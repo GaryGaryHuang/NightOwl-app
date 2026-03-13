@@ -1,0 +1,22 @@
+{
+  "name": "nightowl",
+  "version": "0.1.0",
+  "description": "NightOwl is a local code review CLI built with the GitHub Copilot SDK.",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "bin": {
+    "review": "./dist/bin/review.js"
+  },
+  "scripts": {
+    "build": "node --disable-warning=ExperimentalWarning ./scripts/build.mjs",
+    "prepare": "npm run build",
+    "prepack": "npm run build",
+    "review": "node ./bin/review.js",
+    "test": "npm run build && node --test",
+    "test:watch": "node --test --watch",
+    "test:coverage": "node --test --experimental-test-coverage"
+  }
+}

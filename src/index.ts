@@ -1,0 +1,45 @@
+import {
+  createFoundationPlaceholderApp,
+  type ReviewApp
+} from "./app/review-app.ts";
+import { CliUsageError, parseReviewCommand } from "./cli/parser.ts";
+
+export interface CliRuntime {
+  app?: ReviewApp;
+  stdout?: Pick<typeof console, "log">;
+  stderr?: Pick<typeof console, "error">;
+}
+
+export async function runCli(
+  argv: string[],
+  runtime: CliRuntime = {}
+): Promise<number> {
+  const resolvedRuntime = createDefaultCliRuntime(runtime);
+
+  try {
+    const request = parseReviewCommand(argv);
+    const result = await resolvedRuntime.app.run(request);
+    resolvedRuntime.stdout.log(result.message);
+    return 0;
+  } catch (error) {
+    if (error instanceof CliUsageError) {
+      resolvedRuntime.stderr.error(error.message);
+      return 1;
+    }
+
+    const message =
+      error instanceof Error ? error.message : "NightOwl CLI failed unexpectedly.";
+    resolvedRuntime.stderr.error(message);
+    return 1;
+  }
+}
+
+export function createDefaultCliRuntime(
+  runtime: CliRuntime = {}
+): Required<CliRuntime> {
+  return {
+    app: runtime.app ?? createFoundationPlaceholderApp(),
+    stdout: runtime.stdout ?? console,
+    stderr: runtime.stderr ?? console
+  };
+}

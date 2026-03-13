@@ -4,25 +4,47 @@ NightOwl is a local code review CLI built with the GitHub Copilot SDK.
 
 The project is designed to review changes between two Git refs in a local repository, then produce structured review notes instead of a free-form chat response. Its goal is to make AI-assisted review more traceable, more repeatable, and easier to use as a starting point for human review.
 
-## What It Does
+## Foundation Status
 
-- Reviews a local changeset with `base_ref` and `head_ref`
-- Follows a defined review workflow instead of a single prompt
-- Produces structured review output with clear sections and findings
-- Emphasizes evidence, traceability, and conservative conclusions
+The current repository implements the CLI foundation only. This stage provides:
 
-## Project Direction
+- an installable `review` executable
+- argument parsing for `review <base_ref> <head_ref> [--repo <path>] [--context <value>]`
+- a minimal application boundary that returns a deterministic placeholder success response
+- review output path planning logic for future review runs
 
-NightOwl is being developed as a local-first tool for engineers who want a more disciplined code review workflow. The current design centers on:
+The full review orchestration, Git providers, Copilot SDK session flow, and structured review generation are not implemented yet.
 
-- a CLI entry point for running reviews locally
-- Git-based diff analysis
-- GitHub Copilot SDK as the review engine
-- structured Markdown review artifacts as output
+## Current Behavior
 
-## Status
+After installation, a valid command currently returns a placeholder message:
 
-This project is in active early development. The public repository is currently focused on building the application foundation and core review workflow.
+```bash
+review main feature-branch
+```
+
+```text
+NightOwl foundation: review workflow is not implemented yet.
+```
+
+Invalid input still fails fast with a usage error.
+
+## Development
+
+Useful commands:
+
+```bash
+npm run build
+npm test
+npm install -g .
+```
+
+Implementation notes:
+
+- Source files live under `src/` in TypeScript.
+- Published CLI artifacts live under `dist/` in JavaScript and are what the installed `review` command executes.
+- The current source-install flow (`npm install -g .`) runs `prepare` and regenerates `dist/`, so both local development and installation from this repo currently require Node 25+.
+- If the project later ships prebuilt artifacts or adopts a different build toolchain, the minimum runtime version can be revisited separately from the source build requirement.
 
 ## Planned Experience
 
@@ -32,4 +54,4 @@ The intended usage model is a command such as:
 review <base_ref> <head_ref> [--repo <path>]
 ```
 
-The exact interface and implementation details may continue to evolve during development.
+Future changes will replace the placeholder app boundary with the real review workflow, Git integration, Copilot SDK orchestration, and structured review output.
