@@ -1,5 +1,6 @@
 import {
-  createFoundationPlaceholderApp,
+  createLocalReviewRunApp,
+  formatLocalReviewRunSummary,
   type ReviewApp
 } from "./app/review-app.ts";
 import { CliUsageError, parseReviewCommand } from "./cli/parser.ts";
@@ -8,6 +9,13 @@ export interface CliRuntime {
   app?: ReviewApp;
   stdout?: Pick<typeof console, "log">;
   stderr?: Pick<typeof console, "error">;
+  workingDirectory?: string;
+}
+
+interface ResolvedCliRuntime {
+  app: ReviewApp;
+  stdout: Pick<typeof console, "log">;
+  stderr: Pick<typeof console, "error">;
 }
 
 export async function runCli(
@@ -19,7 +27,7 @@ export async function runCli(
   try {
     const request = parseReviewCommand(argv);
     const result = await resolvedRuntime.app.run(request);
-    resolvedRuntime.stdout.log(result.message);
+    resolvedRuntime.stdout.log(formatLocalReviewRunSummary(result));
     return 0;
   } catch (error) {
     if (error instanceof CliUsageError) {
@@ -36,9 +44,13 @@ export async function runCli(
 
 export function createDefaultCliRuntime(
   runtime: CliRuntime = {}
-): Required<CliRuntime> {
+): ResolvedCliRuntime {
   return {
-    app: runtime.app ?? createFoundationPlaceholderApp(),
+    app:
+      runtime.app ??
+      createLocalReviewRunApp({
+        workingDirectory: runtime.workingDirectory ?? process.cwd()
+      }),
     stdout: runtime.stdout ?? console,
     stderr: runtime.stderr ?? console
   };

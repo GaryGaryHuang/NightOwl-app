@@ -1,22 +1,44 @@
 import type { RunRequest } from "../core/run-request.ts";
+import {
+  ReviewOrchestrator,
+  type ReviewRunSummary
+} from "../core/orchestrator.ts";
+import { LocalGitProvider } from "../providers/local-git-provider.ts";
+import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
 
-export interface ReviewAppResult {
-  message: string;
+export const LOCAL_REVIEW_RUN_HEADER = "Initialized local review run.";
+
+export interface CreateLocalReviewRunAppOptions {
+  workingDirectory: string;
+  timestampProvider?: () => string;
 }
 
 export interface ReviewApp {
-  run(request: RunRequest): Promise<ReviewAppResult>;
+  run(request: RunRequest): Promise<ReviewRunSummary>;
 }
 
-export const FOUNDATION_PLACEHOLDER_MESSAGE =
-  "NightOwl foundation: review workflow is not implemented yet.";
+export function createLocalReviewRunApp(
+  options: CreateLocalReviewRunAppOptions
+): ReviewApp {
+  const orchestrator = new ReviewOrchestrator({
+    sourceProvider: new LocalGitProvider(),
+    outputSink: new LocalWorkspaceProvider(),
+    workingDirectory: options.workingDirectory,
+    timestampProvider: options.timestampProvider
+  });
 
-export function createFoundationPlaceholderApp(): ReviewApp {
   return {
-    async run(_request: RunRequest): Promise<ReviewAppResult> {
-      return {
-        message: FOUNDATION_PLACEHOLDER_MESSAGE
-      };
+    async run(request: RunRequest): Promise<ReviewRunSummary> {
+      return orchestrator.run(request);
     }
   };
+}
+
+export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
+  return [
+    LOCAL_REVIEW_RUN_HEADER,
+    `Repo root: ${result.repoRoot}`,
+    `Output: ${result.outputTarget.basePath}`,
+    `Planned files: ${result.plannedFileCount}`
+  ].join("\n");
 }
