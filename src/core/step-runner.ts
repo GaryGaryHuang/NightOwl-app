@@ -1,9 +1,12 @@
 import type { FileReviewContext } from "./file-review-context.ts";
+import { StructuredOutputValidator } from "./structured-output-validator.ts";
+import type { FindingsPayload } from "./structured-output-validator.ts";
 
 export interface StepExecutionPlan {
   stepId: string;
-  kind: "section";
-  sectionKey: string;
+  kind: "section" | "structured";
+  sectionKey?: string;
+  structuredTarget?: "findings";
   prompt: {
     systemMessage: string;
     userMessage: string;
@@ -15,8 +18,14 @@ export interface StepExecutionPlan {
   completionCheck?: {
     kind: "judge";
     criteria: string;
+  } | {
+    kind: "deterministic";
+    validatorId: "findings-json";
   };
-  applyTo(context: FileReviewContext, responseText: string): void;
+  applyTo(
+    context: FileReviewContext,
+    response: string | FindingsPayload
+  ): void;
 }
 
 export interface StepResult {
@@ -59,15 +68,24 @@ export interface StepRunnerOptions {
       sectionContent: string;
     }): Promise<{ passed: boolean; cause?: string }>;
   };
+  structuredOutputValidator?: {
+    validate(input: {
+      validatorId: "findings-json";
+      responseText: string;
+    }): FindingsPayload;
+  };
 }
 
 export class StepRunner {
   readonly #reviewSessionFactory: StepReviewSessionFactoryLike;
   readonly #judgeService?: StepRunnerOptions["judgeService"];
+  readonly #structuredOutputValidator?: StepRunnerOptions["structuredOutputValidator"];
 
   constructor(options: StepRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
     this.#judgeService = options.judgeService;
+    this.#structuredOutputValidator =
+      options.structuredOutputValidator ?? new StructuredOutputValidator();
   }
 
   async run(input: RunStepInput): Promise<StepResult> {
@@ -90,6 +108,8 @@ export class StepRunner {
           throw new Error("empty review response");
         }
 
+        let validatedResponse: string | FindingsPayload = response;
+
         if (plan.completionCheck?.kind === "judge") {
           if (!this.#judgeService) {
             throw new Error("judge service is not configured");
@@ -105,12 +125,21 @@ export class StepRunner {
           if (!judgeResult.passed) {
             throw new Error(judgeResult.cause ?? "judge rejected");
           }
+        } else if (plan.completionCheck?.kind === "deterministic") {
+          if (!this.#structuredOutputValidator) {
+            throw new Error("structured output validator is not configured");
+          }
+
+          validatedResponse = this.#structuredOutputValidator.validate({
+            validatorId: plan.completionCheck.validatorId,
+            responseText: response
+          });
         }
 
         return {
           stepId: plan.stepId,
           applyTo(context: FileReviewContext) {
-            plan.applyTo(context, response);
+            plan.applyTo(context, validatedResponse);
           }
         };
       } catch (error) {

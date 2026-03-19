@@ -11,6 +11,7 @@ import {
   planNoteFiles,
   type OutputTarget
 } from "./review-path-resolver.ts";
+import { Step5ValidationInterrogationStep } from "./steps/step5-validation-interrogation.ts";
 import { Step4StrategyWhatIfScenariosStep } from "./steps/step4-strategy-what-if-scenarios.ts";
 import { Step3KnowledgeSourceOfTruthStep } from "./steps/step3-knowledge-source-of-truth.ts";
 import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boundaries.ts";
@@ -113,6 +114,9 @@ export class ReviewOrchestrator {
         reviewNoteFinalizer: this.#finalizer
       }),
       new Step4StrategyWhatIfScenariosStep({
+        reviewNoteFinalizer: this.#finalizer
+      }),
+      new Step5ValidationInterrogationStep({
         reviewNoteFinalizer: this.#finalizer
       })
     ];

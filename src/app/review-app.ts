@@ -8,6 +8,7 @@ import {
 } from "../core/orchestrator.ts";
 import { JudgeService } from "../core/judge.ts";
 import { StepRunner } from "../core/step-runner.ts";
+import { StructuredOutputValidator } from "../core/structured-output-validator.ts";
 import { LocalGitProvider } from "../providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
@@ -48,9 +49,14 @@ export function createLocalReviewRunApp(
   const reviewSessionFactory = new ReviewSessionFactory({ clientManager });
   const judgeSessionFactory = new JudgeSessionFactory({ clientManager });
   const judgeService = new JudgeService({ judgeSessionFactory });
+  const structuredOutputValidator = new StructuredOutputValidator();
   const stepRunner =
     options.stepRunner ??
-    new StepRunner({ reviewSessionFactory, judgeService });
+    new StepRunner({
+      reviewSessionFactory,
+      judgeService,
+      structuredOutputValidator
+    });
   const changesetOverviewRunner =
     options.changesetOverviewRunner ??
     new ChangesetOverviewRunner({

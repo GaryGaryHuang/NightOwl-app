@@ -20,17 +20,20 @@ The app currently implements:
 - Step 2 (Dependencies & Boundaries) execution for each planned file
 - Step 3 (Knowledge & Source of Truth) local-first foundation for each planned file
 - Step 4 (Strategy & What-if Scenarios) foundation for each planned file
+- Step 5 (Validation & Interrogation) foundation for each planned file
 - Minimal `StepRunner` foundation for section-step execution
+- Minimal `StructuredOutputValidator` foundation for findings JSON validation and confidence filtering
 - `JudgeSessionFactory` and `JudgeService` for section-step completion checks
 - Judge-based completion-check flow for Step 1, Step 2, Step 3, and Step 4 with retry once semantics
-- Minimal per-file review state and note rendering for bootstrap, Step 1, Step 2, Step 3, and Step 4 snapshots
+- Deterministic validation flow for Step 5 findings JSON with default confidence thresholds
+- Minimal per-file review state and note rendering for bootstrap, Step 1, Step 2, Step 3, Step 4, and Step 5 snapshots
 - Minimal session foundation for Copilot SDK integration
 - Minimal Step 0 guardrails for `read`, `bash`, and `write`
 
 The app does **not** yet implement:
 
 - the full external-knowledge version of Step 3
-- Step 5–7 per-file review flow
+- Step 6–7 per-file review flow
 - MCP / Context7 integration
 - `web_fetch` / URL permission-policy integration
 - `KnowledgeSvc`
@@ -65,7 +68,7 @@ Do **not** treat `npm install -g .` as the product install contract.
   - arbitrary agent `write` operations must remain restricted
 - Do not silently widen tool permissions.
 - If a capability is explicitly deferred in the active change, do not “sneak it in” as part of unrelated implementation.
-- The current Step 1 + Step 2 + Step 3 + Step 4 foundation uses conservative failure semantics: Judge-based completion checks exist, retry once is enabled, Step 3 remains local-first, Step 4 remains strategy-only, skipped-file downgrade is still deferred, and bounded concurrency is still deferred.
+- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 foundation uses conservative failure semantics: Step 1–4 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, retry once is enabled, skipped-file downgrade is still deferred, and bounded concurrency is still deferred.
 
 ## Copilot SDK Notes
 

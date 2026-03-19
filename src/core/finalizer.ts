@@ -1,7 +1,9 @@
 import type { FileReviewContext } from "./file-review-context.ts";
 
 export class ReviewNoteFinalizer {
-  render(context: Pick<FileReviewContext, "filePath" | "getSection">): string {
+  render(
+    context: Pick<FileReviewContext, "filePath" | "getSection" | "getStructuredState">
+  ): string {
     const sections = [
       "overview",
       "dependencies-boundaries",
@@ -10,8 +12,11 @@ export class ReviewNoteFinalizer {
     ]
       .map((sectionKey) => context.getSection(sectionKey)?.trim())
       .filter((section): section is string => Boolean(section));
+    const findingsSection = renderFindingsSection(
+      context.getStructuredState().findings
+    );
 
-    if (sections.length === 0) {
+    if (sections.length === 0 && !findingsSection) {
       return [
         `# ${context.filePath}`,
         "",
@@ -25,9 +30,32 @@ export class ReviewNoteFinalizer {
       "",
       `- Source file: \`${context.filePath}\``,
       "",
-      ...sections.flatMap((section, index) =>
+      ...[...sections, ...(findingsSection ? [findingsSection] : [])].flatMap((section, index) =>
         index === 0 ? [section] : ["", section]
       )
     ].join("\n");
   }
+}
+
+function renderFindingsSection(
+  findings: ReturnType<FileReviewContext["getStructuredState"]>["findings"]
+): string | undefined {
+  if (!findings) {
+    return undefined;
+  }
+
+  if (findings.length === 0) {
+    return ["## Findings", "- 無"].join("\n");
+  }
+
+  return [
+    "## Findings",
+    ...findings.flatMap((finding) => [
+      `- [${finding.type}] ${finding.title}`,
+      `  - Context：${finding.context}`,
+      `  - Deviation：${finding.deviation}`,
+      `  - Impact：${finding.impact}`,
+      `  - Suggestion：${finding.suggestion}`
+    ])
+  ].join("\n");
 }

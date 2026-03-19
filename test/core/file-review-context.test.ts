@@ -69,3 +69,95 @@ test("FileReviewContext stores mutable Overview state while keeping snapshot acc
     ]
   ]);
 });
+
+test("FileReviewContext stores structured findings state separately from section state", () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "問題標題",
+        context: "觸發條件",
+        deviation: "預期與實際有落差",
+        impact: "會造成可觀察錯誤",
+        suggestion: "應補上 guard",
+        confidence: 85
+      }
+    ]
+  });
+
+  assert.equal(context.getSection("overview"), undefined);
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "must",
+        title: "問題標題",
+        context: "觸發條件",
+        deviation: "預期與實際有落差",
+        impact: "會造成可觀察錯誤",
+        suggestion: "應補上 guard",
+        confidence: 85
+      }
+    ]
+  });
+});
+
+test("FileReviewContext replaces structured findings state without leaking snapshot mutation", () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "nice",
+        title: "低優先改善",
+        context: "初始 findings",
+        deviation: "有些不一致",
+        impact: "可維護性下降",
+        suggestion: "補上整理",
+        confidence: 91
+      }
+    ]
+  });
+
+  const snapshot = context.getStructuredState();
+  snapshot.findings?.push({
+    type: "must",
+    title: "不應污染原始狀態",
+    context: "外部 snapshot mutation",
+    deviation: "snapshot 被直接修改",
+    impact: "正式 state 不應受影響",
+    suggestion: "回傳 defensive copy",
+    confidence: 100
+  });
+
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "nice",
+        title: "低優先改善",
+        context: "初始 findings",
+        deviation: "有些不一致",
+        impact: "可維護性下降",
+        suggestion: "補上整理",
+        confidence: 91
+      }
+    ]
+  });
+
+  context.updateStructuredState({ findings: [] });
+
+  assert.deepEqual(context.getStructuredState(), { findings: [] });
+});

@@ -6,6 +6,20 @@ export interface FileReviewContextInput {
   headRef: string;
 }
 
+export interface Finding {
+  type: "must" | "nice";
+  title: string;
+  context: string;
+  deviation: string;
+  impact: string;
+  suggestion: string;
+  confidence: number;
+}
+
+export interface ReviewStructuredState {
+  findings?: Finding[];
+}
+
 export class FileReviewContext {
   readonly filePath: string;
   readonly noteFilePath: string;
@@ -13,6 +27,7 @@ export class FileReviewContext {
   readonly baseRef: string;
   readonly headRef: string;
   readonly #sections = new Map<string, string>();
+  readonly #structuredState: ReviewStructuredState = {};
 
   constructor(input: FileReviewContextInput) {
     this.filePath = input.filePath;
@@ -32,5 +47,21 @@ export class FileReviewContext {
 
   getSectionEntries(): Array<[string, string]> {
     return [...this.#sections.entries()];
+  }
+
+  updateStructuredState(patch: Partial<ReviewStructuredState>): void {
+    if (Object.hasOwn(patch, "findings")) {
+      this.#structuredState.findings = patch.findings?.map((finding) => ({
+        ...finding
+      }));
+    }
+  }
+
+  getStructuredState(): ReviewStructuredState {
+    const findings = this.#structuredState.findings?.map((finding) => ({
+      ...finding
+    }));
+
+    return findings ? { findings } : {};
   }
 }
