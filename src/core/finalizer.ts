@@ -2,7 +2,11 @@ import type { FileReviewContext } from "./file-review-context.ts";
 
 export class ReviewNoteFinalizer {
   render(context: Pick<FileReviewContext, "filePath" | "getSection">): string {
-    const sections = ["overview", "dependencies-boundaries"]
+    const sections = [
+      "overview",
+      "dependencies-boundaries",
+      "knowledge-source-of-truth"
+    ]
       .map((sectionKey) => context.getSection(sectionKey)?.trim())
       .filter((section): section is string => Boolean(section));
 

@@ -11,6 +11,7 @@ import {
   planNoteFiles,
   type OutputTarget
 } from "./review-path-resolver.ts";
+import { Step3KnowledgeSourceOfTruthStep } from "./steps/step3-knowledge-source-of-truth.ts";
 import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boundaries.ts";
 import { Step1OverviewStep } from "./steps/step1-overview.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
@@ -105,6 +106,9 @@ export class ReviewOrchestrator {
     const steps = [
       new Step1OverviewStep({ runContext }),
       new Step2DependenciesBoundariesStep({
+        reviewNoteFinalizer: this.#finalizer
+      }),
+      new Step3KnowledgeSourceOfTruthStep({
         reviewNoteFinalizer: this.#finalizer
       })
     ];

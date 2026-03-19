@@ -12,7 +12,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
-test("ReviewOrchestrator executes Step 1 then Step 2 in filtered changed-file order and passes current review into Step 2", async () => {
+test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 in filtered changed-file order and passes current review into Step 3", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -23,7 +23,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 in filtered changed-file or
     const observedPrompts = [];
     const observedDisconnects = [];
     const sourceProvider = new LocalGitProvider();
-    const stepRunner = createTwoStepJudgeBackedStepRunner({
+    const stepRunner = createThreeStepJudgeBackedStepRunner({
       observedDisconnects,
       observedProfiles,
       observedPrompts,
@@ -66,11 +66,12 @@ test("ReviewOrchestrator executes Step 1 then Step 2 in filtered changed-file or
       observedStepEvents,
       reviewableFiles.flatMap((filePath) => [
         ["step1-overview", filePath],
-        ["step2-dependencies-boundaries", filePath]
+        ["step2-dependencies-boundaries", filePath],
+        ["step3-knowledge-source-of-truth", filePath]
       ])
     );
-    assert.equal(observedDisconnects.length, reviewableFiles.length * 2);
-    assert.equal(observedProfiles.length, reviewableFiles.length * 2);
+    assert.equal(observedDisconnects.length, reviewableFiles.length * 3);
+    assert.equal(observedProfiles.length, reviewableFiles.length * 3);
 
     for (const profile of observedProfiles) {
       assert.equal(profile.outputBaseDir, outputBaseDir);
@@ -79,9 +80,12 @@ test("ReviewOrchestrator executes Step 1 then Step 2 in filtered changed-file or
 
       if (/## Current Step: Overview/u.test(profile.systemMessage)) {
         assert.equal(profile.model, "gpt-5-mini");
-      } else {
+      } else if (/## Current Step: Dependencies & Boundaries/u.test(profile.systemMessage)) {
         assert.match(profile.systemMessage, /## Current Step: Dependencies & Boundaries/u);
         assert.equal(profile.model, "gpt-5.4-mini");
+      } else {
+        assert.match(profile.systemMessage, /## Current Step: Knowledge & Source of Truth/u);
+        assert.equal(profile.model, "gpt-5-mini");
       }
     }
 
@@ -89,11 +93,19 @@ test("ReviewOrchestrator executes Step 1 then Step 2 in filtered changed-file or
     const step2Prompt = observedPrompts.find(
       ({ stepId }) => stepId === "step2-dependencies-boundaries"
     );
+    const step3Prompt = observedPrompts.find(
+      ({ stepId }) => stepId === "step3-knowledge-source-of-truth"
+    );
 
     assert.match(step1Prompt?.prompt ?? "", /## Changeset Overview/u);
     assert.doesNotMatch(step1Prompt?.prompt ?? "", /<current_review>/u);
     assert.match(step2Prompt?.prompt ?? "", /<current_review>[\s\S]*## Overview/u);
     assert.doesNotMatch(step2Prompt?.prompt ?? "", /Review not yet generated/u);
+    assert.match(
+      step3Prompt?.prompt ?? "",
+      /<current_review>[\s\S]*## Dependencies & Boundaries/u
+    );
+    assert.doesNotMatch(step3Prompt?.prompt ?? "", /Review not yet generated/u);
     assert.equal(existsSync(result.outputTarget.basePath), true);
     assert.equal(existsSync(result.outputTarget.filesPath), true);
     assert.equal(existsSync(result.outputTarget.skippedPath), true);
@@ -108,16 +120,20 @@ test("ReviewOrchestrator executes Step 1 then Step 2 in filtered changed-file or
       );
       assert.match(noteContent, /^## Overview/mu);
       assert.match(noteContent, /^## Dependencies & Boundaries/mu);
-      assert.match(noteContent, /## Overview[\s\S]*## Dependencies & Boundaries/u);
+      assert.match(noteContent, /^## Knowledge & Source of Truth/mu);
+      assert.match(
+        noteContent,
+        /## Overview[\s\S]*## Dependencies & Boundaries[\s\S]*## Knowledge & Source of Truth/u
+      );
       assert.doesNotMatch(noteContent, /Review not yet generated/u);
-      assert.doesNotMatch(noteContent, /Step 3|pending/u);
+      assert.doesNotMatch(noteContent, /Step 4|pending/u);
     }
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator still succeeds with zero planned files and does not create Step 1 or Step 2 sessions", async () => {
+test("ReviewOrchestrator still succeeds with zero planned files and does not create Step 1, Step 2, or Step 3 sessions", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -168,6 +184,126 @@ test("ReviewOrchestrator still succeeds with zero planned files and does not cre
     assert.equal(createSessionCalls, 0);
     assert.equal(existsSync(result.outputTarget.basePath), true);
     assert.equal(existsSync(result.outputTarget.skippedPath), true);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator does not start Step 3 for a failed Step 2 file or any later files", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for step2 gating");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const failedFile = reviewableFiles[1];
+    const observedStepEvents = [];
+    const reviewAttempts = new Map();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession(profile) {
+            const stepId = detectStepId(profile.systemMessage);
+
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                const filePath = extractDiffPath(options.prompt);
+                const key = `${stepId}:${filePath}`;
+                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
+
+                reviewAttempts.set(key, attempt);
+                observedStepEvents.push([stepId, filePath]);
+
+                if (stepId === "step1-overview") {
+                  return {
+                    data: {
+                      content: buildOverviewResponse(filePath)
+                    }
+                  };
+                }
+
+                if (
+                  stepId === "step2-dependencies-boundaries" &&
+                  filePath === failedFile
+                ) {
+                  return {
+                    data: {
+                      content: "   "
+                    }
+                  };
+                }
+
+                if (stepId === "step2-dependencies-boundaries") {
+                  return {
+                    data: {
+                      content: buildDependenciesResponse(filePath)
+                    }
+                  };
+                }
+
+                return {
+                  data: {
+                    content: buildKnowledgeResponse(filePath)
+                  }
+                };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        judgeService: {
+          async evaluate() {
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      new RegExp(
+        `step2-dependencies-boundaries.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step2-dependencies-boundaries`,
+        "u"
+      )
+    );
+
+    assert.deepEqual(observedStepEvents, [
+      ["step1-overview", reviewableFiles[0]],
+      ["step2-dependencies-boundaries", reviewableFiles[0]],
+      ["step3-knowledge-source-of-truth", reviewableFiles[0]],
+      ["step1-overview", failedFile],
+      ["step2-dependencies-boundaries", failedFile],
+      ["step2-dependencies-boundaries", failedFile]
+    ]);
+    assert.equal(
+      reviewAttempts.get(`step3-knowledge-source-of-truth:${failedFile}`),
+      undefined
+    );
   } finally {
     fixture.cleanup();
   }
@@ -270,6 +406,7 @@ test("ReviewOrchestrator does not start Step 2 for a failed Step 1 file or any l
     assert.deepEqual(observedStepEvents, [
       ["step1-overview", reviewableFiles[0]],
       ["step2-dependencies-boundaries", reviewableFiles[0]],
+      ["step3-knowledge-source-of-truth", reviewableFiles[0]],
       ["step1-overview", failedFile],
       ["step1-overview", failedFile]
     ]);
@@ -328,7 +465,10 @@ test("ReviewOrchestrator retries Step 2 after a blank response and publishes onl
 
                 return {
                   data: {
-                    content: buildDependenciesResponse(filePath, `${filePath} attempt ${attempt}`)
+                    content:
+                      stepId === "step2-dependencies-boundaries"
+                        ? buildDependenciesResponse(filePath, `${filePath} attempt ${attempt}`)
+                        : buildKnowledgeResponse(filePath)
                   }
                 };
               },
@@ -415,7 +555,9 @@ test("ReviewOrchestrator retries Step 2 after judge rejection and publishes only
                     content:
                       stepId === "step1-overview"
                         ? buildOverviewResponse(filePath)
-                        : buildDependenciesResponse(filePath, `${filePath} attempt ${attempt}`)
+                        : stepId === "step2-dependencies-boundaries"
+                          ? buildDependenciesResponse(filePath, `${filePath} attempt ${attempt}`)
+                          : buildKnowledgeResponse(filePath)
                   }
                 };
               },
@@ -474,6 +616,349 @@ test("ReviewOrchestrator retries Step 2 after judge rejection and publishes only
   }
 });
 
+test("ReviewOrchestrator retries Step 3 after a blank response and publishes only the successful retry snapshot", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const reviewAttempts = new Map();
+    const judgeAttempts = new Map();
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const retryFile = reviewableFiles[1];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession(profile) {
+            const stepId = detectStepId(profile.systemMessage);
+
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                const filePath = extractDiffPath(options.prompt);
+                const key = `${stepId}:${filePath}`;
+                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
+
+                reviewAttempts.set(key, attempt);
+
+                if (stepId === "step1-overview") {
+                  return { data: { content: buildOverviewResponse(filePath) } };
+                }
+
+                if (stepId === "step2-dependencies-boundaries") {
+                  return { data: { content: buildDependenciesResponse(filePath) } };
+                }
+
+                if (filePath === retryFile && attempt === 1) {
+                  return { data: { content: "   " } };
+                }
+
+                return {
+                  data: {
+                    content: buildKnowledgeResponse(filePath, `${filePath} attempt ${attempt}`)
+                  }
+                };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        judgeService: {
+          async evaluate(input) {
+            const key = `${input.stepId}:${input.filePath}`;
+            const attempt = (judgeAttempts.get(key) ?? 0) + 1;
+
+            judgeAttempts.set(key, attempt);
+
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile);
+    const retriedContent = readFileSync(retriedNote.noteFilePath, "utf8");
+
+    assert.equal(reviewAttempts.get(`step3-knowledge-source-of-truth:${retryFile}`), 2);
+    assert.equal(judgeAttempts.get(`step3-knowledge-source-of-truth:${retryFile}`), 1);
+    assert.match(retriedContent, /attempt 2/u);
+    assert.doesNotMatch(retriedContent, /attempt 1/u);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator retries Step 3 after judge rejection and publishes only the successful retry snapshot", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const reviewAttempts = new Map();
+    const judgeAttempts = new Map();
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const retryFile = reviewableFiles[1];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession(profile) {
+            const stepId = detectStepId(profile.systemMessage);
+
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                const filePath = extractDiffPath(options.prompt);
+                const key = `${stepId}:${filePath}`;
+                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
+
+                reviewAttempts.set(key, attempt);
+
+                return {
+                  data: {
+                    content:
+                      stepId === "step1-overview"
+                        ? buildOverviewResponse(filePath)
+                        : stepId === "step2-dependencies-boundaries"
+                          ? buildDependenciesResponse(filePath)
+                          : buildKnowledgeResponse(filePath, `${filePath} attempt ${attempt}`)
+                  }
+                };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        judgeService: {
+          async evaluate(input) {
+            const key = `${input.stepId}:${input.filePath}`;
+            const attempt = (judgeAttempts.get(key) ?? 0) + 1;
+
+            judgeAttempts.set(key, attempt);
+
+            if (
+              input.stepId === "step3-knowledge-source-of-truth" &&
+              input.filePath === retryFile &&
+              attempt === 1
+            ) {
+              return { passed: false, cause: "judge rejected" };
+            }
+
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile);
+    const retriedContent = readFileSync(retriedNote.noteFilePath, "utf8");
+
+    assert.equal(reviewAttempts.get(`step3-knowledge-source-of-truth:${retryFile}`), 2);
+    assert.equal(judgeAttempts.get(`step3-knowledge-source-of-truth:${retryFile}`), 2);
+    assert.match(retriedContent, /attempt 2/u);
+    assert.doesNotMatch(retriedContent, /attempt 1/u);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator aborts Step 3 after review session startup failure retry exhaustion and preserves the Step 2 snapshot", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for step3 startup failure");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const failedFile = reviewableFiles[1];
+    let sessionCount = 0;
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession(profile) {
+            sessionCount += 1;
+
+            if (
+              /## Current Step: Knowledge & Source of Truth/u.test(profile.systemMessage) &&
+              (sessionCount === 6 || sessionCount === 7)
+            ) {
+              throw new Error("review startup failed");
+            }
+
+            const stepId = detectStepId(profile.systemMessage);
+
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                const filePath = extractDiffPath(options.prompt);
+
+                return {
+                  data: {
+                    content:
+                      stepId === "step1-overview"
+                        ? buildOverviewResponse(filePath)
+                        : stepId === "step2-dependencies-boundaries"
+                          ? buildDependenciesResponse(filePath)
+                          : buildKnowledgeResponse(filePath)
+                  }
+                };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        judgeService: {
+          async evaluate() {
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      new RegExp(
+        `step3-knowledge-source-of-truth.*${escapeRegExp(failedFile)}.*review startup failed|${escapeRegExp(failedFile)}.*step3-knowledge-source-of-truth.*review startup failed`,
+        "u"
+      )
+    );
+
+    assert.equal(sessionCount, 7);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator aborts Step 3 after empty review response retry exhaustion and preserves the Step 2 snapshot", async () => {
+  await assertStep3Failure({
+    title: "step3 empty response",
+    expectedErrorPattern:
+      /step3-knowledge-source-of-truth.*empty review response|empty review response.*step3-knowledge-source-of-truth/u,
+    step3ReviewFailure() {
+      return { data: { content: "   " } };
+    },
+    expectedStep3JudgeAttempts: 0
+  });
+});
+
+test("ReviewOrchestrator aborts Step 3 after review timeout retry exhaustion and preserves the Step 2 snapshot", async () => {
+  await assertStep3Failure({
+    title: "step3 review timeout",
+    expectedErrorPattern:
+      /step3-knowledge-source-of-truth.*review timeout|review timeout.*step3-knowledge-source-of-truth/u,
+    step3ReviewFailure() {
+      throw new Error("review timeout");
+    },
+    expectedStep3JudgeAttempts: 0
+  });
+});
+
+test("ReviewOrchestrator aborts Step 3 after judge startup failure retry exhaustion and preserves the Step 2 snapshot", async () => {
+  await assertStep3Failure({
+    title: "step3 judge startup failure",
+    expectedErrorPattern:
+      /step3-knowledge-source-of-truth.*judge startup failed|judge startup failed.*step3-knowledge-source-of-truth/u,
+    step3JudgeFailure() {
+      throw new Error("judge startup failed");
+    },
+    expectedStep3JudgeAttempts: 2
+  });
+});
+
+test("ReviewOrchestrator aborts Step 3 after judge timeout retry exhaustion and preserves the Step 2 snapshot", async () => {
+  await assertStep3Failure({
+    title: "step3 judge timeout",
+    expectedErrorPattern:
+      /step3-knowledge-source-of-truth.*judge timeout|judge timeout.*step3-knowledge-source-of-truth/u,
+    step3JudgeFailure() {
+      throw new Error("judge timeout");
+    },
+    expectedStep3JudgeAttempts: 2
+  });
+});
+
+test("ReviewOrchestrator aborts Step 3 after judge rejection retry exhaustion and preserves the Step 2 snapshot", async () => {
+  await assertStep3Failure({
+    title: "step3 judge rejection",
+    expectedErrorPattern:
+      /step3-knowledge-source-of-truth.*judge rejected|judge rejected.*step3-knowledge-source-of-truth/u,
+    step3JudgeFailure() {
+      return { passed: false, cause: "judge rejected" };
+    },
+    expectedStep3JudgeAttempts: 2
+  });
+});
+
 test("ReviewOrchestrator aborts Step 2 after review session startup failure retry exhaustion and preserves the Step 1 snapshot", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -500,7 +985,7 @@ test("ReviewOrchestrator aborts Step 2 after review session startup failure retr
 
             if (
               /## Current Step: Dependencies & Boundaries/u.test(profile.systemMessage) &&
-              (sessionCount === 4 || sessionCount === 5)
+              (sessionCount === 5 || sessionCount === 6)
             ) {
               throw new Error("review startup failed");
             }
@@ -516,7 +1001,9 @@ test("ReviewOrchestrator aborts Step 2 after review session startup failure retr
                     content:
                       stepId === "step1-overview"
                         ? buildOverviewResponse(filePath)
-                        : buildDependenciesResponse(filePath)
+                        : stepId === "step2-dependencies-boundaries"
+                          ? buildDependenciesResponse(filePath)
+                          : buildKnowledgeResponse(filePath)
                   }
                 };
               },
@@ -556,7 +1043,7 @@ test("ReviewOrchestrator aborts Step 2 after review session startup failure retr
       )
     );
 
-    assert.equal(sessionCount, 5);
+    assert.equal(sessionCount, 6);
   } finally {
     fixture.cleanup();
   }
@@ -891,7 +1378,7 @@ test("ReviewOrchestrator aborts Step 1 flow when Step 1 session startup fails", 
       stepRunner: new StepRunner({
         reviewSessionFactory: {
           async createSession() {
-            if (sessionCount === 2) {
+            if (sessionCount === 3) {
               throw new Error("Copilot CLI session startup failed.");
             }
 
@@ -899,9 +1386,11 @@ test("ReviewOrchestrator aborts Step 1 flow when Step 1 session startup fails", 
 
             return new SessionExecutor({
               async sendAndWait(options) {
+                const filePath = extractDiffPath(options.prompt);
+
                 return {
                   data: {
-                    content: buildOverviewResponse(extractDiffPath(options.prompt))
+                    content: buildOverviewResponse(filePath)
                   }
                 };
               },
@@ -997,6 +1486,24 @@ test("ReviewOrchestrator preserves already-published bootstrap notes when getDif
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: {
         async run({ context }) {
+          if (context.getSection("dependencies-boundaries")) {
+            executedFiles.push(["step3-knowledge-source-of-truth", context.filePath]);
+            context.setSection(
+              "knowledge-source-of-truth",
+              buildKnowledgeResponse(context.filePath)
+            );
+
+            return {
+              stepId: "step3-knowledge-source-of-truth",
+              applyTo(targetContext) {
+                targetContext.setSection(
+                  "knowledge-source-of-truth",
+                  context.getSection("knowledge-source-of-truth")
+                );
+              }
+            };
+          }
+
           if (context.getSection("overview")) {
             executedFiles.push(["step2-dependencies-boundaries", context.filePath]);
             context.setSection(
@@ -1058,12 +1565,14 @@ test("ReviewOrchestrator preserves already-published bootstrap notes when getDif
     assert.equal(existsSync(outputTarget), true);
     assert.deepEqual(executedFiles, [
       ["step1-overview", reviewableFiles[0]],
-      ["step2-dependencies-boundaries", reviewableFiles[0]]
+      ["step2-dependencies-boundaries", reviewableFiles[0]],
+      ["step3-knowledge-source-of-truth", reviewableFiles[0]]
     ]);
 
     const firstBootstrap = readFileSync(plannedNotes[0].noteFilePath, "utf8");
     assert.match(firstBootstrap, /^## Overview/mu);
     assert.match(firstBootstrap, /^## Dependencies & Boundaries/mu);
+    assert.match(firstBootstrap, /^## Knowledge & Source of Truth/mu);
     assert.doesNotMatch(firstBootstrap, /Review not yet generated/u);
 
     const failedBootstrap = readFileSync(
@@ -1199,6 +1708,14 @@ async function assertStep1Failure(input: {
                   };
                 }
 
+                if (stepId === "step3-knowledge-source-of-truth" && filePath === successfulFile) {
+                  return {
+                    data: {
+                      content: buildKnowledgeResponse(filePath)
+                    }
+                  };
+                }
+
                 if (stepId === "step1-overview" && filePath === failedFile) {
                   return input.failingBehavior();
                 }
@@ -1208,7 +1725,9 @@ async function assertStep1Failure(input: {
                     content:
                       stepId === "step1-overview"
                         ? buildOverviewResponse(filePath)
-                        : buildDependenciesResponse(filePath)
+                        : stepId === "step2-dependencies-boundaries"
+                          ? buildDependenciesResponse(filePath)
+                          : buildKnowledgeResponse(filePath)
                   }
                 };
               },
@@ -1248,6 +1767,7 @@ async function assertStep1Failure(input: {
     assert.deepEqual(executedEvents, [
       ["step1-overview", successfulFile],
       ["step2-dependencies-boundaries", successfulFile],
+      ["step3-knowledge-source-of-truth", successfulFile],
       ["step1-overview", failedFile],
       ["step1-overview", failedFile]
     ]);
@@ -1265,6 +1785,7 @@ async function assertStep1Failure(input: {
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
     assert.match(successfulNoteContent, /^## Overview/mu);
     assert.match(successfulNoteContent, /^## Dependencies & Boundaries/mu);
+    assert.match(successfulNoteContent, /^## Knowledge & Source of Truth/mu);
     assert.doesNotMatch(successfulNoteContent, /Review not yet generated/u);
 
     const failedNoteContent = readFileSync(failedNote.noteFilePath, "utf8");
@@ -1335,7 +1856,9 @@ async function assertJudgeFailure(input: {
                     content:
                       stepId === "step1-overview"
                         ? buildOverviewResponse(extractDiffPath(options.prompt))
-                        : buildDependenciesResponse(extractDiffPath(options.prompt))
+                        : stepId === "step2-dependencies-boundaries"
+                          ? buildDependenciesResponse(extractDiffPath(options.prompt))
+                          : buildKnowledgeResponse(extractDiffPath(options.prompt))
                   }
                 };
               },
@@ -1385,7 +1908,10 @@ async function assertJudgeFailure(input: {
     const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
     const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
 
-    assert.match(readFileSync(successfulNote.noteFilePath, "utf8"), /^## Overview/mu);
+    const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
+    assert.match(successfulNoteContent, /^## Overview/mu);
+    assert.match(successfulNoteContent, /^## Dependencies & Boundaries/mu);
+    assert.match(successfulNoteContent, /^## Knowledge & Source of Truth/mu);
     assert.match(readFileSync(failedNote.noteFilePath, "utf8"), /Review not yet generated/u);
     assert.doesNotMatch(readFileSync(failedNote.noteFilePath, "utf8"), /^## Overview/mu);
     assert.match(readFileSync(laterNote.noteFilePath, "utf8"), /Review not yet generated/u);
@@ -1455,7 +1981,10 @@ async function assertStep2Failure(input: {
 
                 return {
                   data: {
-                    content: buildDependenciesResponse(filePath)
+                    content:
+                      stepId === "step2-dependencies-boundaries"
+                        ? buildDependenciesResponse(filePath)
+                        : buildKnowledgeResponse(filePath)
                   }
                 };
               },
@@ -1520,6 +2049,7 @@ async function assertStep2Failure(input: {
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
     assert.match(successfulNoteContent, /^## Overview/mu);
     assert.match(successfulNoteContent, /^## Dependencies & Boundaries/mu);
+    assert.match(successfulNoteContent, /^## Knowledge & Source of Truth/mu);
     assert.doesNotMatch(successfulNoteContent, /Review not yet generated/u);
 
     const failedNoteContent = readFileSync(failedNote.noteFilePath, "utf8");
@@ -1539,6 +2069,162 @@ async function assertStep2Failure(input: {
     assert.match(laterNoteContent, /Review not yet generated/u);
     assert.doesNotMatch(laterNoteContent, /^## Overview/mu);
     assert.doesNotMatch(laterNoteContent, /^## Dependencies & Boundaries/mu);
+
+    const skippedPath = path.join(
+      outputBaseDir,
+      "review",
+      "feature-branch_03131430",
+      "skipped.md"
+    );
+    assert.equal(readFileSync(skippedPath, "utf8"), "");
+  } finally {
+    fixture.cleanup();
+  }
+}
+
+async function assertStep3Failure(input: {
+  title: string;
+  expectedErrorPattern: RegExp;
+  step3ReviewFailure?: () => { data?: { content?: string } } | never;
+  step3JudgeFailure?: () => { passed: boolean; cause?: string } | never;
+  expectedStep3JudgeAttempts: number;
+}): Promise<void> {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll(`add third changed file for ${input.title}`);
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const plannedNotes = planNoteFiles(
+      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      reviewableFiles
+    );
+    const successfulFile = reviewableFiles[0];
+    const failedFile = reviewableFiles[1];
+    const laterFile = reviewableFiles[2];
+    const reviewAttempts = new Map();
+    const judgeAttempts = new Map();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession(profile) {
+            const stepId = detectStepId(profile.systemMessage);
+
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                const filePath = extractDiffPath(options.prompt);
+                const key = `${stepId}:${filePath}`;
+                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
+
+                reviewAttempts.set(key, attempt);
+
+                if (stepId === "step1-overview") {
+                  return { data: { content: buildOverviewResponse(filePath) } };
+                }
+
+                if (stepId === "step2-dependencies-boundaries") {
+                  return { data: { content: buildDependenciesResponse(filePath) } };
+                }
+
+                if (filePath === failedFile && input.step3ReviewFailure) {
+                  return input.step3ReviewFailure();
+                }
+
+                return { data: { content: buildKnowledgeResponse(filePath) } };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        judgeService: {
+          async evaluate(inputJudge) {
+            const key = `${inputJudge.stepId}:${inputJudge.filePath}`;
+            const attempt = (judgeAttempts.get(key) ?? 0) + 1;
+
+            judgeAttempts.set(key, attempt);
+
+            if (
+              inputJudge.stepId === "step3-knowledge-source-of-truth" &&
+              inputJudge.filePath === failedFile &&
+              input.step3JudgeFailure
+            ) {
+              return input.step3JudgeFailure();
+            }
+
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      input.expectedErrorPattern
+    );
+
+    assert.equal(reviewAttempts.get(`step3-knowledge-source-of-truth:${failedFile}`), 2);
+    assert.equal(
+      judgeAttempts.get(`step3-knowledge-source-of-truth:${failedFile}`) ?? 0,
+      input.expectedStep3JudgeAttempts
+    );
+
+    const successfulNote = plannedNotes.find(
+      ({ filePath }) => filePath === successfulFile
+    );
+    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
+
+    const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
+    assert.match(successfulNoteContent, /^## Overview/mu);
+    assert.match(successfulNoteContent, /^## Dependencies & Boundaries/mu);
+    assert.match(successfulNoteContent, /^## Knowledge & Source of Truth/mu);
+    assert.doesNotMatch(successfulNoteContent, /Review not yet generated/u);
+
+    const failedNoteContent = readFileSync(failedNote.noteFilePath, "utf8");
+    assert.match(
+      failedNoteContent,
+      new RegExp(`^# ${escapeRegExp(failedFile)}`, "u")
+    );
+    assert.match(failedNoteContent, /^## Overview/mu);
+    assert.match(failedNoteContent, /^## Dependencies & Boundaries/mu);
+    assert.doesNotMatch(failedNoteContent, /^## Knowledge & Source of Truth/mu);
+    assert.doesNotMatch(failedNoteContent, /Review not yet generated/u);
+
+    const laterNoteContent = readFileSync(laterNote.noteFilePath, "utf8");
+    assert.match(
+      laterNoteContent,
+      new RegExp(`^# ${escapeRegExp(laterFile)}`, "u")
+    );
+    assert.match(laterNoteContent, /Review not yet generated/u);
+    assert.doesNotMatch(laterNoteContent, /^## Overview/mu);
+    assert.doesNotMatch(laterNoteContent, /^## Dependencies & Boundaries/mu);
+    assert.doesNotMatch(laterNoteContent, /^## Knowledge & Source of Truth/mu);
 
     const skippedPath = path.join(
       outputBaseDir,
@@ -1576,6 +2262,18 @@ function buildDependenciesResponse(filePath: string, label = filePath): string {
   ].join("\n");
 }
 
+function buildKnowledgeResponse(filePath: string, label = filePath): string {
+  return [
+    "## Knowledge & Source of Truth",
+    "- 版本／文件參考：",
+    `  - ${label} package.json — repo-native source`,
+    "- 採用規則與假設：",
+    "  - 依 repo 內設定檔與版本檔推論行為約束",
+    "- 排除範圍：",
+    "  - 外部官方文件查證不在本次 foundation 範圍內"
+  ].join("\n");
+}
+
 function extractDiffPath(prompt: string): string {
   const match = prompt.match(/<diff path="([^"]+)"/u);
 
@@ -1590,7 +2288,9 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
-function detectStepId(systemMessage: string): "step1-overview" | "step2-dependencies-boundaries" {
+function detectStepId(
+  systemMessage: string
+): "step1-overview" | "step2-dependencies-boundaries" | "step3-knowledge-source-of-truth" {
   if (/## Current Step: Overview/u.test(systemMessage)) {
     return "step1-overview";
   }
@@ -1599,10 +2299,14 @@ function detectStepId(systemMessage: string): "step1-overview" | "step2-dependen
     return "step2-dependencies-boundaries";
   }
 
+  if (/## Current Step: Knowledge & Source of Truth/u.test(systemMessage)) {
+    return "step3-knowledge-source-of-truth";
+  }
+
   throw new Error(`Unknown step system message: ${systemMessage}`);
 }
 
-function createTwoStepJudgeBackedStepRunner(input: {
+function createThreeStepJudgeBackedStepRunner(input: {
   observedDisconnects: string[];
   observedProfiles: unknown[];
   observedPrompts: Array<{ stepId: string; prompt: string }>;
@@ -1628,7 +2332,9 @@ function createTwoStepJudgeBackedStepRunner(input: {
                 content:
                   stepId === "step1-overview"
                     ? buildOverviewResponse(filePath)
-                    : buildDependenciesResponse(filePath)
+                    : stepId === "step2-dependencies-boundaries"
+                      ? buildDependenciesResponse(filePath)
+                      : buildKnowledgeResponse(filePath)
               }
             };
           },

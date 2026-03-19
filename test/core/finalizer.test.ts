@@ -130,3 +130,92 @@ test("ReviewNoteFinalizer renders Overview before Dependencies & Boundaries for 
   assert.doesNotMatch(rendered, /Review not yet generated/u);
   assert.doesNotMatch(rendered, /Step 3|pending/u);
 });
+
+test("ReviewNoteFinalizer renders Knowledge & Source of Truth after Dependencies & Boundaries for Step 3 handoff and snapshots", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.setSection(
+    "overview",
+    [
+      "## Overview",
+      "- 整體理解：測試用概覽",
+      "- 行為變更：無行為變更",
+      "- 檔案職責：維護 app value",
+      "- 改動目的：調整常數",
+      "- 影響範圍：src/app.ts",
+      "- 測試覆蓋觀察：未見對應測試異動"
+    ].join("\n")
+  );
+  context.setSection(
+    "dependencies-boundaries",
+    [
+      "## Dependencies & Boundaries",
+      "- 相依清單：",
+      "  - `[valueService]` → 提供 value 更新 → Consume",
+      "    - Contract：輸入 value 並回傳更新結果",
+      "    - 評估：此 diff 維持既有 boundary",
+      "- 隱含相依：",
+      "  - 無"
+    ].join("\n")
+  );
+  context.setSection(
+    "knowledge-source-of-truth",
+    [
+      "## Knowledge & Source of Truth",
+      "- 版本／文件參考：",
+      "  - package.json — repo local source",
+      "- 採用規則與假設：",
+      "  - 依 repo 設定檔判讀版本約束",
+      "- 排除範圍：",
+      "  - 外部官方文件查證不在本次 foundation 範圍內"
+    ].join("\n")
+  );
+
+  const rendered = finalizer.render(context);
+
+  assert.equal(
+    rendered,
+    [
+      "# src/app.ts",
+      "",
+      "- Source file: `src/app.ts`",
+      "",
+      "## Overview",
+      "- 整體理解：測試用概覽",
+      "- 行為變更：無行為變更",
+      "- 檔案職責：維護 app value",
+      "- 改動目的：調整常數",
+      "- 影響範圍：src/app.ts",
+      "- 測試覆蓋觀察：未見對應測試異動",
+      "",
+      "## Dependencies & Boundaries",
+      "- 相依清單：",
+      "  - `[valueService]` → 提供 value 更新 → Consume",
+      "    - Contract：輸入 value 並回傳更新結果",
+      "    - 評估：此 diff 維持既有 boundary",
+      "- 隱含相依：",
+      "  - 無",
+      "",
+      "## Knowledge & Source of Truth",
+      "- 版本／文件參考：",
+      "  - package.json — repo local source",
+      "- 採用規則與假設：",
+      "  - 依 repo 設定檔判讀版本約束",
+      "- 排除範圍：",
+      "  - 外部官方文件查證不在本次 foundation 範圍內"
+    ].join("\n")
+  );
+  assert.match(
+    rendered,
+    /## Overview[\s\S]*## Dependencies & Boundaries[\s\S]*## Knowledge & Source of Truth/u
+  );
+  assert.doesNotMatch(rendered, /Review not yet generated/u);
+  assert.doesNotMatch(rendered, /Step 4|pending/u);
+});
