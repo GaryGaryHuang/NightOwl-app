@@ -6,7 +6,7 @@ The project is designed to review changes between two Git refs in a local reposi
 
 ## Current Status
 
-The current repository implements the Step 0 + Step 1 + Step 2 + Step 3 local-first foundation stage. This stage provides:
+The current repository implements the Step 0 + Step 1 + Step 2 + Step 3 + Step 4 foundation stage. This stage provides:
 
 - an installable `review` executable
 - argument parsing for `review <base_ref> <head_ref> [--repo <path>] [--context <value>]`
@@ -17,15 +17,16 @@ The current repository implements the Step 0 + Step 1 + Step 2 + Step 3 local-fi
 - Step 1 (Overview) execution for each planned file with `RunContext.changesetOverview` injected into the prompt
 - Step 2 (Dependencies & Boundaries) execution for each planned file with `<current_review>` rendered from formal in-memory review state after Step 1 succeeds
 - Step 3 (Knowledge & Source of Truth) execution for each planned file using a local-first / repo-native evidence contract after Step 2 succeeds
-- judge-based completion checks for Step 1, Step 2, and Step 3, so section content is written only after the judge passes
-- per-file in-memory review state plus minimal note rendering for bootstrap, Step 1, Step 2, and Step 3 snapshots
-- conservative section-step failure handling for Step 1, Step 2, and Step 3: if an attempt or its judge check fails twice, the run stops, earlier successful snapshots remain, and unfinished files keep their last successfully published note state
+- Step 4 (Strategy & What-if Scenarios) execution for each planned file after Step 3 succeeds, producing scenario-driven validation strategy from the accumulated review state
+- judge-based completion checks for Step 1, Step 2, Step 3, and Step 4, so section content is written only after the judge passes
+- per-file in-memory review state plus minimal note rendering for bootstrap, Step 1, Step 2, Step 3, and Step 4 snapshots
+- conservative section-step failure handling for Step 1, Step 2, Step 3, and Step 4: if an attempt or its judge check fails twice, the run stops, earlier successful snapshots remain, and unfinished files keep their last successfully published note state
 
-The full AI review orchestration is not implemented yet. This repository now includes only the local-first foundation of Step 3; external knowledge tooling for Step 3 is still deferred. Step 4–7, skipped-file / retry strategy beyond the current Step 1 + Step 2 + Step 3 local-first foundation, bounded concurrency, MCP / `web_fetch`, `KnowledgeSvc`, and the complete final rendering pipeline are still deferred.
+The full AI review orchestration is not implemented yet. This repository now includes the Step 4 foundation on top of the Step 3 local-first knowledge foundation; external knowledge tooling for Step 3 is still deferred. Step 5–7, skipped-file / retry strategy beyond the current Step 1 + Step 2 + Step 3 + Step 4 foundation, bounded concurrency, MCP / `web_fetch`, `KnowledgeSvc`, and the complete final rendering pipeline are still deferred.
 
 ## Current Behavior
 
-After installation, a valid command now requires a working GitHub Copilot CLI login, executes Step 0 (Changeset Overview), runs Step 1 (Overview), Step 2 (Dependencies & Boundaries), and Step 3 (Knowledge & Source of Truth) for each planned file, and then reports the same stable run summary:
+After installation, a valid command now requires a working GitHub Copilot CLI login, executes Step 0 (Changeset Overview), runs Step 1 (Overview), Step 2 (Dependencies & Boundaries), Step 3 (Knowledge & Source of Truth), and Step 4 (Strategy & What-if Scenarios) for each planned file, and then reports the same stable run summary:
 
 ```bash
 review main feature-branch
@@ -45,7 +46,7 @@ The command also creates:
 - `<output_base_dir>/review/<session_id>/skipped.md`
 - one Markdown note per planned file
 
-For successfully processed files, the note is updated from the bootstrap skeleton into a Step 1 + Step 2 + Step 3 snapshot that begins with:
+For successfully processed files, the note is updated from the bootstrap skeleton into a Step 1 + Step 2 + Step 3 + Step 4 snapshot that begins with:
 
 ```md
 # path/to/file.ts
@@ -60,13 +61,18 @@ For successfully processed files, the note is updated from the bootstrap skeleto
 
 ## Knowledge & Source of Truth
 ...
+
+## Strategy & What-if Scenarios
+...
 ```
 
 Invalid input still fails fast with a usage error, and successful runs with zero planned files still exit successfully.
 
-At this stage, Step 1, Step 2, and Step 3 all use Judge completion checks with retry once semantics. If a review attempt or judge check still fails after retry, the run stops immediately, `skipped.md` remains unchanged, already-successful files keep their last successful snapshots, and unfinished files keep only the last section state that was successfully published.
+At this stage, Step 1, Step 2, Step 3, and Step 4 all use Judge completion checks with retry once semantics. If a review attempt or judge check still fails after retry, the run stops immediately, `skipped.md` remains unchanged, already-successful files keep their last successful snapshots, and unfinished files keep only the last section state that was successfully published.
 
 Step 3 in the current repository is intentionally **local-first**: it converges `版本／文件參考`、`採用規則與假設`、`排除範圍` from repo-native / local evidence such as version files, lockfiles, config files, internal docs, project conventions, and necessary local git metadata. It does **not** yet wire MCP, Context7, `web_fetch`, or external official docs into the runtime.
+
+Step 4 in the current repository is intentionally **strategy-only**: it converts `Overview`、`Dependencies & Boundaries`、and `Knowledge & Source of Truth` into `高風險區域` and W# What-if scenarios for later validation. It does **not** perform Step 5 validation, generate findings, or introduce app-side parsing of the W# scenarios.
 
 ## Development
 
@@ -101,7 +107,7 @@ Implementation notes:
 - Source files live under `src/` in TypeScript.
 - Published CLI artifacts live under `dist/` in JavaScript and are what the installed `review` command executes.
 - The formal CLI install contract is based on a published package or package artifact; source checkouts are for local development and should use `npm link`.
-- A valid `review` run now depends on a working GitHub Copilot CLI environment and login state, because Step 0, Step 1, Step 2, and Step 3 are all executed before the command completes.
+- A valid `review` run now depends on a working GitHub Copilot CLI environment and login state, because Step 0, Step 1, Step 2, Step 3, and Step 4 are all executed before the command completes.
 - The current source-install flow regenerates `dist/`, so both local development and installation from this repo currently require Node 25+.
 - If the project later ships prebuilt artifacts or adopts a different build toolchain, the minimum runtime version can be revisited separately from the source build requirement.
 
@@ -113,4 +119,4 @@ The intended usage model is a command such as:
 review <base_ref> <head_ref> [--repo <path>]
 ```
 
-Future changes will extend the current Step 0 + Step 1 + Step 2 + Step 3 local-first foundation into the remaining per-file SOP steps, external knowledge tooling for Step 3, skipped-file strategy, bounded concurrency, and the full final review output pipeline.
+Future changes will extend the current Step 0 + Step 1 + Step 2 + Step 3 + Step 4 foundation into the remaining per-file SOP steps, external knowledge tooling for Step 3, skipped-file strategy, bounded concurrency, and the full final review output pipeline.

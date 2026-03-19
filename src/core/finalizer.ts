@@ -5,7 +5,8 @@ export class ReviewNoteFinalizer {
     const sections = [
       "overview",
       "dependencies-boundaries",
-      "knowledge-source-of-truth"
+      "knowledge-source-of-truth",
+      "strategy-what-if-scenarios"
     ]
       .map((sectionKey) => context.getSection(sectionKey)?.trim())
       .filter((section): section is string => Boolean(section));
