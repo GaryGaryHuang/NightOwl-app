@@ -18,6 +18,8 @@ The app currently implements:
 - `RunContext` creation and retention
 - Step 1 (Overview) execution for each planned file
 - Minimal `StepRunner` foundation for section-step execution
+- `JudgeSessionFactory` and `JudgeService` for section-step completion checks
+- Judge-based completion-check flow for Step 1 with retry once semantics
 - Minimal per-file review state and note rendering for bootstrap and Step 1 snapshots
 - Minimal session foundation for Copilot SDK integration
 - Minimal Step 0 guardrails for `read`, `bash`, and `write`
@@ -25,11 +27,11 @@ The app currently implements:
 The app does **not** yet implement:
 
 - Step 2–7 per-file review flow
-- Judge / completion-check services
 - MCP / Context7 integration
 - `web_fetch` / URL permission-policy integration
 - `KnowledgeSvc`
 - bounded concurrency
+- skipped-file pipeline
 - full final review note rendering pipeline
 
 Do not assume these missing capabilities already exist.
@@ -59,7 +61,7 @@ Do **not** treat `npm install -g .` as the product install contract.
   - arbitrary agent `write` operations must remain restricted
 - Do not silently widen tool permissions.
 - If a capability is explicitly deferred in the active change, do not “sneak it in” as part of unrelated implementation.
-- The current Step 1 foundation uses conservative failure semantics: no Judge, no retry/skip downgrade, and no bounded concurrency yet.
+- The current Step 1 foundation uses conservative failure semantics: Judge-based completion checks exist, retry once is enabled, skipped-file downgrade is still deferred, and bounded concurrency is still deferred.
 
 ## Copilot SDK Notes
 

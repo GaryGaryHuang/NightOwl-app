@@ -99,6 +99,18 @@ test("Step1OverviewStep prepares the exact Step 1 prompt contract from RunContex
     model: "gpt-5-mini",
     timeoutMs: 300_000
   });
+  assert.deepEqual(plan.completionCheck, {
+    kind: "judge",
+    criteria: [
+      "段落 `## Overview` 必須存在，且以下六個欄位都必須出現，並對應回答該欄位要求：",
+      "- 整體理解",
+      "- 行為變更",
+      "- 檔案職責",
+      "- 改動目的",
+      "- 影響範圍",
+      "- 測試覆蓋觀察"
+    ].join("\n")
+  });
   assert.equal(plan.prompt.systemMessage, EXPECTED_SYSTEM_MESSAGE);
   assert.equal(
     plan.prompt.userMessage,

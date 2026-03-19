@@ -75,6 +75,16 @@ const STEP1_INSTRUCTION = [
   "- Each field contains a meaningful answer, not a placeholder or blank line"
 ].join("\n");
 
+const STEP1_JUDGE_CRITERIA = [
+  "段落 `## Overview` 必須存在，且以下六個欄位都必須出現，並對應回答該欄位要求：",
+  "- 整體理解",
+  "- 行為變更",
+  "- 檔案職責",
+  "- 改動目的",
+  "- 影響範圍",
+  "- 測試覆蓋觀察"
+].join("\n");
+
 export interface Step1OverviewStepOptions {
   runContext: RunContext;
 }
@@ -99,6 +109,10 @@ export class Step1OverviewStep implements StepDefinition {
       reviewProfile: {
         model: "gpt-5-mini",
         timeoutMs: 300_000
+      },
+      completionCheck: {
+        kind: "judge",
+        criteria: STEP1_JUDGE_CRITERIA
       },
       applyTo(targetContext: FileReviewContext, responseText: string) {
         targetContext.setSection("overview", responseText);

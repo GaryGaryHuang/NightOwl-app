@@ -15,10 +15,11 @@ The current repository implements the Step 0 + Step 1 foundation stage. This sta
 - review output path planning and initialization under `<output_base_dir>/review/<session_id>/`
 - bootstrap note artifacts for each planned file before Step 1 runs
 - Step 1 (Overview) execution for each planned file with `RunContext.changesetOverview` injected into the prompt
+- judge-based completion checks for Step 1, so Overview content is written only after the judge passes
 - per-file in-memory review state plus minimal note rendering for bootstrap and Step 1 Overview snapshots
-- conservative Step 1 failure handling: if a Step 1 attempt fails, the run stops, earlier successful snapshots remain, and unfinished files keep their bootstrap notes
+- conservative Step 1 failure handling: if a Step 1 attempt or its judge check fails twice, the run stops, earlier successful snapshots remain, and unfinished files keep their bootstrap notes
 
-The full AI review orchestration is not implemented yet. Judge completion checks, Step 2–7, retry/skip strategy, bounded concurrency, MCP / `web_fetch`, and the complete final rendering pipeline are still deferred.
+The full AI review orchestration is not implemented yet. Step 2–7, skipped-file / retry strategy beyond the current Step 1 foundation, bounded concurrency, MCP / `web_fetch`, and the complete final rendering pipeline are still deferred.
 
 ## Current Behavior
 
@@ -55,7 +56,7 @@ For successfully processed files, the note is updated from the bootstrap skeleto
 
 Invalid input still fails fast with a usage error, and successful runs with zero planned files still exit successfully.
 
-At this stage, Step 1 does not yet use Judge completion checks. If a Step 1 attempt fails or times out, the run stops immediately, `skipped.md` remains unchanged, already-successful files keep their Overview snapshots, and unfinished files keep only their bootstrap notes.
+At this stage, Step 1 now uses Judge completion checks with retry once semantics. If the review attempt or judge check still fails after retry, the run stops immediately, `skipped.md` remains unchanged, already-successful files keep their Overview snapshots, and unfinished files keep only their bootstrap notes.
 
 ## Development
 
@@ -102,4 +103,4 @@ The intended usage model is a command such as:
 review <base_ref> <head_ref> [--repo <path>]
 ```
 
-Future changes will extend the current Step 0 + Step 1 foundation into the remaining per-file SOP steps, Judge-backed completion checks, retry/skip strategy, bounded concurrency, and the full final review output pipeline.
+Future changes will extend the current Step 0 + Step 1 + judge foundation into the remaining per-file SOP steps, skipped-file strategy, bounded concurrency, and the full final review output pipeline.

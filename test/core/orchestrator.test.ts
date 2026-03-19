@@ -23,32 +23,11 @@ test("ReviewOrchestrator executes Step 1 in filtered changed-file order and upda
     const observedPrompts = [];
     const observedDisconnects = [];
     const sourceProvider = new LocalGitProvider();
-    const stepRunner = new StepRunner({
-      reviewSessionFactory: {
-        async createSession(profile) {
-          observedProfiles.push(profile);
-
-          return new SessionExecutor({
-            async sendAndWait(options, timeoutMs) {
-              const filePath = extractDiffPath(options.prompt);
-
-              observedStep1Files.push(filePath);
-              observedPrompts.push(options.prompt);
-
-              assert.equal(timeoutMs, 300_000);
-
-              return {
-                data: {
-                  content: buildOverviewResponse(filePath)
-                }
-              };
-            },
-            async disconnect() {
-              observedDisconnects.push("disconnect");
-            }
-          });
-        }
-      }
+    const stepRunner = createJudgeBackedStepRunner({
+      observedDisconnects,
+      observedProfiles,
+      observedPrompts,
+      observedStep1Files
     });
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -188,6 +167,191 @@ test("ReviewOrchestrator aborts Step 1 flow on a blank response while preserving
   });
 });
 
+test("ReviewOrchestrator retries Step 1 after judge rejection and publishes only the successful retry snapshot", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const reviewAttempts = new Map();
+    const judgeAttempts = new Map();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession() {
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                const filePath = extractDiffPath(options.prompt);
+                const attempt = (reviewAttempts.get(filePath) ?? 0) + 1;
+
+                reviewAttempts.set(filePath, attempt);
+
+                return {
+                  data: {
+                    content: buildOverviewResponse(`${filePath} attempt ${attempt}`)
+                  }
+                };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        judgeService: {
+          async evaluate(input) {
+            const current = (judgeAttempts.get(input.filePath) ?? 0) + 1;
+
+            judgeAttempts.set(input.filePath, current);
+
+            if (current === 1) {
+              return { passed: false, cause: "judge rejected" };
+            }
+
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = new LocalGitProvider().filterIgnoredFiles(
+      repoRoot,
+      new LocalGitProvider().getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+
+    for (const plannedNote of plannedNotes) {
+      const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
+
+      assert.match(noteContent, /attempt 2/u);
+    }
+
+    for (const filePath of reviewableFiles) {
+      assert.equal(reviewAttempts.get(filePath), 2);
+      assert.equal(judgeAttempts.get(filePath), 2);
+    }
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator aborts Step 1 after judge rejection retry exhaustion and preserves bootstrap semantics", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for judge rejection failure");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const plannedNotes = planNoteFiles(
+      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      reviewableFiles
+    );
+    const failedFile = reviewableFiles[1];
+    const laterFile = reviewableFiles[2];
+    const judgeAttempts = new Map();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession() {
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                return {
+                  data: {
+                    content: buildOverviewResponse(extractDiffPath(options.prompt))
+                  }
+                };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        judgeService: {
+          async evaluate(input) {
+            judgeAttempts.set(
+              input.filePath,
+              (judgeAttempts.get(input.filePath) ?? 0) + 1
+            );
+
+            if (input.filePath === failedFile) {
+              return { passed: false, cause: "judge rejected" };
+            }
+
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      new RegExp(
+        `step1-overview.*${escapeRegExp(failedFile)}.*judge rejected|${escapeRegExp(failedFile)}.*step1-overview.*judge rejected`,
+        "u"
+      )
+    );
+
+    assert.equal(judgeAttempts.get(failedFile), 2);
+
+    const successfulNote = plannedNotes.find(
+      ({ filePath }) => filePath === reviewableFiles[0]
+    );
+    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
+
+    assert.match(readFileSync(successfulNote.noteFilePath, "utf8"), /^## Overview/mu);
+    assert.match(readFileSync(failedNote.noteFilePath, "utf8"), /Review not yet generated/u);
+    assert.doesNotMatch(readFileSync(failedNote.noteFilePath, "utf8"), /^## Overview/mu);
+    assert.match(readFileSync(laterNote.noteFilePath, "utf8"), /Review not yet generated/u);
+    assert.doesNotMatch(readFileSync(laterNote.noteFilePath, "utf8"), /^## Overview/mu);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("ReviewOrchestrator aborts Step 1 flow on a timeout error while preserving earlier successful snapshots", async () => {
   await assertStep1Failure({
     title: "timeout",
@@ -196,6 +360,28 @@ test("ReviewOrchestrator aborts Step 1 flow on a timeout error while preserving 
     },
     expectedErrorPattern:
       /step1-overview.*timed out|timed out.*step1-overview/u
+  });
+});
+
+test("ReviewOrchestrator aborts Step 1 after judge startup failure retry exhaustion and preserves bootstrap semantics", async () => {
+  await assertJudgeFailure({
+    title: "judge startup failure",
+    expectedErrorPattern:
+      /step1-overview.*judge startup failed|judge startup failed.*step1-overview/u,
+    judgeFailure() {
+      throw new Error("Step step1-overview failed for src/app.ts: judge startup failed");
+    }
+  });
+});
+
+test("ReviewOrchestrator aborts Step 1 after judge timeout retry exhaustion and preserves bootstrap semantics", async () => {
+  await assertJudgeFailure({
+    title: "judge timeout failure",
+    expectedErrorPattern:
+      /step1-overview.*judge timeout|judge timeout.*step1-overview/u,
+    judgeFailure() {
+      throw new Error("Step step1-overview failed for src/app.ts: judge timeout");
+    }
   });
 });
 
@@ -237,6 +423,11 @@ test("ReviewOrchestrator aborts Step 1 flow when Step 1 session startup fails", 
               },
               async disconnect() {}
             });
+          }
+        },
+        judgeService: {
+          async evaluate() {
+            return { passed: true };
           }
         }
       }),
@@ -505,6 +696,11 @@ async function assertStep1Failure(input: {
               async disconnect() {}
             });
           }
+        },
+        judgeService: {
+          async evaluate() {
+            return { passed: true };
+          }
         }
       }),
       changesetOverviewRunner: {
@@ -530,7 +726,7 @@ async function assertStep1Failure(input: {
       input.expectedErrorPattern
     );
 
-    assert.deepEqual(executedFiles, [successfulFile, failedFile]);
+    assert.deepEqual(executedFiles, [successfulFile, failedFile, failedFile]);
 
     const successfulNote = plannedNotes.find(
       ({ filePath }) => filePath === successfulFile
@@ -576,6 +772,98 @@ async function assertStep1Failure(input: {
   }
 }
 
+async function assertJudgeFailure(input: {
+  title: string;
+  expectedErrorPattern: RegExp;
+  judgeFailure(): never;
+}): Promise<void> {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll(`add third changed file for ${input.title}`);
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const plannedNotes = planNoteFiles(
+      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      reviewableFiles
+    );
+    const failedFile = reviewableFiles[1];
+    const laterFile = reviewableFiles[2];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession() {
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                return {
+                  data: {
+                    content: buildOverviewResponse(extractDiffPath(options.prompt))
+                  }
+                };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        judgeService: {
+          async evaluate(inputJudge) {
+            if (inputJudge.filePath === failedFile) {
+              return input.judgeFailure();
+            }
+
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      input.expectedErrorPattern
+    );
+
+    const successfulNote = plannedNotes.find(
+      ({ filePath }) => filePath === reviewableFiles[0]
+    );
+    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
+
+    assert.match(readFileSync(successfulNote.noteFilePath, "utf8"), /^## Overview/mu);
+    assert.match(readFileSync(failedNote.noteFilePath, "utf8"), /Review not yet generated/u);
+    assert.doesNotMatch(readFileSync(failedNote.noteFilePath, "utf8"), /^## Overview/mu);
+    assert.match(readFileSync(laterNote.noteFilePath, "utf8"), /Review not yet generated/u);
+    assert.doesNotMatch(readFileSync(laterNote.noteFilePath, "utf8"), /^## Overview/mu);
+  } finally {
+    fixture.cleanup();
+  }
+}
+
 function buildOverviewResponse(filePath: string): string {
   return [
     "## Overview",
@@ -600,4 +888,44 @@ function extractDiffPath(prompt: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function createJudgeBackedStepRunner(input: {
+  observedDisconnects: string[];
+  observedProfiles: unknown[];
+  observedPrompts: string[];
+  observedStep1Files: string[];
+}): StepRunner {
+  return new StepRunner({
+    reviewSessionFactory: {
+      async createSession(profile) {
+        input.observedProfiles.push(profile);
+
+        return new SessionExecutor({
+          async sendAndWait(options, timeoutMs) {
+            const filePath = extractDiffPath(options.prompt);
+
+            input.observedStep1Files.push(filePath);
+            input.observedPrompts.push(options.prompt);
+
+            assert.equal(timeoutMs, 300_000);
+
+            return {
+              data: {
+                content: buildOverviewResponse(filePath)
+              }
+            };
+          },
+          async disconnect() {
+            input.observedDisconnects.push("disconnect");
+          }
+        });
+      }
+    },
+    judgeService: {
+      async evaluate() {
+        return { passed: true };
+      }
+    }
+  });
 }
