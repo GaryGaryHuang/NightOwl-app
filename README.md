@@ -6,20 +6,23 @@ The project is designed to review changes between two Git refs in a local reposi
 
 ## Current Status
 
-The current repository implements the local review run bootstrap stage. This stage provides:
+The current repository implements the Step 0 + Step 1 foundation stage. This stage provides:
 
 - an installable `review` executable
 - argument parsing for `review <base_ref> <head_ref> [--repo <path>] [--context <value>]`
 - Step 0 (Changeset Overview) execution through the GitHub Copilot SDK before local bootstrap continues
 - local Git-backed review run preparation, including repo root discovery and `.reviewignore` filtering
 - review output path planning and initialization under `<output_base_dir>/review/<session_id>/`
-- bootstrap note artifacts for each planned file before any AI review steps run
+- bootstrap note artifacts for each planned file before Step 1 runs
+- Step 1 (Overview) execution for each planned file with `RunContext.changesetOverview` injected into the prompt
+- per-file in-memory review state plus minimal note rendering for bootstrap and Step 1 Overview snapshots
+- conservative Step 1 failure handling: if a Step 1 attempt fails, the run stops, earlier successful snapshots remain, and unfinished files keep their bootstrap notes
 
-The full AI review orchestration, Step 0–7 pipeline, Copilot SDK session flow, and structured review generation are not implemented yet.
+The full AI review orchestration is not implemented yet. Judge completion checks, Step 2–7, retry/skip strategy, bounded concurrency, MCP / `web_fetch`, and the complete final rendering pipeline are still deferred.
 
 ## Current Behavior
 
-After installation, a valid command now requires a working GitHub Copilot CLI login, executes Step 0 (Changeset Overview), and then initializes a local review run with a stable summary:
+After installation, a valid command now requires a working GitHub Copilot CLI login, executes Step 0 (Changeset Overview), runs Step 1 (Overview) for each planned file, and then reports the same stable run summary:
 
 ```bash
 review main feature-branch
@@ -37,9 +40,22 @@ The command also creates:
 - `<output_base_dir>/review/<session_id>/`
 - `<output_base_dir>/review/<session_id>/files/`
 - `<output_base_dir>/review/<session_id>/skipped.md`
-- one bootstrap Markdown note per planned file
+- one Markdown note per planned file
+
+For successfully processed files, the note is updated from the bootstrap skeleton into a Step 1 Overview snapshot that begins with:
+
+```md
+# path/to/file.ts
+
+- Source file: `path/to/file.ts`
+
+## Overview
+...
+```
 
 Invalid input still fails fast with a usage error, and successful runs with zero planned files still exit successfully.
+
+At this stage, Step 1 does not yet use Judge completion checks. If a Step 1 attempt fails or times out, the run stops immediately, `skipped.md` remains unchanged, already-successful files keep their Overview snapshots, and unfinished files keep only their bootstrap notes.
 
 ## Development
 
@@ -74,7 +90,7 @@ Implementation notes:
 - Source files live under `src/` in TypeScript.
 - Published CLI artifacts live under `dist/` in JavaScript and are what the installed `review` command executes.
 - The formal CLI install contract is based on a published package or package artifact; source checkouts are for local development and should use `npm link`.
-- A valid `review` run now depends on a working GitHub Copilot CLI environment and login state, because Step 0 is executed before local bootstrap output is created.
+- A valid `review` run now depends on a working GitHub Copilot CLI environment and login state, because Step 0 and Step 1 are both executed before the command completes.
 - The current source-install flow regenerates `dist/`, so both local development and installation from this repo currently require Node 25+.
 - If the project later ships prebuilt artifacts or adopts a different build toolchain, the minimum runtime version can be revisited separately from the source build requirement.
 
@@ -86,4 +102,4 @@ The intended usage model is a command such as:
 review <base_ref> <head_ref> [--repo <path>]
 ```
 
-Future changes will replace the bootstrap note stage with the real AI review workflow, Step 0 run context generation, Copilot SDK orchestration, and structured review output.
+Future changes will extend the current Step 0 + Step 1 foundation into the remaining per-file SOP steps, Judge-backed completion checks, retry/skip strategy, bounded concurrency, and the full final review output pipeline.

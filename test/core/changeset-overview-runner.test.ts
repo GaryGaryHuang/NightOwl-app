@@ -21,7 +21,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
   });
 
   const runContext = await runner.run({
-    model: "gpt-5.1-codex-mini",
+    model: "gpt-5.4-mini",
     workingDirectory: "/workspace/repo",
     outputBaseDir: "/workspace/repo/packages/app",
     repoRoot: "/workspace/repo",
@@ -59,7 +59,7 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   });
 
   const runContext = await runner.run({
-    model: "gpt-5.1-codex-mini",
+    model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo/packages/app",
     repoRoot: "/workspace/repo",
     changedFilesList: ["M\tsrc/app.ts"],
@@ -90,7 +90,7 @@ test("ChangesetOverviewRunner fails after two empty responses", async () => {
   await assert.rejects(
     () =>
       runner.run({
-        model: "gpt-5.1-codex-mini",
+        model: "gpt-5.4-mini",
         outputBaseDir: "/workspace/repo/packages/app",
         repoRoot: "/workspace/repo",
         changedFilesList: ["M\tsrc/app.ts"],

@@ -1,13 +1,17 @@
 import path from "node:path";
 
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
+import { FileReviewContext } from "./file-review-context.ts";
+import { ReviewNoteFinalizer } from "./finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunRequest } from "./run-request.ts";
+import type { StepRunner } from "./step-runner.ts";
 import {
   buildOutputTarget,
   planNoteFiles,
   type OutputTarget
 } from "./review-path-resolver.ts";
+import { Step1OverviewStep } from "./steps/step1-overview.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 
@@ -22,6 +26,7 @@ export interface ReviewOrchestratorOptions {
   changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
+  stepRunner: Pick<StepRunner, "run">;
   workingDirectory: string;
   timestampProvider?: () => string;
 }
@@ -30,15 +35,19 @@ export class ReviewOrchestrator {
   readonly #changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
   readonly #sourceProvider: ReviewSourceProvider;
   readonly #outputSink: ReviewOutputSink;
+  readonly #stepRunner: Pick<StepRunner, "run">;
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
+  readonly #finalizer: ReviewNoteFinalizer;
 
   constructor(options: ReviewOrchestratorOptions) {
     this.#changesetOverviewRunner = options.changesetOverviewRunner;
     this.#sourceProvider = options.sourceProvider;
     this.#outputSink = options.outputSink;
+    this.#stepRunner = options.stepRunner;
     this.#workingDirectory = options.workingDirectory;
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
+    this.#finalizer = new ReviewNoteFinalizer();
   }
 
   async run(request: RunRequest): Promise<ReviewRunSummary> {
@@ -50,7 +59,7 @@ export class ReviewOrchestrator {
       request.headRef
     );
     const runContext = await this.#changesetOverviewRunner.run({
-      model: "gpt-5.1-codex-mini",
+      model: "gpt-5.4-mini",
       changedFilesList: changesetEntries,
       outputBaseDir: startPath,
       repoRoot,
@@ -80,7 +89,59 @@ export class ReviewOrchestrator {
     for (const plannedNote of plannedNoteFiles) {
       this.#outputSink.publishFileReview({
         noteFilePath: plannedNote.noteFilePath,
-        content: renderBootstrapNote(plannedNote.filePath)
+        content: this.#finalizer.render(
+          new FileReviewContext({
+            filePath: plannedNote.filePath,
+            noteFilePath: plannedNote.noteFilePath,
+            diffContent: "",
+            baseRef: request.baseRef,
+            headRef: request.headRef
+          })
+        )
+      });
+    }
+
+    const step = new Step1OverviewStep({ runContext });
+
+    for (const plannedNote of plannedNoteFiles) {
+      let diffContent: string;
+
+      try {
+        diffContent = this.#sourceProvider.getDiff(
+          repoRoot,
+          request.baseRef,
+          request.headRef,
+          plannedNote.filePath
+        );
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+
+        throw new Error(
+          `Step step1-overview failed for ${plannedNote.filePath}: ${message}`
+        );
+      }
+
+      const fileContext = new FileReviewContext({
+        filePath: plannedNote.filePath,
+        noteFilePath: plannedNote.noteFilePath,
+        diffContent,
+        baseRef: request.baseRef,
+        headRef: request.headRef
+      });
+      const result = await this.#stepRunner.run({
+        step,
+        context: fileContext,
+        outputBaseDir: startPath,
+        repoRoot,
+        workingDirectory: repoRoot
+      });
+
+      result.applyTo(fileContext);
+
+      this.#outputSink.publishFileReview({
+        noteFilePath: fileContext.noteFilePath,
+        content: this.#finalizer.render(fileContext)
       });
     }
 
@@ -91,15 +152,6 @@ export class ReviewOrchestrator {
       plannedFileCount: plannedNoteFiles.length
     };
   }
-}
-
-function renderBootstrapNote(filePath: string): string {
-  return [
-    `# ${filePath}`,
-    "",
-    `- Source file: \`${filePath}\``,
-    "- Status: Review not yet generated."
-  ].join("\n");
 }
 
 function defaultTimestampProvider(): string {

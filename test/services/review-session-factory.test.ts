@@ -27,7 +27,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
   });
 
   await factory.createSession({
-    model: "gpt-5.1-codex-mini",
+    model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo/packages/app",
     repoRoot: "/workspace/repo",
     systemMessage: "system prompt",
@@ -38,7 +38,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
     {
       excludedTools: ["web_fetch"],
       hooks: receivedConfigs[0].hooks,
-      model: "gpt-5.1-codex-mini",
+      model: "gpt-5.4-mini",
       streaming: false,
       onPermissionRequest: receivedConfigs[0].onPermissionRequest,
       systemMessage: {
@@ -106,7 +106,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: "Step 0 only allows repo-local read-only bash analysis commands."
+      permissionDecisionReason: "Review sessions only allow repo-local read-only bash analysis commands."
     }
   );
   assert.deepEqual(
@@ -121,7 +121,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: "Step 0 only allows repo-local read-only bash analysis commands."
+      permissionDecisionReason: "Review sessions only allow repo-local read-only bash analysis commands."
     }
   );
   assert.deepEqual(
@@ -136,7 +136,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: "Step 0 only allows repo-local read-only bash analysis commands."
+      permissionDecisionReason: "Review sessions only allow repo-local read-only bash analysis commands."
     }
   );
   assert.deepEqual(
@@ -151,7 +151,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: "Step 0 only allows repo-local read-only bash analysis commands."
+      permissionDecisionReason: "Review sessions only allow repo-local read-only bash analysis commands."
     }
   );
   assert.deepEqual(
@@ -166,7 +166,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: "Step 0 only allows repo-local read-only bash analysis commands."
+      permissionDecisionReason: "Review sessions only allow repo-local read-only bash analysis commands."
     }
   );
   assert.deepEqual(
@@ -181,7 +181,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: "Step 0 only allows repo-local read-only bash analysis commands."
+      permissionDecisionReason: "Review sessions only allow repo-local read-only bash analysis commands."
     }
   );
   assert.deepEqual(
@@ -196,7 +196,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: "Step 0 only allows repo-local read-only bash analysis commands."
+      permissionDecisionReason: "Review sessions only allow repo-local read-only bash analysis commands."
     }
   );
 });

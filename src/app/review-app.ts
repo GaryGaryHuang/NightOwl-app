@@ -6,6 +6,7 @@ import {
   ReviewOrchestrator,
   type ReviewRunSummary
 } from "../core/orchestrator.ts";
+import { StepRunner } from "../core/step-runner.ts";
 import { LocalGitProvider } from "../providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
@@ -27,6 +28,7 @@ export interface CreateLocalReviewRunAppOptions {
   };
   outputSink?: ReviewOutputSink;
   sourceProvider?: ReviewSourceProvider;
+  stepRunner?: Pick<StepRunner, "run">;
   workingDirectory: string;
   timestampProvider?: () => string;
 }
@@ -42,6 +44,8 @@ export function createLocalReviewRunApp(
   const sourceProvider = options.sourceProvider ?? new LocalGitProvider();
   const outputSink = options.outputSink ?? new LocalWorkspaceProvider();
   const reviewSessionFactory = new ReviewSessionFactory({ clientManager });
+  const stepRunner =
+    options.stepRunner ?? new StepRunner({ reviewSessionFactory });
   const changesetOverviewRunner =
     options.changesetOverviewRunner ??
     new ChangesetOverviewRunner({
@@ -51,6 +55,7 @@ export function createLocalReviewRunApp(
     changesetOverviewRunner,
     sourceProvider,
     outputSink,
+    stepRunner,
     workingDirectory: options.workingDirectory,
     timestampProvider: options.timestampProvider
   });

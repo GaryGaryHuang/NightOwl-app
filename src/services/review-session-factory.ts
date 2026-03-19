@@ -93,7 +93,7 @@ function createReviewPreToolUseHook(
     return {
       permissionDecision: "deny",
       permissionDecisionReason:
-        "Step 0 only allows repo-local read-only bash analysis commands."
+        "Review sessions only allow repo-local read-only bash analysis commands."
     };
   };
 }
