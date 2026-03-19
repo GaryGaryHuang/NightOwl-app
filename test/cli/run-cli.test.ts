@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { runCli } from "../../src/index.ts";
 
 test("runCli forwards parsed input to the app boundary once", async () => {
@@ -23,6 +24,10 @@ test("runCli forwards parsed input to the app boundary once", async () => {
           seenRequests.push(request);
           return {
             repoRoot: "/workspace/repo",
+            runContext: {
+              changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+              userContext: ["release-note"]
+            },
             outputTarget: {
               basePath: "/workspace/repo/review/feature-branch_03131430",
               filesPath: "/workspace/repo/review/feature-branch_03131430/files",
@@ -98,6 +103,10 @@ test("runCli prints the prepared-run summary from the app result", async () => {
       async run() {
         return {
           repoRoot: "/workspace/repo",
+          runContext: {
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          },
           outputTarget: {
             basePath: "/workspace/repo/review/feature-branch_03131430",
             filesPath: "/workspace/repo/review/feature-branch_03131430/files",
@@ -141,6 +150,10 @@ test("runCli reports zero planned files as a successful summary", async () => {
       async run() {
         return {
           repoRoot: "/workspace/repo",
+          runContext: {
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          },
           outputTarget: {
             basePath: "/workspace/repo/review/feature-branch_03131430",
             filesPath: "/workspace/repo/review/feature-branch_03131430/files",
@@ -166,4 +179,39 @@ test("runCli reports zero planned files as a successful summary", async () => {
   assert.equal(exitCode, 0);
   assert.match(stdout.join("\n"), /Planned files: 0/u);
   assert.deepEqual(stderr, []);
+});
+
+test("runCli surfaces a clear runtime error when Step 0 session startup fails", async () => {
+  const stdout = [];
+  const stderr = [];
+  const app = createLocalReviewRunApp({
+    workingDirectory: "/workspace/repo",
+    clientManager: {
+      async start() {
+        throw new Error("Copilot CLI is unavailable.");
+      },
+      async stop() {},
+      getClient() {
+        throw new Error("unreachable");
+      }
+    }
+  });
+
+  const exitCode = await runCli(["main", "feature-branch"], {
+    app,
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 1);
+  assert.deepEqual(stdout, []);
+  assert.match(stderr.join("\n"), /Copilot CLI is unavailable\./u);
 });

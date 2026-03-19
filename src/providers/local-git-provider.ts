@@ -26,6 +26,20 @@ export class LocalGitProvider implements ReviewSourceProvider {
     return output ? output.split("\n").filter(Boolean) : [];
   }
 
+  getChangesetEntries(
+    repoRoot: string,
+    baseRef: string,
+    headRef: string
+  ): string[] {
+    const output = runGit(repoRoot, [
+      "diff",
+      `${baseRef}...${headRef}`,
+      "--name-status"
+    ]);
+
+    return output ? output.split("\n").filter(Boolean) : [];
+  }
+
   getDiff(
     repoRoot: string,
     baseRef: string,

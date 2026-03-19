@@ -10,6 +10,7 @@ The current repository implements the local review run bootstrap stage. This sta
 
 - an installable `review` executable
 - argument parsing for `review <base_ref> <head_ref> [--repo <path>] [--context <value>]`
+- Step 0 (Changeset Overview) execution through the GitHub Copilot SDK before local bootstrap continues
 - local Git-backed review run preparation, including repo root discovery and `.reviewignore` filtering
 - review output path planning and initialization under `<output_base_dir>/review/<session_id>/`
 - bootstrap note artifacts for each planned file before any AI review steps run
@@ -18,7 +19,7 @@ The full AI review orchestration, Step 0–7 pipeline, Copilot SDK session flow,
 
 ## Current Behavior
 
-After installation, a valid command now initializes a local review run and prints a stable summary:
+After installation, a valid command now requires a working GitHub Copilot CLI login, executes Step 0 (Changeset Overview), and then initializes a local review run with a stable summary:
 
 ```bash
 review main feature-branch
@@ -73,6 +74,7 @@ Implementation notes:
 - Source files live under `src/` in TypeScript.
 - Published CLI artifacts live under `dist/` in JavaScript and are what the installed `review` command executes.
 - The formal CLI install contract is based on a published package or package artifact; source checkouts are for local development and should use `npm link`.
+- A valid `review` run now depends on a working GitHub Copilot CLI environment and login state, because Step 0 is executed before local bootstrap output is created.
 - The current source-install flow regenerates `dist/`, so both local development and installation from this repo currently require Node 25+.
 - If the project later ships prebuilt artifacts or adopts a different build toolchain, the minimum runtime version can be revisited separately from the source build requirement.
 

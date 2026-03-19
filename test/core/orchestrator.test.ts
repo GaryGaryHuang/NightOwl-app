@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
+import { createRunContext } from "../../src/core/run-context.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
@@ -17,6 +18,14 @@ test("ReviewOrchestrator initializes a local review run with deterministic note 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       outputSink: new LocalWorkspaceProvider(),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
       workingDirectory: fixture.repoDir,
       timestampProvider: () => "03131430"
     });
@@ -31,6 +40,10 @@ test("ReviewOrchestrator initializes a local review run with deterministic note 
     const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
 
     assert.equal(result.repoRoot, realpathSync(fixture.repoDir));
+    assert.deepEqual(result.runContext, {
+      changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+      userContext: []
+    });
     assert.deepEqual(result.outputTarget, {
       basePath: path.join(outputBaseDir, "review", "feature-branch_03131430"),
       filesPath: path.join(
@@ -67,6 +80,56 @@ test("ReviewOrchestrator initializes a local review run with deterministic note 
     assert.match(readFileSync(nestedNotePath, "utf8"), /not yet generated|pending/u);
     assert.match(readFileSync(sourceNotePath, "utf8"), /src\/app\.ts/u);
     assert.match(readFileSync(sourceNotePath, "utf8"), /not yet generated|pending/u);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator does not initialize local output when Step 0 fails", async () => {
+  const calls = [];
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const outputTarget = path.join(
+      fixture.repoDir,
+      "packages",
+      "app",
+      "review"
+    );
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: {
+        initializeRun() {
+          calls.push("initializeRun");
+        },
+        publishFileReview() {
+          calls.push("publishFileReview");
+        },
+        publishSkippedFile() {
+          calls.push("publishSkippedFile");
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          throw new Error("Step 0 failed");
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /Step 0 failed/u
+    );
+    assert.deepEqual(calls, []);
+    assert.equal(existsSync(outputTarget), false);
   } finally {
     fixture.cleanup();
   }

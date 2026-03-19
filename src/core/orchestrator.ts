@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
+import type { RunContext } from "./run-context.ts";
 import type { RunRequest } from "./run-request.ts";
 import {
   buildOutputTarget,
@@ -11,11 +13,13 @@ import type { ReviewSourceProvider } from "../providers/review-source-provider.t
 
 export interface ReviewRunSummary {
   repoRoot: string;
+  runContext: RunContext;
   outputTarget: OutputTarget;
   plannedFileCount: number;
 }
 
 export interface ReviewOrchestratorOptions {
+  changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   workingDirectory: string;
@@ -23,12 +27,14 @@ export interface ReviewOrchestratorOptions {
 }
 
 export class ReviewOrchestrator {
+  readonly #changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
   readonly #sourceProvider: ReviewSourceProvider;
   readonly #outputSink: ReviewOutputSink;
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
 
   constructor(options: ReviewOrchestratorOptions) {
+    this.#changesetOverviewRunner = options.changesetOverviewRunner;
     this.#sourceProvider = options.sourceProvider;
     this.#outputSink = options.outputSink;
     this.#workingDirectory = options.workingDirectory;
@@ -38,6 +44,19 @@ export class ReviewOrchestrator {
   async run(request: RunRequest): Promise<ReviewRunSummary> {
     const startPath = path.resolve(this.#workingDirectory, request.repoPath ?? ".");
     const repoRoot = this.#sourceProvider.resolveRepoRoot(startPath);
+    const changesetEntries = this.#sourceProvider.getChangesetEntries(
+      repoRoot,
+      request.baseRef,
+      request.headRef
+    );
+    const runContext = await this.#changesetOverviewRunner.run({
+      model: "gpt-5.1-codex-mini",
+      changedFilesList: changesetEntries,
+      outputBaseDir: startPath,
+      repoRoot,
+      userContext: request.userContext,
+      workingDirectory: repoRoot
+    });
     const branchName = this.#sourceProvider.getCurrentBranch(repoRoot);
     const changedFiles = this.#sourceProvider.getChangedFiles(
       repoRoot,
@@ -67,6 +86,7 @@ export class ReviewOrchestrator {
 
     return {
       repoRoot,
+      runContext,
       outputTarget,
       plannedFileCount: plannedNoteFiles.length
     };

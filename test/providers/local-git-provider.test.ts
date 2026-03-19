@@ -91,3 +91,25 @@ test("LocalGitProvider filters changed files with .reviewignore rules", () => {
     fixture.cleanup();
   }
 });
+
+test("LocalGitProvider returns complete name-status entries for Step 0, including deleted files", () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const provider = new LocalGitProvider();
+    const changesetEntries = provider.getChangesetEntries(
+      fixture.repoDir,
+      "main",
+      "feature-branch"
+    );
+
+    assert.deepEqual(changesetEntries, [
+      "M\tdist/app.js",
+      "D\tobsolete.txt",
+      "M\tpackages/app/index.ts",
+      "M\tsrc/app.ts"
+    ]);
+  } finally {
+    fixture.cleanup();
+  }
+});

@@ -5,15 +5,12 @@ import {
   existsSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-
-import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
@@ -92,38 +89,15 @@ test("package exposes an installable review executable", () => {
 
   assert.ok(existsSync(binaryPath), "installed review executable should exist");
 
-  const fixture = createReviewRepoFixture();
-
   try {
-    const execResult = spawnSync(binaryPath, ["main", "feature-branch"], {
-      cwd: fixture.repoDir,
+    const execResult = spawnSync(binaryPath, ["main"], {
       encoding: "utf8"
     });
 
-    assert.equal(execResult.status, 0, execResult.stderr || execResult.stdout);
-    assert.match(execResult.stdout, /Initialized local review run\./u);
-    assert.match(execResult.stdout, /Planned files: 3/u);
-
-    const reviewRoot = path.join(fixture.repoDir, "review");
-    const runDirs = readdirSync(reviewRoot);
-    const createdRunDir = path.join(reviewRoot, runDirs[0]);
-    const filesDir = path.join(createdRunDir, "files");
-
-    assert.equal(existsSync(filesDir), true);
-    assert.equal(
-      existsSync(path.join(filesDir, "dist__app.js.md")),
-      true
-    );
-    assert.equal(
-      existsSync(path.join(filesDir, "app__index.ts.md")),
-      true
-    );
-    assert.equal(
-      existsSync(path.join(filesDir, "src__app.ts.md")),
-      true
-    );
+    assert.equal(execResult.status, 1, execResult.stderr || execResult.stdout);
+    assert.match(execResult.stderr, /head_ref/u);
+    assert.match(execResult.stderr, /review <base_ref> <head_ref>/u);
   } finally {
-    fixture.cleanup();
     rmSync(tarballPath, { force: true });
   }
 });
