@@ -2,9 +2,11 @@ import type { FileReviewContext } from "./file-review-context.ts";
 
 export class ReviewNoteFinalizer {
   render(context: Pick<FileReviewContext, "filePath" | "getSection">): string {
-    const overview = context.getSection("overview")?.trim();
+    const sections = ["overview", "dependencies-boundaries"]
+      .map((sectionKey) => context.getSection(sectionKey)?.trim())
+      .filter((section): section is string => Boolean(section));
 
-    if (!overview) {
+    if (sections.length === 0) {
       return [
         `# ${context.filePath}`,
         "",
@@ -18,7 +20,9 @@ export class ReviewNoteFinalizer {
       "",
       `- Source file: \`${context.filePath}\``,
       "",
-      overview
+      ...sections.flatMap((section, index) =>
+        index === 0 ? [section] : ["", section]
+      )
     ].join("\n");
   }
 }

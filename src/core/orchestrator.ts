@@ -11,6 +11,7 @@ import {
   planNoteFiles,
   type OutputTarget
 } from "./review-path-resolver.ts";
+import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boundaries.ts";
 import { Step1OverviewStep } from "./steps/step1-overview.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
@@ -101,7 +102,12 @@ export class ReviewOrchestrator {
       });
     }
 
-    const step = new Step1OverviewStep({ runContext });
+    const steps = [
+      new Step1OverviewStep({ runContext }),
+      new Step2DependenciesBoundariesStep({
+        reviewNoteFinalizer: this.#finalizer
+      })
+    ];
 
     for (const plannedNote of plannedNoteFiles) {
       let diffContent: string;
@@ -129,20 +135,23 @@ export class ReviewOrchestrator {
         baseRef: request.baseRef,
         headRef: request.headRef
       });
-      const result = await this.#stepRunner.run({
-        step,
-        context: fileContext,
-        outputBaseDir: startPath,
-        repoRoot,
-        workingDirectory: repoRoot
-      });
 
-      result.applyTo(fileContext);
+      for (const step of steps) {
+        const result = await this.#stepRunner.run({
+          step,
+          context: fileContext,
+          outputBaseDir: startPath,
+          repoRoot,
+          workingDirectory: repoRoot
+        });
 
-      this.#outputSink.publishFileReview({
-        noteFilePath: fileContext.noteFilePath,
-        content: this.#finalizer.render(fileContext)
-      });
+        result.applyTo(fileContext);
+
+        this.#outputSink.publishFileReview({
+          noteFilePath: fileContext.noteFilePath,
+          content: this.#finalizer.render(fileContext)
+        });
+      }
     }
 
     return {

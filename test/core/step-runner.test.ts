@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { FileReviewContext } from "../../src/core/file-review-context.ts";
+import { ReviewNoteFinalizer } from "../../src/core/finalizer.ts";
+import { Step2DependenciesBoundariesStep } from "../../src/core/steps/step2-dependencies-boundaries.ts";
 import {
   StepRunner
 } from "../../src/core/step-runner.ts";
@@ -612,4 +614,83 @@ test("StepRunner reports standardized review startup failure after retry exhaust
   );
 
   assert.equal(createAttempts, 2);
+});
+
+test("StepRunner rebuilds Step 2 current review from the last successful state on retry and does not leak provisional content", async () => {
+  const prompts = [];
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+  context.setSection(
+    "overview",
+    [
+      "## Overview",
+      "- 整體理解：測試用概覽",
+      "- 行為變更：無行為變更",
+      "- 檔案職責：維護 app value",
+      "- 改動目的：調整常數",
+      "- 影響範圍：src/app.ts",
+      "- 測試覆蓋觀察：未見對應測試異動"
+    ].join("\n")
+  );
+
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return new SessionExecutor({
+          async sendAndWait(options) {
+            prompts.push(options.prompt);
+
+            return {
+              data: {
+                content: [
+                  "## Dependencies & Boundaries",
+                  "- 相依清單：",
+                  "  - 無外部相依",
+                  "- 隱含相依：",
+                  "  - 無"
+                ].join("\n")
+              }
+            };
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    judgeService: {
+      async evaluate(input) {
+        if (prompts.length === 1) {
+          assert.doesNotMatch(input.sectionContent, /provisional step 2/u);
+
+          return { passed: false, cause: "judge rejected" };
+        }
+
+        return { passed: true };
+      }
+    }
+  });
+
+  const result = await runner.run({
+    step: new Step2DependenciesBoundariesStep({
+      reviewNoteFinalizer: new ReviewNoteFinalizer()
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  assert.equal(prompts.length, 2);
+  assert.equal(prompts[0], prompts[1]);
+  assert.match(prompts[0] ?? "", /<current_review>[\s\S]*## Overview/u);
+  assert.doesNotMatch(prompts[0] ?? "", /Review not yet generated/u);
+  assert.doesNotMatch(prompts[0] ?? "", /provisional step 2/u);
+  assert.equal(context.getSection("dependencies-boundaries"), undefined);
+
+  result.applyTo(context);
+
+  assert.match(context.getSection("dependencies-boundaries") ?? "", /^## Dependencies & Boundaries/u);
 });

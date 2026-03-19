@@ -6,7 +6,7 @@ The project is designed to review changes between two Git refs in a local reposi
 
 ## Current Status
 
-The current repository implements the Step 0 + Step 1 foundation stage. This stage provides:
+The current repository implements the Step 0 + Step 1 + Step 2 foundation stage. This stage provides:
 
 - an installable `review` executable
 - argument parsing for `review <base_ref> <head_ref> [--repo <path>] [--context <value>]`
@@ -15,15 +15,16 @@ The current repository implements the Step 0 + Step 1 foundation stage. This sta
 - review output path planning and initialization under `<output_base_dir>/review/<session_id>/`
 - bootstrap note artifacts for each planned file before Step 1 runs
 - Step 1 (Overview) execution for each planned file with `RunContext.changesetOverview` injected into the prompt
-- judge-based completion checks for Step 1, so Overview content is written only after the judge passes
-- per-file in-memory review state plus minimal note rendering for bootstrap and Step 1 Overview snapshots
-- conservative Step 1 failure handling: if a Step 1 attempt or its judge check fails twice, the run stops, earlier successful snapshots remain, and unfinished files keep their bootstrap notes
+- Step 2 (Dependencies & Boundaries) execution for each planned file with `<current_review>` rendered from formal in-memory review state after Step 1 succeeds
+- judge-based completion checks for Step 1 and Step 2, so section content is written only after the judge passes
+- per-file in-memory review state plus minimal note rendering for bootstrap, Step 1, and Step 2 snapshots
+- conservative section-step failure handling for Step 1 and Step 2: if an attempt or its judge check fails twice, the run stops, earlier successful snapshots remain, and unfinished files keep their last successfully published note state
 
-The full AI review orchestration is not implemented yet. Step 2–7, skipped-file / retry strategy beyond the current Step 1 foundation, bounded concurrency, MCP / `web_fetch`, and the complete final rendering pipeline are still deferred.
+The full AI review orchestration is not implemented yet. Step 3–7, skipped-file / retry strategy beyond the current Step 1 + Step 2 foundation, bounded concurrency, MCP / `web_fetch`, and the complete final rendering pipeline are still deferred.
 
 ## Current Behavior
 
-After installation, a valid command now requires a working GitHub Copilot CLI login, executes Step 0 (Changeset Overview), runs Step 1 (Overview) for each planned file, and then reports the same stable run summary:
+After installation, a valid command now requires a working GitHub Copilot CLI login, executes Step 0 (Changeset Overview), runs Step 1 (Overview) and Step 2 (Dependencies & Boundaries) for each planned file, and then reports the same stable run summary:
 
 ```bash
 review main feature-branch
@@ -43,7 +44,7 @@ The command also creates:
 - `<output_base_dir>/review/<session_id>/skipped.md`
 - one Markdown note per planned file
 
-For successfully processed files, the note is updated from the bootstrap skeleton into a Step 1 Overview snapshot that begins with:
+For successfully processed files, the note is updated from the bootstrap skeleton into a Step 1 + Step 2 snapshot that begins with:
 
 ```md
 # path/to/file.ts
@@ -52,11 +53,14 @@ For successfully processed files, the note is updated from the bootstrap skeleto
 
 ## Overview
 ...
+
+## Dependencies & Boundaries
+...
 ```
 
 Invalid input still fails fast with a usage error, and successful runs with zero planned files still exit successfully.
 
-At this stage, Step 1 now uses Judge completion checks with retry once semantics. If the review attempt or judge check still fails after retry, the run stops immediately, `skipped.md` remains unchanged, already-successful files keep their Overview snapshots, and unfinished files keep only their bootstrap notes.
+At this stage, Step 1 and Step 2 both use Judge completion checks with retry once semantics. If a review attempt or judge check still fails after retry, the run stops immediately, `skipped.md` remains unchanged, already-successful files keep their last successful snapshots, and unfinished files keep only the last section state that was successfully published.
 
 ## Development
 
@@ -91,7 +95,7 @@ Implementation notes:
 - Source files live under `src/` in TypeScript.
 - Published CLI artifacts live under `dist/` in JavaScript and are what the installed `review` command executes.
 - The formal CLI install contract is based on a published package or package artifact; source checkouts are for local development and should use `npm link`.
-- A valid `review` run now depends on a working GitHub Copilot CLI environment and login state, because Step 0 and Step 1 are both executed before the command completes.
+- A valid `review` run now depends on a working GitHub Copilot CLI environment and login state, because Step 0, Step 1, and Step 2 are all executed before the command completes.
 - The current source-install flow regenerates `dist/`, so both local development and installation from this repo currently require Node 25+.
 - If the project later ships prebuilt artifacts or adopts a different build toolchain, the minimum runtime version can be revisited separately from the source build requirement.
 
@@ -103,4 +107,4 @@ The intended usage model is a command such as:
 review <base_ref> <head_ref> [--repo <path>]
 ```
 
-Future changes will extend the current Step 0 + Step 1 + judge foundation into the remaining per-file SOP steps, skipped-file strategy, bounded concurrency, and the full final review output pipeline.
+Future changes will extend the current Step 0 + Step 1 + Step 2 + judge foundation into the remaining per-file SOP steps, skipped-file strategy, bounded concurrency, and the full final review output pipeline.
