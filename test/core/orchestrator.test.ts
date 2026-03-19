@@ -13,7 +13,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
-test("ReviewOrchestrator does not start Step 3, Step 4, or Step 5 for a failed Step 2 file or any later files", async () => {
+test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, or Step 6 for a failed Step 2 file or any later files", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -105,12 +105,17 @@ test("ReviewOrchestrator does not start Step 3, Step 4, or Step 5 for a failed S
       reviewAttempts.get(`step5-validation-interrogation:${failedFile}`),
       undefined
     );
+    assert.equal(
+      reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`),
+      undefined
+    );
     assert.deepEqual(stepEvents, [
       ["step1-overview", reviewableFiles[0]],
       ["step2-dependencies-boundaries", reviewableFiles[0]],
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
       ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
       ["step5-validation-interrogation", reviewableFiles[0]],
+      ["step6-cognitive-simulation", reviewableFiles[0]],
       ["step1-overview", failedFile],
       ["step2-dependencies-boundaries", failedFile],
       ["step2-dependencies-boundaries", failedFile]
@@ -198,6 +203,7 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
       ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
       ["step5-validation-interrogation", reviewableFiles[0]],
+      ["step6-cognitive-simulation", reviewableFiles[0]],
       ["step1-overview", failedFile],
       ["step1-overview", failedFile]
     ]);
@@ -206,7 +212,7 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
   }
 });
 
-test("ReviewOrchestrator preserves a full successful Step 5 snapshot when a later file fails at Step 1", async () => {
+test("ReviewOrchestrator preserves a full successful Step 6 snapshot when a later file fails at Step 1", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -305,7 +311,7 @@ test("ReviewOrchestrator preserves a full successful Step 5 snapshot when a late
   }
 });
 
-test("ReviewOrchestrator preserves an already-published full Step 5 snapshot when getDiff fails after output initialization", async () => {
+test("ReviewOrchestrator preserves an already-published full Step 6 snapshot when getDiff fails after output initialization", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -473,7 +479,8 @@ test("ReviewOrchestrator preserves an already-published full Step 5 snapshot whe
       ["step2-dependencies-boundaries", reviewableFiles[0]],
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
       ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
-      ["step5-validation-interrogation", reviewableFiles[0]]
+      ["step5-validation-interrogation", reviewableFiles[0]],
+      ["step6-cognitive-simulation", reviewableFiles[0]]
     ]);
 
     const firstNote = readFileSync(plannedNotes[0].noteFilePath, "utf8");
@@ -599,13 +606,30 @@ function buildStep5JsonResponse(): string {
   });
 }
 
+function buildStep6JsonResponse(): string {
+  return JSON.stringify({
+    findings: [
+      {
+        type: "must",
+        title: "問題標題",
+        context: "具體情境",
+        deviation: "預期與實際有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 guard",
+        confidence: 91
+      }
+    ]
+  });
+}
+
 function buildStepResponse(
   stepId:
     | "step1-overview"
     | "step2-dependencies-boundaries"
     | "step3-knowledge-source-of-truth"
     | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation",
+    | "step5-validation-interrogation"
+    | "step6-cognitive-simulation",
   filePath: string
 ): string {
   if (stepId === "step1-overview") {
@@ -624,7 +648,11 @@ function buildStepResponse(
     return buildStrategyResponse(filePath);
   }
 
-  return buildStep5JsonResponse();
+  if (stepId === "step5-validation-interrogation") {
+    return buildStep5JsonResponse();
+  }
+
+  return buildStep6JsonResponse();
 }
 
 function detectStepId(
@@ -634,7 +662,8 @@ function detectStepId(
   | "step2-dependencies-boundaries"
   | "step3-knowledge-source-of-truth"
   | "step4-strategy-what-if-scenarios"
-  | "step5-validation-interrogation" {
+  | "step5-validation-interrogation"
+  | "step6-cognitive-simulation" {
   if (/## Current Step: Overview/u.test(systemMessage)) {
     return "step1-overview";
   }
@@ -653,6 +682,10 @@ function detectStepId(
 
   if (/## Current Step: Validation & Interrogation/u.test(systemMessage)) {
     return "step5-validation-interrogation";
+  }
+
+  if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
+    return "step6-cognitive-simulation";
   }
 
   throw new Error(`Unknown step system message: ${systemMessage}`);

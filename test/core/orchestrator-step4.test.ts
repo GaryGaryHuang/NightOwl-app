@@ -167,6 +167,10 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts and 
       reviewAttempts.get(`step5-validation-interrogation:${failedFile}`),
       undefined
     );
+    assert.equal(
+      reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`),
+      undefined
+    );
 
     const successfulNote = plannedNotes.find(
       ({ filePath }) => filePath === reviewableFiles[0]
@@ -345,13 +349,30 @@ function buildStep5JsonResponse(): string {
   });
 }
 
+function buildStep6JsonResponse(): string {
+  return JSON.stringify({
+    findings: [
+      {
+        type: "must",
+        title: "問題標題",
+        context: "具體情境",
+        deviation: "預期與實際有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 guard",
+        confidence: 91
+      }
+    ]
+  });
+}
+
 function buildStepResponse(
   stepId:
     | "step1-overview"
     | "step2-dependencies-boundaries"
     | "step3-knowledge-source-of-truth"
     | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation",
+    | "step5-validation-interrogation"
+    | "step6-cognitive-simulation",
   filePath: string
 ): string {
   if (stepId === "step1-overview") {
@@ -370,7 +391,11 @@ function buildStepResponse(
     return buildStrategyResponse(filePath);
   }
 
-  return buildStep5JsonResponse();
+  if (stepId === "step5-validation-interrogation") {
+    return buildStep5JsonResponse();
+  }
+
+  return buildStep6JsonResponse();
 }
 
 function extractDiffPath(prompt: string): string {
@@ -394,7 +419,8 @@ function detectStepId(
   | "step2-dependencies-boundaries"
   | "step3-knowledge-source-of-truth"
   | "step4-strategy-what-if-scenarios"
-  | "step5-validation-interrogation" {
+  | "step5-validation-interrogation"
+  | "step6-cognitive-simulation" {
   if (/## Current Step: Overview/u.test(systemMessage)) {
     return "step1-overview";
   }
@@ -413,6 +439,10 @@ function detectStepId(
 
   if (/## Current Step: Validation & Interrogation/u.test(systemMessage)) {
     return "step5-validation-interrogation";
+  }
+
+  if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
+    return "step6-cognitive-simulation";
   }
 
   throw new Error(`Unknown step system message: ${systemMessage}`);

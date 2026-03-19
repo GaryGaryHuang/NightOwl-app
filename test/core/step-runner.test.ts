@@ -8,6 +8,7 @@ import { Step2DependenciesBoundariesStep } from "../../src/core/steps/step2-depe
 import { Step3KnowledgeSourceOfTruthStep } from "../../src/core/steps/step3-knowledge-source-of-truth.ts";
 import { Step4StrategyWhatIfScenariosStep } from "../../src/core/steps/step4-strategy-what-if-scenarios.ts";
 import { Step5ValidationInterrogationStep } from "../../src/core/steps/step5-validation-interrogation.ts";
+import { Step6CognitiveSimulationStep } from "../../src/core/steps/step6-cognitive-simulation.ts";
 import {
   StepRunner
 } from "../../src/core/step-runner.ts";
@@ -1058,6 +1059,331 @@ test("StepRunner retries the whole Step 5 structured step when deterministic val
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
         confidence: 85
+      }
+    ]
+  });
+});
+
+test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with final findings", async () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+  seedStep4Context(context);
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "初版 findings",
+        context: "初版情境",
+        deviation: "初版落差",
+        impact: "初版 impact",
+        suggestion: "初版建議",
+        confidence: 88
+      }
+    ]
+  });
+
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return new SessionExecutor({
+          async sendAndWait() {
+            return {
+              data: {
+                content: JSON.stringify({
+                  findings: [
+                    {
+                      type: "must",
+                      title: "最終 findings",
+                      context: "最終情境",
+                      deviation: "最終落差",
+                      impact: "最終 impact",
+                      suggestion: "最終建議",
+                      confidence: 91
+                    }
+                  ]
+                })
+              }
+            };
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    structuredOutputValidator: new StructuredOutputValidator()
+  });
+
+  const result = await runner.run({
+    step: new Step6CognitiveSimulationStep({
+      reviewNoteFinalizer: new ReviewNoteFinalizer()
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "must",
+        title: "初版 findings",
+        context: "初版情境",
+        deviation: "初版落差",
+        impact: "初版 impact",
+        suggestion: "初版建議",
+        confidence: 88
+      }
+    ]
+  });
+
+  result.applyTo(context);
+
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "must",
+        title: "最終 findings",
+        context: "最終情境",
+        deviation: "最終落差",
+        impact: "最終 impact",
+        suggestion: "最終建議",
+        confidence: 91
+      }
+    ]
+  });
+});
+
+test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with empty final findings", async () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+  seedStep4Context(context);
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "初版 findings",
+        context: "初版情境",
+        deviation: "初版落差",
+        impact: "初版 impact",
+        suggestion: "初版建議",
+        confidence: 88
+      }
+    ]
+  });
+
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return new SessionExecutor({
+          async sendAndWait() {
+            return {
+              data: {
+                content: JSON.stringify({ findings: [] })
+              }
+            };
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    structuredOutputValidator: new StructuredOutputValidator()
+  });
+
+  const result = await runner.run({
+    step: new Step6CognitiveSimulationStep({
+      reviewNoteFinalizer: new ReviewNoteFinalizer()
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  result.applyTo(context);
+
+  assert.deepEqual(context.getStructuredState(), { findings: [] });
+});
+
+test("StepRunner applies Step 6 structured output by replacing empty Step 5 findings with final findings", async () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+  seedStep4Context(context);
+  context.updateStructuredState({ findings: [] });
+
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return new SessionExecutor({
+          async sendAndWait() {
+            return {
+              data: {
+                content: JSON.stringify({
+                  findings: [
+                    {
+                      type: "nice",
+                      title: "從空 findings 補出的最終問題",
+                      context: "最終情境",
+                      deviation: "最終落差",
+                      impact: "最終 impact",
+                      suggestion: "最終建議",
+                      confidence: 93
+                    }
+                  ]
+                })
+              }
+            };
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    structuredOutputValidator: new StructuredOutputValidator()
+  });
+
+  const result = await runner.run({
+    step: new Step6CognitiveSimulationStep({
+      reviewNoteFinalizer: new ReviewNoteFinalizer()
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  result.applyTo(context);
+
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "nice",
+        title: "從空 findings 補出的最終問題",
+        context: "最終情境",
+        deviation: "最終落差",
+        impact: "最終 impact",
+        suggestion: "最終建議",
+        confidence: 93
+      }
+    ]
+  });
+});
+
+test("StepRunner retries the whole Step 6 structured step when deterministic validation fails first without mutating Step 5 findings", async () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+  seedStep4Context(context);
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "初版 findings",
+        context: "初版情境",
+        deviation: "初版落差",
+        impact: "初版 impact",
+        suggestion: "初版建議",
+        confidence: 88
+      }
+    ]
+  });
+  const prompts = [];
+  let reviewAttempts = 0;
+
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return new SessionExecutor({
+          async sendAndWait(options) {
+            prompts.push(options.prompt);
+            reviewAttempts += 1;
+
+            if (reviewAttempts === 1) {
+              return {
+                data: {
+                  content: "{\"findings\":[}"
+                }
+              };
+            }
+
+            return {
+              data: {
+                content: JSON.stringify({
+                  findings: [
+                    {
+                      type: "must",
+                      title: "成功結果",
+                      context: "具體情境",
+                      deviation: "預期與實際有落差",
+                      impact: "會造成 correctness 問題",
+                      suggestion: "補上 final guard",
+                      confidence: 91
+                    }
+                  ]
+                })
+              }
+            };
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    structuredOutputValidator: new StructuredOutputValidator()
+  });
+
+  const result = await runner.run({
+    step: new Step6CognitiveSimulationStep({
+      reviewNoteFinalizer: new ReviewNoteFinalizer()
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  assert.equal(reviewAttempts, 2);
+  assert.equal(prompts.length, 2);
+  assert.equal(prompts[0], prompts[1]);
+  assert.match(prompts[0] ?? "", /## Findings[\s\S]*初版 findings/u);
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "must",
+        title: "初版 findings",
+        context: "初版情境",
+        deviation: "初版落差",
+        impact: "初版 impact",
+        suggestion: "初版建議",
+        confidence: 88
+      }
+    ]
+  });
+
+  result.applyTo(context);
+
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "must",
+        title: "成功結果",
+        context: "具體情境",
+        deviation: "預期與實際有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 final guard",
+        confidence: 91
       }
     ]
   });

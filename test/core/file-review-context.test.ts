@@ -160,4 +160,32 @@ test("FileReviewContext replaces structured findings state without leaking snaps
   context.updateStructuredState({ findings: [] });
 
   assert.deepEqual(context.getStructuredState(), { findings: [] });
+
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "從空 findings 補回正式結果",
+        context: "Step 6 最終情境",
+        deviation: "最終檢查後仍有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 final guard",
+        confidence: 92
+      }
+    ]
+  });
+
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "must",
+        title: "從空 findings 補回正式結果",
+        context: "Step 6 最終情境",
+        deviation: "最終檢查後仍有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 final guard",
+        confidence: 92
+      }
+    ]
+  });
 });
