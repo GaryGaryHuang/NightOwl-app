@@ -25,9 +25,10 @@ The current repository implements the Step 0 + Step 1 + Step 2 + Step 3 + Step 4
 - deterministic validation plus confidence filtering for Step 5 and Step 6 findings JSON before formal findings state is updated
 - per-file in-memory review state plus minimal note rendering for bootstrap, Step 1, Step 2, Step 3, Step 4, Step 5, Step 6, and Step 7 snapshots
 - skipped-file pipeline foundation for Step 1–7 exhaustion: if a section-step attempt or its judge check fails twice, or if Step 5 / Step 6 review or deterministic validation fails twice, that file is downgraded to skipped, its last successful formal snapshot is preserved with a deterministic warning block, one record is appended to `skipped.md`, and later planned files continue
+- output-failure taxonomy foundation for current local output edges: `initializeRun()`, bootstrap note publish, successful snapshot publish, interrupted snapshot publish, and `publishSkippedFile()` failures remain fatal output-layer errors and are not downgraded to skipped files
 - minimal interruption-state rendering so skipped files keep bootstrap, Step 1, Step 4, or Step 6 snapshots without leaking provisional failed-step content
 
-The full AI review orchestration is not implemented yet. This repository now includes the Step 7 foundation on top of the Step 3 local-first knowledge foundation, Step 4 strategy foundation, Step 5 first-pass findings foundation, Step 6 findings-finalization foundation, and the skipped-file pipeline foundation for Step 1–7 exhaustion; external knowledge tooling for Step 3 is still deferred. Bounded concurrency, MCP / `web_fetch`, `KnowledgeSvc`, complete output-failure taxonomy, run-level aggregate outputs, and the complete final rendering pipeline are still deferred.
+The full AI review orchestration is not implemented yet. This repository now includes the Step 7 foundation on top of the Step 3 local-first knowledge foundation, Step 4 strategy foundation, Step 5 first-pass findings foundation, Step 6 findings-finalization foundation, the skipped-file pipeline foundation for Step 1–7 exhaustion, and the conservative output-failure taxonomy foundation for current output edges; external knowledge tooling for Step 3 is still deferred. Bounded concurrency, MCP / `web_fetch`, `KnowledgeSvc`, richer output-failure coordinator behavior, run-level aggregate outputs, and the complete final rendering pipeline are still deferred.
 
 ## Current Behavior
 
@@ -88,6 +89,8 @@ At this stage, Step 1, Step 2, Step 3, Step 4, and Step 7 all use Judge completi
 
 Later planned files still continue. Step 0 remains run-fatal and does not use skipped-file downgrade.
 
+At the current foundation boundary, output-layer failures are still more conservative than step exhaustion. If `initializeRun()`, bootstrap note publish, successful snapshot publish, interrupted snapshot publish, or `publishSkippedFile()` throws, the run aborts immediately with the underlying output error. These failures are not reclassified as skipped files, and the runtime does not attempt rollback or best-effort recovery.
+
 Step 3 in the current repository is intentionally **local-first**: it converges `版本／文件參考`、`採用規則與假設`、`排除範圍` from repo-native / local evidence such as version files, lockfiles, config files, internal docs, project conventions, and necessary local git metadata. It does **not** yet wire MCP, Context7, `web_fetch`, or external official docs into the runtime.
 
 Step 4 in the current repository is intentionally **strategy-only**: it converts `Overview`、`Dependencies & Boundaries`、and `Knowledge & Source of Truth` into `高風險區域` and W# What-if scenarios for later validation. It does **not** perform Step 5 validation, generate findings, or introduce app-side parsing of the W# scenarios.
@@ -143,4 +146,4 @@ The intended usage model is a command such as:
 review <base_ref> <head_ref> [--repo <path>]
 ```
 
-Future changes will extend the current Step 0 + Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 plus skipped-file pipeline foundation into bounded concurrency, external knowledge tooling for Step 3, richer output-failure handling, run-level aggregate outputs, and the full final review output pipeline.
+Future changes will extend the current Step 0 + Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 plus skipped-file pipeline and output-failure taxonomy foundations into bounded concurrency, external knowledge tooling for Step 3, richer output-failure coordinator behavior, run-level aggregate outputs, and the full final review output pipeline.

@@ -513,6 +513,172 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
   }
 });
 
+test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap note publish or step execution", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for initializeRun failure");
+
+    const outputCalls = [];
+    const stepEvents = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: {
+        initializeRun(outputTarget) {
+          outputCalls.push(["initializeRun", outputTarget.basePath]);
+          throw new Error("initialize failed");
+        },
+        publishFileReview(fileResult) {
+          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+        },
+        publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+        }
+      },
+      stepRunner: {
+        async run({ context, step }) {
+          stepEvents.push([step.stepId, context.filePath]);
+          throw new Error("should not start steps");
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /initialize failed/u
+    );
+
+    assert.deepEqual(outputCalls, [["initializeRun", path.join(
+      fixture.repoDir,
+      "packages",
+      "app",
+      "review",
+      "feature-branch_03131430"
+    )]]);
+    assert.deepEqual(stepEvents, []);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves earlier bootstrap notes, and stops the bootstrap loop before Step 1", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for bootstrap publish failure");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const plannedNotes = planNoteFiles(
+      path.join(
+        fixture.repoDir,
+        "packages",
+        "app",
+        "review",
+        "feature-branch_03131430",
+        "files"
+      ),
+      reviewableFiles
+    );
+    const outputCalls = [];
+    const writtenNotes = new Map<string, string>();
+    const stepEvents = [];
+    const failedNotePath = plannedNotes[1].noteFilePath;
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: {
+        initializeRun(outputTarget) {
+          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        },
+        publishFileReview(fileResult) {
+          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+
+          if (fileResult.noteFilePath === failedNotePath) {
+            throw new Error("note write failed");
+          }
+
+          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+        },
+        publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+        }
+      },
+      stepRunner: {
+        async run({ context, step }) {
+          stepEvents.push([step.stepId, context.filePath]);
+          throw new Error(`should not start ${step.stepId}`);
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /note write failed/u
+    );
+
+    assert.deepEqual(stepEvents, []);
+    assert.deepEqual(
+      outputCalls.filter(([callType]) => callType === "publishFileReview"),
+      [
+        ["publishFileReview", plannedNotes[0].noteFilePath],
+        ["publishFileReview", plannedNotes[1].noteFilePath]
+      ]
+    );
+    assert.match(
+      writtenNotes.get(plannedNotes[0].noteFilePath) ?? "",
+      /Review not yet generated/u
+    );
+    assert.equal(writtenNotes.has(plannedNotes[1].noteFilePath), false);
+    assert.equal(writtenNotes.has(plannedNotes[2].noteFilePath), false);
+    assert.equal(
+      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
+      false
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("ReviewOrchestrator fails the run when publishing a successful step snapshot fails and does not downgrade the file to skipped", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -595,6 +761,112 @@ test("ReviewOrchestrator fails the run when publishing a successful step snapsho
   }
 });
 
+test("ReviewOrchestrator preserves earlier successful file snapshots and surfaces the output error when a later successful snapshot publish fails", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for later successful snapshot failure");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const failedFile = reviewableFiles[1];
+    const laterFile = reviewableFiles[2];
+    const plannedNotes = planNoteFiles(
+      path.join(
+        fixture.repoDir,
+        "packages",
+        "app",
+        "review",
+        "feature-branch_03131430",
+        "files"
+      ),
+      reviewableFiles
+    );
+    const failedNotePath = plannedNotes.find(
+      ({ filePath }) => filePath === failedFile
+    )!.noteFilePath;
+    const firstNotePath = plannedNotes[0].noteFilePath;
+    const writtenNotes = new Map<string, string>();
+    const outputCalls = [];
+    const stepEvents = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: {
+        initializeRun(outputTarget) {
+          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        },
+        publishFileReview(fileResult) {
+          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+
+          if (
+            fileResult.noteFilePath === failedNotePath &&
+            /^# .*[\s\S]*^## Overview/mu.test(fileResult.content)
+          ) {
+            throw new Error("note write failed");
+          }
+
+          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+        },
+        publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+        }
+      },
+      stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /note write failed/u
+    );
+
+    assert.match(writtenNotes.get(firstNotePath) ?? "", /^# [\s\S]*^## Summary/mu);
+    assert.match(writtenNotes.get(failedNotePath) ?? "", /Review not yet generated/u);
+    assert.doesNotMatch(writtenNotes.get(failedNotePath) ?? "", /^## Overview/mu);
+    assert.deepEqual(stepEvents.slice(0, 8), [
+      ["step1-overview", reviewableFiles[0]],
+      ["step2-dependencies-boundaries", reviewableFiles[0]],
+      ["step3-knowledge-source-of-truth", reviewableFiles[0]],
+      ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
+      ["step5-validation-interrogation", reviewableFiles[0]],
+      ["step6-cognitive-simulation", reviewableFiles[0]],
+      ["step7-summary", reviewableFiles[0]],
+      ["step1-overview", failedFile]
+    ]);
+    assert.equal(
+      stepEvents.some(([, filePath]) => filePath === laterFile),
+      false
+    );
+    assert.equal(
+      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
+      false
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("ReviewOrchestrator fails the run when applyTo throws and does not downgrade the file to skipped", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -665,6 +937,210 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
     assert.equal(
       outputCalls.some(([callType]) => callType === "publishSkippedFile"),
       false
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator aborts with the output error when interrupted snapshot publication fails and does not append a skipped record", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for interrupted snapshot publish failure");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const failedFile = reviewableFiles[1];
+    const laterFile = reviewableFiles[2];
+    const plannedNotes = planNoteFiles(
+      path.join(
+        fixture.repoDir,
+        "packages",
+        "app",
+        "review",
+        "feature-branch_03131430",
+        "files"
+      ),
+      reviewableFiles
+    );
+    const failedNotePath = plannedNotes.find(
+      ({ filePath }) => filePath === failedFile
+    )!.noteFilePath;
+    const writtenNotes = new Map<string, string>();
+    const outputCalls = [];
+    const stepEvents = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: {
+        initializeRun(outputTarget) {
+          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        },
+        publishFileReview(fileResult) {
+          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+
+          if (
+            fileResult.noteFilePath === failedNotePath &&
+            /> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
+          ) {
+            throw new Error("note write failed");
+          }
+
+          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+        },
+        publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+        }
+      },
+      stepRunner: createStepFailureRunner({
+        stepEvents,
+        failedFile,
+        failedStepId: "step5-validation-interrogation",
+        failureCause: "deterministic validation failed"
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /note write failed/u
+    );
+
+    assert.equal(
+      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
+      false
+    );
+    assert.equal(
+      stepEvents.some(([, filePath]) => filePath === laterFile),
+      false
+    );
+    assert.match(
+      writtenNotes.get(failedNotePath) ?? "",
+      /^# [\s\S]*^## Strategy & What-if Scenarios/mu
+    );
+    assert.doesNotMatch(
+      writtenNotes.get(failedNotePath) ?? "",
+      /> \[!WARNING\] Review Interrupted/u
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator aborts with the output error when publishSkippedFile fails after the interrupted snapshot is written", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for skipped log publish failure");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const failedFile = reviewableFiles[1];
+    const laterFile = reviewableFiles[2];
+    const plannedNotes = planNoteFiles(
+      path.join(
+        fixture.repoDir,
+        "packages",
+        "app",
+        "review",
+        "feature-branch_03131430",
+        "files"
+      ),
+      reviewableFiles
+    );
+    const failedNotePath = plannedNotes.find(
+      ({ filePath }) => filePath === failedFile
+    )!.noteFilePath;
+    const writtenNotes = new Map<string, string>();
+    const outputCalls = [];
+    const stepEvents = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: {
+        initializeRun(outputTarget) {
+          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        },
+        publishFileReview(fileResult) {
+          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+        },
+        publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+
+          if (skipRecord.filePath === failedFile) {
+            throw new Error("skipped log write failed");
+          }
+        }
+      },
+      stepRunner: createStepFailureRunner({
+        stepEvents,
+        failedFile,
+        failedStepId: "step7-summary",
+        failureCause: "judge rejected"
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /skipped log write failed/u
+    );
+
+    assert.equal(
+      stepEvents.some(([, filePath]) => filePath === laterFile),
+      false
+    );
+    assert.deepEqual(
+      outputCalls.filter(([callType, filePath]) =>
+        callType === "publishSkippedFile" && filePath === failedFile
+      ),
+      [["publishSkippedFile", failedFile]]
+    );
+    assert.match(
+      writtenNotes.get(failedNotePath) ?? "",
+      /> \[!WARNING\] Review Interrupted/u
     );
   } finally {
     fixture.cleanup();
@@ -914,4 +1390,156 @@ function extractDiffPath(prompt: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function createAlwaysSuccessfulStepRunner(
+  stepEvents: Array<[string, string]>
+): Pick<StepRunner, "run"> {
+  return {
+    async run({ context, step }) {
+      stepEvents.push([step.stepId, context.filePath]);
+
+      return buildSuccessfulStepResult(step.stepId, context.filePath);
+    }
+  };
+}
+
+function createStepFailureRunner(input: {
+  stepEvents: Array<[string, string]>;
+  failedFile: string;
+  failedStepId:
+    | "step1-overview"
+    | "step2-dependencies-boundaries"
+    | "step3-knowledge-source-of-truth"
+    | "step4-strategy-what-if-scenarios"
+    | "step5-validation-interrogation"
+    | "step6-cognitive-simulation"
+    | "step7-summary";
+  failureCause:
+    | "judge rejected"
+    | "judge timeout"
+    | "deterministic validation failed";
+}): Pick<StepRunner, "run"> {
+  return {
+    async run({ context, step }) {
+      input.stepEvents.push([step.stepId, context.filePath]);
+
+      if (
+        context.filePath === input.failedFile &&
+        step.stepId === input.failedStepId
+      ) {
+        throw new Error(
+          `Step ${step.stepId} failed for ${context.filePath}: ${input.failureCause}`
+        );
+      }
+
+      return buildSuccessfulStepResult(step.stepId, context.filePath);
+    }
+  };
+}
+
+function buildSuccessfulStepResult(
+  stepId:
+    | "step1-overview"
+    | "step2-dependencies-boundaries"
+    | "step3-knowledge-source-of-truth"
+    | "step4-strategy-what-if-scenarios"
+    | "step5-validation-interrogation"
+    | "step6-cognitive-simulation"
+    | "step7-summary",
+  filePath: string
+) {
+  if (stepId === "step1-overview") {
+    return {
+      stepId,
+      applyTo(targetContext) {
+        targetContext.setSection("overview", buildOverviewResponse(filePath));
+      }
+    };
+  }
+
+  if (stepId === "step2-dependencies-boundaries") {
+    return {
+      stepId,
+      applyTo(targetContext) {
+        targetContext.setSection(
+          "dependencies-boundaries",
+          buildDependenciesResponse(filePath)
+        );
+      }
+    };
+  }
+
+  if (stepId === "step3-knowledge-source-of-truth") {
+    return {
+      stepId,
+      applyTo(targetContext) {
+        targetContext.setSection(
+          "knowledge-source-of-truth",
+          buildKnowledgeResponse(filePath)
+        );
+      }
+    };
+  }
+
+  if (stepId === "step4-strategy-what-if-scenarios") {
+    return {
+      stepId,
+      applyTo(targetContext) {
+        targetContext.setSection(
+          "strategy-what-if-scenarios",
+          buildStrategyResponse(filePath)
+        );
+      }
+    };
+  }
+
+  if (stepId === "step5-validation-interrogation") {
+    return {
+      stepId,
+      applyTo(targetContext) {
+        targetContext.updateStructuredState({
+          findings: [
+            {
+              type: "must",
+              title: "問題標題",
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        });
+      }
+    };
+  }
+
+  if (stepId === "step6-cognitive-simulation") {
+    return {
+      stepId,
+      applyTo(targetContext) {
+        targetContext.updateStructuredState({
+          findings: [
+            {
+              type: "must",
+              title: "問題標題",
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 91
+            }
+          ]
+        });
+      }
+    };
+  }
+
+  return {
+    stepId,
+    applyTo(targetContext) {
+      targetContext.setSection("summary", buildStep7SummaryResponse(filePath));
+    }
+  };
 }

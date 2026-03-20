@@ -24,6 +24,7 @@ The app currently implements:
 - Step 6 (Cognitive Simulation) foundation for each planned file
 - Step 7 (Summary) foundation for each planned file
 - skipped-file pipeline foundation for Step 1–7 exhaustion
+- output-failure taxonomy foundation for current bootstrap / snapshot / skipped-artifact output edges
 - Minimal `StepRunner` foundation for section-step execution
 - Minimal `StructuredOutputValidator` foundation for findings JSON validation and confidence filtering
 - `JudgeSessionFactory` and `JudgeService` for section-step completion checks
@@ -41,7 +42,7 @@ The app does **not** yet implement:
 - `web_fetch` / URL permission-policy integration
 - `KnowledgeSvc`
 - bounded concurrency
-- complete output-failure taxonomy / coordinator behavior beyond the current skipped-file foundation
+- richer output-failure coordinator behavior beyond the current conservative taxonomy foundation
 - full final review note rendering pipeline
 - run-level aggregate summary output
 
@@ -72,7 +73,7 @@ Do **not** treat `npm install -g .` as the product install contract.
   - arbitrary agent `write` operations must remain restricted
 - Do not silently widen tool permissions.
 - If a capability is explicitly deferred in the active change, do not “sneak it in” as part of unrelated implementation.
-- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation now includes skipped-file downgrade for Step 1–7 exhaustion: Step 1–4 and Step 7 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, retry once is enabled, failed per-file steps publish warning-backed interrupted snapshots plus `skipped.md` records, Step 0 remains fatal, and bounded concurrency is still deferred.
+- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation now includes skipped-file downgrade for Step 1–7 exhaustion plus a conservative output-failure taxonomy foundation: Step 1–4 and Step 7 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, retry once is enabled, failed per-file steps publish warning-backed interrupted snapshots plus `skipped.md` records, `initializeRun()` / bootstrap note publish / successful snapshot publish / interrupted snapshot publish / `publishSkippedFile()` failures remain fatal output-layer errors, Step 0 remains fatal, and bounded concurrency is still deferred.
 
 ## Copilot SDK Notes
 
