@@ -89,6 +89,9 @@ export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
     LOCAL_REVIEW_RUN_HEADER,
     `Repo root: ${result.repoRoot}`,
     `Output: ${result.outputTarget.basePath}`,
-    `Planned files: ${result.plannedFileCount}`
+    `Summary: ${result.outputTarget.summaryPath}`,
+    `Planned files: ${result.plannedFileCount}`,
+    `Successful files: ${result.successfulFileCount}`,
+    `Skipped files: ${result.skippedFileCount}`
   ].join("\n");
 }

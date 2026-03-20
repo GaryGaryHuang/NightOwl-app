@@ -31,6 +31,8 @@ export interface ReviewRunSummary {
   runContext: RunContext;
   outputTarget: OutputTarget;
   plannedFileCount: number;
+  successfulFileCount: number;
+  skippedFileCount: number;
 }
 
 export interface ReviewOrchestratorOptions {
@@ -236,7 +238,9 @@ export class ReviewOrchestrator {
       repoRoot,
       runContext,
       outputTarget,
-      plannedFileCount: plannedNoteFiles.length
+      plannedFileCount: plannedNoteFiles.length,
+      successfulFileCount: successfulFiles.length,
+      skippedFileCount: skippedFiles.length
     };
   }
 }

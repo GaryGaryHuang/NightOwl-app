@@ -26,6 +26,7 @@ The app currently implements:
 - skipped-file pipeline foundation for Step 1–7 exhaustion
 - output-failure taxonomy foundation for current bootstrap / snapshot / skipped-artifact output edges
 - run-level aggregate summary foundation for completed runs
+- CLI run summary fields foundation for completed runs
 - Minimal `StepRunner` foundation for section-step execution
 - Minimal `StructuredOutputValidator` foundation for findings JSON validation and confidence filtering
 - `JudgeSessionFactory` and `JudgeService` for section-step completion checks
@@ -45,7 +46,7 @@ The app does **not** yet implement:
 - bounded concurrency
 - richer output-failure coordinator behavior beyond the current conservative taxonomy foundation
 - full final review note rendering pipeline
-- CLI-level aggregate summary / final export surface beyond the current deterministic `summary.md` foundation
+- richer CLI / export surface beyond the current deterministic `summary.md` plus completed-run counts foundation
 
 Do not assume these missing capabilities already exist.
 
@@ -74,7 +75,7 @@ Do **not** treat `npm install -g .` as the product install contract.
   - arbitrary agent `write` operations must remain restricted
 - Do not silently widen tool permissions.
 - If a capability is explicitly deferred in the active change, do not “sneak it in” as part of unrelated implementation.
-- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation now includes skipped-file downgrade for Step 1–7 exhaustion, a conservative output-failure taxonomy foundation, and a deterministic run-level aggregate summary foundation: Step 1–4 and Step 7 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, retry once is enabled, failed per-file steps publish warning-backed interrupted snapshots plus `skipped.md` records, completed runs publish `summary.md` after all per-file artifacts are finalized, `initializeRun()` / bootstrap note publish / successful snapshot publish / interrupted snapshot publish / `publishSkippedFile()` / `publishRunSummary()` failures remain fatal output-layer errors, Step 0 remains fatal, and bounded concurrency is still deferred.
+- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation now includes skipped-file downgrade for Step 1–7 exhaustion, a conservative output-failure taxonomy foundation, a deterministic run-level aggregate summary foundation, and completed-run CLI summary fields: Step 1–4 and Step 7 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, retry once is enabled, failed per-file steps publish warning-backed interrupted snapshots plus `skipped.md` records, completed runs publish `summary.md` after all per-file artifacts are finalized, CLI success output now reports `summary.md` path plus planned/successful/skipped counts, `initializeRun()` / bootstrap note publish / successful snapshot publish / interrupted snapshot publish / `publishSkippedFile()` / `publishRunSummary()` failures remain fatal output-layer errors, Step 0 remains fatal, and bounded concurrency is still deferred.
 
 ## Copilot SDK Notes
 

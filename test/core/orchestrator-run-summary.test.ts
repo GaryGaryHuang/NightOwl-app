@@ -53,6 +53,8 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
     );
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
+    assert.equal(result.successfulFileCount, reviewableFiles.length);
+    assert.equal(result.skippedFileCount, 0);
     assert.equal(existsSync(result.outputTarget.summaryPath), true);
     assert.equal(
       summaryContent,
@@ -123,6 +125,9 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
     const corruptedSuccessfulNote = readFileSync(plannedNotes[0].noteFilePath, "utf8");
 
     assert.match(corruptedSuccessfulNote, /CORRUPTED NOTE/u);
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
+    assert.equal(result.successfulFileCount, reviewableFiles.length - 1);
+    assert.equal(result.skippedFileCount, 1);
     assert.match(
       summaryContent,
       new RegExp(`- Successful files: ${reviewableFiles.length - 1}`, "u")
@@ -174,6 +179,8 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
     });
 
     assert.equal(result.plannedFileCount, 0);
+    assert.equal(result.successfulFileCount, 0);
+    assert.equal(result.skippedFileCount, 0);
     assert.equal(
       readFileSync(result.outputTarget.summaryPath, "utf8"),
       [
@@ -194,6 +201,55 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
         "- 無"
       ].join("\n")
     );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator treats an all-skipped run as a completed run with zero successful files", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const outputSink = new CorruptingSummaryOutputSink();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink,
+      stepRunner: createAllSkippedRunner(new Set(reviewableFiles)),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
+
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
+    assert.equal(result.successfulFileCount, 0);
+    assert.equal(result.skippedFileCount, reviewableFiles.length);
+    assert.match(summaryContent, new RegExp(`- Planned files: ${reviewableFiles.length}`, "u"));
+    assert.match(summaryContent, /- Successful files: 0/u);
+    assert.match(summaryContent, new RegExp(`- Skipped files: ${reviewableFiles.length}`, "u"));
   } finally {
     fixture.cleanup();
   }
@@ -521,6 +577,20 @@ function createMixedResultRunner(skippedFile: string) {
       ) {
         throw new Error(
           `Step ${step.stepId} failed for ${context.filePath}: deterministic validation failed`
+        );
+      }
+
+      return buildSuccessfulStepResult(step.stepId, context.filePath);
+    }
+  };
+}
+
+function createAllSkippedRunner(skippedFiles: Set<string>) {
+  return {
+    async run({ context, step }) {
+      if (skippedFiles.has(context.filePath) && step.stepId === "step1-overview") {
+        throw new Error(
+          `Step ${step.stepId} failed for ${context.filePath}: judge rejected`
         );
       }
 
