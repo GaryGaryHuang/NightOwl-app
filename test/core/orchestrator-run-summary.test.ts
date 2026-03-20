@@ -61,6 +61,10 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
     assert.equal(result.plannedFileCount, reviewableFiles.length);
     assert.equal(result.successfulFileCount, reviewableFiles.length);
     assert.equal(result.skippedFileCount, 0);
+    assert.deepEqual(
+      result.outputTarget,
+      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+    );
     assert.equal(existsSync(result.outputTarget.summaryPath), true);
     assert.equal(existsSync(result.outputTarget.indexPath), true);
     assert.equal(
@@ -155,6 +159,10 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
     assert.equal(result.plannedFileCount, reviewableFiles.length);
     assert.equal(result.successfulFileCount, reviewableFiles.length - 1);
     assert.equal(result.skippedFileCount, 1);
+    assert.deepEqual(
+      result.outputTarget,
+      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+    );
     assert.match(
       summaryContent,
       new RegExp(`- Successful files: ${reviewableFiles.length - 1}`, "u")
@@ -208,6 +216,10 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
     assert.equal(result.plannedFileCount, 0);
     assert.equal(result.successfulFileCount, 0);
     assert.equal(result.skippedFileCount, 0);
+    assert.deepEqual(
+      result.outputTarget,
+      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+    );
     assert.equal(
       readFileSync(result.outputTarget.summaryPath, "utf8"),
       [
@@ -280,6 +292,10 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
     assert.equal(result.successfulFileCount, 0);
     assert.equal(result.skippedFileCount, reviewableFiles.length);
+    assert.deepEqual(
+      result.outputTarget,
+      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+    );
     assert.match(summaryContent, new RegExp(`- Planned files: ${reviewableFiles.length}`, "u"));
     assert.match(summaryContent, /- Successful files: 0/u);
     assert.match(summaryContent, new RegExp(`- Skipped files: ${reviewableFiles.length}`, "u"));
@@ -357,6 +373,10 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
     assert.equal(result.plannedFileCount, reviewableFiles.length);
     assert.equal(result.successfulFileCount, reviewableFiles.length - 1);
     assert.equal(result.skippedFileCount, 1);
+    assert.deepEqual(
+      result.outputTarget,
+      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+    );
     assert.equal(existsSync(result.outputTarget.indexPath), true);
     assert.equal(
       indexContent,
@@ -1303,4 +1323,16 @@ class IndexRecordingOutputSink {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function createExpectedOutputTarget(outputBaseDir: string, sessionId: string) {
+  const basePath = path.join(outputBaseDir, "review", sessionId);
+
+  return {
+    basePath,
+    filesPath: path.join(basePath, "files"),
+    skippedPath: path.join(basePath, "skipped.md"),
+    summaryPath: path.join(basePath, "summary.md"),
+    indexPath: path.join(basePath, "index.md")
+  };
 }
