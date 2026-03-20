@@ -9,6 +9,7 @@ import { Step3KnowledgeSourceOfTruthStep } from "../../src/core/steps/step3-know
 import { Step4StrategyWhatIfScenariosStep } from "../../src/core/steps/step4-strategy-what-if-scenarios.ts";
 import { Step5ValidationInterrogationStep } from "../../src/core/steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "../../src/core/steps/step6-cognitive-simulation.ts";
+import { Step7SummaryStep } from "../../src/core/steps/step7-summary.ts";
 import {
   StepRunner
 } from "../../src/core/step-runner.ts";
@@ -1387,6 +1388,191 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
       }
     ]
   });
+});
+
+test("StepRunner applies Step 7 section output under summary without changing findings", async () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+  seedStep4Context(context);
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "最終 findings",
+        context: "最終情境",
+        deviation: "最終落差",
+        impact: "最終 impact",
+        suggestion: "最終建議",
+        confidence: 91
+      }
+    ]
+  });
+
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return new SessionExecutor({
+          async sendAndWait() {
+            return {
+              data: {
+                content: [
+                  "## Summary",
+                  "### 審查基礎",
+                  "- 改動概要：調整主要執行流程。",
+                  "- 依據規範：依 repo source-of-truth 與版本假設審查。",
+                  "- 審查假設：未擴張到外部知識查證。",
+                  "### 行為變更提醒",
+                  "- 無",
+                  "### 風險評估",
+                  "- 整體風險等級：Medium",
+                  "- 風險理由：final findings 仍需留意。"
+                ].join("\n")
+              }
+            };
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    judgeService: {
+      async evaluate() {
+        return { passed: true };
+      }
+    }
+  });
+
+  const result = await runner.run({
+    step: new Step7SummaryStep({
+      reviewNoteFinalizer: new ReviewNoteFinalizer()
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  assert.equal(context.getSection("summary"), undefined);
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "must",
+        title: "最終 findings",
+        context: "最終情境",
+        deviation: "最終落差",
+        impact: "最終 impact",
+        suggestion: "最終建議",
+        confidence: 91
+      }
+    ]
+  });
+
+  result.applyTo(context);
+
+  assert.match(context.getSection("summary") ?? "", /^## Summary/u);
+  assert.deepEqual(context.getStructuredState(), {
+    findings: [
+      {
+        type: "must",
+        title: "最終 findings",
+        context: "最終情境",
+        deviation: "最終落差",
+        impact: "最終 impact",
+        suggestion: "最終建議",
+        confidence: 91
+      }
+    ]
+  });
+});
+
+test("StepRunner rebuilds Step 7 current review from the last successful Step 6 state on retry and does not leak provisional content", async () => {
+  const prompts = [];
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+  seedStep4Context(context);
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "最終 findings",
+        context: "最終情境",
+        deviation: "最終落差",
+        impact: "最終 impact",
+        suggestion: "最終建議",
+        confidence: 91
+      }
+    ]
+  });
+
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return new SessionExecutor({
+          async sendAndWait(options) {
+            prompts.push(options.prompt);
+
+            return {
+              data: {
+                content: [
+                  "## Summary",
+                  "### 審查基礎",
+                  "- 改動概要：調整主要執行流程。",
+                  "- 依據規範：依 repo source-of-truth 與版本假設審查。",
+                  "- 審查假設：未擴張到外部知識查證。",
+                  "### 行為變更提醒",
+                  "- 無",
+                  "### 風險評估",
+                  "- 整體風險等級：Medium",
+                  "- 風險理由：final findings 仍需留意。"
+                ].join("\n")
+              }
+            };
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    judgeService: {
+      async evaluate(input) {
+        if (prompts.length === 1) {
+          assert.doesNotMatch(input.sectionContent, /provisional step 7/u);
+
+          return { passed: false, cause: "judge rejected" };
+        }
+
+        return { passed: true };
+      }
+    }
+  });
+
+  const result = await runner.run({
+    step: new Step7SummaryStep({
+      reviewNoteFinalizer: new ReviewNoteFinalizer()
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  assert.equal(prompts.length, 2);
+  assert.equal(prompts[0], prompts[1]);
+  assert.match(prompts[0] ?? "", /<current_review>[\s\S]*## Findings[\s\S]*最終 findings/u);
+  assert.doesNotMatch(prompts[0] ?? "", /<diff/u);
+  assert.doesNotMatch(prompts[0] ?? "", /<changeset_context>/u);
+  assert.doesNotMatch(prompts[0] ?? "", /provisional step 7/u);
+  assert.equal(context.getSection("summary"), undefined);
+
+  result.applyTo(context);
+
+  assert.match(context.getSection("summary") ?? "", /^## Summary/u);
 });
 
 function seedStep4Context(context: FileReviewContext): void {

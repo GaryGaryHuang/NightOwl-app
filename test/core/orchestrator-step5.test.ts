@@ -13,7 +13,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
-test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 in filtered changed-file order and passes current review into Step 5", async () => {
+test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 5", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -71,11 +71,12 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
         ["step3-knowledge-source-of-truth", filePath],
         ["step4-strategy-what-if-scenarios", filePath],
         ["step5-validation-interrogation", filePath],
-        ["step6-cognitive-simulation", filePath]
+        ["step6-cognitive-simulation", filePath],
+        ["step7-summary", filePath]
       ])
     );
-    assert.equal(observedDisconnects.length, reviewableFiles.length * 6);
-    assert.equal(observedProfiles.length, reviewableFiles.length * 6);
+    assert.equal(observedDisconnects.length, reviewableFiles.length * 7);
+    assert.equal(observedProfiles.length, reviewableFiles.length * 7);
 
     for (const profile of observedProfiles) {
       assert.equal(profile.outputBaseDir, outputBaseDir);
@@ -84,7 +85,10 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
 
       if (/## Current Step: Overview/u.test(profile.systemMessage)) {
         assert.equal(profile.model, "gpt-5-mini");
-      } else if (/## Current Step: Knowledge & Source of Truth/u.test(profile.systemMessage)) {
+      } else if (
+        /## Current Step: Knowledge & Source of Truth/u.test(profile.systemMessage) ||
+        /## Current Step: Summary/u.test(profile.systemMessage)
+      ) {
         assert.equal(profile.model, "gpt-5-mini");
       } else {
         assert.equal(profile.model, "gpt-5.4-mini");
@@ -115,14 +119,16 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
         /## Strategy & What-if Scenarios[\s\S]*## Findings/u
       );
       assert.doesNotMatch(noteContent, /confidence/u);
-      assert.doesNotMatch(noteContent, /Step 6|Step 7|pending/u);
+      assert.match(noteContent, /^## Summary/mu);
+      assert.match(noteContent, /## Findings[\s\S]*## Summary/u);
+      assert.doesNotMatch(noteContent, /pending/u);
     }
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator still succeeds with zero planned files and does not create Step 1 through Step 6 sessions", async () => {
+test("ReviewOrchestrator still succeeds with zero planned files and does not create Step 1 through Step 7 sessions", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -279,6 +285,7 @@ test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file or any l
       ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
       ["step5-validation-interrogation", reviewableFiles[0]],
       ["step6-cognitive-simulation", reviewableFiles[0]],
+      ["step7-summary", reviewableFiles[0]],
       ["step1-overview", failedFile],
       ["step2-dependencies-boundaries", failedFile],
       ["step3-knowledge-source-of-truth", failedFile],
@@ -291,6 +298,10 @@ test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file or any l
     );
     assert.equal(
       reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`),
+      undefined
+    );
+    assert.equal(
+      reviewAttempts.get(`step7-summary:${failedFile}`),
       undefined
     );
   } finally {
@@ -684,7 +695,7 @@ test("ReviewOrchestrator aborts Step 5 after review startup failure retry exhaus
 
             if (
               /## Current Step: Validation & Interrogation/u.test(profile.systemMessage) &&
-              (sessionCount === 11 || sessionCount === 12)
+              (sessionCount === 12 || sessionCount === 13)
             ) {
               throw new Error("review startup failed");
             }
@@ -733,7 +744,7 @@ test("ReviewOrchestrator aborts Step 5 after review startup failure retry exhaus
       )
     );
 
-    assert.equal(sessionCount, 12);
+    assert.equal(sessionCount, 13);
   } finally {
     fixture.cleanup();
   }
@@ -932,7 +943,8 @@ function buildStepResponse(
     | "step3-knowledge-source-of-truth"
     | "step4-strategy-what-if-scenarios"
     | "step5-validation-interrogation"
-    | "step6-cognitive-simulation",
+    | "step6-cognitive-simulation"
+    | "step7-summary",
   filePath: string
 ): string {
   if (stepId === "step1-overview") {
@@ -955,17 +967,27 @@ function buildStepResponse(
     return buildStep5JsonResponse();
   }
 
-  return buildStep6JsonResponse();
+  if (stepId === "step6-cognitive-simulation") {
+    return buildStep6JsonResponse();
+  }
+
+  return buildStep7SummaryResponse(filePath);
 }
 
 function extractDiffPath(prompt: string): string {
   const match = prompt.match(/<diff path="([^"]+)"/u);
 
-  if (!match) {
-    throw new Error(`Missing diff path in prompt: ${prompt}`);
+  if (match) {
+    return match[1];
   }
 
-  return match[1];
+  const sourceMatch = prompt.match(/- Source file: `([^`]+)`/u);
+
+  if (sourceMatch) {
+    return sourceMatch[1];
+  }
+
+  throw new Error(`Missing diff path in prompt: ${prompt}`);
 }
 
 function escapeRegExp(value: string): string {
@@ -980,7 +1002,8 @@ function detectStepId(
   | "step3-knowledge-source-of-truth"
   | "step4-strategy-what-if-scenarios"
   | "step5-validation-interrogation"
-  | "step6-cognitive-simulation" {
+  | "step6-cognitive-simulation"
+  | "step7-summary" {
   if (/## Current Step: Overview/u.test(systemMessage)) {
     return "step1-overview";
   }
@@ -1003,6 +1026,10 @@ function detectStepId(
 
   if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
     return "step6-cognitive-simulation";
+  }
+
+  if (/## Current Step: Summary/u.test(systemMessage)) {
+    return "step7-summary";
   }
 
   throw new Error(`Unknown step system message: ${systemMessage}`);
@@ -1080,4 +1107,19 @@ function buildStep6JsonResponse(): string {
       }
     ]
   });
+}
+
+function buildStep7SummaryResponse(filePath: string): string {
+  return [
+    "## Summary",
+    "### 審查基礎",
+    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
+    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
+    "- 審查假設：未擴張到外部知識查證。",
+    "### 行為變更提醒",
+    "- 無",
+    "### 風險評估",
+    "- 整體風險等級：Medium",
+    "- 風險理由：final findings 仍需留意。"
+  ].join("\n");
 }

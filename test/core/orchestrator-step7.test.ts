@@ -13,7 +13,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
-test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 6", async () => {
+test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 7", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -24,7 +24,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     const observedPrompts = [];
     const observedDisconnects = [];
     const sourceProvider = new LocalGitProvider();
-    const stepRunner = createSixStepStructuredStepRunner({
+    const stepRunner = createSevenStepRunner({
       observedDisconnects,
       observedProfiles,
       observedPrompts,
@@ -83,9 +83,8 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
       assert.equal(profile.repoRoot, repoRoot);
       assert.equal(profile.workingDirectory, repoRoot);
 
-      if (/## Current Step: Overview/u.test(profile.systemMessage)) {
-        assert.equal(profile.model, "gpt-5-mini");
-      } else if (
+      if (
+        /## Current Step: Overview/u.test(profile.systemMessage) ||
         /## Current Step: Knowledge & Source of Truth/u.test(profile.systemMessage) ||
         /## Current Step: Summary/u.test(profile.systemMessage)
       ) {
@@ -95,15 +94,17 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
       }
     }
 
-    const step6Prompt = observedPrompts.find(
-      ({ stepId }) => stepId === "step6-cognitive-simulation"
+    const step7Prompt = observedPrompts.find(
+      ({ stepId }) => stepId === "step7-summary"
     );
 
     assert.match(
-      step6Prompt?.prompt ?? "",
-      /<current_review>[\s\S]*## Findings[\s\S]*\[must\] 初版 findings/u
+      step7Prompt?.prompt ?? "",
+      /<current_review>[\s\S]*## Findings[\s\S]*\[must\] 最終 findings/u
     );
-    assert.doesNotMatch(step6Prompt?.prompt ?? "", /Review not yet generated/u);
+    assert.doesNotMatch(step7Prompt?.prompt ?? "", /<diff/u);
+    assert.doesNotMatch(step7Prompt?.prompt ?? "", /<changeset_context>/u);
+    assert.doesNotMatch(step7Prompt?.prompt ?? "", /Review not yet generated/u);
     assert.equal(existsSync(result.outputTarget.basePath), true);
     assert.equal(existsSync(result.outputTarget.filesPath), true);
     assert.equal(existsSync(result.outputTarget.skippedPath), true);
@@ -111,24 +112,20 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     for (const plannedNote of plannedNotes) {
       const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
 
-      assert.match(noteContent, /^## Findings/mu);
-      assert.match(
-        noteContent,
-        /## Strategy & What-if Scenarios[\s\S]*## Findings/u
-      );
-      assert.match(noteContent, /\[must\] 最終 findings/u);
-      assert.doesNotMatch(noteContent, /\[must\] 初版 findings/u);
-      assert.doesNotMatch(noteContent, /confidence/u);
       assert.match(noteContent, /^## Summary/mu);
       assert.match(noteContent, /## Findings[\s\S]*## Summary/u);
-      assert.doesNotMatch(noteContent, /pending/u);
+      assert.match(noteContent, /### 審查基礎/u);
+      assert.match(noteContent, /### 行為變更提醒/u);
+      assert.match(noteContent, /### 風險評估/u);
+      assert.match(noteContent, /\[must\] 最終 findings/u);
+      assert.doesNotMatch(noteContent, /Step 8|aggregate summary|pending/u);
     }
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator passes explicit empty Step 5 findings into Step 6 and allows Step 6 to replace them with final findings", async () => {
+test("ReviewOrchestrator passes explicit empty Step 6 findings into Step 7 and still publishes Summary", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -149,28 +146,8 @@ test("ReviewOrchestrator passes explicit empty Step 5 findings into Step 6 and a
                 const filePath = extractDiffPath(options.prompt);
                 observedPrompts.push({ stepId, prompt: options.prompt });
 
-                if (stepId === "step5-validation-interrogation") {
-                  return { data: { content: JSON.stringify({ findings: [] }) } };
-                }
-
                 if (stepId === "step6-cognitive-simulation") {
-                  return {
-                    data: {
-                      content: JSON.stringify({
-                        findings: [
-                          {
-                            type: "must",
-                            title: `Step6 restored ${filePath}`,
-                            context: "模擬路徑重新確認",
-                            deviation: "first-pass 未涵蓋最終偏差",
-                            impact: "會造成 correctness 問題",
-                            suggestion: "補上 final guard",
-                            confidence: 91
-                          }
-                        ]
-                      })
-                    }
-                  };
+                  return { data: { content: JSON.stringify({ findings: [] }) } };
                 }
 
                 return { data: { content: buildStepResponse(stepId, filePath) } };
@@ -211,98 +188,20 @@ test("ReviewOrchestrator passes explicit empty Step 5 findings into Step 6 and a
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const step6Prompts = observedPrompts.filter(
-      ({ stepId }) => stepId === "step6-cognitive-simulation"
-    );
+    const step7Prompts = observedPrompts.filter(({ stepId }) => stepId === "step7-summary");
 
-    assert.ok(step6Prompts.length > 0);
-    for (const prompt of step6Prompts) {
+    assert.ok(step7Prompts.length > 0);
+    for (const prompt of step7Prompts) {
       assert.match(prompt.prompt, /<current_review>[\s\S]*## Findings\n- 無/u);
+      assert.doesNotMatch(prompt.prompt, /<diff/u);
+      assert.doesNotMatch(prompt.prompt, /<changeset_context>/u);
     }
 
     for (const plannedNote of plannedNotes) {
       const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
 
-      assert.match(noteContent, /^## Findings/mu);
-      assert.match(noteContent, /\[must\] Step6 restored/u);
-      assert.doesNotMatch(noteContent, /## Findings\n- 無/u);
-    }
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("ReviewOrchestrator renders `## Findings` with `- 無` when Step 6 clears prior Step 5 findings", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
-
-    const sourceProvider = new LocalGitProvider();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
-
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                return {
-                  data: {
-                    content:
-                      stepId === "step6-cognitive-simulation"
-                        ? JSON.stringify({ findings: [] })
-                        : buildStepResponse(stepId, filePath)
-                  }
-                };
-              },
-              async disconnect() {}
-            });
-          }
-        },
-        structuredOutputValidator: new StructuredOutputValidator(),
-        judgeService: {
-          async evaluate() {
-            return { passed: true };
-          }
-        }
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: []
-    });
-
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-
-    for (const plannedNote of plannedNotes) {
-      const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
-
-      assert.match(noteContent, /^## Findings/mu);
-      assert.match(noteContent, /## Findings\n- 無/u);
-      assert.doesNotMatch(noteContent, /初版 findings/u);
-      assert.doesNotMatch(noteContent, /confidence/u);
+      assert.match(noteContent, /## Findings\n- 無[\s\S]*## Summary/u);
+      assert.match(noteContent, /### 風險評估/u);
     }
   } finally {
     fixture.cleanup();
@@ -363,13 +262,13 @@ test("ReviewOrchestrator still succeeds with zero planned files and does not cre
   }
 });
 
-test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file or any later files", async () => {
+test("ReviewOrchestrator does not start Step 7 for a failed Step 6 file or any later files", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for step5 gating");
+    fixture.commitAll("add third changed file for step6 gating");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = realpathSync(fixture.repoDir);
@@ -398,10 +297,10 @@ test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file or any l
                 observedStepEvents.push([stepId, filePath]);
 
                 if (
-                  stepId === "step5-validation-interrogation" &&
+                  stepId === "step6-cognitive-simulation" &&
                   filePath === failedFile
                 ) {
-                  return { data: { content: "   " } };
+                  return { data: { content: "{\"findings\":[}" } };
                 }
 
                 return { data: { content: buildStepResponse(stepId, filePath) } };
@@ -438,7 +337,7 @@ test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file or any l
           userContext: []
         }),
       new RegExp(
-        `step5-validation-interrogation.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step5-validation-interrogation`,
+        `step6-cognitive-simulation.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step6-cognitive-simulation`,
         "u"
       )
     );
@@ -456,24 +355,23 @@ test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file or any l
       ["step3-knowledge-source-of-truth", failedFile],
       ["step4-strategy-what-if-scenarios", failedFile],
       ["step5-validation-interrogation", failedFile],
-      ["step5-validation-interrogation", failedFile]
+      ["step6-cognitive-simulation", failedFile],
+      ["step6-cognitive-simulation", failedFile]
     ]);
-    assert.equal(
-      reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`),
-      undefined
-    );
+    assert.equal(reviewAttempts.get(`step7-summary:${failedFile}`), undefined);
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator retries Step 6 after deterministic validation failure and publishes only the successful retry snapshot", async () => {
+test("ReviewOrchestrator retries Step 7 after judge rejection and publishes only the successful retry snapshot", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
     const reviewAttempts = new Map();
+    const judgeAttempts = new Map();
     const sourceProvider = new LocalGitProvider();
     const repoRoot = realpathSync(fixture.repoDir);
     const reviewableFiles = sourceProvider.filterIgnoredFiles(
@@ -481,7 +379,6 @@ test("ReviewOrchestrator retries Step 6 after deterministic validation failure a
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const retryFile = reviewableFiles[1];
-    const judgeCallsByStep = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: new LocalWorkspaceProvider(),
@@ -497,30 +394,12 @@ test("ReviewOrchestrator retries Step 6 after deterministic validation failure a
                 const attempt = (reviewAttempts.get(key) ?? 0) + 1;
 
                 reviewAttempts.set(key, attempt);
-
-                if (stepId !== "step6-cognitive-simulation") {
-                  return { data: { content: buildStepResponse(stepId, filePath) } };
-                }
-
-                if (filePath === retryFile && attempt === 1) {
-                  return { data: { content: "{\"findings\":[}" } };
-                }
-
                 return {
                   data: {
-                    content: JSON.stringify({
-                      findings: [
-                        {
-                          type: "must",
-                          title: `${filePath} final attempt ${attempt}`,
-                          context: "具體情境",
-                          deviation: "預期與實際有落差",
-                          impact: "會造成 correctness 問題",
-                          suggestion: "補上 final guard",
-                          confidence: 91
-                        }
-                      ]
-                    })
+                    content:
+                      stepId === "step7-summary"
+                        ? buildSummaryResponse(filePath, `${filePath} attempt ${attempt}`)
+                        : buildStepResponse(stepId, filePath)
                   }
                 };
               },
@@ -531,10 +410,19 @@ test("ReviewOrchestrator retries Step 6 after deterministic validation failure a
         structuredOutputValidator: new StructuredOutputValidator(),
         judgeService: {
           async evaluate(input) {
-            judgeCallsByStep.set(
-              input.stepId,
-              (judgeCallsByStep.get(input.stepId) ?? 0) + 1
-            );
+            const key = `${input.stepId}:${input.filePath}`;
+            const attempt = (judgeAttempts.get(key) ?? 0) + 1;
+
+            judgeAttempts.set(key, attempt);
+
+            if (
+              input.stepId === "step7-summary" &&
+              input.filePath === retryFile &&
+              attempt === 1
+            ) {
+              return { passed: false, cause: "judge rejected" };
+            }
+
             return { passed: true };
           }
         }
@@ -562,98 +450,62 @@ test("ReviewOrchestrator retries Step 6 after deterministic validation failure a
     const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile);
     const retriedContent = readFileSync(retriedNote.noteFilePath, "utf8");
 
-    assert.equal(reviewAttempts.get(`step6-cognitive-simulation:${retryFile}`), 2);
-    assert.equal(judgeCallsByStep.get("step6-cognitive-simulation") ?? 0, 0);
-    assert.match(retriedContent, /final attempt 2/u);
-    assert.doesNotMatch(retriedContent, /final attempt 1/u);
-    assert.doesNotMatch(retriedContent, /初版 findings/u);
+    assert.equal(reviewAttempts.get(`step7-summary:${retryFile}`), 2);
+    assert.equal(judgeAttempts.get(`step7-summary:${retryFile}`), 2);
+    assert.match(retriedContent, /attempt 2/u);
+    assert.doesNotMatch(retriedContent, /attempt 1/u);
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator aborts Step 6 after malformed JSON retry exhaustion and preserves the Step 5 snapshot", async () => {
-  await assertStep6Failure({
-    title: "step6 malformed json",
+test("ReviewOrchestrator aborts Step 7 after judge rejection retry exhaustion and preserves the Step 6 snapshot", async () => {
+  await assertStep7Failure({
+    title: "step7 judge rejection",
     expectedErrorPattern:
-      /step6-cognitive-simulation.*deterministic validation failed|deterministic validation failed.*step6-cognitive-simulation/u,
-    step6ReviewFailure() {
-      return { data: { content: "{\"findings\":[}" } };
-    }
+      /step7-summary.*judge rejected|judge rejected.*step7-summary/u,
+    judgeFailureCause: "judge rejected"
   });
 });
 
-test("ReviewOrchestrator aborts Step 6 after extra trailing text retry exhaustion and preserves the Step 5 snapshot", async () => {
-  await assertStep6Failure({
-    title: "step6 extra trailing text",
+test("ReviewOrchestrator aborts Step 7 after judge timeout retry exhaustion and preserves the Step 6 snapshot", async () => {
+  await assertStep7Failure({
+    title: "step7 judge timeout",
     expectedErrorPattern:
-      /step6-cognitive-simulation.*deterministic validation failed|deterministic validation failed.*step6-cognitive-simulation/u,
-    step6ReviewFailure() {
-      return {
-        data: {
-          content: "{\"findings\": []}\nextra trailing text"
-        }
-      };
-    }
+      /step7-summary.*judge timeout|judge timeout.*step7-summary/u,
+    judgeFailureCause: "judge timeout"
   });
 });
 
-test("ReviewOrchestrator aborts Step 6 after schema-invalid JSON retry exhaustion and preserves the Step 5 snapshot", async () => {
-  await assertStep6Failure({
-    title: "step6 schema invalid",
+test("ReviewOrchestrator aborts Step 7 after review timeout retry exhaustion and preserves the Step 6 snapshot", async () => {
+  await assertStep7Failure({
+    title: "step7 review timeout",
     expectedErrorPattern:
-      /step6-cognitive-simulation.*deterministic validation failed|deterministic validation failed.*step6-cognitive-simulation/u,
-    step6ReviewFailure() {
-      return {
-        data: {
-          content: JSON.stringify({
-            findings: [
-              {
-                type: "must",
-                title: "",
-                context: "具體情境",
-                deviation: "預期與實際有落差",
-                impact: "會造成 correctness 問題",
-                suggestion: "補上 guard",
-                confidence: 88
-              }
-            ]
-          })
-        }
-      };
-    }
-  });
-});
-
-test("ReviewOrchestrator aborts Step 6 after empty review response retry exhaustion and preserves the Step 5 snapshot", async () => {
-  await assertStep6Failure({
-    title: "step6 empty response",
-    expectedErrorPattern:
-      /step6-cognitive-simulation.*empty review response|empty review response.*step6-cognitive-simulation/u,
-    step6ReviewFailure() {
-      return { data: { content: "   " } };
-    }
-  });
-});
-
-test("ReviewOrchestrator aborts Step 6 after review timeout retry exhaustion and preserves the Step 5 snapshot", async () => {
-  await assertStep6Failure({
-    title: "step6 review timeout",
-    expectedErrorPattern:
-      /step6-cognitive-simulation.*review timeout|review timeout.*step6-cognitive-simulation/u,
-    step6ReviewFailure() {
+      /step7-summary.*review timeout|review timeout.*step7-summary/u,
+    reviewFailure() {
       throw new Error("review timeout");
     }
   });
 });
 
-test("ReviewOrchestrator aborts Step 6 after review startup failure retry exhaustion and preserves the Step 5 snapshot", async () => {
+test("ReviewOrchestrator aborts Step 7 after empty review response retry exhaustion and preserves the Step 6 snapshot", async () => {
+  await assertStep7Failure({
+    title: "step7 empty response",
+    expectedErrorPattern:
+      /step7-summary.*empty review response|empty review response.*step7-summary/u,
+    reviewFailure() {
+      return { data: { content: "   " } };
+    }
+  });
+});
+
+test("ReviewOrchestrator aborts Step 7 after review startup failure retry exhaustion and preserves the Step 6 snapshot", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for step6 startup failure");
+    fixture.commitAll("add third changed file for step7 startup failure");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = realpathSync(fixture.repoDir);
@@ -672,8 +524,8 @@ test("ReviewOrchestrator aborts Step 6 after review startup failure retry exhaus
             sessionCount += 1;
 
             if (
-              /## Current Step: Cognitive Simulation/u.test(profile.systemMessage) &&
-              (sessionCount === 13 || sessionCount === 14)
+              /## Current Step: Summary/u.test(profile.systemMessage) &&
+              (sessionCount === 14 || sessionCount === 15)
             ) {
               throw new Error("review startup failed");
             }
@@ -717,21 +569,22 @@ test("ReviewOrchestrator aborts Step 6 after review startup failure retry exhaus
           userContext: []
         }),
       new RegExp(
-        `step6-cognitive-simulation.*${escapeRegExp(failedFile)}.*review startup failed|${escapeRegExp(failedFile)}.*step6-cognitive-simulation.*review startup failed`,
+        `step7-summary.*${escapeRegExp(failedFile)}.*review startup failed|${escapeRegExp(failedFile)}.*step7-summary.*review startup failed`,
         "u"
       )
     );
 
-    assert.equal(sessionCount, 14);
+    assert.equal(sessionCount, 15);
   } finally {
     fixture.cleanup();
   }
 });
 
-async function assertStep6Failure(input: {
+async function assertStep7Failure(input: {
   title: string;
   expectedErrorPattern: RegExp;
-  step6ReviewFailure(): { data?: { content?: string } } | never;
+  judgeFailureCause?: "judge rejected" | "judge timeout";
+  reviewFailure?: () => { data?: { content?: string } } | never;
 }): Promise<void> {
   const fixture = createReviewRepoFixture();
 
@@ -772,15 +625,19 @@ async function assertStep6Failure(input: {
 
                 reviewAttempts.set(key, attempt);
 
-                if (stepId !== "step6-cognitive-simulation") {
-                  return { data: { content: buildStepResponse(stepId, filePath) } };
+                if (stepId === "step7-summary" && filePath === failedFile) {
+                  if (input.reviewFailure) {
+                    return input.reviewFailure();
+                  }
+
+                  return {
+                    data: {
+                      content: buildSummaryResponse(filePath)
+                    }
+                  };
                 }
 
-                if (filePath === failedFile) {
-                  return input.step6ReviewFailure();
-                }
-
-                return { data: { content: buildStep6JsonResponse() } };
+                return { data: { content: buildStepResponse(stepId, filePath) } };
               },
               async disconnect() {}
             });
@@ -793,6 +650,15 @@ async function assertStep6Failure(input: {
               inputJudge.stepId,
               (judgeCallsByStep.get(inputJudge.stepId) ?? 0) + 1
             );
+
+            if (
+              inputJudge.stepId === "step7-summary" &&
+              inputJudge.filePath === failedFile &&
+              input.judgeFailureCause
+            ) {
+              return { passed: false, cause: input.judgeFailureCause };
+            }
+
             return { passed: true };
           }
         }
@@ -820,28 +686,24 @@ async function assertStep6Failure(input: {
       input.expectedErrorPattern
     );
 
-    assert.equal(reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`), 2);
-    assert.equal(judgeCallsByStep.get("step6-cognitive-simulation") ?? 0, 0);
+    assert.equal(reviewAttempts.get(`step7-summary:${failedFile}`), 2);
+    assert.equal(reviewAttempts.get(`step7-summary:${laterFile}`), undefined);
 
-    const successfulNote = plannedNotes.find(
-      ({ filePath }) => filePath === successfulFile
-    );
+    const successfulNote = plannedNotes.find(({ filePath }) => filePath === successfulFile);
     const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
     const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
 
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
-    assert.match(successfulNoteContent, /^## Findings/mu);
-    assert.match(successfulNoteContent, /最終 findings/u);
+    assert.match(successfulNoteContent, /^## Summary/mu);
 
     const failedNoteContent = readFileSync(failedNote.noteFilePath, "utf8");
     assert.match(failedNoteContent, /^## Findings/mu);
-    assert.match(failedNoteContent, /初版 findings/u);
-    assert.doesNotMatch(failedNoteContent, /最終 findings/u);
+    assert.doesNotMatch(failedNoteContent, /^## Summary/mu);
     assert.doesNotMatch(failedNoteContent, /Review not yet generated/u);
 
     const laterNoteContent = readFileSync(laterNote.noteFilePath, "utf8");
     assert.match(laterNoteContent, /Review not yet generated/u);
-    assert.doesNotMatch(laterNoteContent, /^## Findings/mu);
+    assert.doesNotMatch(laterNoteContent, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -927,18 +789,18 @@ function buildStep6JsonResponse(): string {
   });
 }
 
-function buildStep7SummaryResponse(filePath: string): string {
+function buildSummaryResponse(filePath: string, label = filePath): string {
   return [
     "## Summary",
     "### 審查基礎",
-    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
-    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
-    "- 審查假設：未擴張到外部知識查證。",
+    `- 改動概要：${label} 這次改動主要調整執行流程與輸入處理。`,
+    `- 依據規範：依 repo 內版本檔、${label} 相關 source-of-truth 以及既有契約進行審查。`,
+    "- 審查假設：以 repo 內已建立的版本假設與排除範圍為準，未額外擴張到外部知識查證。",
     "### 行為變更提醒",
     "- 無",
     "### 風險評估",
     "- 整體風險等級：Medium",
-    "- 風險理由：final findings 仍需留意。"
+    `- 風險理由：${label} 仍存在需關注的 final findings，且其風險判斷受到目前審查假設與範圍邊界影響。`
   ].join("\n");
 }
 
@@ -977,7 +839,7 @@ function buildStepResponse(
     return buildStep6JsonResponse();
   }
 
-  return buildStep7SummaryResponse(filePath);
+  return buildSummaryResponse(filePath);
 }
 
 function detectStepId(systemMessage: string):
@@ -1016,10 +878,10 @@ function detectStepId(systemMessage: string):
 }
 
 function extractDiffPath(prompt: string): string {
-  const match = prompt.match(/<diff path="([^"]+)"/u);
+  const diffMatch = prompt.match(/<diff path="([^"]+)"/u);
 
-  if (match) {
-    return match[1];
+  if (diffMatch) {
+    return diffMatch[1];
   }
 
   const sourceMatch = prompt.match(/- Source file: `([^`]+)`/u);
@@ -1028,14 +890,14 @@ function extractDiffPath(prompt: string): string {
     return sourceMatch[1];
   }
 
-  throw new Error(`Unable to find diff path in prompt: ${prompt}`);
+  throw new Error(`Unable to find file path in prompt: ${prompt}`);
 }
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
-function createSixStepStructuredStepRunner(input: {
+function createSevenStepRunner(input: {
   observedDisconnects: string[];
   observedProfiles: Array<Record<string, string>>;
   observedPrompts: Array<Record<string, string>>;

@@ -15,8 +15,9 @@ export class ReviewNoteFinalizer {
     const findingsSection = renderFindingsSection(
       context.getStructuredState().findings
     );
+    const summarySection = context.getSection("summary")?.trim();
 
-    if (sections.length === 0 && !findingsSection) {
+    if (sections.length === 0 && !findingsSection && !summarySection) {
       return [
         `# ${context.filePath}`,
         "",
@@ -30,7 +31,11 @@ export class ReviewNoteFinalizer {
       "",
       `- Source file: \`${context.filePath}\``,
       "",
-      ...[...sections, ...(findingsSection ? [findingsSection] : [])].flatMap((section, index) =>
+      ...[
+        ...sections,
+        ...(findingsSection ? [findingsSection] : []),
+        ...(summarySection ? [summarySection] : [])
+      ].flatMap((section, index) =>
         index === 0 ? [section] : ["", section]
       )
     ].join("\n");

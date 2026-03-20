@@ -365,6 +365,21 @@ function buildStep6JsonResponse(): string {
   });
 }
 
+function buildStep7SummaryResponse(filePath: string): string {
+  return [
+    "## Summary",
+    "### 審查基礎",
+    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
+    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
+    "- 審查假設：未擴張到外部知識查證。",
+    "### 行為變更提醒",
+    "- 無",
+    "### 風險評估",
+    "- 整體風險等級：Medium",
+    "- 風險理由：final findings 仍需留意。"
+  ].join("\n");
+}
+
 function buildStepResponse(
   stepId:
     | "step1-overview"
@@ -372,7 +387,8 @@ function buildStepResponse(
     | "step3-knowledge-source-of-truth"
     | "step4-strategy-what-if-scenarios"
     | "step5-validation-interrogation"
-    | "step6-cognitive-simulation",
+    | "step6-cognitive-simulation"
+    | "step7-summary",
   filePath: string
 ): string {
   if (stepId === "step1-overview") {
@@ -395,17 +411,27 @@ function buildStepResponse(
     return buildStep5JsonResponse();
   }
 
-  return buildStep6JsonResponse();
+  if (stepId === "step6-cognitive-simulation") {
+    return buildStep6JsonResponse();
+  }
+
+  return buildStep7SummaryResponse(filePath);
 }
 
 function extractDiffPath(prompt: string): string {
   const match = prompt.match(/<diff path="([^"]+)"/u);
 
-  if (!match) {
-    throw new Error(`Missing diff path in prompt: ${prompt}`);
+  if (match) {
+    return match[1];
   }
 
-  return match[1];
+  const sourceMatch = prompt.match(/- Source file: `([^`]+)`/u);
+
+  if (sourceMatch) {
+    return sourceMatch[1];
+  }
+
+  throw new Error(`Missing diff path in prompt: ${prompt}`);
 }
 
 function escapeRegExp(value: string): string {
@@ -420,7 +446,8 @@ function detectStepId(
   | "step3-knowledge-source-of-truth"
   | "step4-strategy-what-if-scenarios"
   | "step5-validation-interrogation"
-  | "step6-cognitive-simulation" {
+  | "step6-cognitive-simulation"
+  | "step7-summary" {
   if (/## Current Step: Overview/u.test(systemMessage)) {
     return "step1-overview";
   }
@@ -443,6 +470,10 @@ function detectStepId(
 
   if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
     return "step6-cognitive-simulation";
+  }
+
+  if (/## Current Step: Summary/u.test(systemMessage)) {
+    return "step7-summary";
   }
 
   throw new Error(`Unknown step system message: ${systemMessage}`);

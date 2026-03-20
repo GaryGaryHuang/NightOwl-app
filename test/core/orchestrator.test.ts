@@ -13,7 +13,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
-test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, or Step 6 for a failed Step 2 file or any later files", async () => {
+test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 7 for a failed Step 2 file or any later files", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -109,6 +109,10 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, or Step 6 for a 
       reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`),
       undefined
     );
+    assert.equal(
+      reviewAttempts.get(`step7-summary:${failedFile}`),
+      undefined
+    );
     assert.deepEqual(stepEvents, [
       ["step1-overview", reviewableFiles[0]],
       ["step2-dependencies-boundaries", reviewableFiles[0]],
@@ -116,6 +120,7 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, or Step 6 for a 
       ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
       ["step5-validation-interrogation", reviewableFiles[0]],
       ["step6-cognitive-simulation", reviewableFiles[0]],
+      ["step7-summary", reviewableFiles[0]],
       ["step1-overview", failedFile],
       ["step2-dependencies-boundaries", failedFile],
       ["step2-dependencies-boundaries", failedFile]
@@ -204,6 +209,7 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
       ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
       ["step5-validation-interrogation", reviewableFiles[0]],
       ["step6-cognitive-simulation", reviewableFiles[0]],
+      ["step7-summary", reviewableFiles[0]],
       ["step1-overview", failedFile],
       ["step1-overview", failedFile]
     ]);
@@ -212,7 +218,7 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
   }
 });
 
-test("ReviewOrchestrator preserves a full successful Step 6 snapshot when a later file fails at Step 1", async () => {
+test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a later file fails at Step 1", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -311,7 +317,7 @@ test("ReviewOrchestrator preserves a full successful Step 6 snapshot when a late
   }
 });
 
-test("ReviewOrchestrator preserves an already-published full Step 6 snapshot when getDiff fails after output initialization", async () => {
+test("ReviewOrchestrator preserves an already-published full Step 7 snapshot when getDiff fails after output initialization", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -480,7 +486,8 @@ test("ReviewOrchestrator preserves an already-published full Step 6 snapshot whe
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
       ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
       ["step5-validation-interrogation", reviewableFiles[0]],
-      ["step6-cognitive-simulation", reviewableFiles[0]]
+      ["step6-cognitive-simulation", reviewableFiles[0]],
+      ["step7-summary", reviewableFiles[0]]
     ]);
 
     const firstNote = readFileSync(plannedNotes[0].noteFilePath, "utf8");
@@ -622,6 +629,21 @@ function buildStep6JsonResponse(): string {
   });
 }
 
+function buildStep7SummaryResponse(filePath: string): string {
+  return [
+    "## Summary",
+    "### 審查基礎",
+    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
+    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
+    "- 審查假設：未擴張到外部知識查證。",
+    "### 行為變更提醒",
+    "- 無",
+    "### 風險評估",
+    "- 整體風險等級：Medium",
+    "- 風險理由：final findings 仍需留意。"
+  ].join("\n");
+}
+
 function buildStepResponse(
   stepId:
     | "step1-overview"
@@ -629,7 +651,8 @@ function buildStepResponse(
     | "step3-knowledge-source-of-truth"
     | "step4-strategy-what-if-scenarios"
     | "step5-validation-interrogation"
-    | "step6-cognitive-simulation",
+    | "step6-cognitive-simulation"
+    | "step7-summary",
   filePath: string
 ): string {
   if (stepId === "step1-overview") {
@@ -652,7 +675,11 @@ function buildStepResponse(
     return buildStep5JsonResponse();
   }
 
-  return buildStep6JsonResponse();
+  if (stepId === "step6-cognitive-simulation") {
+    return buildStep6JsonResponse();
+  }
+
+  return buildStep7SummaryResponse(filePath);
 }
 
 function detectStepId(
@@ -663,7 +690,8 @@ function detectStepId(
   | "step3-knowledge-source-of-truth"
   | "step4-strategy-what-if-scenarios"
   | "step5-validation-interrogation"
-  | "step6-cognitive-simulation" {
+  | "step6-cognitive-simulation"
+  | "step7-summary" {
   if (/## Current Step: Overview/u.test(systemMessage)) {
     return "step1-overview";
   }
@@ -688,17 +716,27 @@ function detectStepId(
     return "step6-cognitive-simulation";
   }
 
+  if (/## Current Step: Summary/u.test(systemMessage)) {
+    return "step7-summary";
+  }
+
   throw new Error(`Unknown step system message: ${systemMessage}`);
 }
 
 function extractDiffPath(prompt: string): string {
   const match = prompt.match(/<diff path="([^"]+)"/u);
 
-  if (!match) {
-    throw new Error(`Missing diff path in prompt: ${prompt}`);
+  if (match) {
+    return match[1];
   }
 
-  return match[1];
+  const sourceMatch = prompt.match(/- Source file: `([^`]+)`/u);
+
+  if (sourceMatch) {
+    return sourceMatch[1];
+  }
+
+  throw new Error(`Missing diff path in prompt: ${prompt}`);
 }
 
 function escapeRegExp(value: string): string {
