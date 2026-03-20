@@ -78,7 +78,7 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
   }
 });
 
-test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts and does not start Step 5", async () => {
+test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, skips the file, and continues later files", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -149,19 +149,14 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts and 
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step4-strategy-what-if-scenarios.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step4-strategy-what-if-scenarios`,
-        "u"
-      )
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
 
     assert.equal(
       reviewAttempts.get(`step5-validation-interrogation:${failedFile}`),
@@ -176,14 +171,21 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts and 
       ({ filePath }) => filePath === reviewableFiles[0]
     );
     const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === reviewableFiles[2]);
 
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
-    assert.match(successfulNoteContent, /^## Findings/mu);
+    assert.match(successfulNoteContent, /^## Summary/mu);
 
     const failedNoteContent = readFileSync(failedNote.noteFilePath, "utf8");
     assert.match(failedNoteContent, /^## Knowledge & Source of Truth/mu);
     assert.doesNotMatch(failedNoteContent, /^## Strategy & What-if Scenarios/mu);
     assert.doesNotMatch(failedNoteContent, /^## Findings/mu);
+    assert.match(failedNoteContent, /> \[!WARNING\] Review Interrupted/u);
+    assert.match(failedNoteContent, /step4-strategy-what-if-scenarios/u);
+    assert.match(failedNoteContent, /empty review response/u);
+
+    const laterNoteContent = readFileSync(laterNote.noteFilePath, "utf8");
+    assert.match(laterNoteContent, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }

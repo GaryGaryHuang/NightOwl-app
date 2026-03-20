@@ -182,7 +182,7 @@ test("ReviewOrchestrator still succeeds with zero planned files and does not cre
   }
 });
 
-test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file or any later files", async () => {
+test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file and continues later files", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -264,21 +264,16 @@ test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file or any l
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step4-strategy-what-if-scenarios.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step4-strategy-what-if-scenarios`,
-        "u"
-      )
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
 
-    assert.deepEqual(observedStepEvents, [
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
+
+    assert.deepEqual(observedStepEvents.slice(0, 12), [
       ["step1-overview", reviewableFiles[0]],
       ["step2-dependencies-boundaries", reviewableFiles[0]],
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
@@ -614,6 +609,7 @@ test("ReviewOrchestrator aborts Step 5 after malformed JSON retry exhaustion and
     title: "step5 malformed json",
     expectedErrorPattern:
       /step5-validation-interrogation.*deterministic validation failed|deterministic validation failed.*step5-validation-interrogation/u,
+    expectedReason: "deterministic validation failed",
     step5ReviewFailure() {
       return { data: { content: "{\"findings\":[}" } };
     }
@@ -625,6 +621,7 @@ test("ReviewOrchestrator aborts Step 5 after schema-invalid JSON retry exhaustio
     title: "step5 schema invalid",
     expectedErrorPattern:
       /step5-validation-interrogation.*deterministic validation failed|deterministic validation failed.*step5-validation-interrogation/u,
+    expectedReason: "deterministic validation failed",
     step5ReviewFailure() {
       return {
         data: {
@@ -652,6 +649,7 @@ test("ReviewOrchestrator aborts Step 5 after empty review response retry exhaust
     title: "step5 empty response",
     expectedErrorPattern:
       /step5-validation-interrogation.*empty review response|empty review response.*step5-validation-interrogation/u,
+    expectedReason: "empty review response",
     step5ReviewFailure() {
       return { data: { content: "   " } };
     }
@@ -663,13 +661,14 @@ test("ReviewOrchestrator aborts Step 5 after review timeout retry exhaustion and
     title: "step5 review timeout",
     expectedErrorPattern:
       /step5-validation-interrogation.*review timeout|review timeout.*step5-validation-interrogation/u,
+    expectedReason: "review timeout",
     step5ReviewFailure() {
       throw new Error("review timeout");
     }
   });
 });
 
-test("ReviewOrchestrator aborts Step 5 after review startup failure retry exhaustion and preserves the Step 4 snapshot", async () => {
+test("ReviewOrchestrator skips Step 5 after review startup failure retry exhaustion and preserves the Step 4 snapshot", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -730,21 +729,31 @@ test("ReviewOrchestrator aborts Step 5 after review startup failure retry exhaus
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step5-validation-interrogation.*${escapeRegExp(failedFile)}.*review startup failed|${escapeRegExp(failedFile)}.*step5-validation-interrogation.*review startup failed`,
-        "u"
-      )
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
+    assert.equal(sessionCount, reviewableFiles.length * 7 - 1);
+
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const failedNote = readFileSync(
+      plannedNotes.find(({ filePath }) => filePath === failedFile)!.noteFilePath,
+      "utf8"
+    );
+    const laterNote = readFileSync(
+      plannedNotes.find(({ filePath }) => filePath === reviewableFiles[2])!.noteFilePath,
+      "utf8"
     );
 
-    assert.equal(sessionCount, 13);
+    assert.match(failedNote, /^## Strategy & What-if Scenarios/mu);
+    assert.doesNotMatch(failedNote, /^## Findings/mu);
+    assert.match(failedNote, /step5-validation-interrogation/u);
+    assert.match(failedNote, /review startup failed/u);
+    assert.match(laterNote, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -753,6 +762,7 @@ test("ReviewOrchestrator aborts Step 5 after review startup failure retry exhaus
 async function assertStep5Failure(input: {
   title: string;
   expectedErrorPattern: RegExp;
+  expectedReason: string;
   step5ReviewFailure(): { data?: { content?: string } } | never;
 }): Promise<void> {
   const fixture = createReviewRepoFixture();
@@ -835,16 +845,14 @@ async function assertStep5Failure(input: {
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      input.expectedErrorPattern
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
 
     assert.equal(reviewAttempts.get(`step5-validation-interrogation:${failedFile}`), 2);
     assert.equal(judgeCallsByStep.get("step5-validation-interrogation") ?? 0, 0);
@@ -856,17 +864,18 @@ async function assertStep5Failure(input: {
     const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
 
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
-    assert.match(successfulNoteContent, /^## Strategy & What-if Scenarios/mu);
-    assert.match(successfulNoteContent, /^## Findings/mu);
+    assert.match(successfulNoteContent, /^## Summary/mu);
 
     const failedNoteContent = readFileSync(failedNote.noteFilePath, "utf8");
     assert.match(failedNoteContent, /^## Strategy & What-if Scenarios/mu);
     assert.doesNotMatch(failedNoteContent, /^## Findings/mu);
     assert.doesNotMatch(failedNoteContent, /Review not yet generated/u);
+    assert.match(failedNoteContent, /> \[!WARNING\] Review Interrupted/u);
+    assert.match(failedNoteContent, /step5-validation-interrogation/u);
+    assert.match(failedNoteContent, new RegExp(escapeRegExp(input.expectedReason), "u"));
 
     const laterNoteContent = readFileSync(laterNote.noteFilePath, "utf8");
-    assert.match(laterNoteContent, /Review not yet generated/u);
-    assert.doesNotMatch(laterNoteContent, /^## Findings/mu);
+    assert.match(laterNoteContent, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }

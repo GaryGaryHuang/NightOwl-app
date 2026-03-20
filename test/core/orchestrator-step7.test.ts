@@ -262,7 +262,7 @@ test("ReviewOrchestrator still succeeds with zero planned files and does not cre
   }
 });
 
-test("ReviewOrchestrator does not start Step 7 for a failed Step 6 file or any later files", async () => {
+test("ReviewOrchestrator does not start Step 7 for a failed Step 6 file and continues later files", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -328,21 +328,16 @@ test("ReviewOrchestrator does not start Step 7 for a failed Step 6 file or any l
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step6-cognitive-simulation.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step6-cognitive-simulation`,
-        "u"
-      )
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
 
-    assert.deepEqual(observedStepEvents, [
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
+
+    assert.deepEqual(observedStepEvents.slice(0, 14), [
       ["step1-overview", reviewableFiles[0]],
       ["step2-dependencies-boundaries", reviewableFiles[0]],
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
@@ -359,6 +354,14 @@ test("ReviewOrchestrator does not start Step 7 for a failed Step 6 file or any l
       ["step6-cognitive-simulation", failedFile]
     ]);
     assert.equal(reviewAttempts.get(`step7-summary:${failedFile}`), undefined);
+
+    const laterNote = readFileSync(
+      planNoteFiles(result.outputTarget.filesPath, reviewableFiles).find(
+        ({ filePath }) => filePath === reviewableFiles[2]
+      )!.noteFilePath,
+      "utf8"
+    );
+    assert.match(laterNote, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -459,47 +462,51 @@ test("ReviewOrchestrator retries Step 7 after judge rejection and publishes only
   }
 });
 
-test("ReviewOrchestrator aborts Step 7 after judge rejection retry exhaustion and preserves the Step 6 snapshot", async () => {
+test("ReviewOrchestrator skips Step 7 after judge rejection retry exhaustion and preserves the Step 6 snapshot", async () => {
   await assertStep7Failure({
     title: "step7 judge rejection",
     expectedErrorPattern:
       /step7-summary.*judge rejected|judge rejected.*step7-summary/u,
+    expectedReason: "judge rejected",
     judgeFailureCause: "judge rejected"
   });
 });
 
-test("ReviewOrchestrator aborts Step 7 after judge timeout retry exhaustion and preserves the Step 6 snapshot", async () => {
+test("ReviewOrchestrator skips Step 7 after judge timeout retry exhaustion and preserves the Step 6 snapshot", async () => {
   await assertStep7Failure({
     title: "step7 judge timeout",
     expectedErrorPattern:
       /step7-summary.*judge timeout|judge timeout.*step7-summary/u,
+    expectedReason: "judge timeout",
     judgeFailureCause: "judge timeout"
   });
 });
 
-test("ReviewOrchestrator aborts Step 7 after review timeout retry exhaustion and preserves the Step 6 snapshot", async () => {
+test("ReviewOrchestrator skips Step 7 after review timeout retry exhaustion and preserves the Step 6 snapshot", async () => {
   await assertStep7Failure({
     title: "step7 review timeout",
     expectedErrorPattern:
       /step7-summary.*review timeout|review timeout.*step7-summary/u,
+    expectedReason: "review timeout",
     reviewFailure() {
       throw new Error("review timeout");
     }
   });
 });
 
-test("ReviewOrchestrator aborts Step 7 after empty review response retry exhaustion and preserves the Step 6 snapshot", async () => {
+test("ReviewOrchestrator skips Step 7 after empty review response retry exhaustion and preserves the Step 6 snapshot", async () => {
   await assertStep7Failure({
     title: "step7 empty response",
     expectedErrorPattern:
       /step7-summary.*empty review response|empty review response.*step7-summary/u,
+    expectedReason: "empty review response",
     reviewFailure() {
       return { data: { content: "   " } };
     }
   });
 });
 
-test("ReviewOrchestrator aborts Step 7 after review startup failure retry exhaustion and preserves the Step 6 snapshot", async () => {
+test("ReviewOrchestrator skips Step 7 after review startup failure retry exhaustion and preserves the Step 6 snapshot", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -560,21 +567,28 @@ test("ReviewOrchestrator aborts Step 7 after review startup failure retry exhaus
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step7-summary.*${escapeRegExp(failedFile)}.*review startup failed|${escapeRegExp(failedFile)}.*step7-summary.*review startup failed`,
-        "u"
-      )
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(sessionCount, reviewableFiles.length * 7 + 1);
+
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const failedNote = readFileSync(
+      plannedNotes.find(({ filePath }) => filePath === failedFile)!.noteFilePath,
+      "utf8"
+    );
+    const laterNote = readFileSync(
+      plannedNotes.find(({ filePath }) => filePath === reviewableFiles[2])!.noteFilePath,
+      "utf8"
     );
 
-    assert.equal(sessionCount, 15);
+    assert.match(failedNote, /step7-summary/u);
+    assert.match(failedNote, /review startup failed/u);
+    assert.match(laterNote, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -583,6 +597,7 @@ test("ReviewOrchestrator aborts Step 7 after review startup failure retry exhaus
 async function assertStep7Failure(input: {
   title: string;
   expectedErrorPattern: RegExp;
+  expectedReason: string;
   judgeFailureCause?: "judge rejected" | "judge timeout";
   reviewFailure?: () => { data?: { content?: string } } | never;
 }): Promise<void> {
@@ -675,19 +690,15 @@ async function assertStep7Failure(input: {
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      input.expectedErrorPattern
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
 
     assert.equal(reviewAttempts.get(`step7-summary:${failedFile}`), 2);
-    assert.equal(reviewAttempts.get(`step7-summary:${laterFile}`), undefined);
+    assert.equal(reviewAttempts.get(`step7-summary:${laterFile}`), 1);
 
     const successfulNote = plannedNotes.find(({ filePath }) => filePath === successfulFile);
     const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
@@ -700,10 +711,12 @@ async function assertStep7Failure(input: {
     assert.match(failedNoteContent, /^## Findings/mu);
     assert.doesNotMatch(failedNoteContent, /^## Summary/mu);
     assert.doesNotMatch(failedNoteContent, /Review not yet generated/u);
+    assert.match(failedNoteContent, /> \[!WARNING\] Review Interrupted/u);
+    assert.match(failedNoteContent, /step7-summary/u);
+    assert.match(failedNoteContent, new RegExp(escapeRegExp(input.expectedReason), "u"));
 
     const laterNoteContent = readFileSync(laterNote.noteFilePath, "utf8");
-    assert.match(laterNoteContent, /Review not yet generated/u);
-    assert.doesNotMatch(laterNoteContent, /^## Summary/mu);
+    assert.match(laterNoteContent, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }

@@ -650,3 +650,112 @@ test("ReviewNoteFinalizer preserves empty Findings before Summary", () => {
   assert.match(rendered, /## Findings\n- 無[\s\S]*## Summary/u);
   assert.equal((rendered.match(/^## Summary/mgu) ?? []).length, 1);
 });
+
+test("ReviewNoteFinalizer renders bootstrap interruption snapshot with deterministic warning block", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.markInterrupted("step1-overview", "judge rejected");
+
+  const rendered = finalizer.render(context);
+
+  assert.equal(
+    rendered,
+    [
+      "# src/app.ts",
+      "",
+      "- Source file: `src/app.ts`",
+      "- Status: Review not yet generated.",
+      "",
+      "> [!WARNING] Review Interrupted",
+      "> 本檔案在執行 step1-overview 時失敗（原因：judge rejected），後續審查已略過。"
+    ].join("\n")
+  );
+});
+
+test("ReviewNoteFinalizer renders warning block on top of the last successful section snapshot", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.setSection(
+    "overview",
+    [
+      "## Overview",
+      "- 整體理解：測試用概覽",
+      "- 行為變更：無行為變更",
+      "- 檔案職責：維護 app value",
+      "- 改動目的：調整常數",
+      "- 影響範圍：src/app.ts",
+      "- 測試覆蓋觀察：未見對應測試異動"
+    ].join("\n")
+  );
+  context.markInterrupted("step2-dependencies-boundaries", "judge timeout");
+
+  const rendered = finalizer.render(context);
+
+  assert.match(rendered, /^## Overview/mu);
+  assert.match(
+    rendered,
+    /## Overview[\s\S]*> \[!WARNING\] Review Interrupted[\s\S]*step2-dependencies-boundaries/u
+  );
+});
+
+test("ReviewNoteFinalizer renders warning block on top of Step 6 findings snapshot without provisional Summary", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.setSection(
+    "strategy-what-if-scenarios",
+    [
+      "## Strategy & What-if Scenarios",
+      "- 高風險區域：",
+      "  - state transition：值得驗證",
+      "- What-if 假設情境：",
+      "  - W1: 觸發條件：空輸入；預期正確行為：維持 fallback；待驗證風險/不確定性：流程是否偏移；與本次改動的關聯：diff 調整流程",
+      "  - W2: 觸發條件：dependency 異常；預期正確行為：保留錯誤處理；待驗證風險/不確定性：邊界是否改變；與本次改動的關聯：Step 2 已標示邊界",
+      "  - W3: 觸發條件：重複呼叫；預期正確行為：結果穩定；待驗證風險/不確定性：狀態是否偏移；與本次改動的關聯：Step 3 已收斂假設"
+    ].join("\n")
+  );
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "最終問題",
+        context: "具體情境",
+        deviation: "預期與實際有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 final guard",
+        confidence: 91
+      }
+    ]
+  });
+  context.markInterrupted("step7-summary", "judge rejected");
+
+  const rendered = finalizer.render(context);
+
+  assert.match(rendered, /^## Findings/mu);
+  assert.match(rendered, /\[must\] 最終問題/u);
+  assert.doesNotMatch(rendered, /^## Summary/mu);
+  assert.match(
+    rendered,
+    /## Findings[\s\S]*> \[!WARNING\] Review Interrupted[\s\S]*step7-summary/u
+  );
+});

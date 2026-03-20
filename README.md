@@ -24,9 +24,10 @@ The current repository implements the Step 0 + Step 1 + Step 2 + Step 3 + Step 4
 - judge-based completion checks for Step 1, Step 2, Step 3, Step 4, and Step 7, so section content is written only after the judge passes
 - deterministic validation plus confidence filtering for Step 5 and Step 6 findings JSON before formal findings state is updated
 - per-file in-memory review state plus minimal note rendering for bootstrap, Step 1, Step 2, Step 3, Step 4, Step 5, Step 6, and Step 7 snapshots
-- conservative failure handling for Step 1–7: if a section-step attempt or its judge check fails twice, or if Step 5 / Step 6 review or deterministic validation fails twice, the run stops, earlier successful snapshots remain, and unfinished files keep their last successfully published note state
+- skipped-file pipeline foundation for Step 1–7 exhaustion: if a section-step attempt or its judge check fails twice, or if Step 5 / Step 6 review or deterministic validation fails twice, that file is downgraded to skipped, its last successful formal snapshot is preserved with a deterministic warning block, one record is appended to `skipped.md`, and later planned files continue
+- minimal interruption-state rendering so skipped files keep bootstrap, Step 1, Step 4, or Step 6 snapshots without leaking provisional failed-step content
 
-The full AI review orchestration is not implemented yet. This repository now includes the Step 7 foundation on top of the Step 3 local-first knowledge foundation, Step 4 strategy foundation, Step 5 first-pass findings foundation, and Step 6 findings-finalization foundation; external knowledge tooling for Step 3 is still deferred. Skipped-file / retry strategy beyond the current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation, bounded concurrency, MCP / `web_fetch`, `KnowledgeSvc`, run-level aggregate outputs, and the complete final rendering pipeline are still deferred.
+The full AI review orchestration is not implemented yet. This repository now includes the Step 7 foundation on top of the Step 3 local-first knowledge foundation, Step 4 strategy foundation, Step 5 first-pass findings foundation, Step 6 findings-finalization foundation, and the skipped-file pipeline foundation for Step 1–7 exhaustion; external knowledge tooling for Step 3 is still deferred. Bounded concurrency, MCP / `web_fetch`, `KnowledgeSvc`, complete output-failure taxonomy, run-level aggregate outputs, and the complete final rendering pipeline are still deferred.
 
 ## Current Behavior
 
@@ -78,7 +79,14 @@ For successfully processed files, the note is updated from the bootstrap skeleto
 
 Invalid input still fails fast with a usage error, and successful runs with zero planned files still exit successfully.
 
-At this stage, Step 1, Step 2, Step 3, Step 4, and Step 7 all use Judge completion checks with retry once semantics, while Step 5 and Step 6 use deterministic JSON validation with the same retry-once exhaustion model. If a step still fails after retry, the run stops immediately, `skipped.md` remains unchanged, already-successful files keep their last successful snapshots, and unfinished files keep only the last state that was successfully published.
+At this stage, Step 1, Step 2, Step 3, Step 4, and Step 7 all use Judge completion checks with retry once semantics, while Step 5 and Step 6 use deterministic JSON validation with the same retry-once exhaustion model. If a per-file Step 1–7 still fails after retry, that file is marked skipped, `skipped.md` receives one deterministic record, the note keeps only the last successful formal snapshot plus:
+
+```md
+> [!WARNING] Review Interrupted
+> 本檔案在執行 <stepId> 時失敗（原因：<reason>），後續審查已略過。
+```
+
+Later planned files still continue. Step 0 remains run-fatal and does not use skipped-file downgrade.
 
 Step 3 in the current repository is intentionally **local-first**: it converges `版本／文件參考`、`採用規則與假設`、`排除範圍` from repo-native / local evidence such as version files, lockfiles, config files, internal docs, project conventions, and necessary local git metadata. It does **not** yet wire MCP, Context7, `web_fetch`, or external official docs into the runtime.
 
@@ -135,4 +143,4 @@ The intended usage model is a command such as:
 review <base_ref> <head_ref> [--repo <path>]
 ```
 
-Future changes will extend the current Step 0 + Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation into skipped-file strategy, bounded concurrency, external knowledge tooling for Step 3, run-level aggregate outputs, and the full final review output pipeline.
+Future changes will extend the current Step 0 + Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 plus skipped-file pipeline foundation into bounded concurrency, external knowledge tooling for Step 3, richer output-failure handling, run-level aggregate outputs, and the full final review output pipeline.

@@ -189,3 +189,40 @@ test("FileReviewContext replaces structured findings state without leaking snaps
     ]
   });
 });
+
+test("FileReviewContext stores interruption state separately and returns defensive copies", () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  assert.equal(context.getInterruption(), undefined);
+
+  context.markInterrupted("step5-validation-interrogation", "deterministic validation failed");
+
+  assert.deepEqual(context.getInterruption(), {
+    stepId: "step5-validation-interrogation",
+    reason: "deterministic validation failed"
+  });
+  assert.equal(context.getSection("overview"), undefined);
+  assert.deepEqual(context.getStructuredState(), {});
+
+  const snapshot = context.getInterruption();
+  if (!snapshot) {
+    throw new Error("expected interruption snapshot");
+  }
+  snapshot.stepId = "mutated";
+  snapshot.reason = "mutated";
+
+  assert.deepEqual(context.getInterruption(), {
+    stepId: "step5-validation-interrogation",
+    reason: "deterministic validation failed"
+  });
+
+  context.clearInterruption();
+
+  assert.equal(context.getInterruption(), undefined);
+});

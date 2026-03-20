@@ -5,7 +5,7 @@ import { FileReviewContext } from "./file-review-context.ts";
 import { ReviewNoteFinalizer } from "./finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunRequest } from "./run-request.ts";
-import type { StepRunner } from "./step-runner.ts";
+import type { StepResult, StepRunner } from "./step-runner.ts";
 import {
   buildOutputTarget,
   planNoteFiles,
@@ -157,13 +157,37 @@ export class ReviewOrchestrator {
       });
 
       for (const step of steps) {
-        const result = await this.#stepRunner.run({
-          step,
-          context: fileContext,
-          outputBaseDir: startPath,
-          repoRoot,
-          workingDirectory: repoRoot
-        });
+        let result: StepResult;
+
+        try {
+          result = await this.#stepRunner.run({
+            step,
+            context: fileContext,
+            outputBaseDir: startPath,
+            repoRoot,
+            workingDirectory: repoRoot
+          });
+        } catch (error) {
+          const reason = extractStepFailureReason({
+            stepId: step.stepId,
+            filePath: fileContext.filePath,
+            error
+          });
+
+          fileContext.markInterrupted(step.stepId, reason);
+
+          this.#outputSink.publishFileReview({
+            noteFilePath: fileContext.noteFilePath,
+            content: this.#finalizer.render(fileContext)
+          });
+          this.#outputSink.publishSkippedFile({
+            filePath: fileContext.filePath,
+            stepId: step.stepId,
+            reason
+          });
+
+          break;
+        }
 
         result.applyTo(fileContext);
 
@@ -181,6 +205,18 @@ export class ReviewOrchestrator {
       plannedFileCount: plannedNoteFiles.length
     };
   }
+}
+
+function extractStepFailureReason(input: {
+  stepId: string;
+  filePath: string;
+  error: unknown;
+}): string {
+  const message =
+    input.error instanceof Error ? input.error.message : String(input.error);
+  const prefix = `Step ${input.stepId} failed for ${input.filePath}: `;
+
+  return message.startsWith(prefix) ? message.slice(prefix.length) : message;
 }
 
 function defaultTimestampProvider(): string {

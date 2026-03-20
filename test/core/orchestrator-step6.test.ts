@@ -363,7 +363,7 @@ test("ReviewOrchestrator still succeeds with zero planned files and does not cre
   }
 });
 
-test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file or any later files", async () => {
+test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file and continues later files", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -429,21 +429,16 @@ test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file or any l
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step5-validation-interrogation.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step5-validation-interrogation`,
-        "u"
-      )
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
 
-    assert.deepEqual(observedStepEvents, [
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
+
+    assert.deepEqual(observedStepEvents.slice(0, 13), [
       ["step1-overview", reviewableFiles[0]],
       ["step2-dependencies-boundaries", reviewableFiles[0]],
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
@@ -462,6 +457,14 @@ test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file or any l
       reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`),
       undefined
     );
+
+    const laterNote = readFileSync(
+      planNoteFiles(result.outputTarget.filesPath, reviewableFiles).find(
+        ({ filePath }) => filePath === reviewableFiles[2]
+      )!.noteFilePath,
+      "utf8"
+    );
+    assert.match(laterNote, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -577,6 +580,7 @@ test("ReviewOrchestrator aborts Step 6 after malformed JSON retry exhaustion and
     title: "step6 malformed json",
     expectedErrorPattern:
       /step6-cognitive-simulation.*deterministic validation failed|deterministic validation failed.*step6-cognitive-simulation/u,
+    expectedReason: "deterministic validation failed",
     step6ReviewFailure() {
       return { data: { content: "{\"findings\":[}" } };
     }
@@ -588,6 +592,7 @@ test("ReviewOrchestrator aborts Step 6 after extra trailing text retry exhaustio
     title: "step6 extra trailing text",
     expectedErrorPattern:
       /step6-cognitive-simulation.*deterministic validation failed|deterministic validation failed.*step6-cognitive-simulation/u,
+    expectedReason: "deterministic validation failed",
     step6ReviewFailure() {
       return {
         data: {
@@ -603,6 +608,7 @@ test("ReviewOrchestrator aborts Step 6 after schema-invalid JSON retry exhaustio
     title: "step6 schema invalid",
     expectedErrorPattern:
       /step6-cognitive-simulation.*deterministic validation failed|deterministic validation failed.*step6-cognitive-simulation/u,
+    expectedReason: "deterministic validation failed",
     step6ReviewFailure() {
       return {
         data: {
@@ -630,6 +636,7 @@ test("ReviewOrchestrator aborts Step 6 after empty review response retry exhaust
     title: "step6 empty response",
     expectedErrorPattern:
       /step6-cognitive-simulation.*empty review response|empty review response.*step6-cognitive-simulation/u,
+    expectedReason: "empty review response",
     step6ReviewFailure() {
       return { data: { content: "   " } };
     }
@@ -641,13 +648,14 @@ test("ReviewOrchestrator aborts Step 6 after review timeout retry exhaustion and
     title: "step6 review timeout",
     expectedErrorPattern:
       /step6-cognitive-simulation.*review timeout|review timeout.*step6-cognitive-simulation/u,
+    expectedReason: "review timeout",
     step6ReviewFailure() {
       throw new Error("review timeout");
     }
   });
 });
 
-test("ReviewOrchestrator aborts Step 6 after review startup failure retry exhaustion and preserves the Step 5 snapshot", async () => {
+test("ReviewOrchestrator skips Step 6 after review startup failure retry exhaustion and preserves the Step 5 snapshot", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -708,21 +716,28 @@ test("ReviewOrchestrator aborts Step 6 after review startup failure retry exhaus
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step6-cognitive-simulation.*${escapeRegExp(failedFile)}.*review startup failed|${escapeRegExp(failedFile)}.*step6-cognitive-simulation.*review startup failed`,
-        "u"
-      )
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(sessionCount, reviewableFiles.length * 7);
+
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const failedNote = readFileSync(
+      plannedNotes.find(({ filePath }) => filePath === failedFile)!.noteFilePath,
+      "utf8"
+    );
+    const laterNote = readFileSync(
+      plannedNotes.find(({ filePath }) => filePath === reviewableFiles[2])!.noteFilePath,
+      "utf8"
     );
 
-    assert.equal(sessionCount, 14);
+    assert.match(failedNote, /step6-cognitive-simulation/u);
+    assert.match(failedNote, /review startup failed/u);
+    assert.match(laterNote, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -731,6 +746,7 @@ test("ReviewOrchestrator aborts Step 6 after review startup failure retry exhaus
 async function assertStep6Failure(input: {
   title: string;
   expectedErrorPattern: RegExp;
+  expectedReason: string;
   step6ReviewFailure(): { data?: { content?: string } } | never;
 }): Promise<void> {
   const fixture = createReviewRepoFixture();
@@ -809,16 +825,12 @@ async function assertStep6Failure(input: {
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      input.expectedErrorPattern
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
 
     assert.equal(reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`), 2);
     assert.equal(judgeCallsByStep.get("step6-cognitive-simulation") ?? 0, 0);
@@ -830,18 +842,19 @@ async function assertStep6Failure(input: {
     const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
 
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
-    assert.match(successfulNoteContent, /^## Findings/mu);
-    assert.match(successfulNoteContent, /最終 findings/u);
+    assert.match(successfulNoteContent, /^## Summary/mu);
 
     const failedNoteContent = readFileSync(failedNote.noteFilePath, "utf8");
     assert.match(failedNoteContent, /^## Findings/mu);
     assert.match(failedNoteContent, /初版 findings/u);
     assert.doesNotMatch(failedNoteContent, /最終 findings/u);
     assert.doesNotMatch(failedNoteContent, /Review not yet generated/u);
+    assert.match(failedNoteContent, /> \[!WARNING\] Review Interrupted/u);
+    assert.match(failedNoteContent, /step6-cognitive-simulation/u);
+    assert.match(failedNoteContent, new RegExp(escapeRegExp(input.expectedReason), "u"));
 
     const laterNoteContent = readFileSync(laterNote.noteFilePath, "utf8");
-    assert.match(laterNoteContent, /Review not yet generated/u);
-    assert.doesNotMatch(laterNoteContent, /^## Findings/mu);
+    assert.match(laterNoteContent, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }

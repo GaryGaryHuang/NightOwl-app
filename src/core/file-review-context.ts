@@ -20,6 +20,11 @@ export interface ReviewStructuredState {
   findings?: Finding[];
 }
 
+export interface ReviewInterruption {
+  stepId: string;
+  reason: string;
+}
+
 export class FileReviewContext {
   readonly filePath: string;
   readonly noteFilePath: string;
@@ -28,6 +33,7 @@ export class FileReviewContext {
   readonly headRef: string;
   readonly #sections = new Map<string, string>();
   readonly #structuredState: ReviewStructuredState = {};
+  #interruption?: ReviewInterruption;
 
   constructor(input: FileReviewContextInput) {
     this.filePath = input.filePath;
@@ -63,5 +69,17 @@ export class FileReviewContext {
     }));
 
     return findings ? { findings } : {};
+  }
+
+  markInterrupted(stepId: string, reason: string): void {
+    this.#interruption = { stepId, reason };
+  }
+
+  clearInterruption(): void {
+    this.#interruption = undefined;
+  }
+
+  getInterruption(): ReviewInterruption | undefined {
+    return this.#interruption ? { ...this.#interruption } : undefined;
   }
 }

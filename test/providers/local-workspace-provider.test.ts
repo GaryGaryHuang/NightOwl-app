@@ -61,3 +61,44 @@ test("LocalWorkspaceProvider publishes file review content to the target note pa
     rmSync(tempDir, { force: true, recursive: true });
   }
 });
+
+test("LocalWorkspaceProvider appends deterministic skipped-file records to skipped.md", () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
+  const outputTarget = {
+    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
+    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
+    skippedPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "skipped.md"
+    )
+  };
+
+  try {
+    const provider = new LocalWorkspaceProvider();
+
+    provider.initializeRun(outputTarget);
+    provider.publishSkippedFile({
+      filePath: "src/app.ts",
+      stepId: "step5-validation-interrogation",
+      reason: "deterministic validation failed"
+    });
+    provider.publishSkippedFile({
+      filePath: "src/other.ts",
+      stepId: "step7-summary",
+      reason: "judge rejected"
+    });
+
+    assert.equal(
+      readFileSync(outputTarget.skippedPath, "utf8"),
+      [
+        "- `src/app.ts` — step5-validation-interrogation — deterministic validation failed",
+        "- `src/other.ts` — step7-summary — judge rejected",
+        ""
+      ].join("\n")
+    );
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});

@@ -79,19 +79,14 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step2-dependencies-boundaries.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step2-dependencies-boundaries`,
-        "u"
-      )
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
 
     assert.equal(
       reviewAttempts.get(`step3-knowledge-source-of-truth:${failedFile}`),
@@ -113,7 +108,7 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 
       reviewAttempts.get(`step7-summary:${failedFile}`),
       undefined
     );
-    assert.deepEqual(stepEvents, [
+    assert.deepEqual(stepEvents.slice(0, 10), [
       ["step1-overview", reviewableFiles[0]],
       ["step2-dependencies-boundaries", reviewableFiles[0]],
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
@@ -125,6 +120,22 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 
       ["step2-dependencies-boundaries", failedFile],
       ["step2-dependencies-boundaries", failedFile]
     ]);
+
+    const failedNote = readFileSync(
+      planNoteFiles(result.outputTarget.filesPath, reviewableFiles).find(
+        ({ filePath }) => filePath === failedFile
+      )!.noteFilePath,
+      "utf8"
+    );
+    const laterNote = readFileSync(
+      planNoteFiles(result.outputTarget.filesPath, reviewableFiles).find(
+        ({ filePath }) => filePath === reviewableFiles[2]
+      )!.noteFilePath,
+      "utf8"
+    );
+
+    assert.match(failedNote, /step2-dependencies-boundaries/u);
+    assert.match(laterNote, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -188,21 +199,16 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step1-overview.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step1-overview`,
-        "u"
-      )
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
 
-    assert.deepEqual(stepEvents, [
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
+
+    assert.deepEqual(stepEvents.slice(0, 9), [
       ["step1-overview", reviewableFiles[0]],
       ["step2-dependencies-boundaries", reviewableFiles[0]],
       ["step3-knowledge-source-of-truth", reviewableFiles[0]],
@@ -213,6 +219,21 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
       ["step1-overview", failedFile],
       ["step1-overview", failedFile]
     ]);
+
+    const failedNote = readFileSync(
+      planNoteFiles(result.outputTarget.filesPath, reviewableFiles).find(
+        ({ filePath }) => filePath === failedFile
+      )!.noteFilePath,
+      "utf8"
+    );
+    const laterNote = readFileSync(
+      planNoteFiles(result.outputTarget.filesPath, reviewableFiles).find(
+        ({ filePath }) => filePath === reviewableFiles[2]
+      )!.noteFilePath,
+      "utf8"
+    );
+    assert.match(failedNote, /step1-overview/u);
+    assert.match(laterNote, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -281,19 +302,14 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      new RegExp(
-        `step1-overview.*${escapeRegExp(failedFile)}|${escapeRegExp(failedFile)}.*step1-overview`,
-        "u"
-      )
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
 
     const successfulNote = plannedNotes.find(
       ({ filePath }) => filePath === successfulFile
@@ -310,8 +326,7 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
     assert.doesNotMatch(failedNoteContent, /^## Overview/mu);
 
     const laterNoteContent = readFileSync(laterNote.noteFilePath, "utf8");
-    assert.match(laterNoteContent, /Review not yet generated/u);
-    assert.doesNotMatch(laterNoteContent, /^## Findings/mu);
+    assert.match(laterNoteContent, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -493,6 +508,164 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
     const firstNote = readFileSync(plannedNotes[0].noteFilePath, "utf8");
     assert.match(firstNote, /^## Findings/mu);
     assert.doesNotMatch(firstNote, /Review not yet generated/u);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator fails the run when publishing a successful step snapshot fails and does not downgrade the file to skipped", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const stepEvents = [];
+    const outputCalls = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: {
+        initializeRun(outputTarget) {
+          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        },
+        publishFileReview(fileResult) {
+          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+
+          if (/^# .*[\s\S]*^## Overview/mu.test(fileResult.content)) {
+            throw new Error("note write failed");
+          }
+        },
+        publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+        }
+      },
+      stepRunner: {
+        async run({ context, step }) {
+          stepEvents.push([step.stepId, context.filePath]);
+
+          if (step.stepId !== "step1-overview") {
+            throw new Error(`should not reach ${step.stepId}`);
+          }
+
+          context.setSection("overview", buildOverviewResponse(context.filePath));
+
+          return {
+            stepId: step.stepId,
+            applyTo(targetContext) {
+              targetContext.setSection("overview", context.getSection("overview"));
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /note write failed/u
+    );
+
+    assert.deepEqual(stepEvents, [["step1-overview", reviewableFiles[0]]]);
+    assert.equal(
+      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
+      false
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator fails the run when applyTo throws and does not downgrade the file to skipped", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = realpathSync(fixture.repoDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const stepEvents = [];
+    const outputCalls = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: {
+        initializeRun(outputTarget) {
+          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        },
+        publishFileReview(fileResult) {
+          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+        },
+        publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+        }
+      },
+      stepRunner: {
+        async run({ context, step }) {
+          stepEvents.push([step.stepId, context.filePath]);
+
+          if (step.stepId !== "step1-overview") {
+            throw new Error(`should not reach ${step.stepId}`);
+          }
+
+          return {
+            stepId: step.stepId,
+            applyTo() {
+              throw new Error("apply failed");
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /apply failed/u
+    );
+
+    assert.deepEqual(stepEvents, [["step1-overview", reviewableFiles[0]]]);
+    assert.equal(
+      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
+      false
+    );
   } finally {
     fixture.cleanup();
   }

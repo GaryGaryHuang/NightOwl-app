@@ -2,7 +2,10 @@ import type { FileReviewContext } from "./file-review-context.ts";
 
 export class ReviewNoteFinalizer {
   render(
-    context: Pick<FileReviewContext, "filePath" | "getSection" | "getStructuredState">
+    context: Pick<
+      FileReviewContext,
+      "filePath" | "getSection" | "getStructuredState" | "getInterruption"
+    >
   ): string {
     const sections = [
       "overview",
@@ -16,13 +19,25 @@ export class ReviewNoteFinalizer {
       context.getStructuredState().findings
     );
     const summarySection = context.getSection("summary")?.trim();
+    const warningBlock = renderInterruptionWarning(context.getInterruption());
 
-    if (sections.length === 0 && !findingsSection && !summarySection) {
+    if (sections.length === 0 && !findingsSection && !summarySection && !warningBlock) {
       return [
         `# ${context.filePath}`,
         "",
         `- Source file: \`${context.filePath}\``,
         "- Status: Review not yet generated."
+      ].join("\n");
+    }
+
+    if (sections.length === 0 && !findingsSection && !summarySection && warningBlock) {
+      return [
+        `# ${context.filePath}`,
+        "",
+        `- Source file: \`${context.filePath}\``,
+        "- Status: Review not yet generated.",
+        "",
+        warningBlock
       ].join("\n");
     }
 
@@ -34,7 +49,8 @@ export class ReviewNoteFinalizer {
       ...[
         ...sections,
         ...(findingsSection ? [findingsSection] : []),
-        ...(summarySection ? [summarySection] : [])
+        ...(summarySection ? [summarySection] : []),
+        ...(warningBlock ? [warningBlock] : [])
       ].flatMap((section, index) =>
         index === 0 ? [section] : ["", section]
       )
@@ -62,5 +78,18 @@ function renderFindingsSection(
       `  - Impact：${finding.impact}`,
       `  - Suggestion：${finding.suggestion}`
     ])
+  ].join("\n");
+}
+
+function renderInterruptionWarning(
+  interruption: ReturnType<FileReviewContext["getInterruption"]>
+): string | undefined {
+  if (!interruption) {
+    return undefined;
+  }
+
+  return [
+    "> [!WARNING] Review Interrupted",
+    `> 本檔案在執行 ${interruption.stepId} 時失敗（原因：${interruption.reason}），後續審查已略過。`
   ].join("\n");
 }

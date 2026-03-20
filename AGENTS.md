@@ -23,12 +23,14 @@ The app currently implements:
 - Step 5 (Validation & Interrogation) foundation for each planned file
 - Step 6 (Cognitive Simulation) foundation for each planned file
 - Step 7 (Summary) foundation for each planned file
+- skipped-file pipeline foundation for Step 1–7 exhaustion
 - Minimal `StepRunner` foundation for section-step execution
 - Minimal `StructuredOutputValidator` foundation for findings JSON validation and confidence filtering
 - `JudgeSessionFactory` and `JudgeService` for section-step completion checks
 - Judge-based completion-check flow for Step 1, Step 2, Step 3, Step 4, and Step 7 with retry once semantics
 - Deterministic validation flow for Step 5 and Step 6 findings JSON with default confidence thresholds
 - Minimal per-file review state and note rendering for bootstrap, Step 1, Step 2, Step 3, Step 4, Step 5, Step 6, and Step 7 snapshots
+- Deterministic interrupted-note warning blocks and `skipped.md` records when Step 1–7 exhaust retry
 - Minimal session foundation for Copilot SDK integration
 - Minimal Step 0 guardrails for `read`, `bash`, and `write`
 
@@ -39,7 +41,7 @@ The app does **not** yet implement:
 - `web_fetch` / URL permission-policy integration
 - `KnowledgeSvc`
 - bounded concurrency
-- skipped-file pipeline
+- complete output-failure taxonomy / coordinator behavior beyond the current skipped-file foundation
 - full final review note rendering pipeline
 - run-level aggregate summary output
 
@@ -70,7 +72,7 @@ Do **not** treat `npm install -g .` as the product install contract.
   - arbitrary agent `write` operations must remain restricted
 - Do not silently widen tool permissions.
 - If a capability is explicitly deferred in the active change, do not “sneak it in” as part of unrelated implementation.
-- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation uses conservative failure semantics: Step 1–4 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, retry once is enabled, skipped-file downgrade is still deferred, and bounded concurrency is still deferred.
+- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation now includes skipped-file downgrade for Step 1–7 exhaustion: Step 1–4 and Step 7 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, retry once is enabled, failed per-file steps publish warning-backed interrupted snapshots plus `skipped.md` records, Step 0 remains fatal, and bounded concurrency is still deferred.
 
 ## Copilot SDK Notes
 
