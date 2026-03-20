@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import type { RunRequest } from "../core/run-request.ts";
 import {
   ChangesetOverviewRunner
@@ -10,7 +12,9 @@ import { JudgeService } from "../core/judge.ts";
 import { StepRunner } from "../core/step-runner.ts";
 import { StructuredOutputValidator } from "../core/structured-output-validator.ts";
 import { LocalGitProvider } from "../providers/local-git-provider.ts";
+import { LocalReviewConfigProvider } from "../providers/local-review-config-provider.ts";
 import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
+import type { ReviewConfigProvider } from "../providers/review-config-provider.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 import { JudgeSessionFactory } from "../services/judge-session-factory.ts";
@@ -30,6 +34,7 @@ export interface CreateLocalReviewRunAppOptions {
     getClient(): CopilotClientLike;
   };
   outputSink?: ReviewOutputSink;
+  reviewConfigProvider?: ReviewConfigProvider;
   sourceProvider?: ReviewSourceProvider;
   stepRunner?: Pick<StepRunner, "run">;
   workingDirectory: string;
@@ -46,33 +51,44 @@ export function createLocalReviewRunApp(
   const clientManager = options.clientManager ?? new CopilotClientManager();
   const sourceProvider = options.sourceProvider ?? new LocalGitProvider();
   const outputSink = options.outputSink ?? new LocalWorkspaceProvider();
+  const reviewConfigProvider =
+    options.reviewConfigProvider ?? new LocalReviewConfigProvider();
   const reviewSessionFactory = new ReviewSessionFactory({ clientManager });
   const judgeSessionFactory = new JudgeSessionFactory({ clientManager });
   const judgeService = new JudgeService({ judgeSessionFactory });
-  const structuredOutputValidator = new StructuredOutputValidator();
-  const stepRunner =
-    options.stepRunner ??
-    new StepRunner({
-      reviewSessionFactory,
-      judgeService,
-      structuredOutputValidator
-    });
   const changesetOverviewRunner =
     options.changesetOverviewRunner ??
     new ChangesetOverviewRunner({
       reviewSessionFactory
     });
-  const orchestrator = new ReviewOrchestrator({
-    changesetOverviewRunner,
-    sourceProvider,
-    outputSink,
-    stepRunner,
-    workingDirectory: options.workingDirectory,
-    timestampProvider: options.timestampProvider
-  });
 
   return {
     async run(request: RunRequest): Promise<ReviewRunSummary> {
+      const startPath = path.resolve(
+        options.workingDirectory,
+        request.repoPath ?? "."
+      );
+      const repoRoot = sourceProvider.resolveRepoRoot(startPath);
+      const confidenceThresholds =
+        reviewConfigProvider.loadConfidenceThresholds(repoRoot);
+      const stepRunner =
+        options.stepRunner ??
+        new StepRunner({
+          reviewSessionFactory,
+          judgeService,
+          structuredOutputValidator: new StructuredOutputValidator({
+            confidenceThresholds
+          })
+        });
+      const orchestrator = new ReviewOrchestrator({
+        changesetOverviewRunner,
+        sourceProvider,
+        outputSink,
+        stepRunner,
+        workingDirectory: options.workingDirectory,
+        timestampProvider: options.timestampProvider
+      });
+
       await clientManager.start();
 
       try {

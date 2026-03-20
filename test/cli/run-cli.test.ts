@@ -180,6 +180,26 @@ test("runCli surfaces a clear runtime error when Step 0 session startup fails", 
   const stderr = [];
   const app = createLocalReviewRunApp({
     workingDirectory: "/workspace/repo",
+    sourceProvider: {
+      resolveRepoRoot() {
+        return "/workspace/repo";
+      },
+      getChangedFiles() {
+        throw new Error("unreachable");
+      },
+      getChangesetEntries() {
+        throw new Error("unreachable");
+      },
+      getDiff() {
+        throw new Error("unreachable");
+      },
+      getCurrentBranch() {
+        throw new Error("unreachable");
+      },
+      filterIgnoredFiles() {
+        throw new Error("unreachable");
+      }
+    },
     clientManager: {
       async start() {
         throw new Error("Copilot CLI is unavailable.");

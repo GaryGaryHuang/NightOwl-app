@@ -177,6 +177,82 @@ test("StructuredOutputValidator filters findings by default confidence threshold
   });
 });
 
+test("StructuredOutputValidator filters findings by supplied confidence thresholds", () => {
+  const validator = new StructuredOutputValidator({
+    confidenceThresholds: {
+      must: 70,
+      nice: 85
+    }
+  });
+
+  const result = validator.validate({
+    validatorId: "findings-json",
+    responseText: JSON.stringify({
+      findings: [
+        {
+          type: "must",
+          title: "保留 must",
+          context: "具體情境",
+          deviation: "預期與實際有落差",
+          impact: "影響 correctness",
+          suggestion: "補上 guard",
+          confidence: 70
+        },
+        {
+          type: "must",
+          title: "移除 must",
+          context: "具體情境",
+          deviation: "預期與實際有落差",
+          impact: "影響 correctness",
+          suggestion: "補上 guard",
+          confidence: 69
+        },
+        {
+          type: "nice",
+          title: "保留 nice",
+          context: "具體情境",
+          deviation: "可再調整",
+          impact: "影響可維護性",
+          suggestion: "補上整理",
+          confidence: 85
+        },
+        {
+          type: "nice",
+          title: "移除 nice",
+          context: "具體情境",
+          deviation: "可再調整",
+          impact: "影響可維護性",
+          suggestion: "補上整理",
+          confidence: 84
+        }
+      ]
+    })
+  });
+
+  assert.deepEqual(result, {
+    findings: [
+      {
+        type: "must",
+        title: "保留 must",
+        context: "具體情境",
+        deviation: "預期與實際有落差",
+        impact: "影響 correctness",
+        suggestion: "補上 guard",
+        confidence: 70
+      },
+      {
+        type: "nice",
+        title: "保留 nice",
+        context: "具體情境",
+        deviation: "可再調整",
+        impact: "影響可維護性",
+        suggestion: "補上整理",
+        confidence: 85
+      }
+    ]
+  });
+});
+
 test("StructuredOutputValidator accepts an empty findings array", () => {
   const validator = new StructuredOutputValidator();
 

@@ -32,7 +32,7 @@ The app currently implements:
 - Minimal `StructuredOutputValidator` foundation for findings JSON validation and confidence filtering
 - `JudgeSessionFactory` and `JudgeService` for section-step completion checks
 - Judge-based completion-check flow for Step 1, Step 2, Step 3, Step 4, and Step 7 with retry once semantics
-- Deterministic validation flow for Step 5 and Step 6 findings JSON with default confidence thresholds
+- Deterministic validation flow for Step 5 and Step 6 findings JSON with repo-local `confidenceThresholds` overrides plus documented defaults
 - Minimal per-file review state and note rendering for bootstrap, Step 1, Step 2, Step 3, Step 4, Step 5, Step 6, and Step 7 snapshots
 - Deterministic interrupted-note warning blocks and `skipped.md` records when Step 1–7 exhaust retry
 - Minimal session foundation for Copilot SDK integration
@@ -44,6 +44,7 @@ The app does **not** yet implement:
 - MCP / Context7 integration
 - `web_fetch` / URL permission-policy integration
 - `KnowledgeSvc`
+- `maxConcurrentFiles` wiring from `.reviewconfig.json`
 - bounded concurrency
 - richer output-failure coordinator behavior beyond the current conservative taxonomy foundation
 - full final review note rendering pipeline
@@ -76,7 +77,7 @@ Do **not** treat `npm install -g .` as the product install contract.
   - arbitrary agent `write` operations must remain restricted
 - Do not silently widen tool permissions.
 - If a capability is explicitly deferred in the active change, do not “sneak it in” as part of unrelated implementation.
-- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation now includes skipped-file downgrade for Step 1–7 exhaustion, a conservative output-failure taxonomy foundation, a deterministic run-level aggregate summary foundation, a deterministic review index foundation, and completed-run artifact surface exposure in the CLI: Step 1–4 and Step 7 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, retry once is enabled, failed per-file steps publish warning-backed interrupted snapshots plus `skipped.md` records, completed runs publish `summary.md` and then `index.md` after all per-file artifacts are finalized, CLI success output reports the deterministic `Output`, `Files`, `Summary`, `Index`, and `Skipped` paths plus planned/successful/skipped counts directly from the completed-run result without reading artifacts from disk, `initializeRun()` / bootstrap note publish / successful snapshot publish / interrupted snapshot publish / `publishSkippedFile()` / `publishRunSummary()` / `publishReviewIndex()` failures remain fatal output-layer errors, Step 0 remains fatal, and bounded concurrency is still deferred.
+- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation now includes skipped-file downgrade for Step 1–7 exhaustion, a conservative output-failure taxonomy foundation, a deterministic run-level aggregate summary foundation, a deterministic review index foundation, completed-run artifact surface exposure in the CLI, and repo-local `confidenceThresholds` wiring for Step 5 / Step 6 deterministic filtering: Step 1–4 and Step 7 remain judge-backed section-steps, Step 3 remains local-first, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, retry once is enabled, invalid `.reviewconfig.json` threshold config fails the run before Step 0 begins, missing threshold config falls back to the documented `must=80` / `nice=90` defaults, failed per-file steps publish warning-backed interrupted snapshots plus `skipped.md` records, completed runs publish `summary.md` and then `index.md` after all per-file artifacts are finalized, CLI success output reports the deterministic `Output`, `Files`, `Summary`, `Index`, and `Skipped` paths plus planned/successful/skipped counts directly from the completed-run result without reading artifacts from disk, `initializeRun()` / bootstrap note publish / successful snapshot publish / interrupted snapshot publish / `publishSkippedFile()` / `publishRunSummary()` / `publishReviewIndex()` failures remain fatal output-layer errors, Step 0 remains fatal, and `maxConcurrentFiles`, MCP / `KnowledgeSvc`, and bounded concurrency are still deferred.
 
 ## Copilot SDK Notes
 

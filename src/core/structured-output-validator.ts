@@ -1,10 +1,26 @@
+import {
+  DEFAULT_CONFIDENCE_THRESHOLDS,
+  type ConfidenceThresholds
+} from "./confidence-thresholds.ts";
 import type { Finding } from "./file-review-context.ts";
 
 export interface FindingsPayload {
   findings: Finding[];
 }
 
+export interface StructuredOutputValidatorOptions {
+  confidenceThresholds?: ConfidenceThresholds;
+}
+
 export class StructuredOutputValidator {
+  readonly #confidenceThresholds: ConfidenceThresholds;
+
+  constructor(options: StructuredOutputValidatorOptions = {}) {
+    this.#confidenceThresholds = options.confidenceThresholds ?? {
+      ...DEFAULT_CONFIDENCE_THRESHOLDS
+    };
+  }
+
   validate(input: {
     validatorId: "findings-json";
     responseText: string;
@@ -41,8 +57,8 @@ export class StructuredOutputValidator {
     return {
       findings: validatedFindings.filter((finding) =>
         finding.type === "must"
-          ? finding.confidence >= 80
-          : finding.confidence >= 90
+          ? finding.confidence >= this.#confidenceThresholds.must
+          : finding.confidence >= this.#confidenceThresholds.nice
       )
     };
   }

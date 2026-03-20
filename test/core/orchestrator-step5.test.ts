@@ -480,6 +480,127 @@ test("ReviewOrchestrator treats confidence-filtered empty findings as a successf
   }
 });
 
+test("ReviewOrchestrator uses configured thresholds when Step 5 filters findings into the Step 6 prompt", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const observedPrompts = [];
+    const sourceProvider = new LocalGitProvider();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession(profile) {
+            const stepId = detectStepId(profile.systemMessage);
+
+            return new SessionExecutor({
+              async sendAndWait(options) {
+                const filePath = extractDiffPath(options.prompt);
+                observedPrompts.push({ stepId, prompt: options.prompt });
+
+                if (stepId === "step5-validation-interrogation") {
+                  return {
+                    data: {
+                      content: JSON.stringify({
+                        findings: [
+                          {
+                            type: "must",
+                            title: "低門檻 must",
+                            context: "具體情境",
+                            deviation: "預期與實際有落差",
+                            impact: "影響 correctness",
+                            suggestion: "補上 guard",
+                            confidence: 75
+                          },
+                          {
+                            type: "nice",
+                            title: "低門檻 nice",
+                            context: "具體情境",
+                            deviation: "可改善",
+                            impact: "影響可維護性",
+                            suggestion: "補上整理",
+                            confidence: 88
+                          }
+                        ]
+                      })
+                    }
+                  };
+                }
+
+                if (stepId === "step6-cognitive-simulation") {
+                  return {
+                    data: {
+                      content: JSON.stringify({
+                        findings: [
+                          {
+                            type: "must",
+                            title: `Step6 must ${filePath}`,
+                            context: "模擬路徑重新確認",
+                            deviation: "最終偏差確認",
+                            impact: "會造成 correctness 問題",
+                            suggestion: "補上 final guard",
+                            confidence: 91
+                          }
+                        ]
+                      })
+                    }
+                  };
+                }
+
+                return { data: { content: buildStepResponse(stepId, filePath) } };
+              },
+              async disconnect() {}
+            });
+          }
+        },
+        structuredOutputValidator: new StructuredOutputValidator({
+          confidenceThresholds: {
+            must: 70,
+            nice: 85
+          }
+        }),
+        judgeService: {
+          async evaluate() {
+            return { passed: true };
+          }
+        }
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    const step6Prompts = observedPrompts.filter(
+      ({ stepId }) => stepId === "step6-cognitive-simulation"
+    );
+
+    assert.ok(step6Prompts.length > 0);
+    for (const prompt of step6Prompts) {
+      assert.match(prompt.prompt, /\[must\] 低門檻 must/u);
+      assert.match(prompt.prompt, /\[nice\] 低門檻 nice/u);
+    }
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("ReviewOrchestrator retries Step 5 after deterministic validation failure and publishes only the successful retry snapshot", async () => {
   const fixture = createReviewRepoFixture();
 
