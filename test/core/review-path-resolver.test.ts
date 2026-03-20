@@ -40,7 +40,8 @@ test("buildOutputTarget returns review output paths", () => {
   assert.deepEqual(target, {
     basePath: "/workspace/review/feature_login_03131430",
     filesPath: "/workspace/review/feature_login_03131430/files",
-    skippedPath: "/workspace/review/feature_login_03131430/skipped.md"
+    skippedPath: "/workspace/review/feature_login_03131430/skipped.md",
+    summaryPath: "/workspace/review/feature_login_03131430/summary.md"
   });
 });
 

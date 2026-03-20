@@ -5,6 +5,7 @@ import type { OutputTarget } from "../core/review-path-resolver.ts";
 import type {
   FileReviewResult,
   ReviewOutputSink,
+  RunSummaryResult,
   SkipRecord
 } from "./review-output-sink.ts";
 
@@ -32,5 +33,13 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
       this.#outputTarget.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
     );
+  }
+
+  publishRunSummary(summaryResult: RunSummaryResult): void {
+    if (!this.#outputTarget) {
+      throw new Error("Run output target has not been initialized.");
+    }
+
+    writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
   }
 }

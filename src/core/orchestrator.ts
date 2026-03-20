@@ -3,6 +3,11 @@ import path from "node:path";
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
 import { FileReviewContext } from "./file-review-context.ts";
 import { ReviewNoteFinalizer } from "./finalizer.ts";
+import {
+  RunSummaryFinalizer,
+  type SkippedFileOutcome,
+  type SuccessfulFileOutcome
+} from "./run-summary-finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunRequest } from "./run-request.ts";
 import type { StepResult, StepRunner } from "./step-runner.ts";
@@ -45,6 +50,7 @@ export class ReviewOrchestrator {
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
   readonly #finalizer: ReviewNoteFinalizer;
+  readonly #runSummaryFinalizer: RunSummaryFinalizer;
 
   constructor(options: ReviewOrchestratorOptions) {
     this.#changesetOverviewRunner = options.changesetOverviewRunner;
@@ -54,6 +60,7 @@ export class ReviewOrchestrator {
     this.#workingDirectory = options.workingDirectory;
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
     this.#finalizer = new ReviewNoteFinalizer();
+    this.#runSummaryFinalizer = new RunSummaryFinalizer();
   }
 
   async run(request: RunRequest): Promise<ReviewRunSummary> {
@@ -128,6 +135,8 @@ export class ReviewOrchestrator {
         reviewNoteFinalizer: this.#finalizer
       })
     ];
+    const successfulFiles: SuccessfulFileOutcome[] = [];
+    const skippedFiles: SkippedFileOutcome[] = [];
 
     for (const plannedNote of plannedNoteFiles) {
       let diffContent: string;
@@ -155,6 +164,7 @@ export class ReviewOrchestrator {
         baseRef: request.baseRef,
         headRef: request.headRef
       });
+      let skipped = false;
 
       for (const step of steps) {
         let result: StepResult;
@@ -185,6 +195,12 @@ export class ReviewOrchestrator {
             stepId: step.stepId,
             reason
           });
+          skippedFiles.push({
+            filePath: fileContext.filePath,
+            stepId: step.stepId,
+            reason
+          });
+          skipped = true;
 
           break;
         }
@@ -196,7 +212,25 @@ export class ReviewOrchestrator {
           content: this.#finalizer.render(fileContext)
         });
       }
+
+      if (!skipped) {
+        successfulFiles.push({
+          filePath: fileContext.filePath,
+          findings: fileContext.getStructuredState().findings ?? []
+        });
+      }
     }
+
+    this.#outputSink.publishRunSummary({
+      content: this.#runSummaryFinalizer.render({
+        repoRoot,
+        baseRef: request.baseRef,
+        headRef: request.headRef,
+        plannedFileCount: plannedNoteFiles.length,
+        successfulFiles,
+        skippedFiles
+      })
+    });
 
     return {
       repoRoot,
