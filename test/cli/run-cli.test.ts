@@ -317,6 +317,63 @@ test("runCli reports an all-skipped run as a successful completed summary", asyn
   assert.deepEqual(stderr, []);
 });
 
+test("runCli keeps the existing success summary shape even when the run result includes indexPath", async () => {
+  const stdout = [];
+  const stderr = [];
+
+  const exitCode = await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        return {
+          repoRoot: "/workspace/repo",
+          runContext: {
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          },
+          outputTarget: {
+            basePath: "/workspace/repo/review/feature-branch_03131430",
+            filesPath: "/workspace/repo/review/feature-branch_03131430/files",
+            skippedPath:
+              "/workspace/repo/review/feature-branch_03131430/skipped.md",
+            summaryPath:
+              "/workspace/repo/review/feature-branch_03131430/summary.md",
+            indexPath:
+              "/workspace/repo/review/feature-branch_03131430/index.md"
+          },
+          plannedFileCount: 2,
+          successfulFileCount: 1,
+          skippedFileCount: 1
+        };
+      }
+    },
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(stdout, [
+    [
+      "Initialized local review run.",
+      "Repo root: /workspace/repo",
+      "Output: /workspace/repo/review/feature-branch_03131430",
+      "Summary: /workspace/repo/review/feature-branch_03131430/summary.md",
+      "Planned files: 2",
+      "Successful files: 1",
+      "Skipped files: 1"
+    ].join("\n")
+  ]);
+  assert.deepEqual(stderr, []);
+  assert.doesNotMatch(stdout[0], /Index:/u);
+});
+
 test("runCli surfaces a clear runtime error when Step 0 session startup fails", async () => {
   const stdout = [];
   const stderr = [];

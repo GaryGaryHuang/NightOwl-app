@@ -47,15 +47,22 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
     });
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
+    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
     const successfulLines = reviewableFiles.map(
       (filePath) =>
         `- \`${filePath}\` — must=${countFindings(filePath, "must")}, nice=${countFindings(filePath, "nice")}`
+    );
+    const expectedIndexFileNoteLines = plannedNotes.map(
+      (plannedNote) =>
+        `- [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
     );
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
     assert.equal(result.successfulFileCount, reviewableFiles.length);
     assert.equal(result.skippedFileCount, 0);
     assert.equal(existsSync(result.outputTarget.summaryPath), true);
+    assert.equal(existsSync(result.outputTarget.indexPath), true);
     assert.equal(
       summaryContent,
       [
@@ -74,6 +81,26 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
         "",
         "## Skipped Files",
         "- 無"
+      ].join("\n")
+    );
+    assert.equal(
+      indexContent,
+      [
+        "# Review Index",
+        "",
+        `- Repo root: \`${repoRoot}\``,
+        "- Base ref: `main`",
+        "- Head ref: `feature-branch`",
+        `- Planned files: ${reviewableFiles.length}`,
+        `- Successful files: ${reviewableFiles.length}`,
+        "- Skipped files: 0",
+        "",
+        "## Run Artifacts",
+        "- [summary.md](./summary.md)",
+        "- [skipped.md](./skipped.md)",
+        "",
+        "## File Notes",
+        ...expectedIndexFileNoteLines
       ].join("\n")
     );
   } finally {
@@ -243,6 +270,12 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
     });
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
+    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const expectedIndexFileNoteLines = plannedNotes.map(
+      (plannedNote) =>
+        `- [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
+    );
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
     assert.equal(result.successfulFileCount, 0);
@@ -250,6 +283,161 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
     assert.match(summaryContent, new RegExp(`- Planned files: ${reviewableFiles.length}`, "u"));
     assert.match(summaryContent, /- Successful files: 0/u);
     assert.match(summaryContent, new RegExp(`- Skipped files: ${reviewableFiles.length}`, "u"));
+    assert.equal(
+      indexContent,
+      [
+        "# Review Index",
+        "",
+        `- Repo root: \`${repoRoot}\``,
+        "- Base ref: `main`",
+        "- Head ref: `feature-branch`",
+        `- Planned files: ${reviewableFiles.length}`,
+        "- Successful files: 0",
+        `- Skipped files: ${reviewableFiles.length}`,
+        "",
+        "## Run Artifacts",
+        "- [summary.md](./summary.md)",
+        "- [skipped.md](./skipped.md)",
+        "",
+        "## File Notes",
+        ...expectedIndexFileNoteLines
+      ].join("\n")
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run from formal completed-run data rather than disk artifacts", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for review index");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const skippedFile = "README.md";
+    const outputSink = new CorruptingIndexOutputSink();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink,
+      stepRunner: createMixedResultRunner(skippedFile),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const expectedFileNoteLines = plannedNotes.map(
+      (plannedNote) =>
+        `- [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
+    );
+
+    assert.equal(result.plannedFileCount, reviewableFiles.length);
+    assert.equal(result.successfulFileCount, reviewableFiles.length - 1);
+    assert.equal(result.skippedFileCount, 1);
+    assert.equal(existsSync(result.outputTarget.indexPath), true);
+    assert.equal(
+      indexContent,
+      [
+        "# Review Index",
+        "",
+        `- Repo root: \`${repoRoot}\``,
+        "- Base ref: `main`",
+        "- Head ref: `feature-branch`",
+        `- Planned files: ${reviewableFiles.length}`,
+        `- Successful files: ${reviewableFiles.length - 1}`,
+        "- Skipped files: 1",
+        "",
+        "## Run Artifacts",
+        "- [summary.md](./summary.md)",
+        "- [skipped.md](./skipped.md)",
+        "",
+        "## File Notes",
+        ...expectedFileNoteLines
+      ].join("\n")
+    );
+    assert.doesNotMatch(indexContent, /CORRUPTED SUMMARY/u);
+    assert.doesNotMatch(indexContent, /EXTRA DISK FILE/u);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator publishes index.md for zero planned files with explicit empty file notes", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "**\n");
+
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: {
+        async run() {
+          throw new Error("should not start steps");
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：無",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(
+      readFileSync(result.outputTarget.indexPath, "utf8"),
+      [
+        "# Review Index",
+        "",
+        `- Repo root: \`${result.repoRoot}\``,
+        "- Base ref: `main`",
+        "- Head ref: `feature-branch`",
+        "- Planned files: 0",
+        "- Successful files: 0",
+        "- Skipped files: 0",
+        "",
+        "## Run Artifacts",
+        "- [summary.md](./summary.md)",
+        "- [skipped.md](./skipped.md)",
+        "",
+        "## File Notes",
+        "- 無"
+      ].join("\n")
+    );
   } finally {
     fixture.cleanup();
   }
@@ -276,6 +464,9 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
         },
         publishRunSummary(summaryResult) {
           outputCalls.push(["publishRunSummary", summaryResult.content]);
+        },
+        publishReviewIndex(indexResult) {
+          outputCalls.push(["publishReviewIndex", indexResult.content]);
         }
       },
       stepRunner: {
@@ -319,6 +510,10 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
       outputCalls.some(([callType]) => callType === "publishRunSummary"),
       false
     );
+    assert.equal(
+      outputCalls.some(([callType]) => callType === "publishReviewIndex"),
+      false
+    );
   } finally {
     fixture.cleanup();
   }
@@ -343,6 +538,9 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
         },
         publishRunSummary(summaryResult) {
           outputCalls.push(["publishRunSummary", summaryResult.content]);
+        },
+        publishReviewIndex(indexResult) {
+          outputCalls.push(["publishReviewIndex", indexResult.content]);
         }
       },
       stepRunner: {
@@ -429,6 +627,9 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
         },
         publishRunSummary(summaryResult) {
           outputCalls.push(["publishRunSummary", summaryResult.content]);
+        },
+        publishReviewIndex(indexResult) {
+          outputCalls.push(["publishReviewIndex", indexResult.content]);
         }
       },
       stepRunner: createSuccessfulSummaryRunner(),
@@ -457,6 +658,10 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
 
     assert.equal(
       outputCalls.some(([callType]) => callType === "publishRunSummary"),
+      false
+    );
+    assert.equal(
+      outputCalls.some(([callType]) => callType === "publishReviewIndex"),
       false
     );
   } finally {
@@ -506,6 +711,50 @@ test("ReviewOrchestrator aborts when publishRunSummary fails and preserves per-f
   }
 });
 
+test("ReviewOrchestrator aborts when publishReviewIndex fails after summary.md is written and preserves completed artifacts", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const outputSink = new IndexFailingOutputSink();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink,
+      stepRunner: createSuccessfulSummaryRunner(),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /index write failed/u
+    );
+
+    assert.equal(outputSink.publishRunSummaryCalls, 1);
+    assert.equal(outputSink.publishReviewIndexCalls, 1);
+    assert.equal(existsSync(outputSink.summaryPath ?? ""), true);
+    assert.equal(existsSync(outputSink.indexPath ?? ""), false);
+    assert.ok(outputSink.writtenFileReviews.length > 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("ReviewOrchestrator publishes summary.md only after per-file notes and skipped artifacts are finalized", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -545,7 +794,7 @@ test("ReviewOrchestrator publishes summary.md only after per-file notes and skip
       userContext: []
     });
 
-    assert.equal(outputSink.calls.at(-1), "publishRunSummary");
+    assert.equal(outputSink.calls.at(-1), "publishReviewIndex");
     assert.ok(outputSink.calls.includes("publishSkippedFile"));
     assert.ok(
       outputSink.calls.lastIndexOf("publishRunSummary") >
@@ -555,6 +804,62 @@ test("ReviewOrchestrator publishes summary.md only after per-file notes and skip
       outputSink.calls.lastIndexOf("publishRunSummary") >
         outputSink.calls.lastIndexOf("publishFileReview")
     );
+    assert.ok(
+      outputSink.calls.lastIndexOf("publishReviewIndex") >
+        outputSink.calls.lastIndexOf("publishRunSummary")
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator publishes index.md only after publishRunSummary and does not rewrite finalized artifacts", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for index ordering");
+
+    const outputSink = new IndexRecordingOutputSink();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink,
+      stepRunner: createMixedResultRunner("README.md"),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(outputSink.calls.at(-1), "publishReviewIndex");
+    assert.ok(
+      outputSink.calls.lastIndexOf("publishReviewIndex") >
+        outputSink.calls.lastIndexOf("publishRunSummary")
+    );
+    assert.ok(
+      outputSink.calls.lastIndexOf("publishReviewIndex") >
+        outputSink.calls.lastIndexOf("publishSkippedFile")
+    );
+    assert.ok(
+      outputSink.calls.lastIndexOf("publishReviewIndex") >
+        outputSink.calls.lastIndexOf("publishFileReview")
+    );
+    assert.equal(outputSink.publishFileReviewCallsAfterIndex, 0);
+    assert.equal(outputSink.publishRunSummaryCallsAfterIndex, 0);
   } finally {
     fixture.cleanup();
   }
@@ -796,6 +1101,42 @@ class CorruptingSummaryOutputSink {
   publishRunSummary(summaryResult) {
     writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
   }
+
+  publishReviewIndex(indexResult) {
+    writeFileSync(this.#outputTarget.indexPath, indexResult.content);
+  }
+}
+
+class CorruptingIndexOutputSink {
+  #outputTarget;
+
+  initializeRun(outputTarget) {
+    mkdirSync(outputTarget.basePath, { recursive: true });
+    mkdirSync(outputTarget.filesPath, { recursive: true });
+    writeFileSync(outputTarget.skippedPath, "# CORRUPTED SKIPPED LOG\n");
+    this.#outputTarget = outputTarget;
+  }
+
+  publishFileReview(fileResult) {
+    mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
+    writeFileSync(fileResult.noteFilePath, "# CORRUPTED NOTE\n");
+    writeFileSync(path.join(this.#outputTarget.filesPath, "EXTRA DISK FILE.md"), "# extra\n");
+  }
+
+  publishSkippedFile(skipRecord) {
+    appendFileSync(
+      this.#outputTarget.skippedPath,
+      `CORRUPTED SKIP: ${skipRecord.filePath} ${skipRecord.stepId} ${skipRecord.reason}\n`
+    );
+  }
+
+  publishRunSummary(summaryResult) {
+    writeFileSync(this.#outputTarget.summaryPath, "# CORRUPTED SUMMARY\n");
+  }
+
+  publishReviewIndex(indexResult) {
+    writeFileSync(this.#outputTarget.indexPath, indexResult.content);
+  }
 }
 
 class SummaryFailingOutputSink {
@@ -829,6 +1170,51 @@ class SummaryFailingOutputSink {
     this.publishRunSummaryCalls += 1;
     throw new Error("summary write failed");
   }
+
+  publishReviewIndex() {
+    throw new Error("should not publish index after summary failure");
+  }
+}
+
+class IndexFailingOutputSink {
+  #outputTarget;
+  writtenFileReviews = [];
+  publishRunSummaryCalls = 0;
+  publishReviewIndexCalls = 0;
+  summaryPath;
+  indexPath;
+
+  initializeRun(outputTarget) {
+    mkdirSync(outputTarget.basePath, { recursive: true });
+    mkdirSync(outputTarget.filesPath, { recursive: true });
+    writeFileSync(outputTarget.skippedPath, "");
+    this.#outputTarget = outputTarget;
+    this.summaryPath = outputTarget.summaryPath;
+    this.indexPath = outputTarget.indexPath;
+  }
+
+  publishFileReview(fileResult) {
+    mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
+    writeFileSync(fileResult.noteFilePath, fileResult.content);
+    this.writtenFileReviews.push(fileResult.noteFilePath);
+  }
+
+  publishSkippedFile(skipRecord) {
+    appendFileSync(
+      this.#outputTarget.skippedPath,
+      `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
+    );
+  }
+
+  publishRunSummary(summaryResult) {
+    this.publishRunSummaryCalls += 1;
+    writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
+  }
+
+  publishReviewIndex() {
+    this.publishReviewIndexCalls += 1;
+    throw new Error("index write failed");
+  }
 }
 
 class RecordingOutputSink {
@@ -860,6 +1246,58 @@ class RecordingOutputSink {
   publishRunSummary(summaryResult) {
     writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
     this.calls.push("publishRunSummary");
+  }
+
+  publishReviewIndex(summaryResult) {
+    writeFileSync(this.#outputTarget.indexPath, summaryResult.content);
+    this.calls.push("publishReviewIndex");
+  }
+}
+
+class IndexRecordingOutputSink {
+  #outputTarget;
+  calls = [];
+  publishFileReviewCallsAfterIndex = 0;
+  publishRunSummaryCallsAfterIndex = 0;
+  #indexPublished = false;
+
+  initializeRun(outputTarget) {
+    mkdirSync(outputTarget.basePath, { recursive: true });
+    mkdirSync(outputTarget.filesPath, { recursive: true });
+    writeFileSync(outputTarget.skippedPath, "");
+    this.#outputTarget = outputTarget;
+    this.calls.push("initializeRun");
+  }
+
+  publishFileReview(fileResult) {
+    mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
+    writeFileSync(fileResult.noteFilePath, fileResult.content);
+    if (this.#indexPublished) {
+      this.publishFileReviewCallsAfterIndex += 1;
+    }
+    this.calls.push("publishFileReview");
+  }
+
+  publishSkippedFile(skipRecord) {
+    appendFileSync(
+      this.#outputTarget.skippedPath,
+      `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
+    );
+    this.calls.push("publishSkippedFile");
+  }
+
+  publishRunSummary(summaryResult) {
+    writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
+    if (this.#indexPublished) {
+      this.publishRunSummaryCallsAfterIndex += 1;
+    }
+    this.calls.push("publishRunSummary");
+  }
+
+  publishReviewIndex(indexResult) {
+    writeFileSync(this.#outputTarget.indexPath, indexResult.content);
+    this.#indexPublished = true;
+    this.calls.push("publishReviewIndex");
   }
 }
 

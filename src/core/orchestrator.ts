@@ -8,6 +8,7 @@ import {
   type SkippedFileOutcome,
   type SuccessfulFileOutcome
 } from "./run-summary-finalizer.ts";
+import { ReviewIndexFinalizer } from "./review-index-finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunRequest } from "./run-request.ts";
 import type { StepResult, StepRunner } from "./step-runner.ts";
@@ -53,6 +54,7 @@ export class ReviewOrchestrator {
   readonly #timestampProvider: () => string;
   readonly #finalizer: ReviewNoteFinalizer;
   readonly #runSummaryFinalizer: RunSummaryFinalizer;
+  readonly #reviewIndexFinalizer: ReviewIndexFinalizer;
 
   constructor(options: ReviewOrchestratorOptions) {
     this.#changesetOverviewRunner = options.changesetOverviewRunner;
@@ -63,6 +65,7 @@ export class ReviewOrchestrator {
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
     this.#finalizer = new ReviewNoteFinalizer();
     this.#runSummaryFinalizer = new RunSummaryFinalizer();
+    this.#reviewIndexFinalizer = new ReviewIndexFinalizer();
   }
 
   async run(request: RunRequest): Promise<ReviewRunSummary> {
@@ -231,6 +234,18 @@ export class ReviewOrchestrator {
         plannedFileCount: plannedNoteFiles.length,
         successfulFiles,
         skippedFiles
+      })
+    });
+    this.#outputSink.publishReviewIndex({
+      content: this.#reviewIndexFinalizer.render({
+        repoRoot,
+        baseRef: request.baseRef,
+        headRef: request.headRef,
+        plannedFileCount: plannedNoteFiles.length,
+        successfulFileCount: successfulFiles.length,
+        skippedFileCount: skippedFiles.length,
+        outputTarget,
+        plannedNotes: plannedNoteFiles
       })
     });
 

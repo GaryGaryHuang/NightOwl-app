@@ -3,6 +3,7 @@ export interface OutputTarget {
   filesPath: string;
   skippedPath: string;
   summaryPath: string;
+  indexPath: string;
 }
 
 export interface ResolveOutputTargetInput {
@@ -35,7 +36,8 @@ export function buildOutputTarget(
     basePath,
     filesPath: path.join(basePath, "files"),
     skippedPath: path.join(basePath, "skipped.md"),
-    summaryPath: path.join(basePath, "summary.md")
+    summaryPath: path.join(basePath, "summary.md"),
+    indexPath: path.join(basePath, "index.md")
   };
 }
 

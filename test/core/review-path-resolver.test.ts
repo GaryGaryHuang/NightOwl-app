@@ -41,7 +41,8 @@ test("buildOutputTarget returns review output paths", () => {
     basePath: "/workspace/review/feature_login_03131430",
     filesPath: "/workspace/review/feature_login_03131430/files",
     skippedPath: "/workspace/review/feature_login_03131430/skipped.md",
-    summaryPath: "/workspace/review/feature_login_03131430/summary.md"
+    summaryPath: "/workspace/review/feature_login_03131430/summary.md",
+    indexPath: "/workspace/review/feature_login_03131430/index.md"
   });
 });
 

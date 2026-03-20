@@ -4,6 +4,7 @@ import path from "node:path";
 import type { OutputTarget } from "../core/review-path-resolver.ts";
 import type {
   FileReviewResult,
+  ReviewIndexResult,
   ReviewOutputSink,
   RunSummaryResult,
   SkipRecord
@@ -41,5 +42,13 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
     }
 
     writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
+  }
+
+  publishReviewIndex(indexResult: ReviewIndexResult): void {
+    if (!this.#outputTarget) {
+      throw new Error("Run output target has not been initialized.");
+    }
+
+    writeFileSync(this.#outputTarget.indexPath, indexResult.content);
   }
 }

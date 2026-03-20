@@ -27,10 +27,11 @@ The current repository implements the Step 0 + Step 1 + Step 2 + Step 3 + Step 4
 - skipped-file pipeline foundation for Step 1–7 exhaustion: if a section-step attempt or its judge check fails twice, or if Step 5 / Step 6 review or deterministic validation fails twice, that file is downgraded to skipped, its last successful formal snapshot is preserved with a deterministic warning block, one record is appended to `skipped.md`, and later planned files continue
 - output-failure taxonomy foundation for current local output edges: `initializeRun()`, bootstrap note publish, successful snapshot publish, interrupted snapshot publish, and `publishSkippedFile()` failures remain fatal output-layer errors and are not downgraded to skipped files
 - run-level aggregate summary foundation for completed runs: the app now writes deterministic `summary.md` with planned / successful / skipped counts, final findings totals from successful files only, and planned-order successful / skipped file lists
+- review index foundation for completed runs: the app now writes deterministic `index.md` as a landing page that links `summary.md`, `skipped.md`, and every planned per-file note in planned order
 - CLI run summary fields foundation for completed runs: the success summary now prints `summary.md` path plus planned / successful / skipped counts directly from the app boundary
 - minimal interruption-state rendering so skipped files keep bootstrap, Step 1, Step 4, or Step 6 snapshots without leaking provisional failed-step content
 
-The full AI review orchestration is not implemented yet. This repository now includes the Step 7 foundation on top of the Step 3 local-first knowledge foundation, Step 4 strategy foundation, Step 5 first-pass findings foundation, Step 6 findings-finalization foundation, the skipped-file pipeline foundation for Step 1–7 exhaustion, the conservative output-failure taxonomy foundation for current output edges, the deterministic run-level aggregate summary foundation, and the completed-run CLI summary fields foundation; external knowledge tooling for Step 3 is still deferred. Bounded concurrency, MCP / `web_fetch`, `KnowledgeSvc`, richer output-failure coordinator behavior, and the complete final rendering / export pipeline are still deferred.
+The full AI review orchestration is not implemented yet. This repository now includes the Step 7 foundation on top of the Step 3 local-first knowledge foundation, Step 4 strategy foundation, Step 5 first-pass findings foundation, Step 6 findings-finalization foundation, the skipped-file pipeline foundation for Step 1–7 exhaustion, the conservative output-failure taxonomy foundation for current output edges, the deterministic run-level aggregate summary foundation, the deterministic review index foundation, and the completed-run CLI summary fields foundation; external knowledge tooling for Step 3 is still deferred. Bounded concurrency, MCP / `web_fetch`, `KnowledgeSvc`, richer output-failure coordinator behavior, and the complete final rendering / export pipeline are still deferred.
 
 ## Current Behavior
 
@@ -56,6 +57,7 @@ The command also creates:
 - `<output_base_dir>/review/<session_id>/files/`
 - `<output_base_dir>/review/<session_id>/skipped.md`
 - `<output_base_dir>/review/<session_id>/summary.md`
+- `<output_base_dir>/review/<session_id>/index.md`
 - one Markdown note per planned file
 
 For successfully processed files, the note is updated from the bootstrap skeleton into a Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 snapshot that begins with:
@@ -99,7 +101,9 @@ At the current foundation boundary, output-layer failures are still more conserv
 
 For completed runs, the app now also writes a deterministic run-level `summary.md` after all per-file notes and skipped artifacts are finalized. That artifact includes run metadata, planned / successful / skipped counts, final findings totals from successful files only, a `## Successful Files` section, and a `## Skipped Files` section. Zero-file runs still produce `summary.md` with explicit `- 無` sections. Fatal runs do not publish `summary.md`, and if writing `summary.md` itself fails, the run aborts with the underlying output error.
 
-The CLI success summary now aligns with the completed-run accounting used for `summary.md`: it prints `Summary: <summaryPath>`, `Planned files`, `Successful files`, and `Skipped files` directly from the app boundary. All-successful runs, mixed-result runs, all-skipped runs, and zero-file runs all remain successful completed runs as long as no fatal runtime error occurs.
+For the same completed runs, the app now also writes a deterministic `index.md` after `summary.md` succeeds. That artifact is a landing page rather than a second aggregate report: it links `summary.md`, `skipped.md`, and every planned file note in planned order, including collision-resolved note names under `files/`. Zero-file runs still produce `index.md` with `## File Notes` rendered as `- 無`. Fatal runs do not publish `index.md`, and if writing `index.md` itself fails after `summary.md` is already written, the run still aborts with the underlying output error.
+
+The CLI success summary now aligns with the completed-run accounting used for `summary.md`: it prints `Summary: <summaryPath>`, `Planned files`, `Successful files`, and `Skipped files` directly from the app boundary. It does **not** yet print `index.md` or introduce a richer export surface. All-successful runs, mixed-result runs, all-skipped runs, and zero-file runs all remain successful completed runs as long as no fatal runtime error occurs.
 
 Step 3 in the current repository is intentionally **local-first**: it converges `版本／文件參考`、`採用規則與假設`、`排除範圍` from repo-native / local evidence such as version files, lockfiles, config files, internal docs, project conventions, and necessary local git metadata. It does **not** yet wire MCP, Context7, `web_fetch`, or external official docs into the runtime.
 
@@ -109,7 +113,7 @@ Step 5 in the current repository is intentionally **first-pass only**: it valida
 
 Step 6 in the current repository is intentionally **findings-finalization only**: it consumes the Step 5 `## Findings` render and structured findings state, performs Cognitive Simulation, and overwrites findings with the final Step 6 result. It does **not** yet generate Step 7 summary output, final risk scoring, or the complete final rendering pipeline.
 
-Step 7 in the current repository is intentionally **per-file summary only**: it consumes the completed review note after Step 6, writes `## Summary`, and provides the reader-facing audit trail for that file. Run-level aggregate summary now exists as a separate deterministic `summary.md` artifact, but Step 7 still does **not** add additional structured summary state, aggregate AI synthesis, or the complete final export pipeline.
+Step 7 in the current repository is intentionally **per-file summary only**: it consumes the completed review note after Step 6, writes `## Summary`, and provides the reader-facing audit trail for that file. Run-level aggregate summary and review index now exist as separate deterministic `summary.md` and `index.md` artifacts, but Step 7 still does **not** add additional structured summary state, aggregate AI synthesis, or the complete final export pipeline.
 
 ## Development
 
@@ -156,4 +160,4 @@ The intended usage model is a command such as:
 review <base_ref> <head_ref> [--repo <path>]
 ```
 
-Future changes will extend the current Step 0 + Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 plus skipped-file pipeline, output-failure taxonomy, run-level aggregate summary, and CLI run summary fields foundations into bounded concurrency, external knowledge tooling for Step 3, richer output-failure coordinator behavior, and the full final review output pipeline.
+Future changes will extend the current Step 0 + Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 plus skipped-file pipeline, output-failure taxonomy, run-level aggregate summary, review index, and CLI run summary fields foundations into bounded concurrency, external knowledge tooling for Step 3, richer output-failure coordinator behavior, and the full final review output pipeline.

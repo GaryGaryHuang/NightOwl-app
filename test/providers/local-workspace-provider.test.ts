@@ -22,6 +22,12 @@ test("LocalWorkspaceProvider initializes the run directories and skipped.md", ()
       "review",
       "feature-branch_03131430",
       "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
     )
   };
 
@@ -34,6 +40,7 @@ test("LocalWorkspaceProvider initializes the run directories and skipped.md", ()
     assert.equal(existsSync(outputTarget.filesPath), true);
     assert.equal(existsSync(outputTarget.skippedPath), true);
     assert.equal(existsSync(outputTarget.summaryPath), false);
+    assert.equal(existsSync(outputTarget.indexPath), false);
     assert.equal(readFileSync(outputTarget.skippedPath, "utf8"), "");
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
@@ -56,6 +63,12 @@ test("LocalWorkspaceProvider publishes file review content to the target note pa
       "review",
       "feature-branch_03131430",
       "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
     )
   };
   const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
@@ -91,6 +104,12 @@ test("LocalWorkspaceProvider appends deterministic skipped-file records to skipp
       "review",
       "feature-branch_03131430",
       "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
     )
   };
 
@@ -138,6 +157,12 @@ test("LocalWorkspaceProvider publishes run summary content to summary.md", () =>
       "review",
       "feature-branch_03131430",
       "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
     )
   };
 
@@ -158,6 +183,62 @@ test("LocalWorkspaceProvider publishes run summary content to summary.md", () =>
     assert.equal(
       readFileSync(outputTarget.summaryPath, "utf8"),
       ["# Review Summary", "", "- Planned files: 1", "- Successful files: 1", "- Skipped files: 0"].join("\n")
+    );
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("LocalWorkspaceProvider publishes review index content to index.md", () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
+  const outputTarget = {
+    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
+    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
+    skippedPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "skipped.md"
+    ),
+    summaryPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
+    )
+  };
+
+  try {
+    const provider = new LocalWorkspaceProvider();
+
+    provider.initializeRun(outputTarget);
+    provider.publishReviewIndex({
+      content: [
+        "# Review Index",
+        "",
+        "- Planned files: 1",
+        "",
+        "## Run Artifacts",
+        "- [summary.md](./summary.md)"
+      ].join("\n")
+    });
+
+    assert.equal(
+      readFileSync(outputTarget.indexPath, "utf8"),
+      [
+        "# Review Index",
+        "",
+        "- Planned files: 1",
+        "",
+        "## Run Artifacts",
+        "- [summary.md](./summary.md)"
+      ].join("\n")
     );
   } finally {
     rmSync(tempDir, { force: true, recursive: true });

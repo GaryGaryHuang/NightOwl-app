@@ -15,9 +15,14 @@ export interface RunSummaryResult {
   content: string;
 }
 
+export interface ReviewIndexResult {
+  content: string;
+}
+
 export interface ReviewOutputSink {
   initializeRun(outputTarget: OutputTarget): void;
   publishFileReview(fileResult: FileReviewResult): void;
   publishSkippedFile(skipRecord: SkipRecord): void;
   publishRunSummary(summaryResult: RunSummaryResult): void;
+  publishReviewIndex(indexResult: ReviewIndexResult): void;
 }
