@@ -152,6 +152,8 @@ export class ReviewOrchestrator {
         reviewNoteFinalizer: this.#finalizer
       })
     ];
+    const runAbortState: AbortState = {};
+    const sharedAbortState: AbortState = {};
     const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
     let skippedAppendQueue = Promise.resolve();
     const publishSkippedFileSerialized = (skipRecord: {
@@ -160,6 +162,10 @@ export class ReviewOrchestrator {
       reason: string;
     }): Promise<void> => {
       const queuedPublish = skippedAppendQueue.then(() => {
+        if (runAbortState.error) {
+          throw runAbortState.error;
+        }
+
         this.#outputSink.publishSkippedFile(skipRecord);
       });
 
@@ -174,6 +180,8 @@ export class ReviewOrchestrator {
       repoRoot,
       startPath,
       steps,
+      runAbortState,
+      sharedAbortState,
       publishSkippedFileSerialized
     });
 
@@ -223,7 +231,9 @@ export class ReviewOrchestrator {
     request: RunRequest;
     repoRoot: string;
     startPath: string;
+    runAbortState: AbortState;
     steps: StepDefinition[];
+    sharedAbortState: SharedAbortState;
     publishSkippedFileSerialized(input: {
       filePath: string;
       stepId: string;
@@ -235,10 +245,9 @@ export class ReviewOrchestrator {
       input.plannedNoteFiles.length
     );
     let nextPlannedIndex = 0;
-    let firstFatalError: unknown;
 
     const claimNextWorkItem = (): PlannedFileWorkItem | undefined => {
-      if (firstFatalError) {
+      if (input.runAbortState.error) {
         return undefined;
       }
 
@@ -258,7 +267,7 @@ export class ReviewOrchestrator {
     await Promise.all(
       Array.from({ length: workerCount }, async () => {
         while (true) {
-          if (firstFatalError) {
+          if (input.runAbortState.error) {
             return;
           }
 
@@ -275,19 +284,21 @@ export class ReviewOrchestrator {
               request: input.request,
               repoRoot: input.repoRoot,
               startPath: input.startPath,
+              runAbortState: input.runAbortState,
+              sharedAbortState: input.sharedAbortState,
               steps: input.steps,
               publishSkippedFileSerialized: input.publishSkippedFileSerialized
             });
           } catch (error) {
-            firstFatalError ??= error;
+            input.runAbortState.error ??= error;
             return;
           }
         }
       })
     );
 
-    if (firstFatalError) {
-      throw firstFatalError;
+    if (input.runAbortState.error) {
+      throw input.runAbortState.error;
     }
   }
 
@@ -297,6 +308,8 @@ export class ReviewOrchestrator {
     request: RunRequest;
     repoRoot: string;
     startPath: string;
+    runAbortState: AbortState;
+    sharedAbortState: SharedAbortState;
     steps: StepDefinition[];
     publishSkippedFileSerialized(input: {
       filePath: string;
@@ -329,7 +342,15 @@ export class ReviewOrchestrator {
       headRef: input.request.headRef
     });
 
+    if (input.runAbortState.error) {
+      return;
+    }
+
     for (const step of input.steps) {
+      if (input.runAbortState.error) {
+        return;
+      }
+
       let result: StepResult;
 
       try {
@@ -347,17 +368,39 @@ export class ReviewOrchestrator {
           error
         });
 
+        if (input.runAbortState.error) {
+          return;
+        }
+
         fileContext.markInterrupted(step.stepId, reason);
 
-        this.#outputSink.publishFileReview({
-          noteFilePath: fileContext.noteFilePath,
-          content: this.#finalizer.render(fileContext)
-        });
-        await input.publishSkippedFileSerialized({
-          filePath: fileContext.filePath,
-          stepId: step.stepId,
-          reason
-        });
+        try {
+          this.#outputSink.publishFileReview({
+            noteFilePath: fileContext.noteFilePath,
+            content: this.#finalizer.render(fileContext)
+          });
+        } catch (outputError) {
+          input.runAbortState.error ??= outputError;
+          input.sharedAbortState.error ??= outputError;
+          throw outputError;
+        }
+
+        if (input.runAbortState.error) {
+          return;
+        }
+
+        try {
+          await input.publishSkippedFileSerialized({
+            filePath: fileContext.filePath,
+            stepId: step.stepId,
+            reason
+          });
+        } catch (outputError) {
+          input.runAbortState.error ??= outputError;
+          input.sharedAbortState.error ??= outputError;
+          throw outputError;
+        }
+
         input.outcomeSlots[input.workItem.plannedIndex] = {
           skipped: {
             filePath: fileContext.filePath,
@@ -369,12 +412,44 @@ export class ReviewOrchestrator {
         return;
       }
 
+      if (input.runAbortState.error) {
+        return;
+      }
+
       result.applyTo(fileContext);
 
-      this.#outputSink.publishFileReview({
-        noteFilePath: fileContext.noteFilePath,
-        content: this.#finalizer.render(fileContext)
-      });
+      if (input.runAbortState.error) {
+        return;
+      }
+
+      try {
+        this.#outputSink.publishFileReview({
+          noteFilePath: fileContext.noteFilePath,
+          content: this.#finalizer.render(fileContext)
+        });
+      } catch (outputError) {
+        await this.#downgradeSuccessfulSnapshotOutputFailure({
+          context: fileContext,
+          stepId: step.stepId,
+          error: outputError,
+          runAbortState: input.runAbortState,
+          publishSkippedFileSerialized: input.publishSkippedFileSerialized,
+          sharedAbortState: input.sharedAbortState
+        });
+        input.outcomeSlots[input.workItem.plannedIndex] = {
+          skipped: {
+            filePath: fileContext.filePath,
+            stepId: step.stepId,
+            reason:
+              outputError instanceof Error ? outputError.message : String(outputError)
+          }
+        };
+        return;
+      }
+    }
+
+    if (input.runAbortState.error) {
+      return;
     }
 
     input.outcomeSlots[input.workItem.plannedIndex] = {
@@ -383,6 +458,55 @@ export class ReviewOrchestrator {
         findings: fileContext.getStructuredState().findings ?? []
       }
     };
+  }
+
+  async #downgradeSuccessfulSnapshotOutputFailure(input: {
+    context: FileReviewContext;
+    stepId: string;
+    error: unknown;
+    runAbortState: AbortState;
+    publishSkippedFileSerialized(input: {
+      filePath: string;
+      stepId: string;
+      reason: string;
+    }): Promise<void>;
+    sharedAbortState: SharedAbortState;
+  }): Promise<void> {
+    const reason =
+      input.error instanceof Error ? input.error.message : String(input.error);
+
+    input.context.markInterrupted(input.stepId, reason);
+
+    if (input.runAbortState.error) {
+      return;
+    }
+
+    try {
+      this.#outputSink.publishFileReview({
+        noteFilePath: input.context.noteFilePath,
+        content: this.#finalizer.render(input.context)
+      });
+    } catch (outputError) {
+      input.runAbortState.error ??= outputError;
+      input.sharedAbortState.error ??= outputError;
+      throw outputError;
+    }
+
+    if (input.runAbortState.error) {
+      return;
+    }
+
+    try {
+      await input.publishSkippedFileSerialized({
+        filePath: input.context.filePath,
+        stepId: input.stepId,
+        reason
+      });
+    } catch (outputError) {
+      input.runAbortState.error ??= outputError;
+      input.sharedAbortState.error ??= outputError;
+      throw outputError;
+    }
   }
 }
 
@@ -395,6 +519,12 @@ interface PlannedOutcomeSlot {
   successful?: SuccessfulFileOutcome;
   skipped?: SkippedFileOutcome;
 }
+
+interface AbortState {
+  error?: unknown;
+}
+
+type SharedAbortState = AbortState;
 
 
 function extractStepFailureReason(input: {

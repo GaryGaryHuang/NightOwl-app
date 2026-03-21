@@ -204,13 +204,13 @@ test("ReviewOrchestrator keeps an all-skipped run as a completed run under bound
   }
 });
 
-test("ReviewOrchestrator stops claiming new files after a concurrent fatal file-review publish failure", async () => {
+test("ReviewOrchestrator downgrades a file to skipped after a concurrent successful snapshot write failure and later files continue", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add enough changed files for concurrent fatal gating");
+    fixture.commitAll("add enough changed files for concurrent single-file output fault");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
@@ -229,8 +229,9 @@ test("ReviewOrchestrator stops claiming new files after a concurrent fatal file-
     const failedNotePath = plannedNotes.find(
       (plannedNote) => plannedNote.filePath === failedFile
     )!.noteFilePath;
+    const writtenNotes = new Map<string, string>();
     const stepEvents: Array<[string, string]> = [];
-    const outputSink = new FatalPublishOutputSink({
+    const outputSink = new SingleFileSnapshotFailingOutputSink({
       failedNotePath
     });
     const orchestrator = new ReviewOrchestrator({
@@ -255,6 +256,81 @@ test("ReviewOrchestrator stops claiming new files after a concurrent fatal file-
       maxConcurrentFiles: 2
     });
 
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.equal(result.skippedFileCount, 1);
+    assert.ok(stepEvents.some(([, filePath]) => filePath === siblingFile));
+    for (const laterFile of laterFiles) {
+      assert.ok(stepEvents.some(([, filePath]) => filePath === laterFile));
+    }
+    const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
+
+    assert.match(
+      skippedLog,
+      new RegExp(`- \`${escapeRegExp(failedFile)}\` — step1-overview — file review write failed`, "u")
+    );
+    assert.match(
+      readFileSync(failedNotePath, "utf8"),
+      /> \[!WARNING\] Review Interrupted/u
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator suppresses later interrupted snapshots and skipped records after shared abort from skipped-artifact failure", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add files for skipped artifact abort coordination");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const failedFile = reviewableFiles[0];
+    const siblingFile = reviewableFiles[1];
+    const stepEvents: Array<[string, string]> = [];
+    const siblingFailureReleased = createDeferred<void>();
+    const outputSink = new SkippedArtifactAbortOutputSink({
+      failedSkippedFile: failedFile,
+      onFailedSkippedPublish() {
+        siblingFailureReleased.resolve();
+      }
+    });
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink,
+      stepRunner: createSharedAbortRunner({
+        stepEvents,
+        failByFileAndStep: new Map([
+          [`${failedFile}:step1-overview`, "judge rejected"],
+          [`${siblingFile}:step1-overview`, "judge rejected"]
+        ]),
+        gateByFileAndStep: new Map([[`${siblingFile}:step1-overview`, siblingFailureReleased.promise]])
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430",
+      maxConcurrentFiles: 2
+    });
+
     await assert.rejects(
       () =>
         orchestrator.run({
@@ -263,16 +339,15 @@ test("ReviewOrchestrator stops claiming new files after a concurrent fatal file-
           repoPath: "./packages/app",
           userContext: []
         }),
-      /file review write failed/u
+      /skipped log write failed/u
     );
 
-    assert.ok(stepEvents.some(([, filePath]) => filePath === siblingFile));
-    for (const laterFile of laterFiles) {
-      assert.equal(
-        stepEvents.some(([, filePath]) => filePath === laterFile),
-        false
-      );
-    }
+    assert.deepEqual(
+      stepEvents.filter(([, filePath]) => filePath === siblingFile),
+      [["step1-overview", siblingFile]]
+    );
+    assert.equal(outputSink.siblingInterruptedSnapshotCount, 0);
+    assert.equal(outputSink.siblingSkippedRecordCount, 0);
   } finally {
     fixture.cleanup();
   }
@@ -347,6 +422,21 @@ function createConcurrencyMetrics(expectedBootstrapCount: number) {
   };
 }
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T | PromiseLike<T>): void;
+  reject(reason?: unknown): void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 function createConcurrentRunner(input: {
   metrics: ReturnType<typeof createConcurrencyMetrics>;
   getBootstrapPublishCount: () => number;
@@ -404,6 +494,38 @@ function createConcurrentRunner(input: {
             input.metrics.completionOrder.push(context.filePath);
           }
         }
+      });
+    }
+  };
+}
+
+function createSharedAbortRunner(input: {
+  stepEvents: Array<[string, string]>;
+  gateByFileAndStep?: Map<string, Promise<void>>;
+  failByFileAndStep?: Map<string, string>;
+}) {
+  return {
+    async run({ context, step }: { context: FileReviewContext; step: { stepId: string } }) {
+      input.stepEvents.push([step.stepId, context.filePath]);
+
+      const gate = input.gateByFileAndStep?.get(`${context.filePath}:${step.stepId}`);
+
+      if (gate) {
+        await gate;
+      }
+
+      const failureCause = input.failByFileAndStep?.get(
+        `${context.filePath}:${step.stepId}`
+      );
+
+      if (failureCause) {
+        throw new Error(
+          `Step ${step.stepId} failed for ${context.filePath}: ${failureCause}`
+        );
+      }
+
+      return buildSuccessfulStepResult(step.stepId, context.filePath, {
+        onTerminalApply() {}
       });
     }
   };
@@ -668,7 +790,7 @@ class SummaryFailingOutputSink {
   }
 }
 
-class FatalPublishOutputSink {
+class SingleFileSnapshotFailingOutputSink {
   #outputTarget?: {
     basePath: string;
     filesPath: string;
@@ -711,6 +833,74 @@ class FatalPublishOutputSink {
   }
 
   publishSkippedFile(skipRecord: { filePath: string; stepId: string; reason: string }) {
+    appendFileSync(
+      this.#outputTarget!.skippedPath,
+      `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
+    );
+  }
+
+  publishRunSummary(summaryResult: { content: string }) {
+    writeFileSync(this.#outputTarget!.summaryPath, summaryResult.content);
+  }
+
+  publishReviewIndex(indexResult: { content: string }) {
+    writeFileSync(this.#outputTarget!.indexPath, indexResult.content);
+  }
+}
+
+class SkippedArtifactAbortOutputSink {
+  #outputTarget?: {
+    basePath: string;
+    filesPath: string;
+    skippedPath: string;
+    summaryPath: string;
+    indexPath: string;
+  };
+  readonly #failedSkippedFile: string;
+  readonly #onFailedSkippedPublish?: () => void;
+  siblingInterruptedSnapshotCount = 0;
+  siblingSkippedRecordCount = 0;
+
+  constructor(input: {
+    failedSkippedFile: string;
+    onFailedSkippedPublish?(): void;
+  }) {
+    this.#failedSkippedFile = input.failedSkippedFile;
+    this.#onFailedSkippedPublish = input.onFailedSkippedPublish;
+  }
+
+  initializeRun(outputTarget: {
+    basePath: string;
+    filesPath: string;
+    skippedPath: string;
+    summaryPath: string;
+    indexPath: string;
+  }) {
+    mkdirSync(outputTarget.basePath, { recursive: true });
+    mkdirSync(outputTarget.filesPath, { recursive: true });
+    writeFileSync(outputTarget.skippedPath, "");
+    this.#outputTarget = outputTarget;
+  }
+
+  publishFileReview(fileResult: { noteFilePath: string; content: string }) {
+    if (
+      /> \[!WARNING\] Review Interrupted/u.test(fileResult.content) &&
+      !fileResult.noteFilePath.includes(this.#failedSkippedFile)
+    ) {
+      this.siblingInterruptedSnapshotCount += 1;
+    }
+
+    mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
+    writeFileSync(fileResult.noteFilePath, fileResult.content);
+  }
+
+  publishSkippedFile(skipRecord: { filePath: string; stepId: string; reason: string }) {
+    if (skipRecord.filePath === this.#failedSkippedFile) {
+      this.#onFailedSkippedPublish?.();
+      throw new Error("skipped log write failed");
+    }
+
+    this.siblingSkippedRecordCount += 1;
     appendFileSync(
       this.#outputTarget!.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
