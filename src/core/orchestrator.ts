@@ -11,11 +11,12 @@ import {
 import { ReviewIndexFinalizer } from "./review-index-finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunRequest } from "./run-request.ts";
-import type { StepResult, StepRunner } from "./step-runner.ts";
+import type { StepDefinition, StepResult, StepRunner } from "./step-runner.ts";
 import {
   buildOutputTarget,
   planNoteFiles,
-  type OutputTarget
+  type OutputTarget,
+  type PlannedNoteFile
 } from "./review-path-resolver.ts";
 import { Step5ValidationInterrogationStep } from "./steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "./steps/step6-cognitive-simulation.ts";
@@ -38,6 +39,7 @@ export interface ReviewRunSummary {
 
 export interface ReviewOrchestratorOptions {
   changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
+  maxConcurrentFiles?: number;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   stepRunner: Pick<StepRunner, "run">;
@@ -55,8 +57,17 @@ export class ReviewOrchestrator {
   readonly #finalizer: ReviewNoteFinalizer;
   readonly #runSummaryFinalizer: RunSummaryFinalizer;
   readonly #reviewIndexFinalizer: ReviewIndexFinalizer;
+  readonly #maxConcurrentFiles: number;
 
   constructor(options: ReviewOrchestratorOptions) {
+    if (
+      options.maxConcurrentFiles !== undefined &&
+      (!Number.isInteger(options.maxConcurrentFiles) ||
+        options.maxConcurrentFiles < 1)
+    ) {
+      throw new Error("maxConcurrentFiles must be a positive integer.");
+    }
+
     this.#changesetOverviewRunner = options.changesetOverviewRunner;
     this.#sourceProvider = options.sourceProvider;
     this.#outputSink = options.outputSink;
@@ -66,6 +77,7 @@ export class ReviewOrchestrator {
     this.#finalizer = new ReviewNoteFinalizer();
     this.#runSummaryFinalizer = new RunSummaryFinalizer();
     this.#reviewIndexFinalizer = new ReviewIndexFinalizer();
+    this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
   }
 
   async run(request: RunRequest): Promise<ReviewRunSummary> {
@@ -140,91 +152,37 @@ export class ReviewOrchestrator {
         reviewNoteFinalizer: this.#finalizer
       })
     ];
-    const successfulFiles: SuccessfulFileOutcome[] = [];
-    const skippedFiles: SkippedFileOutcome[] = [];
-
-    for (const plannedNote of plannedNoteFiles) {
-      let diffContent: string;
-
-      try {
-        diffContent = this.#sourceProvider.getDiff(
-          repoRoot,
-          request.baseRef,
-          request.headRef,
-          plannedNote.filePath
-        );
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : String(error);
-
-        throw new Error(
-          `Step step1-overview failed for ${plannedNote.filePath}: ${message}`
-        );
-      }
-
-      const fileContext = new FileReviewContext({
-        filePath: plannedNote.filePath,
-        noteFilePath: plannedNote.noteFilePath,
-        diffContent,
-        baseRef: request.baseRef,
-        headRef: request.headRef
+    const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
+    let skippedAppendQueue = Promise.resolve();
+    const publishSkippedFileSerialized = (skipRecord: {
+      filePath: string;
+      stepId: string;
+      reason: string;
+    }): Promise<void> => {
+      const queuedPublish = skippedAppendQueue.then(() => {
+        this.#outputSink.publishSkippedFile(skipRecord);
       });
-      let skipped = false;
 
-      for (const step of steps) {
-        let result: StepResult;
+      skippedAppendQueue = queuedPublish;
+      return queuedPublish;
+    };
 
-        try {
-          result = await this.#stepRunner.run({
-            step,
-            context: fileContext,
-            outputBaseDir: startPath,
-            repoRoot,
-            workingDirectory: repoRoot
-          });
-        } catch (error) {
-          const reason = extractStepFailureReason({
-            stepId: step.stepId,
-            filePath: fileContext.filePath,
-            error
-          });
+    await this.#runPlannedFileWorkers({
+      plannedNoteFiles,
+      outcomeSlots,
+      request,
+      repoRoot,
+      startPath,
+      steps,
+      publishSkippedFileSerialized
+    });
 
-          fileContext.markInterrupted(step.stepId, reason);
-
-          this.#outputSink.publishFileReview({
-            noteFilePath: fileContext.noteFilePath,
-            content: this.#finalizer.render(fileContext)
-          });
-          this.#outputSink.publishSkippedFile({
-            filePath: fileContext.filePath,
-            stepId: step.stepId,
-            reason
-          });
-          skippedFiles.push({
-            filePath: fileContext.filePath,
-            stepId: step.stepId,
-            reason
-          });
-          skipped = true;
-
-          break;
-        }
-
-        result.applyTo(fileContext);
-
-        this.#outputSink.publishFileReview({
-          noteFilePath: fileContext.noteFilePath,
-          content: this.#finalizer.render(fileContext)
-        });
-      }
-
-      if (!skipped) {
-        successfulFiles.push({
-          filePath: fileContext.filePath,
-          findings: fileContext.getStructuredState().findings ?? []
-        });
-      }
-    }
+    const successfulFiles = outcomeSlots.flatMap((slot) =>
+      slot?.successful ? [slot.successful] : []
+    );
+    const skippedFiles = outcomeSlots.flatMap((slot) =>
+      slot?.skipped ? [slot.skipped] : []
+    );
 
     this.#outputSink.publishRunSummary({
       content: this.#runSummaryFinalizer.render({
@@ -258,7 +216,186 @@ export class ReviewOrchestrator {
       skippedFileCount: skippedFiles.length
     };
   }
+
+  async #runPlannedFileWorkers(input: {
+    plannedNoteFiles: PlannedNoteFile[];
+    outcomeSlots: PlannedOutcomeSlot[];
+    request: RunRequest;
+    repoRoot: string;
+    startPath: string;
+    steps: StepDefinition[];
+    publishSkippedFileSerialized(input: {
+      filePath: string;
+      stepId: string;
+      reason: string;
+    }): Promise<void>;
+  }): Promise<void> {
+    const workerCount = Math.min(
+      this.#maxConcurrentFiles,
+      input.plannedNoteFiles.length
+    );
+    let nextPlannedIndex = 0;
+    let firstFatalError: unknown;
+
+    const claimNextWorkItem = (): PlannedFileWorkItem | undefined => {
+      if (firstFatalError) {
+        return undefined;
+      }
+
+      if (nextPlannedIndex >= input.plannedNoteFiles.length) {
+        return undefined;
+      }
+
+      const plannedIndex = nextPlannedIndex;
+      nextPlannedIndex += 1;
+
+      return {
+        plannedIndex,
+        plannedNote: input.plannedNoteFiles[plannedIndex]
+      };
+    };
+
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        while (true) {
+          if (firstFatalError) {
+            return;
+          }
+
+          const workItem = claimNextWorkItem();
+
+          if (!workItem) {
+            return;
+          }
+
+          try {
+            await this.#processPlannedFile({
+              workItem,
+              outcomeSlots: input.outcomeSlots,
+              request: input.request,
+              repoRoot: input.repoRoot,
+              startPath: input.startPath,
+              steps: input.steps,
+              publishSkippedFileSerialized: input.publishSkippedFileSerialized
+            });
+          } catch (error) {
+            firstFatalError ??= error;
+            return;
+          }
+        }
+      })
+    );
+
+    if (firstFatalError) {
+      throw firstFatalError;
+    }
+  }
+
+  async #processPlannedFile(input: {
+    workItem: PlannedFileWorkItem;
+    outcomeSlots: PlannedOutcomeSlot[];
+    request: RunRequest;
+    repoRoot: string;
+    startPath: string;
+    steps: StepDefinition[];
+    publishSkippedFileSerialized(input: {
+      filePath: string;
+      stepId: string;
+      reason: string;
+    }): Promise<void>;
+  }): Promise<void> {
+    let diffContent: string;
+
+    try {
+      diffContent = this.#sourceProvider.getDiff(
+        input.repoRoot,
+        input.request.baseRef,
+        input.request.headRef,
+        input.workItem.plannedNote.filePath
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+
+      throw new Error(
+        `Step step1-overview failed for ${input.workItem.plannedNote.filePath}: ${message}`
+      );
+    }
+
+    const fileContext = new FileReviewContext({
+      filePath: input.workItem.plannedNote.filePath,
+      noteFilePath: input.workItem.plannedNote.noteFilePath,
+      diffContent,
+      baseRef: input.request.baseRef,
+      headRef: input.request.headRef
+    });
+
+    for (const step of input.steps) {
+      let result: StepResult;
+
+      try {
+        result = await this.#stepRunner.run({
+          step,
+          context: fileContext,
+          outputBaseDir: input.startPath,
+          repoRoot: input.repoRoot,
+          workingDirectory: input.repoRoot
+        });
+      } catch (error) {
+        const reason = extractStepFailureReason({
+          stepId: step.stepId,
+          filePath: fileContext.filePath,
+          error
+        });
+
+        fileContext.markInterrupted(step.stepId, reason);
+
+        this.#outputSink.publishFileReview({
+          noteFilePath: fileContext.noteFilePath,
+          content: this.#finalizer.render(fileContext)
+        });
+        await input.publishSkippedFileSerialized({
+          filePath: fileContext.filePath,
+          stepId: step.stepId,
+          reason
+        });
+        input.outcomeSlots[input.workItem.plannedIndex] = {
+          skipped: {
+            filePath: fileContext.filePath,
+            stepId: step.stepId,
+            reason
+          }
+        };
+
+        return;
+      }
+
+      result.applyTo(fileContext);
+
+      this.#outputSink.publishFileReview({
+        noteFilePath: fileContext.noteFilePath,
+        content: this.#finalizer.render(fileContext)
+      });
+    }
+
+    input.outcomeSlots[input.workItem.plannedIndex] = {
+      successful: {
+        filePath: fileContext.filePath,
+        findings: fileContext.getStructuredState().findings ?? []
+      }
+    };
+  }
 }
+
+interface PlannedFileWorkItem {
+  plannedIndex: number;
+  plannedNote: PlannedNoteFile;
+}
+
+interface PlannedOutcomeSlot {
+  successful?: SuccessfulFileOutcome;
+  skipped?: SkippedFileOutcome;
+}
+
 
 function extractStepFailureReason(input: {
   stepId: string;

@@ -69,15 +69,14 @@ export function createLocalReviewRunApp(
         request.repoPath ?? "."
       );
       const repoRoot = sourceProvider.resolveRepoRoot(startPath);
-      const confidenceThresholds =
-        reviewConfigProvider.loadConfidenceThresholds(repoRoot);
+      const reviewConfig = reviewConfigProvider.loadReviewConfig(repoRoot);
       const stepRunner =
         options.stepRunner ??
         new StepRunner({
           reviewSessionFactory,
           judgeService,
           structuredOutputValidator: new StructuredOutputValidator({
-            confidenceThresholds
+            confidenceThresholds: reviewConfig.confidenceThresholds
           })
         });
       const orchestrator = new ReviewOrchestrator({
@@ -86,7 +85,8 @@ export function createLocalReviewRunApp(
         outputSink,
         stepRunner,
         workingDirectory: options.workingDirectory,
-        timestampProvider: options.timestampProvider
+        timestampProvider: options.timestampProvider,
+        maxConcurrentFiles: reviewConfig.maxConcurrentFiles
       });
 
       await clientManager.start();

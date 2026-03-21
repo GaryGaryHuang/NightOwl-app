@@ -4,96 +4,93 @@ import test from "node:test";
 import { LocalReviewConfigProvider } from "../../src/providers/local-review-config-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
-test("LocalReviewConfigProvider falls back to default thresholds when .reviewconfig.json is missing", () => {
+test("LocalReviewConfigProvider falls back to the documented default review config when .reviewconfig.json is missing", () => {
   const fixture = createReviewRepoFixture();
 
   try {
     const provider = new LocalReviewConfigProvider();
 
-    assert.deepEqual(provider.loadConfidenceThresholds(fixture.repoDir), {
-      must: 80,
-      nice: 90
+    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
+      maxConcurrentFiles: 5,
+      confidenceThresholds: {
+        must: 80,
+        nice: 90
+      }
     });
   } finally {
     fixture.cleanup();
   }
 });
 
-test("LocalReviewConfigProvider falls back to default thresholds when confidenceThresholds is absent", () => {
+test("LocalReviewConfigProvider falls back to defaults when maxConcurrentFiles or confidenceThresholds are absent", () => {
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewconfig.json", JSON.stringify({ maxConcurrentFiles: 5 }));
-
     const provider = new LocalReviewConfigProvider();
 
-    assert.deepEqual(provider.loadConfidenceThresholds(fixture.repoDir), {
-      must: 80,
-      nice: 90
+    fixture.writeFile(".reviewconfig.json", JSON.stringify({}));
+    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
+      maxConcurrentFiles: 5,
+      confidenceThresholds: {
+        must: 80,
+        nice: 90
+      }
+    });
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        maxConcurrentFiles: 2
+      })
+    );
+    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
+      maxConcurrentFiles: 2,
+      confidenceThresholds: {
+        must: 80,
+        nice: 90
+      }
     });
   } finally {
     fixture.cleanup();
   }
 });
 
-test("LocalReviewConfigProvider resolves partial and full threshold overrides", () => {
+test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresholds from the same config file", () => {
   const fixture = createReviewRepoFixture();
 
   try {
-    const provider = new LocalReviewConfigProvider();
-
     fixture.writeFile(
       ".reviewconfig.json",
       JSON.stringify({
-        confidenceThresholds: {
-          must: 70
-        }
-      })
-    );
-    assert.deepEqual(provider.loadConfidenceThresholds(fixture.repoDir), {
-      must: 70,
-      nice: 90
-    });
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        confidenceThresholds: {
-          nice: 85
-        }
-      })
-    );
-    assert.deepEqual(provider.loadConfidenceThresholds(fixture.repoDir), {
-      must: 80,
-      nice: 85
-    });
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
+        maxConcurrentFiles: 2,
         confidenceThresholds: {
           must: 70,
           nice: 85
         }
       })
     );
-    assert.deepEqual(provider.loadConfidenceThresholds(fixture.repoDir), {
-      must: 70,
-      nice: 85
+
+    const provider = new LocalReviewConfigProvider();
+
+    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
+      maxConcurrentFiles: 2,
+      confidenceThresholds: {
+        must: 70,
+        nice: 85
+      }
     });
   } finally {
     fixture.cleanup();
   }
 });
 
-test("LocalReviewConfigProvider accepts boundary threshold values and ignores unrelated top-level keys", () => {
+test("LocalReviewConfigProvider accepts boundary threshold values and unrelated top-level keys while keeping default maxConcurrentFiles", () => {
   const fixture = createReviewRepoFixture();
 
   try {
     fixture.writeFile(
       ".reviewconfig.json",
       JSON.stringify({
-        maxConcurrentFiles: 5,
         mcpServers: {
           demo: {
             command: "demo"
@@ -108,9 +105,12 @@ test("LocalReviewConfigProvider accepts boundary threshold values and ignores un
 
     const provider = new LocalReviewConfigProvider();
 
-    assert.deepEqual(provider.loadConfidenceThresholds(fixture.repoDir), {
-      must: 0,
-      nice: 100
+    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
+      maxConcurrentFiles: 5,
+      confidenceThresholds: {
+        must: 0,
+        nice: 100
+      }
     });
   } finally {
     fixture.cleanup();
@@ -125,13 +125,57 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
 
     fixture.writeFile(".reviewconfig.json", "{");
     assert.throws(
-      () => provider.loadConfidenceThresholds(fixture.repoDir),
+      () => provider.loadReviewConfig(fixture.repoDir),
       /invalid review config/u
     );
 
     fixture.writeFile(".reviewconfig.json", JSON.stringify([]));
     assert.throws(
-      () => provider.loadConfidenceThresholds(fixture.repoDir),
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        maxConcurrentFiles: 0
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        maxConcurrentFiles: -1
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        maxConcurrentFiles: 2.5
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        maxConcurrentFiles: "2"
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
       /invalid review config/u
     );
 
@@ -142,7 +186,7 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
       })
     );
     assert.throws(
-      () => provider.loadConfidenceThresholds(fixture.repoDir),
+      () => provider.loadReviewConfig(fixture.repoDir),
       /invalid review config/u
     );
 
@@ -155,7 +199,7 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
       })
     );
     assert.throws(
-      () => provider.loadConfidenceThresholds(fixture.repoDir),
+      () => provider.loadReviewConfig(fixture.repoDir),
       /invalid review config/u
     );
 
@@ -168,7 +212,7 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
       })
     );
     assert.throws(
-      () => provider.loadConfidenceThresholds(fixture.repoDir),
+      () => provider.loadReviewConfig(fixture.repoDir),
       /invalid review config/u
     );
 
@@ -181,7 +225,7 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
       })
     );
     assert.throws(
-      () => provider.loadConfidenceThresholds(fixture.repoDir),
+      () => provider.loadReviewConfig(fixture.repoDir),
       /invalid review config/u
     );
   } finally {
