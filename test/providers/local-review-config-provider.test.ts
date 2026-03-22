@@ -77,7 +77,8 @@ test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresh
             args: ["-y", "@example/demo-mcp"],
             tools: ["*"]
           }
-        }
+        },
+        webFetchAllowedHosts: [" Docs.Example.Com. ", "react.dev"]
       })
     );
 
@@ -96,7 +97,8 @@ test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresh
           args: ["-y", "@example/demo-mcp"],
           tools: ["*"]
         }
-      }
+      },
+      webFetchAllowedHosts: ["docs.example.com", "react.dev"]
     });
   } finally {
     fixture.cleanup();
@@ -142,6 +144,36 @@ test("LocalReviewConfigProvider accepts boundary threshold values and a validate
           tools: ["resolve-library-id"]
         }
       }
+    });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("LocalReviewConfigProvider preserves baseline web_fetch behavior when webFetchAllowedHosts is absent", () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        maxConcurrentFiles: 2,
+        confidenceThresholds: {
+          must: 70,
+          nice: 85
+        }
+      })
+    );
+
+    const provider = new LocalReviewConfigProvider();
+
+    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
+      maxConcurrentFiles: 2,
+      confidenceThresholds: {
+        must: 70,
+        nice: 85
+      },
+      mcpServers: {}
     });
   } finally {
     fixture.cleanup();
@@ -329,6 +361,94 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
             }
           }
         }
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        webFetchAllowedHosts: "docs.example.com"
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        webFetchAllowedHosts: [123]
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        webFetchAllowedHosts: ["   "]
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        webFetchAllowedHosts: ["https://docs.example.com"]
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        webFetchAllowedHosts: ["docs.example.com:8443"]
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        webFetchAllowedHosts: ["docs.example.com/guide"]
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        webFetchAllowedHosts: ["*.example.com"]
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        webFetchAllowedHosts: ["192.168.1.10"]
       })
     );
     assert.throws(

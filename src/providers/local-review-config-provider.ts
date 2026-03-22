@@ -27,11 +27,16 @@ export class LocalReviewConfigProvider implements ReviewConfigProvider {
 
     try {
       const config = parseReviewConfigObject(readFileSync(configPath, "utf8"));
+      const webFetchAllowedHosts =
+        resolveWebFetchAllowedHostsFromConfigObject(config);
 
       return {
         maxConcurrentFiles: resolveMaxConcurrentFilesFromConfigObject(config),
         confidenceThresholds: resolveConfidenceThresholdsFromConfigObject(config),
-        mcpServers: resolveMcpServersFromConfigObject(config)
+        mcpServers: resolveMcpServersFromConfigObject(config),
+        ...(webFetchAllowedHosts === undefined
+          ? {}
+          : { webFetchAllowedHosts })
       };
     } catch (error) {
       const message =
@@ -125,6 +130,24 @@ function resolveMcpServersFromConfigObject(
   return resolved;
 }
 
+function resolveWebFetchAllowedHostsFromConfigObject(
+  config: Record<string, unknown>
+): string[] | undefined {
+  const rawWebFetchAllowedHosts = config.webFetchAllowedHosts;
+
+  if (rawWebFetchAllowedHosts === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(rawWebFetchAllowedHosts)) {
+    throw new Error("invalid review config");
+  }
+
+  return rawWebFetchAllowedHosts.map((value) =>
+    readWebFetchAllowedHost(value)
+  );
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -149,4 +172,38 @@ function readStringRecord(value: unknown): Record<string, string> {
   }
 
   return Object.fromEntries(entries);
+}
+
+function readWebFetchAllowedHost(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error("invalid review config");
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length === 0 || /[:/?#*\[\]]/u.test(trimmed)) {
+    throw new Error("invalid review config");
+  }
+
+  const canonical = canonicalizeHostname(trimmed);
+
+  if (
+    canonical.length === 0 ||
+    isIpLiteral(canonical) ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/u.test(
+      canonical
+    )
+  ) {
+    throw new Error("invalid review config");
+  }
+
+  return canonical;
+}
+
+function canonicalizeHostname(value: string): string {
+  return value.toLowerCase().replace(/\.$/u, "");
+}
+
+function isIpLiteral(value: string): boolean {
+  return /^(\d{1,3}\.){3}\d{1,3}$/u.test(value) || value.includes(":");
 }

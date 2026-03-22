@@ -25,21 +25,34 @@ export interface ReviewSessionProfile {
 export interface ReviewSessionFactoryOptions {
   clientManager: Pick<CopilotClientManager, "getClient">;
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
+  webFetchAllowedHosts?: string[];
 }
 
 export class ReviewSessionFactory {
   readonly #clientManager: Pick<CopilotClientManager, "getClient">;
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
+  readonly #webFetchAllowedHosts?: Set<string>;
 
   constructor(options: ReviewSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
     this.#knowledgeSvc = options.knowledgeSvc;
+    this.#webFetchAllowedHosts =
+      options.webFetchAllowedHosts === undefined
+        ? undefined
+        : new Set(
+            options.webFetchAllowedHosts.map((host) =>
+              canonicalizeHostnameForComparison(host)
+            )
+          );
   }
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
     const sessionConfig: SessionConfig = {
       hooks: {
-        onPreToolUse: createReviewPreToolUseHook(profile)
+        onPreToolUse: createReviewPreToolUseHook(
+          profile,
+          this.#webFetchAllowedHosts
+        )
       },
       model: profile.model,
       streaming: false,
@@ -85,7 +98,8 @@ function createReviewPermissionHandler(
 }
 
 function createReviewPreToolUseHook(
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
+  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  webFetchAllowedHosts?: ReadonlySet<string>
 ) {
   return async (input): Promise<PreToolUseHookOutput | void> => {
     if (input.toolName === "web_fetch") {
@@ -97,15 +111,30 @@ function createReviewPreToolUseHook(
           ? input.toolArgs.url
           : "";
 
-      if (isAllowedWebFetchUrl(url)) {
-        return;
+      const parsedUrl = parseAllowedWebFetchUrl(url);
+
+      if (!parsedUrl) {
+        return {
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            "Review sessions only allow web_fetch for absolute public http(s) URLs."
+        };
       }
 
-      return {
-        permissionDecision: "deny",
-        permissionDecisionReason:
-          "Review sessions only allow web_fetch for absolute public http(s) URLs."
-      };
+      if (
+        webFetchAllowedHosts &&
+        !webFetchAllowedHosts.has(
+          canonicalizeHostnameForComparison(parsedUrl.hostname)
+        )
+      ) {
+        return {
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            "Review sessions only allow web_fetch for configured public http(s) hosts."
+        };
+      }
+
+      return;
     }
 
     if (input.toolName !== "bash") {
@@ -132,43 +161,51 @@ function createReviewPreToolUseHook(
   };
 }
 
-function isAllowedWebFetchUrl(urlString: string): boolean {
+function parseAllowedWebFetchUrl(urlString: string): URL | undefined {
   let parsed: URL;
 
   try {
     parsed = new URL(urlString);
   } catch {
-    return false;
+    return undefined;
   }
 
   if (
     (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
     !parsed.hostname
   ) {
-    return false;
+    return undefined;
   }
 
-  const hostname = parsed.hostname.toLowerCase();
-  const normalizedHostname =
-    hostname.startsWith("[") && hostname.endsWith("]")
-      ? hostname.slice(1, -1)
-      : hostname;
+  const normalizedHostname = normalizeHostnameForNetworkChecks(parsed.hostname);
 
   if (normalizedHostname === "localhost") {
-    return false;
+    return undefined;
   }
 
   const ipVersion = isIP(normalizedHostname);
 
   if (ipVersion === 4) {
-    return !isDisallowedIpv4(normalizedHostname);
+    return isDisallowedIpv4(normalizedHostname) ? undefined : parsed;
   }
 
   if (ipVersion === 6) {
-    return !isDisallowedIpv6(normalizedHostname);
+    return isDisallowedIpv6(normalizedHostname) ? undefined : parsed;
   }
 
-  return true;
+  return parsed;
+}
+
+function normalizeHostnameForNetworkChecks(hostname: string): string {
+  const lowercaseHostname = hostname.toLowerCase();
+
+  return lowercaseHostname.startsWith("[") && lowercaseHostname.endsWith("]")
+    ? lowercaseHostname.slice(1, -1)
+    : lowercaseHostname;
+}
+
+function canonicalizeHostnameForComparison(hostname: string): string {
+  return normalizeHostnameForNetworkChecks(hostname).replace(/\.$/u, "");
 }
 
 function isDisallowedIpv4(hostname: string): boolean {

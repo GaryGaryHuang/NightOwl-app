@@ -14,6 +14,7 @@ export interface ReviewConfig {
   maxConcurrentFiles: number;
   confidenceThresholds: ConfidenceThresholds;
   mcpServers: ReviewMcpServers;
+  webFetchAllowedHosts?: string[];
 }
 
 export interface ReviewConfigProvider {

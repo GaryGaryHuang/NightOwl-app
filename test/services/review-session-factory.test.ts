@@ -369,6 +369,174 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
   );
 });
 
+test("ReviewSessionFactory enforces exact-host web_fetch allowlist when configured", async () => {
+  const receivedConfigs = [];
+  const factory = new ReviewSessionFactory({
+    clientManager: {
+      getClient() {
+        return {
+          async createSession(config) {
+            receivedConfigs.push(config);
+            return {
+              async sendAndWait() {
+                return {
+                  type: "assistant.message",
+                  data: { content: "ok" }
+                };
+              },
+              async disconnect() {}
+            };
+          }
+        };
+      }
+    },
+    webFetchAllowedHosts: ["docs.example.com"]
+  });
+
+  await factory.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo/packages/app",
+    repoRoot: "/workspace/repo",
+    systemMessage: "system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+
+  const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://Docs.Example.Com/reference" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com./guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com:8443/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://react.dev/reference" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://sub.docs.example.com/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+});
+
+test("ReviewSessionFactory denies all web_fetch hosts when configured allowlist is empty", async () => {
+  const receivedConfigs = [];
+  const factory = new ReviewSessionFactory({
+    clientManager: {
+      getClient() {
+        return {
+          async createSession(config) {
+            receivedConfigs.push(config);
+            return {
+              async sendAndWait() {
+                return {
+                  type: "assistant.message",
+                  data: { content: "ok" }
+                };
+              },
+              async disconnect() {}
+            };
+          }
+        };
+      }
+    },
+    webFetchAllowedHosts: []
+  });
+
+  await factory.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo/packages/app",
+    repoRoot: "/workspace/repo",
+    systemMessage: "system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+
+  const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+});
+
 test("ReviewSessionFactory injects built-in Context7 by default for review sessions and still allows explicit disable", async () => {
   const receivedConfigs = [];
   const factory = new ReviewSessionFactory({

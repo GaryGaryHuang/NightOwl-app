@@ -74,7 +74,8 @@ export function createLocalReviewRunApp(
         });
       const reviewSessionFactory = new ReviewSessionFactory({
         clientManager,
-        knowledgeSvc
+        knowledgeSvc,
+        webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts
       });
       const changesetOverviewRunner =
         options.changesetOverviewRunner ??
