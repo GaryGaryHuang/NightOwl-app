@@ -4,7 +4,7 @@ import test from "node:test";
 import { KnowledgeSvc } from "../../src/services/knowledge.ts";
 import { ReviewSessionFactory } from "../../src/services/review-session-factory.ts";
 
-test("ReviewSessionFactory creates a non-streaming review session with a replaced system message", async () => {
+test("ReviewSessionFactory creates a non-streaming review session with a replaced system message and web_fetch enabled", async () => {
   const receivedConfigs = [];
   const factory = new ReviewSessionFactory({
     clientManager: {
@@ -37,7 +37,6 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
 
   assert.deepEqual(receivedConfigs, [
     {
-      excludedTools: ["web_fetch"],
       hooks: receivedConfigs[0].hooks,
       model: "gpt-5.4-mini",
       streaming: false,
@@ -83,6 +82,174 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
 
   const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
 
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "http://example.com/spec" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "/internal/path" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "http://[::ffff:127.0.0.1]/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "http://[::ffff:192.168.1.10]/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "example.com/docs" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "file:///etc/passwd" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "http://localhost:3000" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "http://192.168.1.10/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "http://[::1]/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
   assert.deepEqual(
     await preToolUse(
       {
@@ -303,11 +470,5 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
   }
 
   assert.equal(receivedConfigs[4]?.mcpServers, undefined);
-  assert.deepEqual(receivedConfigs.map((config) => config.excludedTools), [
-    ["web_fetch"],
-    ["web_fetch"],
-    ["web_fetch"],
-    ["web_fetch"],
-    ["web_fetch"]
-  ]);
+  assert.ok(receivedConfigs.every((config) => config.excludedTools === undefined));
 });

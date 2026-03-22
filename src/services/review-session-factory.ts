@@ -3,6 +3,7 @@ import {
   type PreToolUseHookOutput,
   type SessionConfig
 } from "@github/copilot-sdk";
+import { isIP } from "node:net";
 import path from "node:path";
 
 import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
@@ -37,7 +38,6 @@ export class ReviewSessionFactory {
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
     const sessionConfig: SessionConfig = {
-      excludedTools: ["web_fetch"],
       hooks: {
         onPreToolUse: createReviewPreToolUseHook(profile)
       },
@@ -88,6 +88,26 @@ function createReviewPreToolUseHook(
   profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
 ) {
   return async (input): Promise<PreToolUseHookOutput | void> => {
+    if (input.toolName === "web_fetch") {
+      const url =
+        input.toolArgs &&
+        typeof input.toolArgs === "object" &&
+        "url" in input.toolArgs &&
+        typeof input.toolArgs.url === "string"
+          ? input.toolArgs.url
+          : "";
+
+      if (isAllowedWebFetchUrl(url)) {
+        return;
+      }
+
+      return {
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Review sessions only allow web_fetch for absolute public http(s) URLs."
+      };
+    }
+
     if (input.toolName !== "bash") {
       return;
     }
@@ -110,6 +130,121 @@ function createReviewPreToolUseHook(
         "Review sessions only allow repo-local read-only bash analysis commands."
     };
   };
+}
+
+function isAllowedWebFetchUrl(urlString: string): boolean {
+  let parsed: URL;
+
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return false;
+  }
+
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    !parsed.hostname
+  ) {
+    return false;
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const normalizedHostname =
+    hostname.startsWith("[") && hostname.endsWith("]")
+      ? hostname.slice(1, -1)
+      : hostname;
+
+  if (normalizedHostname === "localhost") {
+    return false;
+  }
+
+  const ipVersion = isIP(normalizedHostname);
+
+  if (ipVersion === 4) {
+    return !isDisallowedIpv4(normalizedHostname);
+  }
+
+  if (ipVersion === 6) {
+    return !isDisallowedIpv6(normalizedHostname);
+  }
+
+  return true;
+}
+
+function isDisallowedIpv4(hostname: string): boolean {
+  const octets = hostname.split(".").map((value) => Number.parseInt(value, 10));
+
+  if (octets.length !== 4 || octets.some((value) => Number.isNaN(value))) {
+    return true;
+  }
+
+  if (octets[0] === 10 || octets[0] === 127) {
+    return true;
+  }
+
+  if (octets[0] === 169 && octets[1] === 254) {
+    return true;
+  }
+
+  if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) {
+    return true;
+  }
+
+  if (octets[0] === 192 && octets[1] === 168) {
+    return true;
+  }
+
+  return false;
+}
+
+function isDisallowedIpv6(hostname: string): boolean {
+  const mappedIpv4 = extractMappedIpv4(hostname);
+
+  if (mappedIpv4) {
+    return isDisallowedIpv4(mappedIpv4);
+  }
+
+  return (
+    hostname === "::1" ||
+    hostname.startsWith("fc") ||
+    hostname.startsWith("fd") ||
+    /^fe[89ab]/u.test(hostname)
+  );
+}
+
+function extractMappedIpv4(hostname: string): string | undefined {
+  if (!hostname.startsWith("::ffff:")) {
+    return undefined;
+  }
+
+  const suffix = hostname.slice("::ffff:".length);
+
+  if (isIP(suffix) === 4) {
+    return suffix;
+  }
+
+  const segments = suffix.split(":");
+
+  if (segments.length !== 2) {
+    return undefined;
+  }
+
+  const values = segments.map((segment) => Number.parseInt(segment, 16));
+
+  if (
+    values.some(
+      (value) => Number.isNaN(value) || value < 0 || value > 0xffff
+    )
+  ) {
+    return undefined;
+  }
+
+  return [
+    values[0] >> 8,
+    values[0] & 0xff,
+    values[1] >> 8,
+    values[1] & 0xff
+  ].join(".");
 }
 
 function isAllowedReadPath(

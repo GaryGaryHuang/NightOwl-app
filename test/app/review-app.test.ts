@@ -420,6 +420,103 @@ test("createLocalReviewRunApp keeps Step 5 custom MCP startup failure on the exi
   });
 });
 
+test("createLocalReviewRunApp exposes runtime web_fetch guardrails without introducing a new step failure family", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    const sessionConfigs = [];
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        getClient() {
+          return {
+            async createSession(config) {
+              sessionConfigs.push(config);
+
+              return {
+                async sendAndWait({ prompt }) {
+                  return {
+                    data: {
+                      content: buildSessionResponse(config, prompt)
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      reviewConfigProvider: {
+        loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: {
+              must: 80,
+              nice: 90
+            },
+            mcpServers: {}
+          };
+        }
+      },
+      outputSink: {
+        initializeRun() {},
+        publishFileReview() {},
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {}
+      }
+    });
+
+    const result = await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.ok(result.plannedFileCount >= 2);
+    assert.ok(result.successfulFileCount >= 1);
+
+    const reviewSessionConfig = sessionConfigs.find(
+      (config) =>
+        isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
+        config.hooks?.onPreToolUse
+    );
+
+    assert.ok(reviewSessionConfig);
+    assert.deepEqual(
+      await reviewSessionConfig.hooks.onPreToolUse(
+        {
+          timestamp: Date.now(),
+          cwd: fixture.repoDir,
+          toolName: "web_fetch",
+          toolArgs: { url: "http://localhost:3000" }
+        },
+        { sessionId: "session-1" }
+      ),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Review sessions only allow web_fetch for absolute public http(s) URLs."
+      }
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
   stepMatcher(systemMessage: unknown): boolean;
 }): Promise<void> {
