@@ -181,7 +181,15 @@ function readWebFetchAllowedHost(value: unknown): string {
 
   const trimmed = value.trim();
 
-  if (trimmed.length === 0 || /[:/?#*\[\]]/u.test(trimmed)) {
+  if (trimmed.length === 0) {
+    throw new Error("invalid review config");
+  }
+
+  if (trimmed.includes("*")) {
+    return readWildcardWebFetchHostEntry(trimmed);
+  }
+
+  if (/[:/?#\[\]]/u.test(trimmed)) {
     throw new Error("invalid review config");
   }
 
@@ -198,6 +206,32 @@ function readWebFetchAllowedHost(value: unknown): string {
   }
 
   return canonical;
+}
+
+function readWildcardWebFetchHostEntry(trimmed: string): string {
+  if (!trimmed.startsWith("*.")) {
+    throw new Error("invalid review config");
+  }
+
+  const base = trimmed.slice(2);
+
+  if (base.length === 0 || base.includes("*") || /[:/?#\[\]]/u.test(base)) {
+    throw new Error("invalid review config");
+  }
+
+  const canonicalBase = canonicalizeHostname(base);
+
+  if (
+    canonicalBase.length === 0 ||
+    isIpLiteral(canonicalBase) ||
+    !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/u.test(
+      canonicalBase
+    )
+  ) {
+    throw new Error("invalid review config");
+  }
+
+  return `*.${canonicalBase}`;
 }
 
 function canonicalizeHostname(value: string): string {

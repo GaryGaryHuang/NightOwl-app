@@ -32,18 +32,28 @@ export class ReviewSessionFactory {
   readonly #clientManager: Pick<CopilotClientManager, "getClient">;
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   readonly #webFetchAllowedHosts?: Set<string>;
+  readonly #webFetchWildcardSuffixes?: readonly string[];
 
   constructor(options: ReviewSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
     this.#knowledgeSvc = options.knowledgeSvc;
-    this.#webFetchAllowedHosts =
-      options.webFetchAllowedHosts === undefined
-        ? undefined
-        : new Set(
-            options.webFetchAllowedHosts.map((host) =>
-              canonicalizeHostnameForComparison(host)
-            )
-          );
+
+    if (options.webFetchAllowedHosts === undefined) {
+      this.#webFetchAllowedHosts = undefined;
+      this.#webFetchWildcardSuffixes = undefined;
+    } else {
+      const exactHosts = new Set<string>();
+      const wildcardSuffixes: string[] = [];
+      for (const host of options.webFetchAllowedHosts) {
+        if (host.startsWith("*.")) {
+          wildcardSuffixes.push(`.${host.slice(2)}`);
+        } else {
+          exactHosts.add(canonicalizeHostnameForComparison(host));
+        }
+      }
+      this.#webFetchAllowedHosts = exactHosts;
+      this.#webFetchWildcardSuffixes = wildcardSuffixes;
+    }
   }
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
@@ -51,7 +61,8 @@ export class ReviewSessionFactory {
       hooks: {
         onPreToolUse: createReviewPreToolUseHook(
           profile,
-          this.#webFetchAllowedHosts
+          this.#webFetchAllowedHosts,
+          this.#webFetchWildcardSuffixes
         )
       },
       model: profile.model,
@@ -99,7 +110,8 @@ function createReviewPermissionHandler(
 
 function createReviewPreToolUseHook(
   profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
-  webFetchAllowedHosts?: ReadonlySet<string>
+  webFetchAllowedHosts?: ReadonlySet<string>,
+  webFetchWildcardSuffixes?: readonly string[]
 ) {
   return async (input): Promise<PreToolUseHookOutput | void> => {
     if (input.toolName === "web_fetch") {
@@ -121,17 +133,20 @@ function createReviewPreToolUseHook(
         };
       }
 
-      if (
-        webFetchAllowedHosts &&
-        !webFetchAllowedHosts.has(
-          canonicalizeHostnameForComparison(parsedUrl.hostname)
-        )
-      ) {
-        return {
-          permissionDecision: "deny",
-          permissionDecisionReason:
-            "Review sessions only allow web_fetch for configured public http(s) hosts."
-        };
+      if (webFetchAllowedHosts !== undefined) {
+        const normalizedHostname = canonicalizeHostnameForComparison(parsedUrl.hostname);
+        if (
+          !webFetchAllowedHosts.has(normalizedHostname) &&
+          !(webFetchWildcardSuffixes ?? []).some((suffix) =>
+            normalizedHostname.endsWith(suffix)
+          )
+        ) {
+          return {
+            permissionDecision: "deny",
+            permissionDecisionReason:
+              "Review sessions only allow web_fetch for configured public http(s) hosts."
+          };
+        }
       }
 
       return;
