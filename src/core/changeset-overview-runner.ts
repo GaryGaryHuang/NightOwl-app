@@ -1,4 +1,5 @@
 import { createRunContext, type RunContext } from "./run-context.ts";
+import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 
 export interface ChangesetOverviewRunnerInput {
   model: string;
@@ -11,7 +12,10 @@ export interface ChangesetOverviewRunnerInput {
 
 export interface ReviewSessionFactoryLike {
   createSession(profile: {
+    knowledgeMode?: ReviewKnowledgeMode;
     model: string;
+    outputBaseDir: string;
+    repoRoot: string;
     systemMessage: string;
     workingDirectory?: string;
   }): Promise<{
@@ -33,6 +37,7 @@ export class ChangesetOverviewRunner {
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const session = await this.#reviewSessionFactory.createSession({
+        knowledgeMode: "disabled",
         model: input.model,
         outputBaseDir: input.outputBaseDir,
         repoRoot: input.repoRoot,

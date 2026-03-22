@@ -99,6 +99,7 @@ test("Step3KnowledgeSourceOfTruthStep prepares the exact Step 3 prompt contract 
   assert.equal(plan.sectionKey, "knowledge-source-of-truth");
   assert.deepEqual(plan.reviewProfile, {
     model: "gpt-5-mini",
+    knowledgeMode: "step3-built-in-context7",
     timeoutMs: 300_000
   });
   assert.deepEqual(plan.completionCheck, {

@@ -1,4 +1,5 @@
 import type { FileReviewContext } from "./file-review-context.ts";
+import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload } from "./structured-output-validator.ts";
 
@@ -12,6 +13,7 @@ export interface StepExecutionPlan {
     userMessage: string;
   };
   reviewProfile: {
+    knowledgeMode?: ReviewKnowledgeMode;
     model: string;
     timeoutMs?: number;
   };
@@ -40,6 +42,7 @@ export interface StepDefinition {
 
 export interface StepReviewSessionFactoryLike {
   createSession(profile: {
+    knowledgeMode?: ReviewKnowledgeMode;
     model: string;
     outputBaseDir: string;
     repoRoot: string;
@@ -93,6 +96,7 @@ export class StepRunner {
       try {
         const plan = input.step.prepare(input.context);
         const session = await this.#reviewSessionFactory.createSession({
+          knowledgeMode: plan.reviewProfile.knowledgeMode ?? "disabled",
           model: plan.reviewProfile.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,

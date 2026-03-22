@@ -5,12 +5,15 @@ import {
 } from "@github/copilot-sdk";
 import path from "node:path";
 
+import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
 import {
   CopilotClientManager,
   SessionExecutor
 } from "./session-executor.ts";
+import type { KnowledgeSvc } from "./knowledge.ts";
 
 export interface ReviewSessionProfile {
+  knowledgeMode?: ReviewKnowledgeMode;
   model: string;
   outputBaseDir: string;
   repoRoot: string;
@@ -20,13 +23,16 @@ export interface ReviewSessionProfile {
 
 export interface ReviewSessionFactoryOptions {
   clientManager: Pick<CopilotClientManager, "getClient">;
+  knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
 }
 
 export class ReviewSessionFactory {
   readonly #clientManager: Pick<CopilotClientManager, "getClient">;
+  readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
 
   constructor(options: ReviewSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
+    this.#knowledgeSvc = options.knowledgeSvc;
   }
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
@@ -43,6 +49,14 @@ export class ReviewSessionFactory {
       },
       onPermissionRequest: createReviewPermissionHandler(profile)
     };
+
+    const mcpServers = this.#knowledgeSvc?.getMcpServers(
+      profile.knowledgeMode ?? "disabled"
+    );
+
+    if (mcpServers) {
+      sessionConfig.mcpServers = mcpServers;
+    }
 
     if (profile.workingDirectory) {
       sessionConfig.workingDirectory = profile.workingDirectory;

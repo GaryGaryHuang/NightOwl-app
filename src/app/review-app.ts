@@ -18,6 +18,7 @@ import type { ReviewConfigProvider } from "../providers/review-config-provider.t
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 import { JudgeSessionFactory } from "../services/judge-session-factory.ts";
+import { KnowledgeSvc } from "../services/knowledge.ts";
 import {
   CopilotClientManager,
   type CopilotClientLike
@@ -34,6 +35,7 @@ export interface CreateLocalReviewRunAppOptions {
     getClient(): CopilotClientLike;
   };
   outputSink?: ReviewOutputSink;
+  knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   reviewConfigProvider?: ReviewConfigProvider;
   sourceProvider?: ReviewSourceProvider;
   stepRunner?: Pick<StepRunner, "run">;
@@ -53,7 +55,15 @@ export function createLocalReviewRunApp(
   const outputSink = options.outputSink ?? new LocalWorkspaceProvider();
   const reviewConfigProvider =
     options.reviewConfigProvider ?? new LocalReviewConfigProvider();
-  const reviewSessionFactory = new ReviewSessionFactory({ clientManager });
+  const knowledgeSvc =
+    options.knowledgeSvc ??
+    new KnowledgeSvc({
+      context7ApiKey: process.env.CONTEXT7_API_KEY
+    });
+  const reviewSessionFactory = new ReviewSessionFactory({
+    clientManager,
+    knowledgeSvc
+  });
   const judgeSessionFactory = new JudgeSessionFactory({ clientManager });
   const judgeService = new JudgeService({ judgeSessionFactory });
   const changesetOverviewRunner =
