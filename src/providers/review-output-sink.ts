@@ -19,10 +19,41 @@ export interface ReviewIndexResult {
   content: string;
 }
 
+export type SuccessfulSnapshotFaultScope =
+  | "single-file-output-fault"
+  | "shared-output-target-fault";
+
+export interface SuccessfulSnapshotFailureInput {
+  noteFilePath: string;
+  error: unknown;
+}
+
+export interface SuccessfulSnapshotFailureAssessment {
+  faultScope: SuccessfulSnapshotFaultScope;
+}
+
 export interface ReviewOutputSink {
   initializeRun(outputTarget: OutputTarget): void;
   publishFileReview(fileResult: FileReviewResult): void;
+  assessSuccessfulSnapshotFailure?(
+    input: SuccessfulSnapshotFailureInput
+  ): SuccessfulSnapshotFailureAssessment;
   publishSkippedFile(skipRecord: SkipRecord): void;
   publishRunSummary(summaryResult: RunSummaryResult): void;
   publishReviewIndex(indexResult: ReviewIndexResult): void;
+}
+
+export function resolveSuccessfulSnapshotFailureAssessment(
+  outputSink: ReviewOutputSink,
+  input: SuccessfulSnapshotFailureInput
+): SuccessfulSnapshotFailureAssessment {
+  try {
+    return (
+      outputSink.assessSuccessfulSnapshotFailure?.(input) ?? {
+        faultScope: "shared-output-target-fault"
+      }
+    );
+  } catch {
+    return { faultScope: "shared-output-target-fault" };
+  }
 }

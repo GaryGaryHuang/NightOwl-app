@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -239,6 +239,192 @@ test("LocalWorkspaceProvider publishes review index content to index.md", () => 
         "## Run Artifacts",
         "- [summary.md](./summary.md)"
       ].join("\n")
+    );
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("LocalWorkspaceProvider classifies path-specific successful snapshot write failures as single-file output faults when the shared files path remains healthy", () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
+  const outputTarget = {
+    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
+    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
+    skippedPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "skipped.md"
+    ),
+    summaryPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
+    )
+  };
+
+  try {
+    const provider = new LocalWorkspaceProvider();
+    const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
+    const error = Object.assign(new Error("name too long"), {
+      code: "ENAMETOOLONG",
+      path: noteFilePath
+    });
+
+    provider.initializeRun(outputTarget);
+
+    assert.deepEqual(
+      provider.assessSuccessfulSnapshotFailure({
+        noteFilePath,
+        error
+      }),
+      { faultScope: "single-file-output-fault" }
+    );
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("LocalWorkspaceProvider classifies disk-capacity successful snapshot write failures as shared output target faults", () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
+  const outputTarget = {
+    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
+    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
+    skippedPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "skipped.md"
+    ),
+    summaryPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
+    )
+  };
+
+  try {
+    const provider = new LocalWorkspaceProvider();
+    const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
+    const error = Object.assign(new Error("disk full"), {
+      code: "ENOSPC",
+      path: noteFilePath
+    });
+
+    provider.initializeRun(outputTarget);
+
+    assert.deepEqual(
+      provider.assessSuccessfulSnapshotFailure({
+        noteFilePath,
+        error
+      }),
+      { faultScope: "shared-output-target-fault" }
+    );
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("LocalWorkspaceProvider falls back to shared output target fault when successful snapshot classification is inconclusive", () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
+  const outputTarget = {
+    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
+    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
+    skippedPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "skipped.md"
+    ),
+    summaryPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
+    )
+  };
+
+  try {
+    const provider = new LocalWorkspaceProvider();
+    const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
+
+    provider.initializeRun(outputTarget);
+
+    assert.deepEqual(
+      provider.assessSuccessfulSnapshotFailure({
+        noteFilePath,
+        error: new Error("note write failed")
+      }),
+      { faultScope: "shared-output-target-fault" }
+    );
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("LocalWorkspaceProvider treats shared files-path corruption as a shared output target fault", () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
+  const outputTarget = {
+    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
+    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
+    skippedPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "skipped.md"
+    ),
+    summaryPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "summary.md"
+    ),
+    indexPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "index.md"
+    )
+  };
+
+  try {
+    const provider = new LocalWorkspaceProvider();
+    const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
+    const error = Object.assign(new Error("path collision"), {
+      code: "EEXIST",
+      path: outputTarget.filesPath
+    });
+
+    provider.initializeRun(outputTarget);
+    rmSync(outputTarget.filesPath, { recursive: true, force: true });
+    writeFileSync(outputTarget.filesPath, "not-a-directory");
+
+    assert.deepEqual(
+      provider.assessSuccessfulSnapshotFailure({
+        noteFilePath,
+        error
+      }),
+      { faultScope: "shared-output-target-fault" }
     );
   } finally {
     rmSync(tempDir, { force: true, recursive: true });

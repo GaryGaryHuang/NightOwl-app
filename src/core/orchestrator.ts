@@ -25,7 +25,10 @@ import { Step4StrategyWhatIfScenariosStep } from "./steps/step4-strategy-what-if
 import { Step3KnowledgeSourceOfTruthStep } from "./steps/step3-knowledge-source-of-truth.ts";
 import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boundaries.ts";
 import { Step1OverviewStep } from "./steps/step1-overview.ts";
-import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
+import {
+  resolveSuccessfulSnapshotFailureAssessment,
+  type ReviewOutputSink
+} from "../providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 
 export interface ReviewRunSummary {
@@ -428,6 +431,20 @@ export class ReviewOrchestrator {
           content: this.#finalizer.render(fileContext)
         });
       } catch (outputError) {
+        const assessment = resolveSuccessfulSnapshotFailureAssessment(
+          this.#outputSink,
+          {
+            noteFilePath: fileContext.noteFilePath,
+            error: outputError
+          }
+        );
+
+        if (assessment.faultScope === "shared-output-target-fault") {
+          input.runAbortState.error ??= outputError;
+          input.sharedAbortState.error ??= outputError;
+          throw outputError;
+        }
+
         await this.#downgradeSuccessfulSnapshotOutputFailure({
           context: fileContext,
           stepId: step.stepId,

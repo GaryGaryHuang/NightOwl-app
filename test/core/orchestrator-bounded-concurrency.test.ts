@@ -283,6 +283,86 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
   }
 });
 
+test("ReviewOrchestrator suppresses sibling successful snapshots and later dispatch after a shared-target successful snapshot failure", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add files for shared-target successful snapshot abort coordination");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const failedFile = reviewableFiles[0];
+    const siblingFile = reviewableFiles[1];
+    const laterFile = reviewableFiles[2];
+    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const plannedNotes = planNoteFiles(
+      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      reviewableFiles
+    );
+    const failedNotePath = plannedNotes.find(
+      (plannedNote) => plannedNote.filePath === failedFile
+    )!.noteFilePath;
+    const siblingReleased = createDeferred<void>();
+    const stepEvents: Array<[string, string]> = [];
+    const outputSink = new SharedTargetSnapshotFailingOutputSink({
+      failedNotePath,
+      failedFile,
+      onFailedSuccessfulSnapshotPublish() {
+        siblingReleased.resolve();
+      }
+    });
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink,
+      stepRunner: createSharedAbortRunner({
+        stepEvents,
+        gateByFileAndStep: new Map([[`${siblingFile}:step1-overview`, siblingReleased.promise]])
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430",
+      maxConcurrentFiles: 2
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /disk full/u
+    );
+
+    assert.deepEqual(
+      stepEvents.filter(([, filePath]) => filePath === siblingFile),
+      [["step1-overview", siblingFile]]
+    );
+    assert.equal(
+      stepEvents.some(([, filePath]) => filePath === laterFile),
+      false
+    );
+    assert.equal(outputSink.siblingSuccessfulSnapshotCount, 0);
+    assert.equal(outputSink.siblingSkippedRecordCount, 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("ReviewOrchestrator suppresses later interrupted snapshots and skipped records after shared abort from skipped-artifact failure", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -832,7 +912,100 @@ class SingleFileSnapshotFailingOutputSink {
     writeFileSync(fileResult.noteFilePath, fileResult.content);
   }
 
+  assessSuccessfulSnapshotFailure() {
+    return { faultScope: "single-file-output-fault" as const };
+  }
+
   publishSkippedFile(skipRecord: { filePath: string; stepId: string; reason: string }) {
+    appendFileSync(
+      this.#outputTarget!.skippedPath,
+      `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
+    );
+  }
+
+  publishRunSummary(summaryResult: { content: string }) {
+    writeFileSync(this.#outputTarget!.summaryPath, summaryResult.content);
+  }
+
+  publishReviewIndex(indexResult: { content: string }) {
+    writeFileSync(this.#outputTarget!.indexPath, indexResult.content);
+  }
+}
+
+class SharedTargetSnapshotFailingOutputSink {
+  #outputTarget?: {
+    basePath: string;
+    filesPath: string;
+    skippedPath: string;
+    summaryPath: string;
+    indexPath: string;
+  };
+  readonly #failedNotePath: string;
+  readonly #failedFile: string;
+  readonly #onFailedSuccessfulSnapshotPublish?: () => void;
+  #failed = false;
+  siblingSuccessfulSnapshotCount = 0;
+  siblingSkippedRecordCount = 0;
+
+  constructor(input: {
+    failedNotePath: string;
+    failedFile: string;
+    onFailedSuccessfulSnapshotPublish?(): void;
+  }) {
+    this.#failedNotePath = input.failedNotePath;
+    this.#failedFile = input.failedFile;
+    this.#onFailedSuccessfulSnapshotPublish = input.onFailedSuccessfulSnapshotPublish;
+  }
+
+  initializeRun(outputTarget: {
+    basePath: string;
+    filesPath: string;
+    skippedPath: string;
+    summaryPath: string;
+    indexPath: string;
+  }) {
+    mkdirSync(outputTarget.basePath, { recursive: true });
+    mkdirSync(outputTarget.filesPath, { recursive: true });
+    writeFileSync(outputTarget.skippedPath, "");
+    this.#outputTarget = outputTarget;
+  }
+
+  publishFileReview(fileResult: { noteFilePath: string; content: string }) {
+    const isBootstrap = /- Status: Review not yet generated\./u.test(fileResult.content);
+    const isInterrupted = /> \[!WARNING\] Review Interrupted/u.test(fileResult.content);
+
+    if (
+      !this.#failed &&
+      fileResult.noteFilePath === this.#failedNotePath &&
+      !isBootstrap &&
+      !isInterrupted
+    ) {
+      this.#failed = true;
+      this.#onFailedSuccessfulSnapshotPublish?.();
+      throw new Error("disk full");
+    }
+
+    if (
+      !isBootstrap &&
+      !isInterrupted &&
+      !fileResult.noteFilePath.includes(this.#failedFile)
+    ) {
+      this.siblingSuccessfulSnapshotCount += 1;
+    }
+
+    mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
+    writeFileSync(fileResult.noteFilePath, fileResult.content);
+  }
+
+  assessSuccessfulSnapshotFailure() {
+    return { faultScope: "shared-output-target-fault" as const };
+  }
+
+  publishSkippedFile(skipRecord: { filePath: string; stepId: string; reason: string }) {
+    if (skipRecord.filePath !== this.#failedFile) {
+      this.siblingSkippedRecordCount += 1;
+    }
+
     appendFileSync(
       this.#outputTarget!.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
