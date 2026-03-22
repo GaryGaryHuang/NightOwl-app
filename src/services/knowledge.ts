@@ -16,7 +16,7 @@ export class KnowledgeSvc {
   getMcpServers(
     knowledgeMode: ReviewKnowledgeMode
   ): Record<string, MCPServerConfig> | undefined {
-    if (knowledgeMode !== "step3-built-in-context7") {
+    if (knowledgeMode !== "built-in-context7") {
       return undefined;
     }
 

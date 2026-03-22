@@ -37,7 +37,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
     "PR-123",
     "https://example.com/spec"
   ]);
-  assert.equal(profiles[0]?.knowledgeMode, "disabled");
+  assert.equal(profiles[0]?.knowledgeMode, "built-in-context7");
   assert.equal(
     profiles[0]?.systemMessage,
     [

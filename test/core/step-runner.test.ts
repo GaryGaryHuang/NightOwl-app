@@ -84,7 +84,7 @@ test("StepRunner returns an apply-able result without mutating state or writing 
     [
       "createSession",
       {
-        knowledgeMode: "disabled",
+        knowledgeMode: "built-in-context7",
         model: "gpt-5-mini",
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo",

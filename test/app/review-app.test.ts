@@ -130,6 +130,89 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
   }
 });
 
+test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the existing retry-and-abort path", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    let startCalls = 0;
+    let stopCalls = 0;
+    let initializeRunCalls = 0;
+    let step0Context7Failures = 0;
+    const sessionConfigs = [];
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {
+          startCalls += 1;
+        },
+        async stop() {
+          stopCalls += 1;
+        },
+        getClient() {
+          return {
+            async createSession(config) {
+              sessionConfigs.push(config);
+
+              if (
+                config.mcpServers?.context7 &&
+                isChangesetOverviewSystemMessage(config.systemMessage)
+              ) {
+                step0Context7Failures += 1;
+                throw new Error("context7 startup failed");
+              }
+
+              return {
+                async sendAndWait() {
+                  return {
+                    data: {
+                      content: "## Changeset Overview\n- 調整範圍：feature"
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      outputSink: {
+        initializeRun() {
+          initializeRunCalls += 1;
+        },
+        publishFileReview() {},
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {}
+      }
+    });
+
+    await assert.rejects(
+      () =>
+        app.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /context7 startup failed/u
+    );
+
+    assert.ok(step0Context7Failures >= 2);
+    assert.equal(startCalls, 1);
+    assert.equal(stopCalls, 1);
+    assert.equal(initializeRunCalls, 0);
+    assert.ok(
+      sessionConfigs.every(
+        (config) =>
+          !isChangesetOverviewSystemMessage(config.systemMessage) ||
+          Boolean(config.mcpServers?.context7)
+      )
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the existing retry-and-skip path", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -239,6 +322,122 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
     fixture.cleanup();
   }
 });
+
+test("createLocalReviewRunApp keeps Step 4 Context7 startup failure on the existing retry-and-skip path", async () => {
+  await assertPerFileContext7StartupFailureSkipsOneFile({
+    stepMatcher: isStrategyWhatIfSystemMessage
+  });
+});
+
+test("createLocalReviewRunApp keeps Step 5 Context7 startup failure on the existing retry-and-skip path", async () => {
+  await assertPerFileContext7StartupFailureSkipsOneFile({
+    stepMatcher: isValidationInterrogationSystemMessage
+  });
+});
+
+async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
+  stepMatcher(systemMessage: unknown): boolean;
+}): Promise<void> {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add changed file for broader Context7 startup failure coverage");
+
+    const sessionConfigs = [];
+    let context7Failures = 0;
+    const skippedRecords = [];
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        getClient() {
+          return {
+            async createSession(config) {
+              sessionConfigs.push(config);
+
+              if (
+                config.mcpServers?.context7 &&
+                input.stepMatcher(config.systemMessage)
+              ) {
+                context7Failures += 1;
+
+                if (context7Failures <= 2) {
+                  throw new Error("context7 startup failed");
+                }
+              }
+
+              return {
+                async sendAndWait({ prompt }) {
+                  return {
+                    data: {
+                      content: buildSessionResponse(config, prompt)
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      reviewConfigProvider: {
+        loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: {
+              must: 80,
+              nice: 90
+            }
+          };
+        }
+      },
+      outputSink: {
+        initializeRun() {},
+        publishFileReview() {},
+        publishSkippedFile(skipRecord) {
+          skippedRecords.push(skipRecord);
+        },
+        publishRunSummary() {},
+        publishReviewIndex() {}
+      }
+    });
+
+    const result = await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.ok(context7Failures >= 2);
+    assert.equal(result.skippedFileCount, 1);
+    assert.ok(result.plannedFileCount >= 3);
+    assert.ok(result.successfulFileCount >= 1);
+    assert.match(
+      skippedRecords[0]?.reason ?? "",
+      /context7 startup failed/u
+    );
+    assert.ok(
+      sessionConfigs.some(
+        (config) =>
+          config.mcpServers?.context7 && input.stepMatcher(config.systemMessage)
+      )
+    );
+  } finally {
+    fixture.cleanup();
+  }
+}
 
 function buildSessionResponse(config: { systemMessage?: unknown; availableTools?: string[] }, prompt: { prompt: string }): string {
   if (Array.isArray(config.availableTools) && config.availableTools.length === 0) {
@@ -358,6 +557,24 @@ function extractSystemMessageContent(systemMessage: unknown): string {
 
 function isKnowledgeSourceOfTruthSystemMessage(systemMessage: unknown): boolean {
   return /## Current Step: Knowledge & Source of Truth/u.test(
+    extractSystemMessageContent(systemMessage)
+  );
+}
+
+function isChangesetOverviewSystemMessage(systemMessage: unknown): boolean {
+  return /## Current Step: Changeset Overview/u.test(
+    extractSystemMessageContent(systemMessage)
+  );
+}
+
+function isStrategyWhatIfSystemMessage(systemMessage: unknown): boolean {
+  return /## Current Step: Strategy & What-if Scenarios/u.test(
+    extractSystemMessageContent(systemMessage)
+  );
+}
+
+function isValidationInterrogationSystemMessage(systemMessage: unknown): boolean {
+  return /## Current Step: Validation & Interrogation/u.test(
     extractSystemMessageContent(systemMessage)
   );
 }

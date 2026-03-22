@@ -51,7 +51,7 @@ export class ReviewSessionFactory {
     };
 
     const mcpServers = this.#knowledgeSvc?.getMcpServers(
-      profile.knowledgeMode ?? "disabled"
+      profile.knowledgeMode ?? "built-in-context7"
     );
 
     if (mcpServers) {

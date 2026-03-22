@@ -35,26 +35,39 @@ export class ChangesetOverviewRunner {
   }
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const session = await this.#reviewSessionFactory.createSession({
-        knowledgeMode: "disabled",
-        model: input.model,
-        outputBaseDir: input.outputBaseDir,
-        repoRoot: input.repoRoot,
-        systemMessage: STEP0_SYSTEM_MESSAGE,
-        workingDirectory: input.workingDirectory
-      });
-      const response = (await session.sendAndWait(buildStep0Prompt(input)))?.trim();
+    let lastError: Error | undefined;
 
-      if (response) {
-        return createRunContext({
-          changesetOverview: response,
-          userContext: input.userContext
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const session = await this.#reviewSessionFactory.createSession({
+          knowledgeMode: "built-in-context7",
+          model: input.model,
+          outputBaseDir: input.outputBaseDir,
+          repoRoot: input.repoRoot,
+          systemMessage: STEP0_SYSTEM_MESSAGE,
+          workingDirectory: input.workingDirectory
         });
+        const response = (await session.sendAndWait(buildStep0Prompt(input)))?.trim();
+
+        if (response) {
+          return createRunContext({
+            changesetOverview: response,
+            userContext: input.userContext
+          });
+        }
+
+        lastError = new Error(
+          "Step 0 changeset overview did not produce a non-empty response."
+        );
+      } catch (error) {
+        lastError =
+          error instanceof Error ? error : new Error(String(error));
       }
     }
 
-    throw new Error("Step 0 changeset overview did not produce a non-empty response.");
+    throw lastError ?? new Error(
+      "Step 0 changeset overview did not produce a non-empty response."
+    );
   }
 }
 

@@ -1,1 +1,1 @@
-export type ReviewKnowledgeMode = "disabled" | "step3-built-in-context7";
+export type ReviewKnowledgeMode = "disabled" | "built-in-context7";

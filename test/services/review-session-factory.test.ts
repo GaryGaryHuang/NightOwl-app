@@ -202,7 +202,7 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
   );
 });
 
-test("ReviewSessionFactory injects built-in Context7 only for Step 3 review sessions", async () => {
+test("ReviewSessionFactory injects built-in Context7 by default for review sessions and still allows explicit disable", async () => {
   const receivedConfigs = [];
   const factory = new ReviewSessionFactory({
     clientManager: {
@@ -229,35 +229,62 @@ test("ReviewSessionFactory injects built-in Context7 only for Step 3 review sess
   });
 
   await factory.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo/packages/app",
+    repoRoot: "/workspace/repo",
+    systemMessage: "step0 system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+  await factory.createSession({
+    model: "gpt-5-mini",
+    outputBaseDir: "/workspace/repo/packages/app",
+    repoRoot: "/workspace/repo",
+    systemMessage: "step1 system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+  await factory.createSession({
     model: "gpt-5-mini",
     outputBaseDir: "/workspace/repo/packages/app",
     repoRoot: "/workspace/repo",
     systemMessage: "step3 system prompt",
-    knowledgeMode: "step3-built-in-context7",
+    knowledgeMode: "built-in-context7",
     workingDirectory: "/workspace/repo"
   });
   await factory.createSession({
     model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo/packages/app",
     repoRoot: "/workspace/repo",
-    systemMessage: "step4 system prompt",
+    systemMessage: "step5 system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+  await factory.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo/packages/app",
+    repoRoot: "/workspace/repo",
+    systemMessage: "explicitly disabled system prompt",
     knowledgeMode: "disabled",
     workingDirectory: "/workspace/repo"
   });
 
-  assert.deepEqual(receivedConfigs[0]?.mcpServers, {
-    context7: {
-      type: "local",
-      command: "npx",
-      args: ["-y", "@upstash/context7-mcp"],
-      env: {
-        CONTEXT7_API_KEY: "test-api-key"
-      },
-      tools: ["*"]
-    }
-  });
-  assert.equal(receivedConfigs[1]?.mcpServers, undefined);
+  for (const config of receivedConfigs.slice(0, 4)) {
+    assert.deepEqual(config?.mcpServers, {
+      context7: {
+        type: "local",
+        command: "npx",
+        args: ["-y", "@upstash/context7-mcp"],
+        env: {
+          CONTEXT7_API_KEY: "test-api-key"
+        },
+        tools: ["*"]
+      }
+    });
+  }
+
+  assert.equal(receivedConfigs[4]?.mcpServers, undefined);
   assert.deepEqual(receivedConfigs.map((config) => config.excludedTools), [
+    ["web_fetch"],
+    ["web_fetch"],
+    ["web_fetch"],
     ["web_fetch"],
     ["web_fetch"]
   ]);

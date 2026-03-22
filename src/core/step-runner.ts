@@ -96,7 +96,7 @@ export class StepRunner {
       try {
         const plan = input.step.prepare(input.context);
         const session = await this.#reviewSessionFactory.createSession({
-          knowledgeMode: plan.reviewProfile.knowledgeMode ?? "disabled",
+          knowledgeMode: plan.reviewProfile.knowledgeMode ?? "built-in-context7",
           model: plan.reviewProfile.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,
