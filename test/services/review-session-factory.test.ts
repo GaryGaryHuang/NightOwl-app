@@ -224,7 +224,22 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
       }
     },
     knowledgeSvc: new KnowledgeSvc({
-      context7ApiKey: "test-api-key"
+      context7ApiKey: "test-api-key",
+      userMcpServers: {
+        demo: {
+          type: "local",
+          command: "npx",
+          args: ["-y", "@example/demo-mcp"],
+          tools: ["*"]
+        },
+        context7: {
+          type: "local",
+          env: {
+            CUSTOM_FLAG: "1"
+          },
+          tools: ["resolve-library-id"]
+        }
+      }
     })
   });
 
@@ -273,8 +288,15 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
         command: "npx",
         args: ["-y", "@upstash/context7-mcp"],
         env: {
-          CONTEXT7_API_KEY: "test-api-key"
+          CONTEXT7_API_KEY: "test-api-key",
+          CUSTOM_FLAG: "1"
         },
+        tools: ["resolve-library-id"]
+      },
+      demo: {
+        type: "local",
+        command: "npx",
+        args: ["-y", "@example/demo-mcp"],
         tools: ["*"]
       }
     });

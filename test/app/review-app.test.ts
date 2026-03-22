@@ -335,6 +335,91 @@ test("createLocalReviewRunApp keeps Step 5 Context7 startup failure on the exist
   });
 });
 
+test("createLocalReviewRunApp keeps Step 0 custom MCP startup failure on the existing retry-and-abort path", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    let customMcpFailures = 0;
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        getClient() {
+          return {
+            async createSession(config) {
+              if (
+                config.mcpServers?.demo &&
+                isChangesetOverviewSystemMessage(config.systemMessage)
+              ) {
+                customMcpFailures += 1;
+                throw new Error("custom mcp startup failed");
+              }
+
+              return {
+                async sendAndWait() {
+                  return {
+                    data: {
+                      content: "## Changeset Overview\n- 調整範圍：feature"
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      reviewConfigProvider: {
+        loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: {
+              must: 80,
+              nice: 90
+            },
+            mcpServers: {
+              demo: {
+                type: "local",
+                command: "npx",
+                args: ["-y", "@example/demo-mcp"],
+                tools: ["*"]
+              }
+            }
+          };
+        }
+      }
+    });
+
+    await assert.rejects(
+      () =>
+        app.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /custom mcp startup failed/u
+    );
+
+    assert.ok(customMcpFailures >= 2);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("createLocalReviewRunApp keeps Step 4 custom MCP startup failure on the existing retry-and-skip path", async () => {
+  await assertPerFileCustomMcpStartupFailureSkipsOneFile({
+    stepMatcher: isStrategyWhatIfSystemMessage
+  });
+});
+
+test("createLocalReviewRunApp keeps Step 5 custom MCP startup failure on the existing retry-and-skip path", async () => {
+  await assertPerFileCustomMcpStartupFailureSkipsOneFile({
+    stepMatcher: isValidationInterrogationSystemMessage
+  });
+});
+
 async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
   stepMatcher(systemMessage: unknown): boolean;
 }): Promise<void> {
@@ -433,6 +518,104 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
         (config) =>
           config.mcpServers?.context7 && input.stepMatcher(config.systemMessage)
       )
+    );
+  } finally {
+    fixture.cleanup();
+  }
+}
+
+async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
+  stepMatcher(systemMessage: unknown): boolean;
+}): Promise<void> {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add changed file for custom MCP startup failure coverage");
+
+    const skippedRecords = [];
+    let customMcpFailures = 0;
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        getClient() {
+          return {
+            async createSession(config) {
+              if (config.mcpServers?.demo && input.stepMatcher(config.systemMessage)) {
+                customMcpFailures += 1;
+
+                if (customMcpFailures <= 2) {
+                  throw new Error("custom mcp startup failed");
+                }
+              }
+
+              return {
+                async sendAndWait({ prompt }) {
+                  return {
+                    data: {
+                      content: buildSessionResponse(config, prompt)
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      reviewConfigProvider: {
+        loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: {
+              must: 80,
+              nice: 90
+            },
+            mcpServers: {
+              demo: {
+                type: "local",
+                command: "npx",
+                args: ["-y", "@example/demo-mcp"],
+                tools: ["*"]
+              }
+            }
+          };
+        }
+      },
+      outputSink: {
+        initializeRun() {},
+        publishFileReview() {},
+        publishSkippedFile(skipRecord) {
+          skippedRecords.push(skipRecord);
+        },
+        publishRunSummary() {},
+        publishReviewIndex() {}
+      }
+    });
+
+    const result = await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.ok(customMcpFailures >= 2);
+    assert.equal(result.skippedFileCount, 1);
+    assert.match(
+      skippedRecords[0]?.reason ?? "",
+      /custom mcp startup failed/u
     );
   } finally {
     fixture.cleanup();

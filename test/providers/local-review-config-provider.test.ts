@@ -15,7 +15,8 @@ test("LocalReviewConfigProvider falls back to the documented default review conf
       confidenceThresholds: {
         must: 80,
         nice: 90
-      }
+      },
+      mcpServers: {}
     });
   } finally {
     fixture.cleanup();
@@ -34,7 +35,8 @@ test("LocalReviewConfigProvider falls back to defaults when maxConcurrentFiles o
       confidenceThresholds: {
         must: 80,
         nice: 90
-      }
+      },
+      mcpServers: {}
     });
 
     fixture.writeFile(
@@ -48,7 +50,8 @@ test("LocalReviewConfigProvider falls back to defaults when maxConcurrentFiles o
       confidenceThresholds: {
         must: 80,
         nice: 90
-      }
+      },
+      mcpServers: {}
     });
   } finally {
     fixture.cleanup();
@@ -66,6 +69,14 @@ test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresh
         confidenceThresholds: {
           must: 70,
           nice: 85
+        },
+        mcpServers: {
+          demo: {
+            type: "local",
+            command: "npx",
+            args: ["-y", "@example/demo-mcp"],
+            tools: ["*"]
+          }
         }
       })
     );
@@ -77,6 +88,14 @@ test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresh
       confidenceThresholds: {
         must: 70,
         nice: 85
+      },
+      mcpServers: {
+        demo: {
+          type: "local",
+          command: "npx",
+          args: ["-y", "@example/demo-mcp"],
+          tools: ["*"]
+        }
       }
     });
   } finally {
@@ -84,7 +103,7 @@ test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresh
   }
 });
 
-test("LocalReviewConfigProvider accepts boundary threshold values and unrelated top-level keys while keeping default maxConcurrentFiles", () => {
+test("LocalReviewConfigProvider accepts boundary threshold values and a validated partial context7 override while keeping default maxConcurrentFiles", () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -92,8 +111,11 @@ test("LocalReviewConfigProvider accepts boundary threshold values and unrelated 
       ".reviewconfig.json",
       JSON.stringify({
         mcpServers: {
-          demo: {
-            command: "demo"
+          context7: {
+            env: {
+              CUSTOM_FLAG: "1"
+            },
+            tools: ["resolve-library-id"]
           }
         },
         confidenceThresholds: {
@@ -110,6 +132,15 @@ test("LocalReviewConfigProvider accepts boundary threshold values and unrelated 
       confidenceThresholds: {
         must: 0,
         nice: 100
+      },
+      mcpServers: {
+        context7: {
+          type: "local",
+          env: {
+            CUSTOM_FLAG: "1"
+          },
+          tools: ["resolve-library-id"]
+        }
       }
     });
   } finally {
@@ -221,6 +252,82 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
       JSON.stringify({
         confidenceThresholds: {
           nice: "85"
+        }
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: []
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          demo: {
+            type: "local"
+          }
+        }
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          demo: {
+            type: "remote",
+            command: "https://example.com/mcp"
+          }
+        }
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          demo: {
+            type: "local",
+            command: "npx",
+            args: "--bad"
+          }
+        }
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          context7: {
+            env: {
+              API_KEY: 123
+            }
+          }
         }
       })
     );

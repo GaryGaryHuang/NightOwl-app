@@ -55,22 +55,8 @@ export function createLocalReviewRunApp(
   const outputSink = options.outputSink ?? new LocalWorkspaceProvider();
   const reviewConfigProvider =
     options.reviewConfigProvider ?? new LocalReviewConfigProvider();
-  const knowledgeSvc =
-    options.knowledgeSvc ??
-    new KnowledgeSvc({
-      context7ApiKey: process.env.CONTEXT7_API_KEY
-    });
-  const reviewSessionFactory = new ReviewSessionFactory({
-    clientManager,
-    knowledgeSvc
-  });
   const judgeSessionFactory = new JudgeSessionFactory({ clientManager });
   const judgeService = new JudgeService({ judgeSessionFactory });
-  const changesetOverviewRunner =
-    options.changesetOverviewRunner ??
-    new ChangesetOverviewRunner({
-      reviewSessionFactory
-    });
 
   return {
     async run(request: RunRequest): Promise<ReviewRunSummary> {
@@ -80,6 +66,21 @@ export function createLocalReviewRunApp(
       );
       const repoRoot = sourceProvider.resolveRepoRoot(startPath);
       const reviewConfig = reviewConfigProvider.loadReviewConfig(repoRoot);
+      const knowledgeSvc =
+        options.knowledgeSvc ??
+        new KnowledgeSvc({
+          context7ApiKey: process.env.CONTEXT7_API_KEY,
+          userMcpServers: reviewConfig.mcpServers
+        });
+      const reviewSessionFactory = new ReviewSessionFactory({
+        clientManager,
+        knowledgeSvc
+      });
+      const changesetOverviewRunner =
+        options.changesetOverviewRunner ??
+        new ChangesetOverviewRunner({
+          reviewSessionFactory
+        });
       const stepRunner =
         options.stepRunner ??
         new StepRunner({
