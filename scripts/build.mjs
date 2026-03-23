@@ -66,8 +66,8 @@ function listTypeScriptFiles(directoryPath) {
 function rewriteTypeScriptSpecifiers(code) {
   return code
     .replace(
-      /((?:import|export)\s.+?\sfrom\s+["'])(\.[^"']+)\.ts(["'])/gu,
+      /((?:import|export)\s.+?\sfrom\s+["'])(\.[^"']+)\.ts(["'])/gsu,
       "$1$2.js$3"
     )
-    .replace(/(import\s*\(\s*["'])(\.[^"']+)\.ts(["']\s*\))/gu, "$1$2.js$3");
+    .replace(/(import\s*\(\s*["'])(\.[^"']+)\.ts(["']\s*\))/gsu, "$1$2.js$3");
 }
