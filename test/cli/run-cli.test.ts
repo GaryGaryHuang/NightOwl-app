@@ -160,6 +160,7 @@ test("runCli prints the complete deterministic artifact surface from the complet
   assert.deepEqual(stderr, []);
   assert.match(stdout[0], /Files: \/workspace\/repo\/review\/feature-branch_03131430\/files/u);
   assert.match(stdout[0], /Index: \/workspace\/repo\/review\/feature-branch_03131430\/index\.md/u);
+  assert.match(stdout[0], /Manifest: \/workspace\/repo\/review\/feature-branch_03131430\/manifest\.json/u);
   assert.match(stdout[0], /Skipped: \/workspace\/repo\/review\/feature-branch_03131430\/skipped\.md/u);
 });
 
@@ -174,7 +175,8 @@ test("runCli prints artifact paths directly from the completed-run result withou
       filesPath: `${basePath}/files`,
       skippedPath: `${basePath}/skipped.md`,
       summaryPath: `${basePath}/summary.md`,
-      indexPath: `${basePath}/index.md`
+      indexPath: `${basePath}/index.md`,
+      manifestPath: `${basePath}/manifest.json`
     }
   });
   const { exitCode, stdout, stderr } = await runCliWithResult(result);
@@ -267,6 +269,7 @@ test("runCli does not print partial completed-run counts or artifact lines on fa
   assert.match(stderr.join("\n"), /summary write failed/u);
   assert.doesNotMatch(stderr.join("\n"), /Files:/u);
   assert.doesNotMatch(stderr.join("\n"), /Index:/u);
+  assert.doesNotMatch(stderr.join("\n"), /Manifest:/u);
   assert.doesNotMatch(stderr.join("\n"), /Skipped:/u);
   assert.doesNotMatch(stderr.join("\n"), /Successful files:/u);
   assert.doesNotMatch(stderr.join("\n"), /Skipped files:/u);
@@ -309,6 +312,7 @@ test("runCli keeps fatal runs on the error path even when artifacts already exis
     assert.doesNotMatch(stderr.join("\n"), /Files:/u);
     assert.doesNotMatch(stderr.join("\n"), /Summary:/u);
     assert.doesNotMatch(stderr.join("\n"), /Index:/u);
+    assert.doesNotMatch(stderr.join("\n"), /Manifest:/u);
     assert.doesNotMatch(stderr.join("\n"), /Skipped:/u);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
@@ -360,6 +364,7 @@ function createCompletedRunResult(
       skippedPath: `${basePath}/skipped.md`,
       summaryPath: `${basePath}/summary.md`,
       indexPath: `${basePath}/index.md`,
+      manifestPath: `${basePath}/manifest.json`,
       ...outputTargetOverrides
     },
     plannedFileCount: 2,
@@ -377,6 +382,7 @@ function renderExpectedSummary(result: ReviewRunSummary): string {
     `Files: ${result.outputTarget.filesPath}`,
     `Summary: ${result.outputTarget.summaryPath}`,
     `Index: ${result.outputTarget.indexPath}`,
+    `Manifest: ${result.outputTarget.manifestPath}`,
     `Skipped: ${result.outputTarget.skippedPath}`,
     `Planned files: ${result.plannedFileCount}`,
     `Successful files: ${result.successfulFileCount}`,

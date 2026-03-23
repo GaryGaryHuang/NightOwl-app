@@ -543,7 +543,8 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -638,7 +639,8 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -754,7 +756,8 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -858,7 +861,8 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -959,7 +963,8 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1066,7 +1071,8 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1171,7 +1177,8 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
           }
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1276,7 +1283,8 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1351,7 +1359,8 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -1457,7 +1466,8 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: createStepFailureRunner({
         stepEvents,
@@ -1560,7 +1570,8 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
           }
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: createStepFailureRunner({
         stepEvents,
@@ -1629,7 +1640,8 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
           calls.push("publishSkippedFile");
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       },
       stepRunner: {
         async run() {

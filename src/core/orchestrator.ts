@@ -16,6 +16,7 @@ import {
   type SuccessfulFileOutcome
 } from "./run-summary-finalizer.ts";
 import { ReviewIndexFinalizer } from "./review-index-finalizer.ts";
+import { RunManifestFinalizer } from "./run-manifest-finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunRequest } from "./run-request.ts";
 import type { StepDefinition, StepResult, StepRunner } from "./step-runner.ts";
@@ -67,6 +68,7 @@ export class ReviewOrchestrator {
   readonly #finalizer: ReviewNoteFinalizer;
   readonly #runSummaryFinalizer: RunSummaryFinalizer;
   readonly #reviewIndexFinalizer: ReviewIndexFinalizer;
+  readonly #runManifestFinalizer: RunManifestFinalizer;
   readonly #maxConcurrentFiles: number;
 
   constructor(options: ReviewOrchestratorOptions) {
@@ -87,6 +89,7 @@ export class ReviewOrchestrator {
     this.#finalizer = new ReviewNoteFinalizer();
     this.#runSummaryFinalizer = new RunSummaryFinalizer();
     this.#reviewIndexFinalizer = new ReviewIndexFinalizer();
+    this.#runManifestFinalizer = new RunManifestFinalizer();
     this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
   }
 
@@ -238,6 +241,18 @@ export class ReviewOrchestrator {
     });
     this.#outputSink.publishReviewIndex({
       content: this.#reviewIndexFinalizer.render({
+        repoRoot,
+        baseRef: request.baseRef,
+        headRef: request.headRef,
+        plannedFileCount: plannedNoteFiles.length,
+        successfulFiles,
+        skippedFiles,
+        outputTarget,
+        plannedNotes: plannedNoteFiles
+      })
+    });
+    this.#outputSink.publishRunManifest({
+      content: this.#runManifestFinalizer.render({
         repoRoot,
         baseRef: request.baseRef,
         headRef: request.headRef,

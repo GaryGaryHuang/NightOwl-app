@@ -4,6 +4,7 @@ export interface OutputTarget {
   skippedPath: string;
   summaryPath: string;
   indexPath: string;
+  manifestPath: string;
 }
 
 export interface ResolveOutputTargetInput {
@@ -37,7 +38,8 @@ export function buildOutputTarget(
     filesPath: path.join(basePath, "files"),
     skippedPath: path.join(basePath, "skipped.md"),
     summaryPath: path.join(basePath, "summary.md"),
-    indexPath: path.join(basePath, "index.md")
+    indexPath: path.join(basePath, "index.md"),
+    manifestPath: path.join(basePath, "manifest.json")
   };
 }
 

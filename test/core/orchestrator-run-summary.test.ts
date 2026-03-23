@@ -21,6 +21,7 @@ type FileReviewPublishResult = Parameters<ReviewOutputSink["publishFileReview"]>
 type SkipRecord = Parameters<ReviewOutputSink["publishSkippedFile"]>[0];
 type RunSummaryPublishResult = Parameters<ReviewOutputSink["publishRunSummary"]>[0];
 type ReviewIndexPublishResult = Parameters<ReviewOutputSink["publishReviewIndex"]>[0];
+type RunManifestPublishResult = Parameters<ReviewOutputSink["publishRunManifest"]>[0];
 type Step7NarrativeRiskLevel = "High" | "Medium" | "Low" | "None";
 
 interface SuccessfulStepOptions {
@@ -65,6 +66,7 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    const manifestContent = readFileSync(result.outputTarget.manifestPath, "utf8");
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
     const successfulLines = reviewableFiles.map(
       (filePath) =>
@@ -84,6 +86,7 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
     );
     assert.equal(existsSync(result.outputTarget.summaryPath), true);
     assert.equal(existsSync(result.outputTarget.indexPath), true);
+    assert.equal(existsSync(result.outputTarget.manifestPath), true);
     assert.equal(
       summaryContent,
       [
@@ -130,6 +133,9 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
         ...expectedIndexFileNoteLines
       ].join("\n")
     );
+    assert.match(manifestContent, /"schemaVersion": 1/u);
+    assert.match(manifestContent, /"manifestPath": ".*manifest\.json"/u);
+    assert.match(manifestContent, /"successfulFileCount": 2/u);
   } finally {
     fixture.cleanup();
   }
@@ -279,6 +285,7 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
     });
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
+    const manifestContent = readFileSync(result.outputTarget.manifestPath, "utf8");
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
     const corruptedSuccessfulNote = readFileSync(plannedNotes[0].noteFilePath, "utf8");
 
@@ -303,6 +310,9 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
       summaryContent,
       new RegExp(`- \`${escapeRegExp(skippedFile)}\` — step5-validation-interrogation — deterministic validation failed`, "u")
     );
+    assert.match(manifestContent, /"skippedFileCount": 1/u);
+    assert.match(manifestContent, /"status": "skipped"/u);
+    assert.match(manifestContent, /"failedStepId": "step5-validation-interrogation"/u);
   } finally {
     fixture.cleanup();
   }
@@ -374,6 +384,31 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
         "- 無"
       ].join("\n")
     );
+    assert.equal(
+      readFileSync(result.outputTarget.manifestPath, "utf8"),
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          repoRoot: result.repoRoot,
+          baseRef: "main",
+          headRef: "feature-branch",
+          plannedFileCount: 0,
+          successfulFileCount: 0,
+          skippedFileCount: 0,
+          artifacts: {
+            basePath: result.outputTarget.basePath,
+            filesPath: result.outputTarget.filesPath,
+            summaryPath: result.outputTarget.summaryPath,
+            indexPath: result.outputTarget.indexPath,
+            skippedPath: result.outputTarget.skippedPath,
+            manifestPath: result.outputTarget.manifestPath
+          },
+          files: []
+        },
+        null,
+        2
+      )
+    );
   } finally {
     fixture.cleanup();
   }
@@ -417,6 +452,7 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    const manifestContent = readFileSync(result.outputTarget.manifestPath, "utf8");
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
     const expectedIndexFileNoteLines = plannedNotes.map(
       (plannedNote) =>
@@ -453,6 +489,8 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
         ...expectedIndexFileNoteLines
       ].join("\n")
     );
+    assert.match(manifestContent, /"successfulFileCount": 0/u);
+    assert.match(manifestContent, new RegExp(`"skippedFileCount": ${reviewableFiles.length}`, "u"));
   } finally {
     fixture.cleanup();
   }
@@ -498,6 +536,7 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
     });
 
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    const manifestContent = readFileSync(result.outputTarget.manifestPath, "utf8");
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
     const RISK_ORDER_MAP = { High: 0, Medium: 1, Low: 2, None: 3 } as const;
     const expectedFileNoteLines = [
@@ -552,6 +591,7 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
     );
     assert.doesNotMatch(indexContent, /CORRUPTED SUMMARY/u);
     assert.doesNotMatch(indexContent, /EXTRA DISK FILE/u);
+    assert.doesNotMatch(manifestContent, /CORRUPTED/u);
   } finally {
     fixture.cleanup();
   }
@@ -639,6 +679,9 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
         },
         publishReviewIndex(indexResult: ReviewIndexPublishResult) {
           outputCalls.push(["publishReviewIndex", indexResult.content]);
+        },
+        publishRunManifest(manifestResult: RunManifestPublishResult) {
+          outputCalls.push(["publishRunManifest", manifestResult.content]);
         }
       },
       stepRunner: {
@@ -713,6 +756,9 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
         },
         publishReviewIndex(indexResult: ReviewIndexPublishResult) {
           outputCalls.push(["publishReviewIndex", indexResult.content]);
+        },
+        publishRunManifest(manifestResult: RunManifestPublishResult) {
+          outputCalls.push(["publishRunManifest", manifestResult.content]);
         }
       },
       stepRunner: {
@@ -802,6 +848,9 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
         },
         publishReviewIndex(indexResult: ReviewIndexPublishResult) {
           outputCalls.push(["publishReviewIndex", indexResult.content]);
+        },
+        publishRunManifest(manifestResult: RunManifestPublishResult) {
+          outputCalls.push(["publishRunManifest", manifestResult.content]);
         }
       },
       stepRunner: createSuccessfulSummaryRunner(),
@@ -927,7 +976,53 @@ test("ReviewOrchestrator aborts when publishReviewIndex fails after summary.md i
   }
 });
 
-test("ReviewOrchestrator publishes summary.md only after per-file notes and skipped artifacts are finalized", async () => {
+test("ReviewOrchestrator aborts when publishRunManifest fails after summary.md and index.md are written and preserves completed artifacts", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+
+    const outputSink = new ManifestFailingOutputSink();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink,
+      stepRunner: createSuccessfulSummaryRunner(),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /manifest write failed/u
+    );
+
+    assert.equal(outputSink.publishRunSummaryCalls, 1);
+    assert.equal(outputSink.publishReviewIndexCalls, 1);
+    assert.equal(outputSink.publishRunManifestCalls, 1);
+    assert.equal(existsSync(outputSink.summaryPath ?? ""), true);
+    assert.equal(existsSync(outputSink.indexPath ?? ""), true);
+    assert.equal(existsSync(outputSink.manifestPath ?? ""), false);
+    assert.ok(outputSink.writtenFileReviews.length > 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator publishes summary.md, index.md, and manifest.json only after per-file notes and skipped artifacts are finalized", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -966,7 +1061,7 @@ test("ReviewOrchestrator publishes summary.md only after per-file notes and skip
       userContext: []
     });
 
-    assert.equal(outputSink.calls.at(-1), "publishReviewIndex");
+    assert.equal(outputSink.calls.at(-1), "publishRunManifest");
     assert.ok(outputSink.calls.includes("publishSkippedFile"));
     assert.ok(
       outputSink.calls.lastIndexOf("publishRunSummary") >
@@ -980,12 +1075,16 @@ test("ReviewOrchestrator publishes summary.md only after per-file notes and skip
       outputSink.calls.lastIndexOf("publishReviewIndex") >
         outputSink.calls.lastIndexOf("publishRunSummary")
     );
+    assert.ok(
+      outputSink.calls.lastIndexOf("publishRunManifest") >
+        outputSink.calls.lastIndexOf("publishReviewIndex")
+    );
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator publishes index.md only after publishRunSummary and does not rewrite finalized artifacts", async () => {
+test("ReviewOrchestrator publishes manifest.json only after publishReviewIndex and does not rewrite finalized artifacts", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -1017,7 +1116,7 @@ test("ReviewOrchestrator publishes index.md only after publishRunSummary and doe
       userContext: []
     });
 
-    assert.equal(outputSink.calls.at(-1), "publishReviewIndex");
+    assert.equal(outputSink.calls.at(-1), "publishRunManifest");
     assert.ok(
       outputSink.calls.lastIndexOf("publishReviewIndex") >
         outputSink.calls.lastIndexOf("publishRunSummary")
@@ -1030,8 +1129,13 @@ test("ReviewOrchestrator publishes index.md only after publishRunSummary and doe
       outputSink.calls.lastIndexOf("publishReviewIndex") >
         outputSink.calls.lastIndexOf("publishFileReview")
     );
-    assert.equal(outputSink.publishFileReviewCallsAfterIndex, 0);
-    assert.equal(outputSink.publishRunSummaryCallsAfterIndex, 0);
+    assert.ok(
+      outputSink.calls.lastIndexOf("publishRunManifest") >
+        outputSink.calls.lastIndexOf("publishReviewIndex")
+    );
+    assert.equal(outputSink.publishFileReviewCallsAfterManifest, 0);
+    assert.equal(outputSink.publishRunSummaryCallsAfterManifest, 0);
+    assert.equal(outputSink.publishReviewIndexCallsAfterManifest, 0);
   } finally {
     fixture.cleanup();
   }
@@ -1353,6 +1457,10 @@ class CorruptingSummaryOutputSink {
   publishReviewIndex(indexResult: ReviewIndexPublishResult) {
     writeFileSync(this.#outputTarget.indexPath, indexResult.content);
   }
+
+  publishRunManifest(manifestResult: RunManifestPublishResult) {
+    writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
+  }
 }
 
 class CorruptingIndexOutputSink {
@@ -1384,6 +1492,10 @@ class CorruptingIndexOutputSink {
 
   publishReviewIndex(indexResult: ReviewIndexPublishResult) {
     writeFileSync(this.#outputTarget.indexPath, indexResult.content);
+  }
+
+  publishRunManifest(manifestResult: RunManifestPublishResult) {
+    writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
   }
 }
 
@@ -1421,6 +1533,10 @@ class SummaryFailingOutputSink {
 
   publishReviewIndex(_indexResult: ReviewIndexPublishResult) {
     throw new Error("should not publish index after summary failure");
+  }
+
+  publishRunManifest(_manifestResult: RunManifestPublishResult) {
+    throw new Error("should not publish manifest after summary failure");
   }
 }
 
@@ -1463,6 +1579,59 @@ class IndexFailingOutputSink {
     this.publishReviewIndexCalls += 1;
     throw new Error("index write failed");
   }
+
+  publishRunManifest(_manifestResult: RunManifestPublishResult) {
+    throw new Error("should not publish manifest after index failure");
+  }
+}
+
+class ManifestFailingOutputSink {
+  #outputTarget!: OutputTarget;
+  writtenFileReviews: string[] = [];
+  publishRunSummaryCalls = 0;
+  publishReviewIndexCalls = 0;
+  publishRunManifestCalls = 0;
+  summaryPath?: string;
+  indexPath?: string;
+  manifestPath?: string;
+
+  initializeRun(outputTarget: OutputTarget) {
+    mkdirSync(outputTarget.basePath, { recursive: true });
+    mkdirSync(outputTarget.filesPath, { recursive: true });
+    writeFileSync(outputTarget.skippedPath, "");
+    this.#outputTarget = outputTarget;
+    this.summaryPath = outputTarget.summaryPath;
+    this.indexPath = outputTarget.indexPath;
+    this.manifestPath = outputTarget.manifestPath;
+  }
+
+  publishFileReview(fileResult: FileReviewPublishResult) {
+    mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
+    writeFileSync(fileResult.noteFilePath, fileResult.content);
+    this.writtenFileReviews.push(fileResult.noteFilePath);
+  }
+
+  publishSkippedFile(skipRecord: SkipRecord) {
+    appendFileSync(
+      this.#outputTarget.skippedPath,
+      `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
+    );
+  }
+
+  publishRunSummary(summaryResult: RunSummaryPublishResult) {
+    this.publishRunSummaryCalls += 1;
+    writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
+  }
+
+  publishReviewIndex(indexResult: ReviewIndexPublishResult) {
+    this.publishReviewIndexCalls += 1;
+    writeFileSync(this.#outputTarget.indexPath, indexResult.content);
+  }
+
+  publishRunManifest(_manifestResult: RunManifestPublishResult) {
+    this.publishRunManifestCalls += 1;
+    throw new Error("manifest write failed");
+  }
 }
 
 class RecordingOutputSink {
@@ -1500,14 +1669,20 @@ class RecordingOutputSink {
     writeFileSync(this.#outputTarget.indexPath, indexResult.content);
     this.calls.push("publishReviewIndex");
   }
+
+  publishRunManifest(manifestResult: RunManifestPublishResult) {
+    writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
+    this.calls.push("publishRunManifest");
+  }
 }
 
 class IndexRecordingOutputSink {
   #outputTarget!: OutputTarget;
   calls: string[] = [];
-  publishFileReviewCallsAfterIndex = 0;
-  publishRunSummaryCallsAfterIndex = 0;
-  #indexPublished = false;
+  publishFileReviewCallsAfterManifest = 0;
+  publishRunSummaryCallsAfterManifest = 0;
+  publishReviewIndexCallsAfterManifest = 0;
+  #manifestPublished = false;
 
   initializeRun(outputTarget: OutputTarget) {
     mkdirSync(outputTarget.basePath, { recursive: true });
@@ -1520,8 +1695,8 @@ class IndexRecordingOutputSink {
   publishFileReview(fileResult: FileReviewPublishResult) {
     mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
     writeFileSync(fileResult.noteFilePath, fileResult.content);
-    if (this.#indexPublished) {
-      this.publishFileReviewCallsAfterIndex += 1;
+    if (this.#manifestPublished) {
+      this.publishFileReviewCallsAfterManifest += 1;
     }
     this.calls.push("publishFileReview");
   }
@@ -1536,16 +1711,24 @@ class IndexRecordingOutputSink {
 
   publishRunSummary(summaryResult: RunSummaryPublishResult) {
     writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
-    if (this.#indexPublished) {
-      this.publishRunSummaryCallsAfterIndex += 1;
+    if (this.#manifestPublished) {
+      this.publishRunSummaryCallsAfterManifest += 1;
     }
     this.calls.push("publishRunSummary");
   }
 
   publishReviewIndex(indexResult: ReviewIndexPublishResult) {
+    if (this.#manifestPublished) {
+      this.publishReviewIndexCallsAfterManifest += 1;
+    }
     writeFileSync(this.#outputTarget.indexPath, indexResult.content);
-    this.#indexPublished = true;
     this.calls.push("publishReviewIndex");
+  }
+
+  publishRunManifest(manifestResult: RunManifestPublishResult) {
+    writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
+    this.#manifestPublished = true;
+    this.calls.push("publishRunManifest");
   }
 }
 
@@ -1561,6 +1744,7 @@ function createExpectedOutputTarget(outputBaseDir: string, sessionId: string) {
     filesPath: path.join(basePath, "files"),
     skippedPath: path.join(basePath, "skipped.md"),
     summaryPath: path.join(basePath, "summary.md"),
-    indexPath: path.join(basePath, "index.md")
+    indexPath: path.join(basePath, "index.md"),
+    manifestPath: path.join(basePath, "manifest.json")
   };
 }

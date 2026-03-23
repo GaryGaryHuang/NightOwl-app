@@ -43,6 +43,10 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
     assert.ok(skippedFile);
     assert.ok(fastSuccessfulFile);
     assert.ok(slowSuccessfulFile);
+    const confirmedSkippedFile = skippedFile!;
+    const confirmedFastSuccessfulFile = fastSuccessfulFile!;
+    const confirmedSlowSuccessfulFile = slowSuccessfulFile!;
+    const mediumOrSlowSuccessfulFile = (mediumSuccessfulFile ?? slowSuccessfulFile)!;
 
     const metrics = createConcurrencyMetrics(reviewableFiles.length);
     const outputSink = new BootstrapTrackingOutputSink();
@@ -53,12 +57,12 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
         metrics,
         getBootstrapPublishCount: () => outputSink.bootstrapPublishCount,
         completionDelayByFile: new Map([
-          [fastSuccessfulFile, 0],
-          [skippedFile, 5],
-          [mediumSuccessfulFile ?? slowSuccessfulFile, 35],
-          [slowSuccessfulFile, 60]
+          [confirmedFastSuccessfulFile, 0],
+          [confirmedSkippedFile, 5],
+          [mediumOrSlowSuccessfulFile, 35],
+          [confirmedSlowSuccessfulFile, 60]
         ]),
-        failedFile: skippedFile,
+        failedFile: confirmedSkippedFile,
         failedStepId: "step5-validation-interrogation",
         failureCause: "deterministic validation failed"
       }),
@@ -834,6 +838,12 @@ class BootstrapTrackingOutputSink {
   ) {
     this.#delegate.publishReviewIndex(indexResult);
   }
+
+  publishRunManifest(
+    manifestResult: Parameters<LocalWorkspaceProvider["publishRunManifest"]>[0]
+  ) {
+    this.#delegate.publishRunManifest(manifestResult);
+  }
 }
 
 class SummaryFailingOutputSink {
@@ -843,6 +853,7 @@ class SummaryFailingOutputSink {
     skippedPath: string;
     summaryPath: string;
     indexPath: string;
+    manifestPath: string;
   };
   writtenFileReviews: string[] = [];
   publishRunSummaryCalls = 0;
@@ -854,6 +865,7 @@ class SummaryFailingOutputSink {
     skippedPath: string;
     summaryPath: string;
     indexPath: string;
+    manifestPath: string;
   }) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
@@ -883,6 +895,10 @@ class SummaryFailingOutputSink {
   publishReviewIndex() {
     throw new Error("should not publish index after summary failure");
   }
+
+  publishRunManifest() {
+    throw new Error("should not publish manifest after summary failure");
+  }
 }
 
 class SingleFileSnapshotFailingOutputSink {
@@ -892,6 +908,7 @@ class SingleFileSnapshotFailingOutputSink {
     skippedPath: string;
     summaryPath: string;
     indexPath: string;
+    manifestPath: string;
   };
   readonly #failedNotePath: string;
   #failed = false;
@@ -906,6 +923,7 @@ class SingleFileSnapshotFailingOutputSink {
     skippedPath: string;
     summaryPath: string;
     indexPath: string;
+    manifestPath: string;
   }) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
@@ -945,6 +963,10 @@ class SingleFileSnapshotFailingOutputSink {
   publishReviewIndex(indexResult: { content: string }) {
     writeFileSync(this.#outputTarget!.indexPath, indexResult.content);
   }
+
+  publishRunManifest(manifestResult: { content: string }) {
+    writeFileSync(this.#outputTarget!.manifestPath, manifestResult.content);
+  }
 }
 
 class SharedTargetSnapshotFailingOutputSink {
@@ -954,6 +976,7 @@ class SharedTargetSnapshotFailingOutputSink {
     skippedPath: string;
     summaryPath: string;
     indexPath: string;
+    manifestPath: string;
   };
   readonly #failedNotePath: string;
   readonly #failedFile: string;
@@ -978,6 +1001,7 @@ class SharedTargetSnapshotFailingOutputSink {
     skippedPath: string;
     summaryPath: string;
     indexPath: string;
+    manifestPath: string;
   }) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
@@ -1034,6 +1058,10 @@ class SharedTargetSnapshotFailingOutputSink {
   publishReviewIndex(indexResult: { content: string }) {
     writeFileSync(this.#outputTarget!.indexPath, indexResult.content);
   }
+
+  publishRunManifest(manifestResult: { content: string }) {
+    writeFileSync(this.#outputTarget!.manifestPath, manifestResult.content);
+  }
 }
 
 class SkippedArtifactAbortOutputSink {
@@ -1043,6 +1071,7 @@ class SkippedArtifactAbortOutputSink {
     skippedPath: string;
     summaryPath: string;
     indexPath: string;
+    manifestPath: string;
   };
   readonly #failedSkippedFile: string;
   readonly #onFailedSkippedPublish?: () => void;
@@ -1063,6 +1092,7 @@ class SkippedArtifactAbortOutputSink {
     skippedPath: string;
     summaryPath: string;
     indexPath: string;
+    manifestPath: string;
   }) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
@@ -1101,6 +1131,10 @@ class SkippedArtifactAbortOutputSink {
 
   publishReviewIndex(indexResult: { content: string }) {
     writeFileSync(this.#outputTarget!.indexPath, indexResult.content);
+  }
+
+  publishRunManifest(manifestResult: { content: string }) {
+    writeFileSync(this.#outputTarget!.manifestPath, manifestResult.content);
   }
 }
 

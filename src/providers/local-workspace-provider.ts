@@ -13,6 +13,7 @@ import type {
   FileReviewResult,
   ReviewIndexResult,
   ReviewOutputSink,
+  RunManifestResult,
   RunSummaryResult,
   SuccessfulSnapshotFailureAssessment,
   SuccessfulSnapshotFailureInput,
@@ -100,6 +101,14 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
     }
 
     writeFileSync(this.#outputTarget.indexPath, indexResult.content);
+  }
+
+  publishRunManifest(manifestResult: RunManifestResult): void {
+    if (!this.#outputTarget) {
+      throw new Error("Run output target has not been initialized.");
+    }
+
+    writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
   }
 }
 

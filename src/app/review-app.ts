@@ -174,6 +174,7 @@ export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
     `Files: ${result.outputTarget.filesPath}`,
     `Summary: ${result.outputTarget.summaryPath}`,
     `Index: ${result.outputTarget.indexPath}`,
+    `Manifest: ${result.outputTarget.manifestPath}`,
     `Skipped: ${result.outputTarget.skippedPath}`,
     `Planned files: ${result.plannedFileCount}`,
     `Successful files: ${result.successfulFileCount}`,

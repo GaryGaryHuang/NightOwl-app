@@ -45,7 +45,8 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       }
     });
 
@@ -111,7 +112,8 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       }
     });
 
@@ -191,7 +193,8 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       }
     });
 
@@ -299,7 +302,8 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
           skippedRecords.push(skipRecord);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       }
     });
 
@@ -497,7 +501,8 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       }
     });
 
@@ -519,8 +524,9 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
     const preToolUse = reviewSessionConfig?.hooks?.onPreToolUse;
 
     assert.ok(preToolUse);
+    const confirmedPreToolUse = preToolUse!;
     assert.deepEqual(
-      await preToolUse(
+      await confirmedPreToolUse(
         {
           timestamp: Date.now(),
           cwd: fixture.repoDir,
@@ -600,7 +606,8 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       }
     });
 
@@ -622,8 +629,9 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
     const preToolUse = reviewSessionConfig?.hooks?.onPreToolUse;
 
     assert.ok(preToolUse);
+    const confirmedPreToolUse = preToolUse!;
     assert.deepEqual(
-      await preToolUse(
+      await confirmedPreToolUse(
         {
           timestamp: Date.now(),
           cwd: fixture.repoDir,
@@ -639,7 +647,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
       }
     );
     assert.deepEqual(
-      await preToolUse(
+      await confirmedPreToolUse(
         {
           timestamp: Date.now(),
           cwd: fixture.repoDir,
@@ -734,7 +742,8 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
           skippedRecords.push(skipRecord);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       }
     });
 
@@ -844,7 +853,8 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
           skippedRecords.push(skipRecord);
         },
         publishRunSummary() {},
-        publishReviewIndex() {}
+        publishReviewIndex() {},
+        publishRunManifest() {}
       }
     });
 
@@ -1073,7 +1083,8 @@ function createSignalTestApp(options: {
       publishFileReview() {},
       publishSkippedFile() {},
       publishRunSummary() {},
-      publishReviewIndex() {}
+      publishReviewIndex() {},
+      publishRunManifest() {}
     },
     changesetOverviewRunner: {
       async run() {
