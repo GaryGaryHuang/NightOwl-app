@@ -7,6 +7,7 @@ import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { Finding } from "../../src/core/file-review-context.ts";
+import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
@@ -51,11 +52,11 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
     const successfulLines = reviewableFiles.map(
       (filePath) =>
-        `- \`${filePath}\` — must=${countFindings(filePath, "must")}, nice=${countFindings(filePath, "nice")}`
+        `- [High] \`${filePath}\` — must=${countFindings(filePath, "must")}, nice=${countFindings(filePath, "nice")}`
     );
     const expectedIndexFileNoteLines = plannedNotes.map(
       (plannedNote) =>
-        `- [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
+        `- [High] [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
     );
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -79,6 +80,12 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
         "- Successful files: 2",
         "- Skipped files: 0",
         "- Final findings totals: must=2, nice=1",
+        "",
+        "## Risk Distribution",
+        "- Critical: 0",
+        "- High: 2",
+        "- Medium: 0",
+        "- Low: 0",
         "",
         "## Successful Files",
         ...successfulLines,
@@ -169,8 +176,9 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
     );
     assert.match(summaryContent, /- Skipped files: 1/u);
     assert.match(summaryContent, /- Final findings totals: must=2, nice=1/u);
-    assert.match(summaryContent, /- `src\/app.ts` — must=1, nice=1/u);
-    assert.match(summaryContent, /- `packages\/app\/index.ts` — must=1, nice=0/u);
+    assert.match(summaryContent, /## Risk Distribution/u);
+    assert.match(summaryContent, /- \[High\] `src\/app\.ts` — must=1, nice=1/u);
+    assert.match(summaryContent, /- \[High\] `packages\/app\/index\.ts` — must=1, nice=0/u);
     assert.match(
       summaryContent,
       new RegExp(`- \`${escapeRegExp(skippedFile)}\` — step5-validation-interrogation — deterministic validation failed`, "u")
@@ -233,6 +241,12 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
         "- Skipped files: 0",
         "- Final findings totals: must=0, nice=0",
         "",
+        "## Risk Distribution",
+        "- Critical: 0",
+        "- High: 0",
+        "- Medium: 0",
+        "- Low: 0",
+        "",
         "## Successful Files",
         "- 無",
         "",
@@ -286,7 +300,7 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
     const expectedIndexFileNoteLines = plannedNotes.map(
       (plannedNote) =>
-        `- [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
+        `- [Skipped] [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
     );
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -365,10 +379,28 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
 
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const expectedFileNoteLines = plannedNotes.map(
-      (plannedNote) =>
-        `- [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
-    );
+    const RISK_ORDER_MAP = { Critical: 0, High: 1, Medium: 2, Low: 3 } as const;
+    const expectedFileNoteLines = [
+      ...plannedNotes
+        .filter((n) => n.filePath !== skippedFile)
+        .sort((a, b) => {
+          const aRisk = deriveFileRiskLevel(buildFindingsForFile(a.filePath));
+          const bRisk = deriveFileRiskLevel(buildFindingsForFile(b.filePath));
+          if (aRisk !== bRisk) return RISK_ORDER_MAP[aRisk] - RISK_ORDER_MAP[bRisk];
+          return reviewableFiles.indexOf(a.filePath) - reviewableFiles.indexOf(b.filePath);
+        })
+        .map((n) => {
+          const risk = deriveFileRiskLevel(buildFindingsForFile(n.filePath));
+          const link = `./${path.relative(result.outputTarget.basePath, n.noteFilePath).replace(/\\/gu, "/")}`;
+          return `- [${risk}] [\`${n.filePath}\`](${link})`;
+        }),
+      ...plannedNotes
+        .filter((n) => n.filePath === skippedFile)
+        .map((n) => {
+          const link = `./${path.relative(result.outputTarget.basePath, n.noteFilePath).replace(/\\/gu, "/")}`;
+          return `- [Skipped] [\`${n.filePath}\`](${link})`;
+        })
+    ];
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
     assert.equal(result.successfulFileCount, reviewableFiles.length - 1);
@@ -880,6 +912,46 @@ test("ReviewOrchestrator publishes index.md only after publishRunSummary and doe
     );
     assert.equal(outputSink.publishFileReviewCallsAfterIndex, 0);
     assert.equal(outputSink.publishRunSummaryCallsAfterIndex, 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to ReviewIndexFinalizer and renders risk indicators in index.md", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for risk wiring verification");
+
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: createMixedResultRunner("README.md"),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+
+    assert.match(indexContent, /\[High\]/u);
+    assert.match(indexContent, /\[Skipped\]/u);
   } finally {
     fixture.cleanup();
   }

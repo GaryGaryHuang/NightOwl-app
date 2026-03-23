@@ -7,6 +7,7 @@ import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { Finding, FileReviewContext } from "../../src/core/file-review-context.ts";
+import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
@@ -84,10 +85,26 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const expectedIndexFileNoteLines = plannedNotes.map(
-      (plannedNote) =>
-        `- [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
-    );
+    const RISK_ORDER_MAP = { Critical: 0, High: 1, Medium: 2, Low: 3 } as const;
+    const successfulNotesRiskSorted = plannedNotes
+      .filter((n) => n.filePath !== skippedFile)
+      .sort((a, b) => {
+        const aRisk = deriveFileRiskLevel(buildFindingsForFile(a.filePath));
+        const bRisk = deriveFileRiskLevel(buildFindingsForFile(b.filePath));
+        if (aRisk !== bRisk) return RISK_ORDER_MAP[aRisk] - RISK_ORDER_MAP[bRisk];
+        return reviewableFiles.indexOf(a.filePath) - reviewableFiles.indexOf(b.filePath);
+      });
+    const skippedNotes = plannedNotes.filter((n) => n.filePath === skippedFile);
+    const expectedIndexFileNoteLines = [
+      ...successfulNotesRiskSorted.map((plannedNote) => {
+        const risk = deriveFileRiskLevel(buildFindingsForFile(plannedNote.filePath));
+        return `- [${risk}] [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`;
+      }),
+      ...skippedNotes.map(
+        (plannedNote) =>
+          `- [Skipped] [\`${plannedNote.filePath}\`](./${path.relative(result.outputTarget.basePath, plannedNote.noteFilePath).replace(/\\/gu, "/")})`
+      )
+    ];
 
     assert.equal(metrics.firstStepBootstrapCount, reviewableFiles.length);
     assert.equal(outputSink.bootstrapPublishCount, reviewableFiles.length);
@@ -97,11 +114,9 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
       metrics.completionOrder.indexOf(fastSuccessfulFile) <
         metrics.completionOrder.indexOf(slowSuccessfulFile)
     );
-    const successfulFilesInPlannedOrder = reviewableFiles.filter(
-      (filePath) => filePath !== skippedFile
-    );
+    const successfulFilesInRiskSortedOrder = successfulNotesRiskSorted.map((n) => n.filePath);
 
-    assertSuccessfulFileOrder(summaryContent, successfulFilesInPlannedOrder);
+    assertSuccessfulFileOrder(summaryContent, successfulFilesInRiskSortedOrder);
     assert.match(
       summaryContent,
       new RegExp(
@@ -1104,7 +1119,7 @@ function assertSuccessfulFileOrder(
   expectedFileOrder: string[]
 ): void {
   const positions = expectedFileOrder.map(
-    (filePath) => summaryContent.indexOf(`- \`${filePath}\``)
+    (filePath) => summaryContent.indexOf(`\`${filePath}\``)
   );
 
   for (const position of positions) {

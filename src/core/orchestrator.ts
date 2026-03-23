@@ -211,8 +211,8 @@ export class ReviewOrchestrator {
         baseRef: request.baseRef,
         headRef: request.headRef,
         plannedFileCount: plannedNoteFiles.length,
-        successfulFileCount: successfulFiles.length,
-        skippedFileCount: skippedFiles.length,
+        successfulFiles,
+        skippedFiles,
         outputTarget,
         plannedNotes: plannedNoteFiles
       })
