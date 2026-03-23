@@ -870,3 +870,536 @@ test("ReviewSessionFactory enforces mixed exact-host and wildcard web_fetch allo
     }
   );
 });
+
+// ── Denylist runtime semantics TDD (tasks 3.1–3.4) ────────────────────────────
+
+test("ReviewSessionFactory enforces deny-over-allow semantics when denylist is configured", async () => {
+  const receivedConfigs = [];
+  const factory = new ReviewSessionFactory({
+    clientManager: {
+      getClient() {
+        return {
+          async createSession(config) {
+            receivedConfigs.push(config);
+            return {
+              async sendAndWait() {
+                return { type: "assistant.message", data: { content: "ok" } };
+              },
+              async disconnect() {}
+            };
+          }
+        };
+      }
+    },
+    webFetchAllowedHosts: ["*.example.com"],
+    webFetchDeniedHosts: ["internal.example.com"]
+  });
+
+  await factory.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    systemMessage: "system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+
+  const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+  // exact-host deny blocks allowlisted host
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://internal.example.com/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  // non-denied host under same wildcard is still allowed
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+});
+
+test("ReviewSessionFactory enforces wildcard denylist blocking and bare-domain exclusion", async () => {
+  const receivedConfigs = [];
+  const factory = new ReviewSessionFactory({
+    clientManager: {
+      getClient() {
+        return {
+          async createSession(config) {
+            receivedConfigs.push(config);
+            return {
+              async sendAndWait() {
+                return { type: "assistant.message", data: { content: "ok" } };
+              },
+              async disconnect() {}
+            };
+          }
+        };
+      }
+    },
+    webFetchAllowedHosts: ["*.example.com"],
+    webFetchDeniedHosts: ["*.internal.example.com"]
+  });
+
+  await factory.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    systemMessage: "system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+
+  const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+  // wildcard deny blocks matching subdomain
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://api.internal.example.com/v2" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  // wildcard deny blocks deep subdomain
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://deep.api.internal.example.com/v2" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  // wildcard deny does NOT block bare domain of denylist base
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://internal.example.com/page" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+});
+
+test("ReviewSessionFactory enforces denylist comparison rules: case-insensitive, trailing-dot, port exclusion", async () => {
+  const receivedConfigs = [];
+  const factory = new ReviewSessionFactory({
+    clientManager: {
+      getClient() {
+        return {
+          async createSession(config) {
+            receivedConfigs.push(config);
+            return {
+              async sendAndWait() {
+                return { type: "assistant.message", data: { content: "ok" } };
+              },
+              async disconnect() {}
+            };
+          }
+        };
+      }
+    },
+    webFetchAllowedHosts: ["*.example.com"],
+    webFetchDeniedHosts: ["internal.example.com"]
+  });
+
+  await factory.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    systemMessage: "system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+
+  const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+  // case-insensitive
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://INTERNAL.example.com/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  // trailing-dot canonicalization
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://internal.example.com./admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  // port exclusion from comparison
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://internal.example.com:8443/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+});
+
+test("ReviewSessionFactory enforces denylist-only (no allowlist): denied host blocked, non-denied public host allowed", async () => {
+  const receivedConfigs = [];
+  const factory = new ReviewSessionFactory({
+    clientManager: {
+      getClient() {
+        return {
+          async createSession(config) {
+            receivedConfigs.push(config);
+            return {
+              async sendAndWait() {
+                return { type: "assistant.message", data: { content: "ok" } };
+              },
+              async disconnect() {}
+            };
+          }
+        };
+      }
+    },
+    webFetchDeniedHosts: ["evil.com"]
+  });
+
+  await factory.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    systemMessage: "system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+
+  const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+  // denied host blocked (baseline space)
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://evil.com/payload" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  // wildcard denylist-only blocks matching subdomain
+  const receivedConfigs2 = [];
+  const factory2 = new ReviewSessionFactory({
+    clientManager: {
+      getClient() {
+        return {
+          async createSession(config) {
+            receivedConfigs2.push(config);
+            return {
+              async sendAndWait() {
+                return { type: "assistant.message", data: { content: "ok" } };
+              },
+              async disconnect() {}
+            };
+          }
+        };
+      }
+    },
+    webFetchDeniedHosts: ["*.evil.com"]
+  });
+
+  await factory2.createSession({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    systemMessage: "system prompt",
+    workingDirectory: "/workspace/repo"
+  });
+
+  const preToolUse2 = receivedConfigs2[0].hooks.onPreToolUse;
+
+  assert.deepEqual(
+    await preToolUse2(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://sub.evil.com/payload" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  // wildcard denylist does NOT block bare domain of denylist base
+  assert.deepEqual(
+    await preToolUse2(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://evil.com/payload" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+
+  // non-denied public host still allowed (baseline passthrough)
+  assert.deepEqual(
+    await preToolUse(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+});
+
+test("ReviewSessionFactory: empty denylist blocks nothing; mixed exact+wildcard deny via OR logic; allow+deny same host is denied", async () => {
+  const makeFactory = (opts) =>
+    new ReviewSessionFactory({
+      clientManager: {
+        getClient() {
+          return {
+            async createSession(config) {
+              return {
+                async sendAndWait() {
+                  return { type: "assistant.message", data: { content: "ok" } };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      ...opts
+    });
+
+  // empty denylist: no additional blocking
+  {
+    const receivedConfigs = [];
+    const factory = new ReviewSessionFactory({
+      clientManager: {
+        getClient() {
+          return {
+            async createSession(config) {
+              receivedConfigs.push(config);
+              return {
+                async sendAndWait() {
+                  return { type: "assistant.message", data: { content: "ok" } };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      webFetchAllowedHosts: ["*.example.com"],
+      webFetchDeniedHosts: []
+    });
+
+    await factory.createSession({
+      model: "gpt-5.4-mini",
+      outputBaseDir: "/workspace/repo",
+      repoRoot: "/workspace/repo",
+      systemMessage: "system prompt",
+      workingDirectory: "/workspace/repo"
+    });
+
+    const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+    assert.deepEqual(
+      await preToolUse(
+        {
+          timestamp: Date.now(),
+          cwd: "/workspace/repo",
+          toolName: "web_fetch",
+          toolArgs: { url: "https://internal.example.com/admin" }
+        },
+        { sessionId: "session-1" }
+      ),
+      undefined
+    );
+  }
+
+  // mixed exact + wildcard denylist deny via OR logic
+  {
+    const receivedConfigs = [];
+    const factory = new ReviewSessionFactory({
+      clientManager: {
+        getClient() {
+          return {
+            async createSession(config) {
+              receivedConfigs.push(config);
+              return {
+                async sendAndWait() {
+                  return { type: "assistant.message", data: { content: "ok" } };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      webFetchAllowedHosts: ["*.example.com", "evil.org"],
+      webFetchDeniedHosts: ["internal.example.com", "*.secret.example.com"]
+    });
+
+    await factory.createSession({
+      model: "gpt-5.4-mini",
+      outputBaseDir: "/workspace/repo",
+      repoRoot: "/workspace/repo",
+      systemMessage: "system prompt",
+      workingDirectory: "/workspace/repo"
+    });
+
+    const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+    assert.deepEqual(
+      await preToolUse(
+        {
+          timestamp: Date.now(),
+          cwd: "/workspace/repo",
+          toolName: "web_fetch",
+          toolArgs: { url: "https://api.secret.example.com/data" }
+        },
+        { sessionId: "session-1" }
+      ),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Review sessions only allow web_fetch for configured public http(s) hosts."
+      }
+    );
+  }
+
+  // host in both allow and deny is denied
+  {
+    const receivedConfigs = [];
+    const factory = new ReviewSessionFactory({
+      clientManager: {
+        getClient() {
+          return {
+            async createSession(config) {
+              receivedConfigs.push(config);
+              return {
+                async sendAndWait() {
+                  return { type: "assistant.message", data: { content: "ok" } };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      webFetchAllowedHosts: ["internal.example.com"],
+      webFetchDeniedHosts: ["internal.example.com"]
+    });
+
+    await factory.createSession({
+      model: "gpt-5.4-mini",
+      outputBaseDir: "/workspace/repo",
+      repoRoot: "/workspace/repo",
+      systemMessage: "system prompt",
+      workingDirectory: "/workspace/repo"
+    });
+
+    const preToolUse = receivedConfigs[0].hooks.onPreToolUse;
+
+    assert.deepEqual(
+      await preToolUse(
+        {
+          timestamp: Date.now(),
+          cwd: "/workspace/repo",
+          toolName: "web_fetch",
+          toolArgs: { url: "https://internal.example.com/admin" }
+        },
+        { sessionId: "session-1" }
+      ),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Review sessions only allow web_fetch for configured public http(s) hosts."
+      }
+    );
+  }
+});
