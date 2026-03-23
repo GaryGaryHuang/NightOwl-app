@@ -4,30 +4,54 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "./review-path-resolver.ts";
+import { deriveFileRiskLevel, type RiskLevel } from "./risk-level.ts";
+import type {
+  SkippedFileOutcome,
+  SuccessfulFileOutcome
+} from "./run-summary-finalizer.ts";
+
+const RISK_ORDER: Record<RiskLevel, number> = {
+  Critical: 0,
+  High: 1,
+  Medium: 2,
+  Low: 3
+};
 
 export interface ReviewIndexRenderInput {
   repoRoot: string;
   baseRef: string;
   headRef: string;
   plannedFileCount: number;
-  successfulFileCount: number;
-  skippedFileCount: number;
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
+  successfulFiles: SuccessfulFileOutcome[];
+  skippedFiles: SkippedFileOutcome[];
 }
 
 export class ReviewIndexFinalizer {
   render(input: ReviewIndexRenderInput): string {
+    const sortedNotes = [...input.plannedNotes].sort((a, b) => {
+      const aKey = getSortKey(a.filePath, input.successfulFiles);
+      const bKey = getSortKey(b.filePath, input.successfulFiles);
+      return aKey - bKey;
+    });
+
     const fileNoteLines =
-      input.plannedNotes.length === 0
+      sortedNotes.length === 0
         ? ["- 無"]
-        : input.plannedNotes.map(
-            (plannedNote) =>
-              `- [\`${plannedNote.filePath}\`](${toRelativeLink(
-                input.outputTarget.basePath,
-                plannedNote.noteFilePath
-              )})`
-          );
+        : sortedNotes.map((plannedNote) => {
+            const successfulFile = input.successfulFiles.find(
+              (f) => f.filePath === plannedNote.filePath
+            );
+            const prefix = successfulFile
+              ? `[${deriveFileRiskLevel(successfulFile.findings)}]`
+              : "[Skipped]";
+            const link = toRelativeLink(
+              input.outputTarget.basePath,
+              plannedNote.noteFilePath
+            );
+            return `- ${prefix} [\`${plannedNote.filePath}\`](${link})`;
+          });
 
     return [
       "# Review Index",
@@ -36,8 +60,8 @@ export class ReviewIndexFinalizer {
       `- Base ref: \`${input.baseRef}\``,
       `- Head ref: \`${input.headRef}\``,
       `- Planned files: ${input.plannedFileCount}`,
-      `- Successful files: ${input.successfulFileCount}`,
-      `- Skipped files: ${input.skippedFileCount}`,
+      `- Successful files: ${input.successfulFiles.length}`,
+      `- Skipped files: ${input.skippedFiles.length}`,
       "",
       "## Run Artifacts",
       `- [summary.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.summaryPath)})`,
@@ -47,6 +71,17 @@ export class ReviewIndexFinalizer {
       ...fileNoteLines
     ].join("\n");
   }
+}
+
+function getSortKey(
+  filePath: string,
+  successfulFiles: SuccessfulFileOutcome[]
+): number {
+  const successfulFile = successfulFiles.find((f) => f.filePath === filePath);
+  if (successfulFile) {
+    return RISK_ORDER[deriveFileRiskLevel(successfulFile.findings)];
+  }
+  return 4; // Skipped — always last
 }
 
 function toRelativeLink(basePath: string, targetPath: string): string {
