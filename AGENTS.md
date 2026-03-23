@@ -30,6 +30,7 @@ The app currently implements:
 - risk-level derivation (`deriveFileRiskLevel`) for the four-tier `Critical`/`High`/`Medium`/`Low` heuristic, exported from `src/core/risk-level.ts`
 - enhanced per-file findings rendering with must-fix-before-nice-to-have grouping and summary statistics line
 - completed-run artifact surface foundation for CLI success output
+- SIGINT/SIGTERM graceful shutdown foundation: signal handler registration in app lifecycle layer, `AbortController`/`AbortSignal` propagation to orchestrator, `ReviewRunInterruptedError` distinct error type, worker safe-boundary abort semantics reusing `runAbortState`, and CLI exit code 130 with distinct interrupt message
 - Minimal `StepRunner` foundation for section-step execution
 - Minimal `StructuredOutputValidator` foundation for findings JSON validation and confidence filtering
 - `JudgeSessionFactory` and `JudgeService` for section-step completion checks
@@ -48,7 +49,7 @@ The app does **not** yet implement:
 - broader external-knowledge tooling beyond the current built-in Context7 plus validated local custom MCP plus exact-host web_fetch host-policy rollout
 - richer `web_fetch` / URL permission-policy integration beyond the current exact-host allowlist foundation
 - remote MCP support
-- rollback / retry / recovery behavior beyond the current shared-output abort coordination foundation
+- rollback / retry / recovery behavior beyond the current graceful shutdown foundation and shared-output abort coordination foundation (deferred: `forceStop()` timeout fallback, per-signal exit code differentiation, run resume/restart from checkpoint)
 - full final review note rendering pipeline
 - richer CLI / export surface beyond the current deterministic `outputTarget` artifact surface plus completed-run counts foundation
 
