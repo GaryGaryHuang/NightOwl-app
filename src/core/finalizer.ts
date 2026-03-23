@@ -66,12 +66,17 @@ function renderFindingsSection(
   }
 
   if (findings.length === 0) {
-    return ["## Findings", "- 無"].join("\n");
+    return ["## Findings", "無 findings.", "- 無"].join("\n");
   }
+
+  const mustFindings = findings.filter((f) => f.type === "must");
+  const niceFindings = findings.filter((f) => f.type === "nice");
+  const statsLine = `${mustFindings.length} must-fix issue(s), ${niceFindings.length} nice-to-have suggestion(s).`;
 
   return [
     "## Findings",
-    ...findings.flatMap((finding) => [
+    statsLine,
+    ...[...mustFindings, ...niceFindings].flatMap((finding) => [
       `- [${finding.type}] ${finding.title}`,
       `  - Context：${finding.context}`,
       `  - Deviation：${finding.deviation}`,

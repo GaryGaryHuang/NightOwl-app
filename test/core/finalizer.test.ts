@@ -478,7 +478,7 @@ test("ReviewNoteFinalizer renders empty Findings as `- 無`", () => {
   const rendered = finalizer.render(context);
 
   assert.match(rendered, /^## Findings/mu);
-  assert.match(rendered, /## Findings\n- 無/u);
+  assert.match(rendered, /## Findings\n無 findings\.\n- 無/u);
   assert.doesNotMatch(rendered, /confidence/u);
 });
 
@@ -647,7 +647,7 @@ test("ReviewNoteFinalizer preserves empty Findings before Summary", () => {
 
   const rendered = finalizer.render(context);
 
-  assert.match(rendered, /## Findings\n- 無[\s\S]*## Summary/u);
+  assert.match(rendered, /## Findings\n無 findings\.\n- 無[\s\S]*## Summary/u);
   assert.equal((rendered.match(/^## Summary/mgu) ?? []).length, 1);
 });
 
@@ -758,4 +758,157 @@ test("ReviewNoteFinalizer renders warning block on top of Step 6 findings snapsh
     rendered,
     /## Findings[\s\S]*> \[!WARNING\] Review Interrupted[\s\S]*step7-summary/u
   );
+});
+
+test("ReviewNoteFinalizer prepends statistics line before grouped findings", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "nice",
+        title: "A",
+        context: "ctx",
+        deviation: "dev",
+        impact: "low",
+        suggestion: "optional",
+        confidence: 85
+      },
+      {
+        type: "must",
+        title: "B",
+        context: "ctx",
+        deviation: "dev",
+        impact: "high",
+        suggestion: "fix it",
+        confidence: 88
+      },
+      {
+        type: "nice",
+        title: "C",
+        context: "ctx",
+        deviation: "dev",
+        impact: "low",
+        suggestion: "optional too",
+        confidence: 82
+      }
+    ]
+  });
+
+  const rendered = finalizer.render(context);
+
+  assert.match(rendered, /^## Findings$/mu);
+  assert.match(rendered, /1 must-fix issue\(s\), 2 nice-to-have suggestion\(s\)\./u);
+  const findingsIdx = rendered.indexOf("## Findings");
+  const statsIdx = rendered.indexOf("1 must-fix issue(s), 2 nice-to-have suggestion(s).");
+  const bIdx = rendered.indexOf("- [must] B");
+  const aIdx = rendered.indexOf("- [nice] A");
+  const cIdx = rendered.indexOf("- [nice] C");
+
+  assert.ok(findingsIdx < statsIdx, "statistics line should come after ## Findings heading");
+  assert.ok(statsIdx < bIdx, "statistics line should come before first finding");
+  assert.ok(bIdx < aIdx, "must finding B should come before nice finding A");
+  assert.ok(aIdx < cIdx, "nice finding A should come before nice finding C");
+});
+
+test("ReviewNoteFinalizer groups all must findings before all nice findings preserving intra-group order", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "X",
+        context: "ctx",
+        deviation: "dev",
+        impact: "high",
+        suggestion: "fix",
+        confidence: 90
+      },
+      {
+        type: "must",
+        title: "Y",
+        context: "ctx",
+        deviation: "dev",
+        impact: "high",
+        suggestion: "fix",
+        confidence: 88
+      }
+    ]
+  });
+
+  const rendered = finalizer.render(context);
+
+  assert.match(rendered, /2 must-fix issue\(s\), 0 nice-to-have suggestion\(s\)\./u);
+  assert.ok(rendered.indexOf("- [must] X") < rendered.indexOf("- [must] Y"));
+});
+
+test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must prefix", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "nice",
+        title: "P",
+        context: "ctx",
+        deviation: "dev",
+        impact: "low",
+        suggestion: "optional",
+        confidence: 85
+      },
+      {
+        type: "nice",
+        title: "Q",
+        context: "ctx",
+        deviation: "dev",
+        impact: "low",
+        suggestion: "optional",
+        confidence: 83
+      }
+    ]
+  });
+
+  const rendered = finalizer.render(context);
+
+  assert.match(rendered, /0 must-fix issue\(s\), 2 nice-to-have suggestion\(s\)\./u);
+  assert.ok(rendered.indexOf("- [nice] P") < rendered.indexOf("- [nice] Q"));
+});
+
+test("ReviewNoteFinalizer renders empty findings with 無 findings. before - 無", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.updateStructuredState({ findings: [] });
+
+  const rendered = finalizer.render(context);
+
+  assert.match(rendered, /## Findings\n無 findings\.\n- 無/u);
 });

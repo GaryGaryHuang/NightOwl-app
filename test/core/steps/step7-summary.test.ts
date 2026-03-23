@@ -150,6 +150,7 @@ test("Step7SummaryStep prepares the exact Step 7 prompt contract from current re
       "  - W3: 觸發條件：多次重複呼叫；預期正確行為：應保持可預測結果；待驗證風險/不確定性：狀態是否會累積偏移；與本次改動的關聯：Step 3 已收斂 repo 假設",
       "",
       "## Findings",
+      "1 must-fix issue(s), 0 nice-to-have suggestion(s).",
       "- [must] 最終問題",
       "  - Context：具體情境",
       "  - Deviation：預期與實際有落差",
@@ -176,7 +177,7 @@ test("Step7SummaryStep carries explicit empty findings state in current review",
 
   const plan = step.prepare(context);
 
-  assert.match(plan.prompt.userMessage, /<current_review>[\s\S]*## Findings\n- 無/u);
+  assert.match(plan.prompt.userMessage, /<current_review>[\s\S]*## Findings\n無 findings\.\n- 無/u);
   assert.doesNotMatch(plan.prompt.userMessage, /Review not yet generated/u);
 });
 

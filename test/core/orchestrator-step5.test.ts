@@ -373,7 +373,7 @@ test("ReviewOrchestrator renders `## Findings` with `- 無` when Step 5 returns 
       const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
 
       assert.match(noteContent, /^## Findings/mu);
-      assert.match(noteContent, /## Findings\n- 無/u);
+      assert.match(noteContent, /## Findings\n無 findings\.\n- 無/u);
       assert.doesNotMatch(noteContent, /confidence/u);
     }
   } finally {
@@ -472,7 +472,7 @@ test("ReviewOrchestrator treats confidence-filtered empty findings as a successf
       const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
 
       assert.match(noteContent, /^## Findings/mu);
-      assert.match(noteContent, /## Findings\n- 無/u);
+      assert.match(noteContent, /## Findings\n無 findings\.\n- 無/u);
       assert.doesNotMatch(noteContent, /低信心 must|低信心 nice/u);
     }
   } finally {
