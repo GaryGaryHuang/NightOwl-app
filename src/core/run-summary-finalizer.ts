@@ -1,4 +1,5 @@
 import type { Finding } from "./file-review-context.ts";
+import { deriveFileRiskLevel, type RiskLevel } from "./risk-level.ts";
 
 export interface SuccessfulFileOutcome {
   filePath: string;
@@ -20,6 +21,13 @@ export interface RunSummaryRenderInput {
   skippedFiles: SkippedFileOutcome[];
 }
 
+const RISK_ORDER: Record<RiskLevel, number> = {
+  Critical: 0,
+  High: 1,
+  Medium: 2,
+  Low: 3
+};
+
 export class RunSummaryFinalizer {
   render(input: RunSummaryRenderInput): string {
     const totalMust = input.successfulFiles.reduce(
@@ -35,10 +43,30 @@ export class RunSummaryFinalizer {
       0
     );
 
+    const criticalCount = input.successfulFiles.filter(
+      (f) => deriveFileRiskLevel(f.findings) === "Critical"
+    ).length;
+    const highCount = input.successfulFiles.filter(
+      (f) => deriveFileRiskLevel(f.findings) === "High"
+    ).length;
+    const mediumCount = input.successfulFiles.filter(
+      (f) => deriveFileRiskLevel(f.findings) === "Medium"
+    ).length;
+    const lowCount = input.successfulFiles.filter(
+      (f) => deriveFileRiskLevel(f.findings) === "Low"
+    ).length;
+
+    const sortedSuccessfulFiles = [...input.successfulFiles].sort(
+      (a, b) =>
+        RISK_ORDER[deriveFileRiskLevel(a.findings)] -
+        RISK_ORDER[deriveFileRiskLevel(b.findings)]
+    );
+
     const successfulLines =
-      input.successfulFiles.length === 0
+      sortedSuccessfulFiles.length === 0
         ? ["- 無"]
-        : input.successfulFiles.map((file) => {
+        : sortedSuccessfulFiles.map((file) => {
+            const risk = deriveFileRiskLevel(file.findings);
             const mustCount = file.findings.filter(
               (finding) => finding.type === "must"
             ).length;
@@ -46,7 +74,7 @@ export class RunSummaryFinalizer {
               (finding) => finding.type === "nice"
             ).length;
 
-            return `- \`${file.filePath}\` — must=${mustCount}, nice=${niceCount}`;
+            return `- [${risk}] \`${file.filePath}\` — must=${mustCount}, nice=${niceCount}`;
           });
     const skippedLines =
       input.skippedFiles.length === 0
@@ -65,6 +93,12 @@ export class RunSummaryFinalizer {
       `- Successful files: ${input.successfulFiles.length}`,
       `- Skipped files: ${input.skippedFiles.length}`,
       `- Final findings totals: must=${totalMust}, nice=${totalNice}`,
+      "",
+      "## Risk Distribution",
+      `- Critical: ${criticalCount}`,
+      `- High: ${highCount}`,
+      `- Medium: ${mediumCount}`,
+      `- Low: ${lowCount}`,
       "",
       "## Successful Files",
       ...successfulLines,
