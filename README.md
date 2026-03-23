@@ -127,14 +127,25 @@ Step 7 in the current repository is intentionally **per-file summary only**: it 
 
 ## Development
 
+Prerequisites:
+
+- Node.js >= 22.7.0 (the project uses `node:module` `stripTypeScriptTypes` for build and Node's native TypeScript execution for development)
+
 Useful commands:
 
 ```bash
 npm install
 npm run build
 npm test
+npm run typecheck
 npm pack
 npm link
+```
+
+Running the CLI locally (no build step required):
+
+```bash
+npm run review -- main feature-branch
 ```
 
 Installation:
@@ -159,8 +170,9 @@ Implementation notes:
 - Published CLI artifacts live under `dist/` in JavaScript and are what the installed `review` command executes.
 - The formal CLI install contract is based on a published package or package artifact; source checkouts are for local development and should use `npm link`.
 - A valid `review` run now depends on a working GitHub Copilot CLI environment and login state, because Step 0, Step 1, Step 2, Step 3, Step 4, Step 5, Step 6, and Step 7 are all executed before the command completes.
-- The current source-install flow regenerates `dist/`, so both local development and installation from this repo currently require Node 25+.
-- If the project later ships prebuilt artifacts or adopts a different build toolchain, the minimum runtime version can be revisited separately from the source build requirement.
+- The development toolchain intentionally uses Node's native TypeScript support: `node src/bin/review.ts` for development execution, and `node:module` `stripTypeScriptTypes` for the build step. This keeps the toolchain zero-external-dependency.
+- Type checking is available via `npm run typecheck` (runs `tsc --noEmit`). This is separate from the build step and does not produce output files.
+- The `prepack` lifecycle script ensures `dist/` is always rebuilt before `npm pack` or `npm publish`.
 
 ## Planned Experience
 

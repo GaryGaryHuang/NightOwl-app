@@ -54,6 +54,10 @@ Do not assume these missing capabilities already exist.
 
 ## Install And Run Contract
 
+Prerequisites:
+
+- Node.js >= 22.7.0 (the project uses `node:module` `stripTypeScriptTypes` for build and Node's native TypeScript execution for development)
+
 Formal CLI installation:
 
 - Use a published package or package artifact
