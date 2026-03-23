@@ -21,6 +21,12 @@ type FileReviewPublishResult = Parameters<ReviewOutputSink["publishFileReview"]>
 type SkipRecord = Parameters<ReviewOutputSink["publishSkippedFile"]>[0];
 type RunSummaryPublishResult = Parameters<ReviewOutputSink["publishRunSummary"]>[0];
 type ReviewIndexPublishResult = Parameters<ReviewOutputSink["publishReviewIndex"]>[0];
+type Step7NarrativeRiskLevel = "High" | "Medium" | "Low" | "None";
+
+interface SuccessfulStepOptions {
+  findingsByFile?: ReadonlyMap<string, Finding[]>;
+  narrativeRiskByFile?: ReadonlyMap<string, Step7NarrativeRiskLevel>;
+}
 
 test("ReviewOrchestrator publishes deterministic summary.md for an all-successful run", async () => {
   const fixture = createReviewRepoFixture();
@@ -92,10 +98,10 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
         "- Final findings totals: must=2, nice=1",
         "",
         "## Risk Distribution",
-        "- Critical: 0",
         "- High: 2",
         "- Medium: 0",
         "- Low: 0",
+        "- None: 0",
         "",
         "## Successful Files",
         ...successfulLines,
@@ -124,6 +130,110 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
         ...expectedIndexFileNoteLines
       ].join("\n")
     );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator derives High, Medium, Low, and None from formal findings and ignores stale Step 7 narrative risk text", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.writeFile("docs/notes.md", "- additional notes\n");
+    fixture.commitAll("add files for derived risk coverage");
+
+    const sourceProvider = new LocalGitProvider();
+    const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
+    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+      repoRoot,
+      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    );
+    const findingsByFile = new Map<string, Finding[]>([
+      [
+        "src/app.ts",
+        [createFinding("must", "threshold must", 90)]
+      ],
+      [
+        "packages/app/index.ts",
+        [createFinding("must", "below-threshold must", 89)]
+      ],
+      [
+        "README.md",
+        [createFinding("nice", "nice-only finding", 80)]
+      ],
+      ["docs/notes.md", []]
+    ]);
+    const narrativeRiskByFile = new Map<string, Step7NarrativeRiskLevel>(
+      reviewableFiles.map((filePath) => [filePath, "Low"])
+    );
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider,
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: createSuccessfulSummaryRunner({
+        findingsByFile,
+        narrativeRiskByFile
+      }),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
+    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const noneNotePath = plannedNotes.find(
+      (plannedNote) => plannedNote.filePath === "docs/notes.md"
+    )?.noteFilePath;
+    const expectedRiskCounts = reviewableFiles.reduce<Record<string, number>>(
+      (counts, filePath) => {
+        const risk = deriveFileRiskLevel(
+          findingsByFile.get(filePath) ?? buildFindingsForFile(filePath)
+        );
+        counts[risk] += 1;
+        return counts;
+      },
+      { High: 0, Medium: 0, Low: 0, None: 0 }
+    );
+
+    assert.ok(reviewableFiles.includes("src/app.ts"));
+    assert.ok(reviewableFiles.includes("packages/app/index.ts"));
+    assert.ok(reviewableFiles.includes("README.md"));
+    assert.ok(reviewableFiles.includes("docs/notes.md"));
+    assert.ok(noneNotePath);
+    assert.match(readFileSync(noneNotePath, "utf8"), /- 整體風險等級：Low/u);
+    assert.match(summaryContent, new RegExp(`- High: ${expectedRiskCounts.High}`, "u"));
+    assert.match(summaryContent, new RegExp(`- Medium: ${expectedRiskCounts.Medium}`, "u"));
+    assert.match(summaryContent, new RegExp(`- Low: ${expectedRiskCounts.Low}`, "u"));
+    assert.match(summaryContent, new RegExp(`- None: ${expectedRiskCounts.None}`, "u"));
+    assert.match(summaryContent, /- \[High\] `src\/app\.ts` — must=1, nice=0/u);
+    assert.match(
+      summaryContent,
+      /- \[Medium\] `packages\/app\/index\.ts` — must=1, nice=0/u
+    );
+    assert.match(summaryContent, /- \[Low\] `README\.md` — must=0, nice=1/u);
+    assert.match(summaryContent, /- \[None\] `docs\/notes\.md` — must=0, nice=0/u);
+    assert.match(indexContent, /- \[High\] \[`src\/app\.ts`\]/u);
+    assert.match(indexContent, /- \[Medium\] \[`packages\/app\/index\.ts`\]/u);
+    assert.match(indexContent, /- \[Low\] \[`README\.md`\]/u);
+    assert.match(indexContent, /- \[None\] \[`docs\/notes\.md`\]/u);
+    assert.doesNotMatch(summaryContent, /\[Critical\]/u);
+    assert.doesNotMatch(indexContent, /\[Critical\]/u);
   } finally {
     fixture.cleanup();
   }
@@ -252,10 +362,10 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
         "- Final findings totals: must=0, nice=0",
         "",
         "## Risk Distribution",
-        "- Critical: 0",
         "- High: 0",
         "- Medium: 0",
         "- Low: 0",
+        "- None: 0",
         "",
         "## Successful Files",
         "- 無",
@@ -389,7 +499,7 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
 
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const RISK_ORDER_MAP = { Critical: 0, High: 1, Medium: 2, Low: 3 } as const;
+    const RISK_ORDER_MAP = { High: 0, Medium: 1, Low: 2, None: 3 } as const;
     const expectedFileNoteLines = [
       ...plannedNotes
         .filter((n) => n.filePath !== skippedFile)
@@ -967,15 +1077,20 @@ test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to Review
   }
 });
 
-function createSuccessfulSummaryRunner(): Pick<StepRunner, "run"> {
+function createSuccessfulSummaryRunner(
+  options: SuccessfulStepOptions = {}
+): Pick<StepRunner, "run"> {
   return {
     async run({ context, step }: RunStepInput): Promise<StepResult> {
-      return buildSuccessfulStepResult(step.stepId, context.filePath);
+      return buildSuccessfulStepResult(step.stepId, context.filePath, options);
     }
   };
 }
 
-function createMixedResultRunner(skippedFile: string): Pick<StepRunner, "run"> {
+function createMixedResultRunner(
+  skippedFile: string,
+  options: SuccessfulStepOptions = {}
+): Pick<StepRunner, "run"> {
   return {
     async run({ context, step }: RunStepInput): Promise<StepResult> {
       if (
@@ -987,12 +1102,15 @@ function createMixedResultRunner(skippedFile: string): Pick<StepRunner, "run"> {
         );
       }
 
-      return buildSuccessfulStepResult(step.stepId, context.filePath);
+      return buildSuccessfulStepResult(step.stepId, context.filePath, options);
     }
   };
 }
 
-function createAllSkippedRunner(skippedFiles: Set<string>): Pick<StepRunner, "run"> {
+function createAllSkippedRunner(
+  skippedFiles: Set<string>,
+  options: SuccessfulStepOptions = {}
+): Pick<StepRunner, "run"> {
   return {
     async run({ context, step }: RunStepInput): Promise<StepResult> {
       if (skippedFiles.has(context.filePath) && step.stepId === "step1-overview") {
@@ -1001,12 +1119,16 @@ function createAllSkippedRunner(skippedFiles: Set<string>): Pick<StepRunner, "ru
         );
       }
 
-      return buildSuccessfulStepResult(step.stepId, context.filePath);
+      return buildSuccessfulStepResult(step.stepId, context.filePath, options);
     }
   };
 }
 
-function buildSuccessfulStepResult(stepId: string, filePath: string): StepResult {
+function buildSuccessfulStepResult(
+  stepId: string,
+  filePath: string,
+  options: SuccessfulStepOptions = {}
+): StepResult {
   if (stepId === "step1-overview") {
     return {
       stepId,
@@ -1057,7 +1179,7 @@ function buildSuccessfulStepResult(stepId: string, filePath: string): StepResult
       stepId,
       applyTo(targetContext: FileReviewContext) {
         targetContext.updateStructuredState({
-          findings: buildFindingsForFile(filePath)
+          findings: getFindingsForFile(filePath, options)
         });
       }
     };
@@ -1068,7 +1190,7 @@ function buildSuccessfulStepResult(stepId: string, filePath: string): StepResult
       stepId,
       applyTo(targetContext: FileReviewContext) {
         targetContext.updateStructuredState({
-          findings: buildFindingsForFile(filePath)
+          findings: getFindingsForFile(filePath, options)
         });
       }
     };
@@ -1078,7 +1200,10 @@ function buildSuccessfulStepResult(stepId: string, filePath: string): StepResult
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection("summary", buildSummaryResponse(filePath));
+        targetContext.setSection(
+          "summary",
+          buildSummaryResponse(filePath, getNarrativeRiskLevel(filePath, options))
+        );
       }
     };
   }
@@ -1101,7 +1226,25 @@ function buildFindingsForFile(filePath: string): Finding[] {
   return [];
 }
 
-function createFinding(type: "must" | "nice", title: string): Finding {
+function getFindingsForFile(
+  filePath: string,
+  options: SuccessfulStepOptions
+): Finding[] {
+  return options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath);
+}
+
+function getNarrativeRiskLevel(
+  filePath: string,
+  options: SuccessfulStepOptions
+): Step7NarrativeRiskLevel {
+  return options.narrativeRiskByFile?.get(filePath) ?? "Medium";
+}
+
+function createFinding(
+  type: "must" | "nice",
+  title: string,
+  confidence = 90
+): Finding {
   return {
     type,
     title,
@@ -1109,7 +1252,7 @@ function createFinding(type: "must" | "nice", title: string): Finding {
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
-    confidence: 90
+    confidence
   };
 }
 
@@ -1163,7 +1306,10 @@ function buildStrategyResponse(filePath: string): string {
   ].join("\n");
 }
 
-function buildSummaryResponse(filePath: string): string {
+function buildSummaryResponse(
+  filePath: string,
+  riskLevel: Step7NarrativeRiskLevel = "Medium"
+): string {
   return [
     "## Summary",
     "### 審查基礎",
@@ -1173,7 +1319,7 @@ function buildSummaryResponse(filePath: string): string {
     "### 行為變更提醒",
     "- 無",
     "### 風險評估",
-    "- 整體風險等級：Medium",
+    `- 整體風險等級：${riskLevel}`,
     "- 風險理由：final findings 仍需留意。"
   ].join("\n");
 }

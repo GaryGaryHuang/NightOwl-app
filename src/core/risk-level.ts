@@ -1,23 +1,31 @@
 import type { Finding } from "./file-review-context.ts";
 
-export type RiskLevel = "Critical" | "High" | "Medium" | "Low";
+const HIGH_CONFIDENCE_THRESHOLD = 90;
+
+export type RiskLevel = "High" | "Medium" | "Low" | "None";
 
 export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel {
   if (!findings || findings.length === 0) {
-    return "Low";
+    return "None";
   }
 
-  if (findings.some((f) => f.type === "must" && f.confidence >= 95)) {
-    return "Critical";
-  }
-
-  if (findings.some((f) => f.type === "must")) {
+  if (
+    findings.some(
+      (finding) =>
+        finding.type === "must" &&
+        finding.confidence >= HIGH_CONFIDENCE_THRESHOLD
+    )
+  ) {
     return "High";
   }
 
-  if (findings.some((f) => f.type === "nice")) {
+  if (findings.some((finding) => finding.type === "must")) {
     return "Medium";
   }
 
-  return "Low";
+  if (findings.some((finding) => finding.type === "nice")) {
+    return "Low";
+  }
+
+  return "None";
 }

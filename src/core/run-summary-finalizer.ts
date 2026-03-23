@@ -22,10 +22,10 @@ export interface RunSummaryRenderInput {
 }
 
 const RISK_ORDER: Record<RiskLevel, number> = {
-  Critical: 0,
-  High: 1,
-  Medium: 2,
-  Low: 3
+  High: 0,
+  Medium: 1,
+  Low: 2,
+  None: 3
 };
 
 export class RunSummaryFinalizer {
@@ -43,30 +43,29 @@ export class RunSummaryFinalizer {
       0
     );
 
-    const criticalCount = input.successfulFiles.filter(
-      (f) => deriveFileRiskLevel(f.findings) === "Critical"
-    ).length;
-    const highCount = input.successfulFiles.filter(
-      (f) => deriveFileRiskLevel(f.findings) === "High"
-    ).length;
-    const mediumCount = input.successfulFiles.filter(
-      (f) => deriveFileRiskLevel(f.findings) === "Medium"
-    ).length;
-    const lowCount = input.successfulFiles.filter(
-      (f) => deriveFileRiskLevel(f.findings) === "Low"
-    ).length;
+    const successfulFilesWithRisk = input.successfulFiles.map((file) => ({
+      file,
+      risk: deriveFileRiskLevel(file.findings)
+    }));
+    const riskCounts: Record<RiskLevel, number> = {
+      High: 0,
+      Medium: 0,
+      Low: 0,
+      None: 0
+    };
 
-    const sortedSuccessfulFiles = [...input.successfulFiles].sort(
-      (a, b) =>
-        RISK_ORDER[deriveFileRiskLevel(a.findings)] -
-        RISK_ORDER[deriveFileRiskLevel(b.findings)]
+    for (const { risk } of successfulFilesWithRisk) {
+      riskCounts[risk] += 1;
+    }
+
+    const sortedSuccessfulFiles = [...successfulFilesWithRisk].sort(
+      (a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk]
     );
 
     const successfulLines =
       sortedSuccessfulFiles.length === 0
         ? ["- 無"]
-        : sortedSuccessfulFiles.map((file) => {
-            const risk = deriveFileRiskLevel(file.findings);
+        : sortedSuccessfulFiles.map(({ file, risk }) => {
             const mustCount = file.findings.filter(
               (finding) => finding.type === "must"
             ).length;
@@ -95,10 +94,10 @@ export class RunSummaryFinalizer {
       `- Final findings totals: must=${totalMust}, nice=${totalNice}`,
       "",
       "## Risk Distribution",
-      `- Critical: ${criticalCount}`,
-      `- High: ${highCount}`,
-      `- Medium: ${mediumCount}`,
-      `- Low: ${lowCount}`,
+      `- High: ${riskCounts.High}`,
+      `- Medium: ${riskCounts.Medium}`,
+      `- Low: ${riskCounts.Low}`,
+      `- None: ${riskCounts.None}`,
       "",
       "## Successful Files",
       ...successfulLines,

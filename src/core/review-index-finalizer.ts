@@ -11,10 +11,10 @@ import type {
 } from "./run-summary-finalizer.ts";
 
 const RISK_ORDER: Record<RiskLevel, number> = {
-  Critical: 0,
-  High: 1,
-  Medium: 2,
-  Low: 3
+  High: 0,
+  Medium: 1,
+  Low: 2,
+  None: 3
 };
 
 export interface ReviewIndexRenderInput {

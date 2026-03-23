@@ -85,7 +85,7 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const RISK_ORDER_MAP = { Critical: 0, High: 1, Medium: 2, Low: 3 } as const;
+    const RISK_ORDER_MAP = { High: 0, Medium: 1, Low: 2, None: 3 } as const;
     const successfulNotesRiskSorted = plannedNotes
       .filter((n) => n.filePath !== skippedFile)
       .sort((a, b) => {
