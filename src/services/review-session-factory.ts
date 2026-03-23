@@ -26,6 +26,7 @@ export interface ReviewSessionFactoryOptions {
   clientManager: Pick<CopilotClientManager, "getClient">;
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   webFetchAllowedHosts?: string[];
+  webFetchDeniedHosts?: string[];
 }
 
 export class ReviewSessionFactory {
@@ -33,6 +34,8 @@ export class ReviewSessionFactory {
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   readonly #webFetchAllowedHosts?: Set<string>;
   readonly #webFetchWildcardSuffixes?: readonly string[];
+  readonly #webFetchDeniedHosts?: Set<string>;
+  readonly #webFetchDeniedWildcardSuffixes?: readonly string[];
 
   constructor(options: ReviewSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
@@ -54,6 +57,23 @@ export class ReviewSessionFactory {
       this.#webFetchAllowedHosts = exactHosts;
       this.#webFetchWildcardSuffixes = wildcardSuffixes;
     }
+
+    if (options.webFetchDeniedHosts === undefined) {
+      this.#webFetchDeniedHosts = undefined;
+      this.#webFetchDeniedWildcardSuffixes = undefined;
+    } else {
+      const exactDenied = new Set<string>();
+      const deniedWildcardSuffixes: string[] = [];
+      for (const host of options.webFetchDeniedHosts) {
+        if (host.startsWith("*.")) {
+          deniedWildcardSuffixes.push(`.${host.slice(2)}`);
+        } else {
+          exactDenied.add(canonicalizeHostnameForComparison(host));
+        }
+      }
+      this.#webFetchDeniedHosts = exactDenied;
+      this.#webFetchDeniedWildcardSuffixes = deniedWildcardSuffixes;
+    }
   }
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
@@ -62,7 +82,9 @@ export class ReviewSessionFactory {
         onPreToolUse: createReviewPreToolUseHook(
           profile,
           this.#webFetchAllowedHosts,
-          this.#webFetchWildcardSuffixes
+          this.#webFetchWildcardSuffixes,
+          this.#webFetchDeniedHosts,
+          this.#webFetchDeniedWildcardSuffixes
         )
       },
       model: profile.model,
@@ -111,7 +133,9 @@ function createReviewPermissionHandler(
 function createReviewPreToolUseHook(
   profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
   webFetchAllowedHosts?: ReadonlySet<string>,
-  webFetchWildcardSuffixes?: readonly string[]
+  webFetchWildcardSuffixes?: readonly string[],
+  webFetchDeniedHosts?: ReadonlySet<string>,
+  webFetchDeniedWildcardSuffixes?: readonly string[]
 ) {
   return async (input): Promise<PreToolUseHookOutput | void> => {
     if (input.toolName === "web_fetch") {
@@ -138,6 +162,22 @@ function createReviewPreToolUseHook(
         if (
           !webFetchAllowedHosts.has(normalizedHostname) &&
           !(webFetchWildcardSuffixes ?? []).some((suffix) =>
+            normalizedHostname.endsWith(suffix)
+          )
+        ) {
+          return {
+            permissionDecision: "deny",
+            permissionDecisionReason:
+              "Review sessions only allow web_fetch for configured public http(s) hosts."
+          };
+        }
+      }
+
+      if (webFetchDeniedHosts !== undefined) {
+        const normalizedHostname = canonicalizeHostnameForComparison(parsedUrl.hostname);
+        if (
+          webFetchDeniedHosts.has(normalizedHostname) ||
+          (webFetchDeniedWildcardSuffixes ?? []).some((suffix) =>
             normalizedHostname.endsWith(suffix)
           )
         ) {

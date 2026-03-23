@@ -29,6 +29,8 @@ export class LocalReviewConfigProvider implements ReviewConfigProvider {
       const config = parseReviewConfigObject(readFileSync(configPath, "utf8"));
       const webFetchAllowedHosts =
         resolveWebFetchAllowedHostsFromConfigObject(config);
+      const webFetchDeniedHosts =
+        resolveWebFetchDeniedHostsFromConfigObject(config);
 
       return {
         maxConcurrentFiles: resolveMaxConcurrentFilesFromConfigObject(config),
@@ -36,7 +38,10 @@ export class LocalReviewConfigProvider implements ReviewConfigProvider {
         mcpServers: resolveMcpServersFromConfigObject(config),
         ...(webFetchAllowedHosts === undefined
           ? {}
-          : { webFetchAllowedHosts })
+          : { webFetchAllowedHosts }),
+        ...(webFetchDeniedHosts === undefined
+          ? {}
+          : { webFetchDeniedHosts })
       };
     } catch (error) {
       const message =
@@ -144,7 +149,25 @@ function resolveWebFetchAllowedHostsFromConfigObject(
   }
 
   return rawWebFetchAllowedHosts.map((value) =>
-    readWebFetchAllowedHost(value)
+    readWebFetchHostEntry(value)
+  );
+}
+
+function resolveWebFetchDeniedHostsFromConfigObject(
+  config: Record<string, unknown>
+): string[] | undefined {
+  const rawWebFetchDeniedHosts = config.webFetchDeniedHosts;
+
+  if (rawWebFetchDeniedHosts === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(rawWebFetchDeniedHosts)) {
+    throw new Error("invalid review config");
+  }
+
+  return rawWebFetchDeniedHosts.map((value) =>
+    readWebFetchHostEntry(value)
   );
 }
 
@@ -174,7 +197,7 @@ function readStringRecord(value: unknown): Record<string, string> {
   return Object.fromEntries(entries);
 }
 
-function readWebFetchAllowedHost(value: unknown): string {
+function readWebFetchHostEntry(value: unknown): string {
   if (typeof value !== "string") {
     throw new Error("invalid review config");
   }

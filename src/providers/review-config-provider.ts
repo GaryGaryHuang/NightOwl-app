@@ -15,6 +15,7 @@ export interface ReviewConfig {
   confidenceThresholds: ConfidenceThresholds;
   mcpServers: ReviewMcpServers;
   webFetchAllowedHosts?: string[];
+  webFetchDeniedHosts?: string[];
 }
 
 export interface ReviewConfigProvider {
