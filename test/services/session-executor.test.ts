@@ -27,6 +27,51 @@ test("CopilotClientManager starts and stops the underlying client", async () => 
   assert.deepEqual(lifecycle, ["start", "stop"]);
 });
 
+test("CopilotClientManager forceStop() forwards to the underlying client", async () => {
+  const lifecycle: string[] = [];
+  const manager = new CopilotClientManager({
+    createClient() {
+      return {
+        async start() {
+          lifecycle.push("start");
+        },
+        async stop() {
+          lifecycle.push("stop");
+        },
+        async forceStop() {
+          lifecycle.push("forceStop");
+        }
+      };
+    }
+  });
+
+  await manager.start();
+  await manager.forceStop();
+
+  assert.deepEqual(lifecycle, ["start", "forceStop"]);
+});
+
+test("CopilotClientManager forceStop() is a no-op before startup", async () => {
+  let createClientCalls = 0;
+  const manager = new CopilotClientManager({
+    createClient() {
+      createClientCalls += 1;
+
+      return {
+        async start() {},
+        async stop() {},
+        async forceStop() {
+          throw new Error("forceStop should not be called before startup");
+        }
+      };
+    }
+  });
+
+  await manager.forceStop();
+
+  assert.equal(createClientCalls, 0);
+});
+
 test("SessionExecutor sendAndWait returns the assistant message content and disconnects afterwards", async () => {
   const calls = [];
   const session = {

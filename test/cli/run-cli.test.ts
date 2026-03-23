@@ -206,6 +206,7 @@ test("runCli surfaces a clear runtime error when Step 0 session startup fails", 
         throw new Error("Copilot CLI is unavailable.");
       },
       async stop() {},
+      async forceStop() {},
       getClient() {
         throw new Error("unreachable");
       }

@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SessionConfig } from "@github/copilot-sdk";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
 test("createLocalReviewRunApp fails before client startup, Step 0, and output initialization when review config is invalid", async () => {
@@ -25,6 +27,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         async stop() {
           stopCalls += 1;
         },
+        async forceStop() {},
         getClient() {
           throw new Error("unused");
         }
@@ -90,6 +93,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         async stop() {
           stopCalls += 1;
         },
+        async forceStop() {},
         getClient() {
           throw new Error("unused");
         }
@@ -139,7 +143,7 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
     let stopCalls = 0;
     let initializeRunCalls = 0;
     let step0Context7Failures = 0;
-    const sessionConfigs = [];
+    const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       clientManager: {
@@ -149,9 +153,13 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
         async stop() {
           stopCalls += 1;
         },
+        async forceStop() {},
         getClient() {
           return {
-            async createSession(config) {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
               sessionConfigs.push(config);
 
               if (
@@ -222,17 +230,21 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for Step 3 Context7 startup failure");
 
-    const sessionConfigs = [];
+    const sessionConfigs: SessionConfig[] = [];
     let context7Failures = 0;
-    const skippedRecords = [];
+    const skippedRecords: SkipRecord[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
         async stop() {},
+        async forceStop() {},
         getClient() {
           return {
-            async createSession(config) {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
               sessionConfigs.push(config);
 
               if (
@@ -275,7 +287,8 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
             confidenceThresholds: {
               must: 80,
               nice: 90
-            }
+            },
+            mcpServers: {}
           };
         }
       },
@@ -346,9 +359,13 @@ test("createLocalReviewRunApp keeps Step 0 custom MCP startup failure on the exi
       clientManager: {
         async start() {},
         async stop() {},
+        async forceStop() {},
         getClient() {
           return {
-            async createSession(config) {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
               if (
                 config.mcpServers?.demo &&
                 isChangesetOverviewSystemMessage(config.systemMessage)
@@ -426,15 +443,19 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
 
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
-    const sessionConfigs = [];
+    const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
         async stop() {},
+        async forceStop() {},
         getClient() {
           return {
-            async createSession(config) {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
               sessionConfigs.push(config);
 
               return {
@@ -495,10 +516,11 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
         isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
         config.hooks?.onPreToolUse
     );
+    const preToolUse = reviewSessionConfig?.hooks?.onPreToolUse;
 
-    assert.ok(reviewSessionConfig);
+    assert.ok(preToolUse);
     assert.deepEqual(
-      await reviewSessionConfig.hooks.onPreToolUse(
+      await preToolUse(
         {
           timestamp: Date.now(),
           cwd: fixture.repoDir,
@@ -523,15 +545,19 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
 
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
-    const sessionConfigs = [];
+    const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
         async stop() {},
+        async forceStop() {},
         getClient() {
           return {
-            async createSession(config) {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
               sessionConfigs.push(config);
 
               return {
@@ -593,10 +619,11 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
         isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
         config.hooks?.onPreToolUse
     );
+    const preToolUse = reviewSessionConfig?.hooks?.onPreToolUse;
 
-    assert.ok(reviewSessionConfig);
+    assert.ok(preToolUse);
     assert.deepEqual(
-      await reviewSessionConfig.hooks.onPreToolUse(
+      await preToolUse(
         {
           timestamp: Date.now(),
           cwd: fixture.repoDir,
@@ -612,7 +639,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
       }
     );
     assert.deepEqual(
-      await reviewSessionConfig.hooks.onPreToolUse(
+      await preToolUse(
         {
           timestamp: Date.now(),
           cwd: fixture.repoDir,
@@ -638,17 +665,21 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add changed file for broader Context7 startup failure coverage");
 
-    const sessionConfigs = [];
+    const sessionConfigs: SessionConfig[] = [];
     let context7Failures = 0;
-    const skippedRecords = [];
+    const skippedRecords: SkipRecord[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
         async stop() {},
+        async forceStop() {},
         getClient() {
           return {
-            async createSession(config) {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
               sessionConfigs.push(config);
 
               if (
@@ -691,7 +722,8 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
             confidenceThresholds: {
               must: 80,
               nice: 90
-            }
+            },
+            mcpServers: {}
           };
         }
       },
@@ -742,16 +774,20 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add changed file for custom MCP startup failure coverage");
 
-    const skippedRecords = [];
+    const skippedRecords: SkipRecord[] = [];
     let customMcpFailures = 0;
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
         async stop() {},
+        async forceStop() {},
         getClient() {
           return {
-            async createSession(config) {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
               if (config.mcpServers?.demo && input.stepMatcher(config.systemMessage)) {
                 customMcpFailures += 1;
 
@@ -830,7 +866,10 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
   }
 }
 
-function buildSessionResponse(config: { systemMessage?: unknown; availableTools?: string[] }, prompt: { prompt: string }): string {
+function buildSessionResponse(
+  config: { systemMessage?: unknown; availableTools?: string[] },
+  prompt: string
+): string {
   if (Array.isArray(config.availableTools) && config.availableTools.length === 0) {
     return "Y";
   }
@@ -930,7 +969,7 @@ function buildSessionResponse(config: { systemMessage?: unknown; availableTools?
     ].join("\n");
   }
 
-  throw new Error(`Unexpected session prompt: ${prompt.prompt}`);
+  throw new Error(`Unexpected session prompt: ${prompt}`);
 }
 
 function extractSystemMessageContent(systemMessage: unknown): string {
@@ -980,15 +1019,30 @@ function createSignalTestApp(options: {
   stopCalls: string[];
   onStep1?: () => void;
   step0ShouldThrow?: boolean;
+  step0Error?: Error;
+  startError?: Error;
+  stopImpl?: () => Promise<void>;
+  forceStopImpl?: () => Promise<void>;
+  gracefulShutdownTimeoutMs?: number;
 }) {
   const TEST_FILES = ["src/app.ts", "packages/app/index.ts"];
 
   return createLocalReviewRunApp({
     workingDirectory: "/tmp/signal-test",
+    gracefulShutdownTimeoutMs: options.gracefulShutdownTimeoutMs,
     clientManager: {
-      async start() {},
+      async start() {
+        if (options.startError) {
+          throw options.startError;
+        }
+      },
       async stop() {
         options.stopCalls.push("stop");
+        await options.stopImpl?.();
+      },
+      async forceStop() {
+        options.stopCalls.push("forceStop");
+        await options.forceStopImpl?.();
       },
       getClient() {
         throw new Error("unused");
@@ -1023,6 +1077,10 @@ function createSignalTestApp(options: {
     },
     changesetOverviewRunner: {
       async run() {
+        if (options.step0Error) {
+          throw options.step0Error;
+        }
+
         if (options.step0ShouldThrow) {
           throw new Error("step0 fatal error in test");
         }
@@ -1100,7 +1158,21 @@ test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after normal r
   const sigintBefore = process.listenerCount("SIGINT");
   const sigtermBefore = process.listenerCount("SIGTERM");
 
-  const app = createSignalTestApp({ stopCalls });
+  const app = createSignalTestApp({
+    stopCalls,
+    async stopImpl() {
+      assert.equal(
+        process.listenerCount("SIGINT"),
+        sigintBefore,
+        "SIGINT listener should be removed before stop() on normal completion"
+      );
+      assert.equal(
+        process.listenerCount("SIGTERM"),
+        sigtermBefore,
+        "SIGTERM listener should be removed before stop() on normal completion"
+      );
+    }
+  });
 
   await app.run(SIGNAL_TEST_REQUEST);
 
@@ -1122,7 +1194,22 @@ test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after a run er
   const sigintBefore = process.listenerCount("SIGINT");
   const sigtermBefore = process.listenerCount("SIGTERM");
 
-  const app = createSignalTestApp({ stopCalls, step0ShouldThrow: true });
+  const app = createSignalTestApp({
+    stopCalls,
+    step0ShouldThrow: true,
+    async stopImpl() {
+      assert.equal(
+        process.listenerCount("SIGINT"),
+        sigintBefore,
+        "SIGINT listener should be removed before stop() after error"
+      );
+      assert.equal(
+        process.listenerCount("SIGTERM"),
+        sigtermBefore,
+        "SIGTERM listener should be removed before stop() after error"
+      );
+    }
+  });
 
   await assert.rejects(() => app.run(SIGNAL_TEST_REQUEST));
 
@@ -1147,6 +1234,18 @@ test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after an inter
 
   const app = createSignalTestApp({
     stopCalls,
+    async stopImpl() {
+      assert.equal(
+        process.listenerCount("SIGINT"),
+        sigintBefore,
+        "SIGINT listener should be removed before stop() after interruption"
+      );
+      assert.equal(
+        process.listenerCount("SIGTERM"),
+        sigtermBefore,
+        "SIGTERM listener should be removed before stop() after interruption"
+      );
+    },
     onStep1() {
       if (!fired) {
         fired = true;
@@ -1190,3 +1289,191 @@ test("createLocalReviewRunApp calls clientManager.stop() when run throws a non-s
 
   assert.deepEqual(stopCalls, ["stop"]);
 });
+
+test("createLocalReviewRunApp keeps the successful summary when stop() resolves before the graceful shutdown timeout", async () => {
+  const stopCalls: string[] = [];
+  const app = createSignalTestApp({
+    stopCalls,
+    gracefulShutdownTimeoutMs: 1,
+    async stopImpl() {
+      await sleep(0);
+    }
+  });
+
+  const summary = await app.run(SIGNAL_TEST_REQUEST);
+
+  assert.equal(summary.repoRoot, "/tmp/signal-test");
+  assert.deepEqual(stopCalls, ["stop"]);
+});
+
+test("createLocalReviewRunApp falls back to clientManager.forceStop() after a successful run when stop() exceeds the graceful shutdown timeout", async () => {
+  const stopCalls: string[] = [];
+  const sigintBefore = process.listenerCount("SIGINT");
+  const sigtermBefore = process.listenerCount("SIGTERM");
+  const app = createSignalTestApp({
+    stopCalls,
+    gracefulShutdownTimeoutMs: 1,
+    async stopImpl() {
+      await sleep(20);
+    },
+    async forceStopImpl() {
+      assert.equal(
+        process.listenerCount("SIGINT"),
+        sigintBefore,
+        "SIGINT listener should be removed before forceStop() on normal completion"
+      );
+      assert.equal(
+        process.listenerCount("SIGTERM"),
+        sigtermBefore,
+        "SIGTERM listener should be removed before forceStop() on normal completion"
+      );
+    }
+  });
+
+  const summary = await app.run(SIGNAL_TEST_REQUEST);
+
+  assert.equal(summary.repoRoot, "/tmp/signal-test");
+  assert.equal(process.listenerCount("SIGINT"), sigintBefore);
+  assert.equal(process.listenerCount("SIGTERM"), sigtermBefore);
+  assert.deepEqual(stopCalls, ["stop", "forceStop"]);
+});
+
+test("createLocalReviewRunApp preserves ReviewRunInterruptedError when forceStop() follows a timed-out stop()", async () => {
+  const stopCalls: string[] = [];
+  const sigintBefore = process.listenerCount("SIGINT");
+  const sigtermBefore = process.listenerCount("SIGTERM");
+  let sigintFired = false;
+  const app = createSignalTestApp({
+    stopCalls,
+    gracefulShutdownTimeoutMs: 1,
+    async stopImpl() {
+      await sleep(20);
+    },
+    async forceStopImpl() {
+      assert.equal(
+        process.listenerCount("SIGINT"),
+        sigintBefore,
+        "SIGINT listener should be removed before forceStop() after interruption"
+      );
+      assert.equal(
+        process.listenerCount("SIGTERM"),
+        sigtermBefore,
+        "SIGTERM listener should be removed before forceStop() after interruption"
+      );
+    },
+    onStep1() {
+      if (!sigintFired) {
+        sigintFired = true;
+        process.emit("SIGINT", "SIGINT");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+
+  assert.equal(process.listenerCount("SIGINT"), sigintBefore);
+  assert.equal(process.listenerCount("SIGTERM"), sigtermBefore);
+  assert.deepEqual(stopCalls, ["stop", "forceStop"]);
+});
+
+test("createLocalReviewRunApp preserves the original run error when forceStop() follows a timed-out stop()", async () => {
+  const stopCalls: string[] = [];
+  const sigintBefore = process.listenerCount("SIGINT");
+  const sigtermBefore = process.listenerCount("SIGTERM");
+  const runError = new Error("step0 fatal error in test");
+  const app = createSignalTestApp({
+    stopCalls,
+    step0Error: runError,
+    gracefulShutdownTimeoutMs: 1,
+    async stopImpl() {
+      await sleep(20);
+    },
+    async forceStopImpl() {
+      assert.equal(
+        process.listenerCount("SIGINT"),
+        sigintBefore,
+        "SIGINT listener should be removed before forceStop() after error"
+      );
+      assert.equal(
+        process.listenerCount("SIGTERM"),
+        sigtermBefore,
+        "SIGTERM listener should be removed before forceStop() after error"
+      );
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err === runError
+  );
+
+  assert.equal(process.listenerCount("SIGINT"), sigintBefore);
+  assert.equal(process.listenerCount("SIGTERM"), sigtermBefore);
+  assert.deepEqual(stopCalls, ["stop", "forceStop"]);
+});
+
+test("createLocalReviewRunApp surfaces a fast stop() rejection without calling forceStop()", async () => {
+  const stopCalls: string[] = [];
+  const stopError = new Error("stop failed fast");
+  const app = createSignalTestApp({
+    stopCalls,
+    gracefulShutdownTimeoutMs: 1,
+    async stopImpl() {
+      throw stopError;
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err === stopError
+  );
+
+  assert.deepEqual(stopCalls, ["stop"]);
+});
+
+test("createLocalReviewRunApp surfaces a forceStop() rejection instead of the original run outcome", async () => {
+  const stopCalls: string[] = [];
+  const forceStopError = new Error("forceStop failed");
+  const app = createSignalTestApp({
+    stopCalls,
+    gracefulShutdownTimeoutMs: 1,
+    async stopImpl() {
+      await sleep(20);
+    },
+    async forceStopImpl() {
+      throw forceStopError;
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err === forceStopError
+  );
+
+  assert.deepEqual(stopCalls, ["stop", "forceStop"]);
+});
+
+test("createLocalReviewRunApp skips stop() and forceStop() when client startup fails", async () => {
+  const stopCalls: string[] = [];
+  const startError = new Error("client start failed");
+  const app = createSignalTestApp({
+    stopCalls,
+    startError
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err === startError
+  );
+
+  assert.deepEqual(stopCalls, []);
+});
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}

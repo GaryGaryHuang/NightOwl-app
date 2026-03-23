@@ -26,12 +26,15 @@ import {
 import { ReviewSessionFactory } from "../services/review-session-factory.ts";
 
 export const LOCAL_REVIEW_RUN_HEADER = "Initialized local review run.";
+const DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
+const STOP_TIMEOUT_EXCEEDED = Symbol("stop-timeout-exceeded");
 
 export interface CreateLocalReviewRunAppOptions {
   changesetOverviewRunner?: Pick<ChangesetOverviewRunner, "run">;
   clientManager?: {
     start(): Promise<void>;
     stop(): Promise<void>;
+    forceStop(): Promise<void>;
     getClient(): CopilotClientLike;
   };
   outputSink?: ReviewOutputSink;
@@ -41,7 +44,12 @@ export interface CreateLocalReviewRunAppOptions {
   stepRunner?: Pick<StepRunner, "run">;
   workingDirectory: string;
   timestampProvider?: () => string;
+  gracefulShutdownTimeoutMs?: number;
 }
+
+type LocalReviewRunClientManager = NonNullable<
+  CreateLocalReviewRunAppOptions["clientManager"]
+>;
 
 export interface ReviewApp {
   run(request: RunRequest): Promise<ReviewRunSummary>;
@@ -51,6 +59,8 @@ export function createLocalReviewRunApp(
   options: CreateLocalReviewRunAppOptions
 ): ReviewApp {
   const clientManager = options.clientManager ?? new CopilotClientManager();
+  const gracefulShutdownTimeoutMs =
+    options.gracefulShutdownTimeoutMs ?? DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
   const sourceProvider = options.sourceProvider ?? new LocalGitProvider();
   const outputSink = options.outputSink ?? new LocalWorkspaceProvider();
   const reviewConfigProvider =
@@ -118,10 +128,42 @@ export function createLocalReviewRunApp(
         // Remove handlers before stop() to prevent double-fire from SIGTERM during SDK teardown.
         process.off("SIGINT", handleSignal);
         process.off("SIGTERM", handleSignal);
-        await clientManager.stop();
+        await stopClientManagerWithTimeout(clientManager, gracefulShutdownTimeoutMs);
       }
     }
   };
+}
+
+async function stopClientManagerWithTimeout(
+  clientManager: LocalReviewRunClientManager,
+  timeoutMs: number
+): Promise<void> {
+  const stopPromise = clientManager.stop();
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  let stopResult: void | typeof STOP_TIMEOUT_EXCEEDED = undefined;
+
+  try {
+    stopResult = await Promise.race([
+      stopPromise.then(() => undefined),
+      new Promise<typeof STOP_TIMEOUT_EXCEEDED>((resolve) => {
+        timeoutHandle = setTimeout(() => {
+          resolve(STOP_TIMEOUT_EXCEEDED);
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
+  if (stopResult !== STOP_TIMEOUT_EXCEEDED) {
+    return;
+  }
+
+  // stop() may still settle after timeout; handle that late rejection while forceStop() takes over.
+  void stopPromise.catch(() => {});
+  await clientManager.forceStop();
 }
 
 export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {

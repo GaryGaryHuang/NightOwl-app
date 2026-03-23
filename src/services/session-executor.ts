@@ -18,6 +18,7 @@ export interface SessionLike {
 export interface CopilotClientLike {
   start(): Promise<void>;
   stop(): Promise<unknown>;
+  forceStop(): Promise<unknown>;
   createSession(config: SessionConfig): Promise<SessionLike>;
 }
 
@@ -55,6 +56,14 @@ export class CopilotClientManager {
     }
 
     await this.#client.stop();
+  }
+
+  async forceStop(): Promise<void> {
+    if (!this.#client) {
+      return;
+    }
+
+    await this.#client.forceStop();
   }
 }
 
