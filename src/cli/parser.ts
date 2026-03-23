@@ -10,9 +10,9 @@ export class CliUsageError extends Error {
 const USAGE = "review <base_ref> <head_ref> [--repo <path>] [--context <value>]";
 
 export function parseReviewCommand(argv: string[]): RunRequest {
-  const positionals = [];
-  const userContext = [];
-  let repoPath;
+  const positionals: string[] = [];
+  const userContext: string[] = [];
+  let repoPath: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];

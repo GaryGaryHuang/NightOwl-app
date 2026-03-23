@@ -1,6 +1,5 @@
 import {
   type PermissionHandler,
-  type PreToolUseHookOutput,
   type SessionConfig
 } from "@github/copilot-sdk";
 import { isIP } from "node:net";
@@ -8,10 +7,16 @@ import path from "node:path";
 
 import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
 import {
-  CopilotClientManager,
+  type CopilotClientLike,
   SessionExecutor
 } from "./session-executor.ts";
 import type { KnowledgeSvc } from "./knowledge.ts";
+
+type PreToolUseHook = NonNullable<
+  NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
+>;
+type PreToolUseHookInput = Parameters<PreToolUseHook>[0];
+type PreToolUseHookResult = Awaited<ReturnType<PreToolUseHook>>;
 
 export interface ReviewSessionProfile {
   knowledgeMode?: ReviewKnowledgeMode;
@@ -23,14 +28,16 @@ export interface ReviewSessionProfile {
 }
 
 export interface ReviewSessionFactoryOptions {
-  clientManager: Pick<CopilotClientManager, "getClient">;
+  clientManager: {
+    getClient(): Pick<CopilotClientLike, "createSession">;
+  };
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
 }
 
 export class ReviewSessionFactory {
-  readonly #clientManager: Pick<CopilotClientManager, "getClient">;
+  readonly #clientManager: ReviewSessionFactoryOptions["clientManager"];
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   readonly #webFetchAllowedHosts?: Set<string>;
   readonly #webFetchWildcardSuffixes?: readonly string[];
@@ -136,8 +143,8 @@ function createReviewPreToolUseHook(
   webFetchWildcardSuffixes?: readonly string[],
   webFetchDeniedHosts?: ReadonlySet<string>,
   webFetchDeniedWildcardSuffixes?: readonly string[]
-) {
-  return async (input): Promise<PreToolUseHookOutput | void> => {
+): PreToolUseHook {
+  return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
     if (input.toolName === "web_fetch") {
       const url =
         input.toolArgs &&

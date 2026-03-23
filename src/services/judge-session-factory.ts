@@ -1,7 +1,7 @@
-import type { SessionConfig } from "@github/copilot-sdk";
+import { approveAll, type SessionConfig } from "@github/copilot-sdk";
 
 import {
-  CopilotClientManager,
+  type CopilotClientLike,
   SessionExecutor
 } from "./session-executor.ts";
 
@@ -11,11 +11,13 @@ export interface JudgeSessionProfile {
 }
 
 export interface JudgeSessionFactoryOptions {
-  clientManager: Pick<CopilotClientManager, "getClient">;
+  clientManager: {
+    getClient(): Pick<CopilotClientLike, "createSession">;
+  };
 }
 
 export class JudgeSessionFactory {
-  readonly #clientManager: Pick<CopilotClientManager, "getClient">;
+  readonly #clientManager: JudgeSessionFactoryOptions["clientManager"];
 
   constructor(options: JudgeSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
@@ -25,6 +27,7 @@ export class JudgeSessionFactory {
     const sessionConfig: SessionConfig = {
       availableTools: [],
       model: profile.model,
+      onPermissionRequest: approveAll,
       streaming: false,
       systemMessage: {
         mode: "replace",

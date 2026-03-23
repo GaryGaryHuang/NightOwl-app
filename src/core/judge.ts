@@ -48,8 +48,7 @@ export class JudgeService {
       try {
         session = await this.#judgeSessionFactory.createSession({
           model: "gpt-5-mini",
-          systemMessage: this.systemMessage,
-          timeoutMs: 180_000
+          systemMessage: this.systemMessage
         });
       } catch {
         throw new Error("judge startup failed");

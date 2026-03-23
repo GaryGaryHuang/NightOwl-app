@@ -189,12 +189,17 @@ function readStringRecord(value: unknown): Record<string, string> {
   }
 
   const entries = Object.entries(value);
+  const result: Record<string, string> = {};
 
-  if (entries.some(([, item]) => typeof item !== "string")) {
-    throw new Error("invalid review config");
+  for (const [key, item] of entries) {
+    if (typeof item !== "string") {
+      throw new Error("invalid review config");
+    }
+
+    result[key] = item;
   }
 
-  return Object.fromEntries(entries);
+  return result;
 }
 
 function readWebFetchHostEntry(value: unknown): string {
