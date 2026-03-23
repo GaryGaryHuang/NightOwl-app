@@ -1,5 +1,12 @@
 import path from "node:path";
 
+export class ReviewRunInterruptedError extends Error {
+  constructor(message: string = "Run interrupted by external signal.") {
+    super(message);
+    this.name = "ReviewRunInterruptedError";
+  }
+}
+
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
 import { FileReviewContext } from "./file-review-context.ts";
 import { ReviewNoteFinalizer } from "./finalizer.ts";
@@ -83,7 +90,10 @@ export class ReviewOrchestrator {
     this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
   }
 
-  async run(request: RunRequest): Promise<ReviewRunSummary> {
+  async run(
+    request: RunRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<ReviewRunSummary> {
     const startPath = path.resolve(this.#workingDirectory, request.repoPath ?? ".");
     const repoRoot = this.#sourceProvider.resolveRepoRoot(startPath);
     const changesetEntries = this.#sourceProvider.getChangesetEntries(
@@ -99,6 +109,13 @@ export class ReviewOrchestrator {
       userContext: request.userContext,
       workingDirectory: repoRoot
     });
+
+    // Check if the signal was aborted during Step 0 (or before run() was called).
+    // This is the only explicit poll — all later boundaries rely on the event listener below.
+    if (options?.signal?.aborted) {
+      throw new ReviewRunInterruptedError("Run interrupted by external signal.");
+    }
+
     const branchName = this.#sourceProvider.getCurrentBranch(repoRoot);
     const changedFiles = this.#sourceProvider.getChangedFiles(
       repoRoot,
@@ -156,6 +173,20 @@ export class ReviewOrchestrator {
       })
     ];
     const runAbortState: AbortState = {};
+
+    // Register abort listener — fires synchronously when signal aborts, immediately
+    // setting runAbortState.error so all existing safe-boundary guards detect it.
+    // { once: true } auto-removes the listener after first fire (no leak).
+    options?.signal?.addEventListener(
+      "abort",
+      () => {
+        runAbortState.error ??= new ReviewRunInterruptedError(
+          "Run interrupted by external signal."
+        );
+      },
+      { once: true }
+    );
+
     const sharedAbortState: AbortState = {};
     const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
     let skippedAppendQueue = Promise.resolve();

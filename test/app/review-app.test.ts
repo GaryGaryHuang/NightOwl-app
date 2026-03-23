@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
+import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
@@ -972,3 +973,220 @@ function isValidationInterrogationSystemMessage(systemMessage: unknown): boolean
 function isJudgeSystemMessage(systemMessage: unknown): boolean {
   return /Output only Y or N/u.test(extractSystemMessageContent(systemMessage));
 }
+
+// ─── Task 3.1: App lifecycle signal handling tests ────────────────────────────
+
+function createSignalTestApp(options: {
+  stopCalls: string[];
+  onStep1?: () => void;
+  step0ShouldThrow?: boolean;
+}) {
+  const TEST_FILES = ["src/app.ts", "packages/app/index.ts"];
+
+  return createLocalReviewRunApp({
+    workingDirectory: "/tmp/signal-test",
+    clientManager: {
+      async start() {},
+      async stop() {
+        options.stopCalls.push("stop");
+      },
+      getClient() {
+        throw new Error("unused");
+      }
+    },
+    sourceProvider: {
+      resolveRepoRoot(startPath: string) {
+        return startPath;
+      },
+      getChangesetEntries() {
+        return TEST_FILES;
+      },
+      getCurrentBranch() {
+        return "feature-branch";
+      },
+      getChangedFiles() {
+        return TEST_FILES;
+      },
+      filterIgnoredFiles(_repoRoot: string, files: string[]) {
+        return files;
+      },
+      getDiff() {
+        return "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n";
+      }
+    },
+    outputSink: {
+      initializeRun() {},
+      publishFileReview() {},
+      publishSkippedFile() {},
+      publishRunSummary() {},
+      publishReviewIndex() {}
+    },
+    changesetOverviewRunner: {
+      async run() {
+        if (options.step0ShouldThrow) {
+          throw new Error("step0 fatal error in test");
+        }
+        return createRunContext({
+          changesetOverview: "## Changeset\n- test",
+          userContext: []
+        });
+      }
+    },
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        if (step.stepId === "step1-overview") {
+          options.onStep1?.();
+        }
+        return {
+          stepId: step.stepId,
+          applyTo(_ctx: unknown) {}
+        };
+      }
+    }
+  });
+}
+
+const SIGNAL_TEST_REQUEST = {
+  baseRef: "main",
+  headRef: "feature-branch",
+  repoPath: ".",
+  userContext: []
+};
+
+test("createLocalReviewRunApp SIGINT during run propagates ReviewRunInterruptedError to caller", async () => {
+  const stopCalls: string[] = [];
+  let sigintFired = false;
+
+  const app = createSignalTestApp({
+    stopCalls,
+    onStep1() {
+      if (!sigintFired) {
+        sigintFired = true;
+        process.emit("SIGINT", "SIGINT");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+  assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after interruption");
+});
+
+test("createLocalReviewRunApp SIGTERM during run propagates ReviewRunInterruptedError to caller", async () => {
+  const stopCalls: string[] = [];
+  let sigtermFired = false;
+
+  const app = createSignalTestApp({
+    stopCalls,
+    onStep1() {
+      if (!sigtermFired) {
+        sigtermFired = true;
+        process.emit("SIGTERM", "SIGTERM");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+  assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after SIGTERM");
+});
+
+test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after normal run completion", async () => {
+  const stopCalls: string[] = [];
+  const sigintBefore = process.listenerCount("SIGINT");
+  const sigtermBefore = process.listenerCount("SIGTERM");
+
+  const app = createSignalTestApp({ stopCalls });
+
+  await app.run(SIGNAL_TEST_REQUEST);
+
+  assert.equal(
+    process.listenerCount("SIGINT"),
+    sigintBefore,
+    "SIGINT listener should be removed after normal completion"
+  );
+  assert.equal(
+    process.listenerCount("SIGTERM"),
+    sigtermBefore,
+    "SIGTERM listener should be removed after normal completion"
+  );
+  assert.deepEqual(stopCalls, ["stop"]);
+});
+
+test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after a run error", async () => {
+  const stopCalls: string[] = [];
+  const sigintBefore = process.listenerCount("SIGINT");
+  const sigtermBefore = process.listenerCount("SIGTERM");
+
+  const app = createSignalTestApp({ stopCalls, step0ShouldThrow: true });
+
+  await assert.rejects(() => app.run(SIGNAL_TEST_REQUEST));
+
+  assert.equal(
+    process.listenerCount("SIGINT"),
+    sigintBefore,
+    "SIGINT listener should be removed after error"
+  );
+  assert.equal(
+    process.listenerCount("SIGTERM"),
+    sigtermBefore,
+    "SIGTERM listener should be removed after error"
+  );
+  assert.deepEqual(stopCalls, ["stop"]);
+});
+
+test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after an interrupted run", async () => {
+  const stopCalls: string[] = [];
+  const sigintBefore = process.listenerCount("SIGINT");
+  const sigtermBefore = process.listenerCount("SIGTERM");
+  let fired = false;
+
+  const app = createSignalTestApp({
+    stopCalls,
+    onStep1() {
+      if (!fired) {
+        fired = true;
+        process.emit("SIGINT", "SIGINT");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+
+  assert.equal(
+    process.listenerCount("SIGINT"),
+    sigintBefore,
+    "SIGINT listener should be removed after interruption"
+  );
+  assert.equal(
+    process.listenerCount("SIGTERM"),
+    sigtermBefore,
+    "SIGTERM listener should be removed after interruption"
+  );
+  assert.deepEqual(stopCalls, ["stop"]);
+});
+
+test("createLocalReviewRunApp calls clientManager.stop() on normal completion", async () => {
+  const stopCalls: string[] = [];
+  const app = createSignalTestApp({ stopCalls });
+
+  await app.run(SIGNAL_TEST_REQUEST);
+
+  assert.deepEqual(stopCalls, ["stop"]);
+});
+
+test("createLocalReviewRunApp calls clientManager.stop() when run throws a non-signal error", async () => {
+  const stopCalls: string[] = [];
+  const app = createSignalTestApp({ stopCalls, step0ShouldThrow: true });
+
+  await assert.rejects(() => app.run(SIGNAL_TEST_REQUEST));
+
+  assert.deepEqual(stopCalls, ["stop"]);
+});

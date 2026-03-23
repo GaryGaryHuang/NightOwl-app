@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
+import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { runCli } from "../../src/index.ts";
 
 test("runCli forwards parsed input to the app boundary once", async () => {
@@ -371,3 +372,146 @@ function renderExpectedSummary(result) {
     `Skipped files: ${result.skippedFileCount}`
   ].join("\n");
 }
+
+// ─── Task 4.1: CLI interrupted exit tests ─────────────────────────────────────
+
+test("runCli exits with code 130 when app throws ReviewRunInterruptedError", async () => {
+  const stdout = [];
+  const stderr = [];
+
+  const exitCode = await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new ReviewRunInterruptedError("Run interrupted by external signal.");
+      }
+    },
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 130);
+  assert.deepEqual(stdout, [], "success summary must not be printed after interrupt");
+  assert.equal(stderr.length, 1, "exactly one stderr line for interrupt");
+});
+
+test("runCli prints a distinct interrupt message (not the generic error format) for ReviewRunInterruptedError", async () => {
+  const stderr = [];
+
+  await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new ReviewRunInterruptedError("Run interrupted by external signal.");
+      }
+    },
+    stdout: { log() {} },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  const interruptMessage = stderr.join("\n");
+  assert.match(interruptMessage, /interrupted/i, "interrupt message should mention interruption");
+});
+
+test("runCli interrupted message is distinct from the generic error message", async () => {
+  const interruptStderr = [];
+  const genericStderr = [];
+
+  await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new ReviewRunInterruptedError("Run interrupted by external signal.");
+      }
+    },
+    stdout: { log() {} },
+    stderr: {
+      error(message) {
+        interruptStderr.push(String(message));
+      }
+    }
+  });
+
+  await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new Error("some generic step failure");
+      }
+    },
+    stdout: { log() {} },
+    stderr: {
+      error(message) {
+        genericStderr.push(String(message));
+      }
+    }
+  });
+
+  assert.notDeepEqual(
+    interruptStderr,
+    genericStderr,
+    "interrupt stderr must differ from generic error stderr"
+  );
+});
+
+test("runCli does not print success summary on interrupted run", async () => {
+  const stdout = [];
+
+  await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new ReviewRunInterruptedError("Run interrupted before finish.");
+      }
+    },
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: { error() {} }
+  });
+
+  assert.deepEqual(stdout, [], "stdout must be empty: no success summary on interrupt");
+  assert.ok(
+    stdout.every((line) => !String(line).includes("Initialized local review run.")),
+    "interrupt must not produce the success header"
+  );
+});
+
+test("runCli still exits with code 1 and generic message for a plain Error", async () => {
+  const stderr = [];
+
+  const exitCode = await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new Error("some other failure");
+      }
+    },
+    stdout: { log() {} },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(stderr.join("\n"), /some other failure/u);
+});
+
+test("runCli still exits with code 1 for CliUsageError", async () => {
+  const exitCode = await runCli(["main"], {
+    stdout: { log() {} },
+    stderr: { error() {} }
+  });
+
+  assert.equal(exitCode, 1);
+});

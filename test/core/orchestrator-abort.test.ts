@@ -1,0 +1,374 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  ReviewOrchestrator,
+  ReviewRunInterruptedError
+} from "../../src/core/orchestrator.ts";
+import { createRunContext } from "../../src/core/run-context.ts";
+import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
+import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
+import type { FileReviewContext } from "../../src/core/file-review-context.ts";
+import type { StepDefinition } from "../../src/core/step-runner.ts";
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function createMockSourceProvider(files: string[]): ReviewSourceProvider {
+  return {
+    resolveRepoRoot(startPath: string): string {
+      return startPath;
+    },
+    getChangesetEntries(
+      _repoRoot: string,
+      _baseRef: string,
+      _headRef: string
+    ): string[] {
+      return files;
+    },
+    getCurrentBranch(_repoRoot: string): string {
+      return "feature-branch";
+    },
+    getChangedFiles(
+      _repoRoot: string,
+      _baseRef: string,
+      _headRef: string
+    ): string[] {
+      return files;
+    },
+    filterIgnoredFiles(_repoRoot: string, changedFiles: string[]): string[] {
+      return changedFiles;
+    },
+    getDiff(
+      _repoRoot: string,
+      _baseRef: string,
+      _headRef: string,
+      _filePath: string
+    ): string {
+      return "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n";
+    }
+  };
+}
+
+interface TrackingOutputSink extends ReviewOutputSink {
+  calls: string[];
+}
+
+function createTrackingOutputSink(): TrackingOutputSink {
+  const calls: string[] = [];
+  return {
+    calls,
+    initializeRun(_outputTarget) {
+      calls.push("initializeRun");
+    },
+    publishFileReview(_result) {
+      calls.push("publishFileReview");
+    },
+    publishSkippedFile(_record) {
+      calls.push("publishSkippedFile");
+    },
+    publishRunSummary(_result) {
+      calls.push("publishRunSummary");
+    },
+    publishReviewIndex(_result) {
+      calls.push("publishReviewIndex");
+    }
+  };
+}
+
+function createNoOpStepRunner() {
+  return {
+    async run({
+      step
+    }: {
+      step: StepDefinition;
+      context: FileReviewContext;
+      outputBaseDir: string;
+      repoRoot: string;
+      workingDirectory: string;
+    }) {
+      return {
+        stepId: step.stepId,
+        applyTo(_ctx: FileReviewContext) {}
+      };
+    }
+  };
+}
+
+const TEST_REQUEST = {
+  baseRef: "main",
+  headRef: "feature-branch",
+  repoPath: ".",
+  userContext: []
+};
+
+const TEST_FILES = ["src/app.ts", "packages/app/index.ts"];
+
+function createBaseOrchestrator(overrides: {
+  sourceProvider?: ReviewSourceProvider;
+  outputSink?: ReviewOutputSink;
+  stepRunner?: { run: (...args: any[]) => Promise<any> };
+  changesetOverviewRunner?: { run: (...args: any[]) => Promise<any> };
+  maxConcurrentFiles?: number;
+}) {
+  return new ReviewOrchestrator({
+    workingDirectory: "/tmp/abort-test",
+    timestampProvider: () => "03131430",
+    sourceProvider:
+      overrides.sourceProvider ?? createMockSourceProvider(TEST_FILES),
+    outputSink: overrides.outputSink ?? createTrackingOutputSink(),
+    stepRunner: overrides.stepRunner ?? createNoOpStepRunner(),
+    changesetOverviewRunner: overrides.changesetOverviewRunner ?? {
+      async run() {
+        return createRunContext({
+          changesetOverview: "## Changeset\n- test",
+          userContext: []
+        });
+      }
+    },
+    maxConcurrentFiles: overrides.maxConcurrentFiles ?? 1
+  });
+}
+
+// ─── Task 1.1: ReviewRunInterruptedError basic tests ─────────────────────────
+
+test("ReviewRunInterruptedError is an instance of Error", () => {
+  const err = new ReviewRunInterruptedError("Run interrupted by external signal.");
+  assert.ok(err instanceof Error);
+  assert.ok(err instanceof ReviewRunInterruptedError);
+  assert.equal(err.message, "Run interrupted by external signal.");
+});
+
+test("ReviewRunInterruptedError name property identifies the error type", () => {
+  const err = new ReviewRunInterruptedError("Run interrupted by external signal.");
+  assert.equal(err.name, "ReviewRunInterruptedError");
+});
+
+test("ReviewRunInterruptedError instanceof distinguishes it from a generic Error", () => {
+  const interrupted = new ReviewRunInterruptedError("interrupted");
+  const generic = new Error("generic");
+  assert.ok(interrupted instanceof ReviewRunInterruptedError);
+  assert.ok(!(generic instanceof ReviewRunInterruptedError));
+});
+
+// ─── Task 2.1: Orchestrator AbortSignal tests ─────────────────────────────────
+
+test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already aborted before dispatch", async () => {
+  const controller = new AbortController();
+  controller.abort();
+
+  const step1Calls: string[] = [];
+  const orchestrator = createBaseOrchestrator({
+    stepRunner: {
+      async run({ step, context }: { step: { stepId: string }; context: { filePath: string } }) {
+        if (step.stepId === "step1-overview") {
+          step1Calls.push(context.filePath);
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+  assert.deepEqual(step1Calls, [], "No file should enter Step 1 when signal is pre-aborted");
+});
+
+test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is aborted during Step 0", async () => {
+  const controller = new AbortController();
+  const step1Calls: string[] = [];
+
+  const orchestrator = createBaseOrchestrator({
+    changesetOverviewRunner: {
+      async run() {
+        // Signal fires "during" Step 0 — before Step 0 returns
+        controller.abort();
+        return createRunContext({
+          changesetOverview: "## Changeset\n- test",
+          userContext: []
+        });
+      }
+    },
+    stepRunner: {
+      async run({ step, context }: { step: { stepId: string }; context: { filePath: string } }) {
+        if (step.stepId === "step1-overview") {
+          step1Calls.push(context.filePath);
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+  assert.deepEqual(step1Calls, [], "No file should enter Step 1 when signal is aborted during Step 0");
+});
+
+test("ReviewOrchestrator stops new file dispatch when signal aborts during fan-out", async () => {
+  const threeFiles = ["src/app.ts", "packages/app/index.ts", "extra/helper.ts"];
+  const controller = new AbortController();
+  const step1Calls: string[] = [];
+  let abortFired = false;
+
+  const orchestrator = createBaseOrchestrator({
+    sourceProvider: createMockSourceProvider(threeFiles),
+    maxConcurrentFiles: 2,
+    stepRunner: {
+      async run({ step, context }: { step: { stepId: string }; context: { filePath: string } }) {
+        if (step.stepId === "step1-overview") {
+          step1Calls.push(context.filePath);
+          // abort on first Step 1 call — before third file can be dispatched
+          if (!abortFired) {
+            abortFired = true;
+            controller.abort();
+          }
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+  assert.ok(
+    !step1Calls.includes("extra/helper.ts"),
+    "Third file should not enter Step 1 after abort"
+  );
+});
+
+test("ReviewOrchestrator worker stops at next safe boundary and does not start the following step", async () => {
+  const controller = new AbortController();
+  const stepsExecuted: string[] = [];
+
+  const orchestrator = createBaseOrchestrator({
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        stepsExecuted.push(step.stepId);
+        if (step.stepId === "step1-overview") {
+          // Abort during step1 — before step2 guard runs
+          controller.abort();
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      orchestrator.run(
+        { ...TEST_REQUEST, repoPath: "." },
+        { signal: controller.signal }
+      ),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+  assert.ok(
+    stepsExecuted.includes("step1-overview"),
+    "Step 1 should have started before abort"
+  );
+  assert.ok(
+    !stepsExecuted.includes("step2-dependencies-boundaries"),
+    "Step 2 should not start after abort"
+  );
+});
+
+test("ReviewOrchestrator worker does not publish a new per-file snapshot after abort signal", async () => {
+  const controller = new AbortController();
+  const sink = createTrackingOutputSink();
+  const fileReviewCallsAfterAbort: string[] = [];
+  let abortFired = false;
+
+  const orchestrator = createBaseOrchestrator({
+    outputSink: {
+      ...sink,
+      publishFileReview(result) {
+        if (abortFired) {
+          fileReviewCallsAfterAbort.push(result.noteFilePath);
+        }
+        sink.publishFileReview(result);
+      }
+    },
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        if (step.stepId === "step1-overview" && !abortFired) {
+          abortFired = true;
+          controller.abort();
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+  assert.deepEqual(
+    fileReviewCallsAfterAbort,
+    [],
+    "publishFileReview should not be called with a new per-file snapshot after abort"
+  );
+});
+
+test("ReviewOrchestrator does not call publishRunSummary or publishReviewIndex after external abort", async () => {
+  const controller = new AbortController();
+  const sink = createTrackingOutputSink();
+
+  const orchestrator = createBaseOrchestrator({
+    outputSink: sink,
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        if (step.stepId === "step1-overview") {
+          controller.abort();
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError
+  );
+  assert.ok(
+    !sink.calls.includes("publishRunSummary"),
+    "publishRunSummary should not be called after abort"
+  );
+  assert.ok(
+    !sink.calls.includes("publishReviewIndex"),
+    "publishReviewIndex should not be called after abort"
+  );
+});
+
+test("ReviewOrchestrator calls publishRunSummary and publishReviewIndex on a normal run without abort", async () => {
+  const sink = createTrackingOutputSink();
+
+  const orchestrator = createBaseOrchestrator({
+    outputSink: sink,
+    stepRunner: createNoOpStepRunner()
+  });
+
+  await orchestrator.run(TEST_REQUEST);
+  assert.ok(
+    sink.calls.includes("publishRunSummary"),
+    "publishRunSummary should be called on normal completion"
+  );
+  assert.ok(
+    sink.calls.includes("publishReviewIndex"),
+    "publishReviewIndex should be called on normal completion"
+  );
+});
+
+test("ReviewOrchestrator run without signal option proceeds normally", async () => {
+  const sink = createTrackingOutputSink();
+  const orchestrator = createBaseOrchestrator({ outputSink: sink });
+
+  const result = await orchestrator.run(TEST_REQUEST);
+  assert.equal(result.plannedFileCount, TEST_FILES.length);
+  assert.equal(result.successfulFileCount, TEST_FILES.length);
+  assert.equal(result.skippedFileCount, 0);
+});

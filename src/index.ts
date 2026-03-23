@@ -4,6 +4,7 @@ import {
   type ReviewApp
 } from "./app/review-app.ts";
 import { CliUsageError, parseReviewCommand } from "./cli/parser.ts";
+import { ReviewRunInterruptedError } from "./core/orchestrator.ts";
 
 export interface CliRuntime {
   app?: ReviewApp;
@@ -33,6 +34,11 @@ export async function runCli(
     if (error instanceof CliUsageError) {
       resolvedRuntime.stderr.error(error.message);
       return 1;
+    }
+
+    if (error instanceof ReviewRunInterruptedError) {
+      resolvedRuntime.stderr.error("Review run interrupted.");
+      return 130;
     }
 
     const message =
