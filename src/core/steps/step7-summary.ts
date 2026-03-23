@@ -42,54 +42,6 @@ const STEP7_SYSTEM_ADDITION = [
   "- Begin the response with `## Summary`."
 ].join("\n");
 
-const STEP7_INSTRUCTION = [
-  "This summary serves as the audit trail for the reader to understand what this review was based on and how to interpret its conclusions.",
-  "",
-  "Read <current_review> and write a structured summary with the following three sections:",
-  "",
-  "1. 審查基礎: Describe the basis of this review so the reader can judge whether the final conclusions are well grounded.",
-  "   - 改動概要: Summarize the change at a high level, based on Overview.",
-  "   - 依據規範: List the key specifications, framework versions, source-of-truth references, or standards that governed this review, based on Knowledge & Source of Truth.",
-  "   - 審查假設: State the assumptions and scope boundaries that materially shaped this review, including what was explicitly treated as out of scope.",
-  "",
-  "2. 行為變更提醒: Consolidate the observable behavioral change observations from earlier steps.",
-  "   - Report behavioral changes as observations only.",
-  "   - Do not restate findings or correctness judgments here.",
-  "   - If no behavioral changes were observed, write `無`.",
-  "",
-  "3. 風險評估: Provide an overall risk assessment of the completed review.",
-  "   - 整體風險等級: One of Low / Medium / High / Critical.",
-  "   - 風險理由: Briefly explain the chosen risk level based on the final findings, the observed behavioral changes, and the review assumptions/scope boundaries.",
-  "",
-  "Keep the summary concise, high-level, and grounded in <current_review>.",
-  "",
-  "Respond in the following format:",
-  "",
-  "## Summary",
-  "### 審查基礎",
-  "- 改動概要：[from Overview]",
-  "- 依據規範：[from Knowledge & Source of Truth]",
-  "- 審查假設：[from Knowledge's 採用規則與假設 and 排除範圍]",
-  "### 行為變更提醒",
-  "- [consolidated behavioral change observations, or 無]",
-  "### 風險評估",
-  "- 整體風險等級：[Low / Medium / High / Critical]",
-  "- 風險理由：[rationale based on final findings, behavioral changes, and review scope/assumptions]",
-  "",
-  "Before submitting your response, verify:",
-  "- Begins with `## Summary`",
-  "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、審查假設",
-  "- Contains `### 行為變更提醒` with specific content or explicitly states `無`",
-  "- Contains `### 風險評估` with 整體風險等級 set to exactly one of: Low / Medium / High / Critical, and a non-empty 風險理由"
-].join("\n");
-
-const STEP7_JUDGE_CRITERIA = [
-  "段落 `## Summary` 必須存在，且符合以下條件：",
-  "- 包含 `### 審查基礎` 子段落，且「改動概要」、「依據規範」、「審查假設」三個欄位都必須出現並對應回答欄位要求。",
-  "- 包含 `### 行為變更提醒` 子段落，且有具體內容或明確寫 `無`。",
-  "- 包含 `### 風險評估` 子段落，且「整體風險等級」為 Low / Medium / High / Critical 其中之一，「風險理由」需對應整體風險判斷。"
-].join("\n");
-
 export interface Step7SummaryStepOptions {
   reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
 }
@@ -119,7 +71,7 @@ export class Step7SummaryStep implements StepDefinition {
       },
       completionCheck: {
         kind: "judge",
-        criteria: STEP7_JUDGE_CRITERIA
+        criteria: buildStep7JudgeCriteria()
       },
       applyTo(targetContext: FileReviewContext, responseText: string) {
         targetContext.setSection("summary", responseText);
@@ -134,6 +86,58 @@ function buildStep7UserMessage(currentReview: string): string {
     currentReview,
     "</current_review>",
     "",
-    STEP7_INSTRUCTION
+    buildStep7Instruction()
+  ].join("\n");
+}
+
+function buildStep7Instruction(): string {
+  return [
+    "This summary serves as the audit trail for the reader to understand what this review was based on and how to interpret its conclusions.",
+    "",
+    "Read <current_review> and write a structured summary with the following three sections:",
+    "",
+    "1. 審查基礎: Describe the basis of this review so the reader can judge whether the final conclusions are well grounded.",
+    "   - 改動概要: Summarize the change at a high level, based on Overview.",
+    "   - 依據規範: List the key specifications, framework versions, source-of-truth references, or standards that governed this review, based on Knowledge & Source of Truth.",
+    "   - 審查假設: State the assumptions and scope boundaries that materially shaped this review, including what was explicitly treated as out of scope.",
+    "",
+    "2. 行為變更提醒: Consolidate the observable behavioral change observations from earlier steps.",
+    "   - Report behavioral changes as observations only.",
+    "   - Do not restate findings or correctness judgments here.",
+    "   - If no behavioral changes were observed, write `無`.",
+    "",
+    "3. 風險評估: Provide an overall risk assessment of the completed review.",
+    "   - 整體風險等級: One of High / Medium / Low / None.",
+    "   - 風險理由: Briefly explain the chosen risk level based on the final findings, the observed behavioral changes, and the review assumptions/scope boundaries.",
+    "",
+    "Keep the summary concise, high-level, and grounded in <current_review>.",
+    "",
+    "Respond in the following format:",
+    "",
+    "## Summary",
+    "### 審查基礎",
+    "- 改動概要：[from Overview]",
+    "- 依據規範：[from Knowledge & Source of Truth]",
+    "- 審查假設：[from Knowledge's 採用規則與假設 and 排除範圍]",
+    "### 行為變更提醒",
+    "- [consolidated behavioral change observations, or 無]",
+    "### 風險評估",
+    "- 整體風險等級：[High / Medium / Low / None]",
+    "- 風險理由：[rationale based on final findings, behavioral changes, and review scope/assumptions]",
+    "",
+    "Before submitting your response, verify:",
+    "- Begins with `## Summary`",
+    "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、審查假設",
+    "- Contains `### 行為變更提醒` with specific content or explicitly states `無`",
+    "- Contains `### 風險評估` with 整體風險等級 set to one of High / Medium / Low / None, and a non-empty 風險理由"
+  ].join("\n");
+}
+
+function buildStep7JudgeCriteria(): string {
+  return [
+    "段落 `## Summary` 必須存在，且符合以下條件：",
+    "- 包含 `### 審查基礎` 子段落，且「改動概要」、「依據規範」、「審查假設」三個欄位都必須出現並對應回答欄位要求。",
+    "- 包含 `### 行為變更提醒` 子段落，且有具體內容或明確寫 `無`。",
+    "- 包含 `### 風險評估` 子段落，且「整體風險等級」為 High / Medium / Low / None 其中之一，「風險理由」需對應整體風險判斷。"
   ].join("\n");
 }

@@ -640,7 +640,7 @@ test("ReviewNoteFinalizer preserves empty Findings before Summary", () => {
       "### 行為變更提醒",
       "- 無",
       "### 風險評估",
-      "- 整體風險等級：Low",
+      "- 整體風險等級：None",
       "- 風險理由：目前未保留 final findings。"
     ].join("\n")
   );

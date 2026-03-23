@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { Finding } from "../../../src/core/file-review-context.ts";
 import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step7SummaryStep } from "../../../src/core/steps/step7-summary.ts";
@@ -43,49 +44,8 @@ const EXPECTED_SYSTEM_MESSAGE = [
   "- Begin the response with `## Summary`."
 ].join("\n");
 
-const EXPECTED_STEP_INSTRUCTION = [
-  "This summary serves as the audit trail for the reader to understand what this review was based on and how to interpret its conclusions.",
-  "",
-  "Read <current_review> and write a structured summary with the following three sections:",
-  "",
-  "1. 審查基礎: Describe the basis of this review so the reader can judge whether the final conclusions are well grounded.",
-  "   - 改動概要: Summarize the change at a high level, based on Overview.",
-  "   - 依據規範: List the key specifications, framework versions, source-of-truth references, or standards that governed this review, based on Knowledge & Source of Truth.",
-  "   - 審查假設: State the assumptions and scope boundaries that materially shaped this review, including what was explicitly treated as out of scope.",
-  "",
-  "2. 行為變更提醒: Consolidate the observable behavioral change observations from earlier steps.",
-  "   - Report behavioral changes as observations only.",
-  "   - Do not restate findings or correctness judgments here.",
-  "   - If no behavioral changes were observed, write `無`.",
-  "",
-  "3. 風險評估: Provide an overall risk assessment of the completed review.",
-  "   - 整體風險等級: One of Low / Medium / High / Critical.",
-  "   - 風險理由: Briefly explain the chosen risk level based on the final findings, the observed behavioral changes, and the review assumptions/scope boundaries.",
-  "",
-  "Keep the summary concise, high-level, and grounded in <current_review>.",
-  "",
-  "Respond in the following format:",
-  "",
-  "## Summary",
-  "### 審查基礎",
-  "- 改動概要：[from Overview]",
-  "- 依據規範：[from Knowledge & Source of Truth]",
-  "- 審查假設：[from Knowledge's 採用規則與假設 and 排除範圍]",
-  "### 行為變更提醒",
-  "- [consolidated behavioral change observations, or 無]",
-  "### 風險評估",
-  "- 整體風險等級：[Low / Medium / High / Critical]",
-  "- 風險理由：[rationale based on final findings, behavioral changes, and review scope/assumptions]",
-  "",
-  "Before submitting your response, verify:",
-  "- Begins with `## Summary`",
-  "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、審查假設",
-  "- Contains `### 行為變更提醒` with specific content or explicitly states `無`",
-  "- Contains `### 風險評估` with 整體風險等級 set to exactly one of: Low / Medium / High / Critical, and a non-empty 風險理由"
-].join("\n");
-
 test("Step7SummaryStep prepares the exact Step 7 prompt contract from current review only", () => {
-  const context = createContextWithStep6Findings();
+  const context = createContextWithFindings([createFinding("must", 91, "最終問題")]);
   const step = new Step7SummaryStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
   });
@@ -101,108 +61,182 @@ test("Step7SummaryStep prepares the exact Step 7 prompt contract from current re
   });
   assert.deepEqual(plan.completionCheck, {
     kind: "judge",
-    criteria: [
-      "段落 `## Summary` 必須存在，且符合以下條件：",
-      "- 包含 `### 審查基礎` 子段落，且「改動概要」、「依據規範」、「審查假設」三個欄位都必須出現並對應回答欄位要求。",
-      "- 包含 `### 行為變更提醒` 子段落，且有具體內容或明確寫 `無`。",
-      "- 包含 `### 風險評估` 子段落，且「整體風險等級」為 Low / Medium / High / Critical 其中之一，「風險理由」需對應整體風險判斷。"
-    ].join("\n")
+    criteria: buildExpectedJudgeCriteria()
   });
   assert.equal(plan.prompt.systemMessage, EXPECTED_SYSTEM_MESSAGE);
   assert.equal(
     plan.prompt.userMessage,
     [
       "<current_review>",
-      "# src/app.ts",
-      "",
-      "- Source file: `src/app.ts`",
-      "",
-      "## Overview",
-      "- 整體理解：測試用概覽",
-      "- 行為變更：無行為變更",
-      "- 檔案職責：維護 app value",
-      "- 改動目的：調整常數",
-      "- 影響範圍：src/app.ts",
-      "- 測試覆蓋觀察：未見對應測試異動",
-      "",
-      "## Dependencies & Boundaries",
-      "- 相依清單：",
-      "  - `[valueService]` → 提供 value 更新 → Consume",
-      "    - Contract：輸入 value 並回傳更新結果",
-      "    - 評估：此 diff 維持既有 boundary",
-      "- 隱含相依：",
-      "  - 無",
-      "",
-      "## Knowledge & Source of Truth",
-      "- 版本／文件參考：",
-      "  - package.json — repo local source",
-      "- 採用規則與假設：",
-      "  - 依 repo 設定檔判讀版本約束",
-      "- 排除範圍：",
-      "  - 外部官方文件查證不在本次 foundation 範圍內",
-      "",
-      "## Strategy & What-if Scenarios",
-      "- 高風險區域：",
-      "  - state transition：這次改動調整 value 更新流程，值得驗證狀態切換是否一致",
-      "- What-if 假設情境：",
-      "  - W1: 觸發條件：value 為空；預期正確行為：應維持既有 fallback；待驗證風險/不確定性：新的分支是否略過 fallback；與本次改動的關聯：diff 調整了 value 更新路徑",
-      "  - W2: 觸發條件：dependency 回傳異常；預期正確行為：應保留既有錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示 valueService boundary",
-      "  - W3: 觸發條件：多次重複呼叫；預期正確行為：應保持可預測結果；待驗證風險/不確定性：狀態是否會累積偏移；與本次改動的關聯：Step 3 已收斂 repo 假設",
-      "",
-      "## Findings",
-      "1 must-fix issue(s), 0 nice-to-have suggestion(s).",
-      "- [must] 最終問題",
-      "  - Context：具體情境",
-      "  - Deviation：預期與實際有落差",
-      "  - Impact：會造成 correctness 問題",
-      "  - Suggestion：補上 final guard",
+      buildExpectedCurrentReview(),
       "</current_review>",
       "",
-      EXPECTED_STEP_INSTRUCTION
+      buildExpectedStepInstruction()
     ].join("\n")
   );
   assert.doesNotMatch(plan.prompt.userMessage, /<diff/u);
   assert.doesNotMatch(plan.prompt.userMessage, /<changeset_context>/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /<required_risk_level>/u);
   assert.doesNotMatch(
     plan.prompt.userMessage.match(/<current_review>[\s\S]*<\/current_review>/u)?.[0] ?? "",
     /confidence/u
   );
 });
 
-test("Step7SummaryStep carries explicit empty findings state in current review", () => {
-  const context = createContextWithStep6EmptyFindings();
+test("Step7SummaryStep uses consistent prompt and criteria regardless of findings risk level", () => {
+  const context = createContextWithFindings([createFinding("nice", 95, "建議項")]);
   const step = new Step7SummaryStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
   });
 
   const plan = step.prepare(context);
 
-  assert.match(plan.prompt.userMessage, /<current_review>[\s\S]*## Findings\n無 findings\.\n- 無/u);
-  assert.doesNotMatch(plan.prompt.userMessage, /Review not yet generated/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /<required_risk_level>/u);
+  assert.deepEqual(plan.completionCheck, {
+    kind: "judge",
+    criteria: buildExpectedJudgeCriteria()
+  });
 });
 
-function createContextWithStep6Findings(): FileReviewContext {
-  const context = createBaseContext();
-  context.updateStructuredState({
-    findings: [
-      {
-        type: "must",
-        title: "最終問題",
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 final guard",
-        confidence: 91
-      }
-    ]
+test("Step7SummaryStep carries explicit empty findings state in current review", () => {
+  const context = createContextWithFindings([]);
+  const step = new Step7SummaryStep({
+    reviewNoteFinalizer: new ReviewNoteFinalizer()
   });
+
+  const plan = step.prepare(context);
+
+  assert.match(
+    plan.prompt.userMessage,
+    /<current_review>[\s\S]*## Findings\n無 findings\.\n- 無[\s\S]*<\/current_review>/u
+  );
+  assert.doesNotMatch(plan.prompt.userMessage, /<required_risk_level>/u);
+  assert.deepEqual(plan.completionCheck, {
+    kind: "judge",
+    criteria: buildExpectedJudgeCriteria()
+  });
+});
+
+function buildExpectedStepInstruction(): string {
+  return [
+    "This summary serves as the audit trail for the reader to understand what this review was based on and how to interpret its conclusions.",
+    "",
+    "Read <current_review> and write a structured summary with the following three sections:",
+    "",
+    "1. 審查基礎: Describe the basis of this review so the reader can judge whether the final conclusions are well grounded.",
+    "   - 改動概要: Summarize the change at a high level, based on Overview.",
+    "   - 依據規範: List the key specifications, framework versions, source-of-truth references, or standards that governed this review, based on Knowledge & Source of Truth.",
+    "   - 審查假設: State the assumptions and scope boundaries that materially shaped this review, including what was explicitly treated as out of scope.",
+    "",
+    "2. 行為變更提醒: Consolidate the observable behavioral change observations from earlier steps.",
+    "   - Report behavioral changes as observations only.",
+    "   - Do not restate findings or correctness judgments here.",
+    "   - If no behavioral changes were observed, write `無`.",
+    "",
+    "3. 風險評估: Provide an overall risk assessment of the completed review.",
+    "   - 整體風險等級: One of High / Medium / Low / None.",
+    "   - 風險理由: Briefly explain the chosen risk level based on the final findings, the observed behavioral changes, and the review assumptions/scope boundaries.",
+    "",
+    "Keep the summary concise, high-level, and grounded in <current_review>.",
+    "",
+    "Respond in the following format:",
+    "",
+    "## Summary",
+    "### 審查基礎",
+    "- 改動概要：[from Overview]",
+    "- 依據規範：[from Knowledge & Source of Truth]",
+    "- 審查假設：[from Knowledge's 採用規則與假設 and 排除範圍]",
+    "### 行為變更提醒",
+    "- [consolidated behavioral change observations, or 無]",
+    "### 風險評估",
+    "- 整體風險等級：[High / Medium / Low / None]",
+    "- 風險理由：[rationale based on final findings, behavioral changes, and review scope/assumptions]",
+    "",
+    "Before submitting your response, verify:",
+    "- Begins with `## Summary`",
+    "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、審查假設",
+    "- Contains `### 行為變更提醒` with specific content or explicitly states `無`",
+    "- Contains `### 風險評估` with 整體風險等級 set to one of High / Medium / Low / None, and a non-empty 風險理由"
+  ].join("\n");
+}
+
+function buildExpectedJudgeCriteria(): string {
+  return [
+    "段落 `## Summary` 必須存在，且符合以下條件：",
+    "- 包含 `### 審查基礎` 子段落，且「改動概要」、「依據規範」、「審查假設」三個欄位都必須出現並對應回答欄位要求。",
+    "- 包含 `### 行為變更提醒` 子段落，且有具體內容或明確寫 `無`。",
+    "- 包含 `### 風險評估` 子段落，且「整體風險等級」為 High / Medium / Low / None 其中之一，「風險理由」需對應整體風險判斷。"
+  ].join("\n");
+}
+
+function createContextWithFindings(findings: Finding[]): FileReviewContext {
+  const context = createBaseContext();
+  context.updateStructuredState({ findings });
   return context;
 }
 
-function createContextWithStep6EmptyFindings(): FileReviewContext {
-  const context = createBaseContext();
-  context.updateStructuredState({ findings: [] });
-  return context;
+function createFinding(
+  type: "must" | "nice",
+  confidence: number,
+  title: string
+): Finding {
+  return {
+    type,
+    title,
+    context: "具體情境",
+    deviation: "預期與實際有落差",
+    impact: "會造成 correctness 問題",
+    suggestion: "補上 final guard",
+    confidence
+  };
+}
+
+function buildExpectedCurrentReview(): string {
+  return [
+    "# src/app.ts",
+    "",
+    "- Source file: `src/app.ts`",
+    "",
+    "## Overview",
+    "- 整體理解：測試用概覽",
+    "- 行為變更：無行為變更",
+    "- 檔案職責：維護 app value",
+    "- 改動目的：調整常數",
+    "- 影響範圍：src/app.ts",
+    "- 測試覆蓋觀察：未見對應測試異動",
+    "",
+    "## Dependencies & Boundaries",
+    "- 相依清單：",
+    "  - `[valueService]` → 提供 value 更新 → Consume",
+    "    - Contract：輸入 value 並回傳更新結果",
+    "    - 評估：此 diff 維持既有 boundary",
+    "- 隱含相依：",
+    "  - 無",
+    "",
+    "## Knowledge & Source of Truth",
+    "- 版本／文件參考：",
+    "  - package.json — repo local source",
+    "- 採用規則與假設：",
+    "  - 依 repo 設定檔判讀版本約束",
+    "- 排除範圍：",
+    "  - 外部官方文件查證不在本次 foundation 範圍內",
+    "",
+    "## Strategy & What-if Scenarios",
+    "- 高風險區域：",
+    "  - state transition：這次改動調整 value 更新流程，值得驗證狀態切換是否一致",
+    "- What-if 假設情境：",
+    "  - W1: 觸發條件：value 為空；預期正確行為：應維持既有 fallback；待驗證風險/不確定性：新的分支是否略過 fallback；與本次改動的關聯：diff 調整了 value 更新路徑",
+    "  - W2: 觸發條件：dependency 回傳異常；預期正確行為：應保留既有錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示 valueService boundary",
+    "  - W3: 觸發條件：多次重複呼叫；預期正確行為：應保持可預測結果；待驗證風險/不確定性：狀態是否會累積偏移；與本次改動的關聯：Step 3 已收斂 repo 假設",
+    "",
+    "## Findings",
+    "1 must-fix issue(s), 0 nice-to-have suggestion(s).",
+    "- [must] 最終問題",
+    "  - Context：具體情境",
+    "  - Deviation：預期與實際有落差",
+    "  - Impact：會造成 correctness 問題",
+    "  - Suggestion：補上 final guard"
+  ].join("\n");
 }
 
 function createBaseContext(): FileReviewContext {
