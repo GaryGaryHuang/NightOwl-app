@@ -11,12 +11,20 @@ import { Step5ValidationInterrogationStep } from "../../src/core/steps/step5-val
 import { Step6CognitiveSimulationStep } from "../../src/core/steps/step6-cognitive-simulation.ts";
 import { Step7SummaryStep } from "../../src/core/steps/step7-summary.ts";
 import {
+  type StepExecutionPlan,
   StepRunner
 } from "../../src/core/step-runner.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 
+function applySection(sectionKey: string): StepExecutionPlan["applyTo"] {
+  return (targetContext, response) => {
+    assert.ok(typeof response === "string");
+    targetContext.setSection(sectionKey, response);
+  };
+}
+
 test("StepRunner returns an apply-able result without mutating state or writing output directly", async () => {
-  const lifecycle = [];
+  const lifecycle: unknown[] = [];
   const context = new FileReviewContext({
     filePath: "src/app.ts",
     noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
@@ -62,9 +70,7 @@ test("StepRunner returns an apply-able result without mutating state or writing 
             model: "gpt-5-mini",
             timeoutMs: 300_000
           },
-          applyTo(targetContext, responseText) {
-            targetContext.setSection("overview", responseText);
-          }
+          applyTo: applySection("overview")
         };
       }
     },
@@ -140,9 +146,7 @@ test("StepRunner fails on blank responses and does not apply any state", async (
                 model: "gpt-5-mini",
                 timeoutMs: 300_000
               },
-              applyTo(targetContext, responseText) {
-                targetContext.setSection("overview", responseText);
-              }
+              applyTo: applySection("overview")
             };
           }
         },
@@ -189,7 +193,7 @@ test("StepRunner wraps prepare failures with step and file context", async () =>
 });
 
 test("StepRunner retries the whole section-step when judge rejects the first attempt and applies only the successful retry", async () => {
-  const lifecycle = [];
+  const lifecycle: unknown[] = [];
   const context = new FileReviewContext({
     filePath: "src/app.ts",
     noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
@@ -255,9 +259,7 @@ test("StepRunner retries the whole section-step when judge rejects the first att
             kind: "judge",
             criteria: "must contain overview fields"
           },
-          applyTo(targetContext, responseText) {
-            targetContext.setSection("overview", responseText);
-          }
+          applyTo: applySection("overview")
         };
       }
     },
@@ -329,9 +331,7 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
                 kind: "judge",
                 criteria: "must contain overview fields"
               },
-              applyTo(targetContext, responseText) {
-                targetContext.setSection("overview", responseText);
-              }
+              applyTo: applySection("overview")
             };
           }
         },
@@ -406,9 +406,7 @@ test("StepRunner retries the whole step on judge timeout with fresh review and j
             kind: "judge",
             criteria: "must contain overview fields"
           },
-          applyTo(targetContext, responseText) {
-            targetContext.setSection("overview", responseText);
-          }
+          applyTo: applySection("overview")
         };
       }
     },
@@ -475,9 +473,7 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
                 kind: "judge",
                 criteria: "must contain overview fields"
               },
-              applyTo(targetContext, responseText) {
-                targetContext.setSection("overview", responseText);
-              }
+              applyTo: applySection("overview")
             };
           }
         },
@@ -546,9 +542,7 @@ test("StepRunner retries the whole step when review session startup fails and ev
             kind: "judge",
             criteria: "must contain overview fields"
           },
-          applyTo(targetContext, responseText) {
-            targetContext.setSection("overview", responseText);
-          }
+          applyTo: applySection("overview")
         };
       }
     },
@@ -607,9 +601,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
                 kind: "judge",
                 criteria: "must contain overview fields"
               },
-              applyTo(targetContext, responseText) {
-                targetContext.setSection("overview", responseText);
-              }
+              applyTo: applySection("overview")
             };
           }
         },
@@ -624,7 +616,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
 });
 
 test("StepRunner rebuilds Step 2 current review from the last successful state on retry and does not leak provisional content", async () => {
-  const prompts = [];
+  const prompts: string[] = [];
   const context = new FileReviewContext({
     filePath: "src/app.ts",
     noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
@@ -703,7 +695,7 @@ test("StepRunner rebuilds Step 2 current review from the last successful state o
 });
 
 test("StepRunner rebuilds Step 3 current review from the last successful Step 2 state on retry and does not leak provisional content", async () => {
-  const prompts = [];
+  const prompts: string[] = [];
   const context = new FileReviewContext({
     filePath: "src/app.ts",
     noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
@@ -794,7 +786,7 @@ test("StepRunner rebuilds Step 3 current review from the last successful Step 2 
 });
 
 test("StepRunner rebuilds Step 4 current review from the last successful Step 3 state on retry and does not leak provisional content", async () => {
-  const prompts = [];
+  const prompts: string[] = [];
   const context = new FileReviewContext({
     filePath: "src/app.ts",
     noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
@@ -991,7 +983,7 @@ test("StepRunner retries the whole Step 5 structured step when deterministic val
     headRef: "feature-branch"
   });
   seedStep4Context(context);
-  const prompts = [];
+  const prompts: string[] = [];
   let reviewAttempts = 0;
 
   const runner = new StepRunner({
@@ -1303,7 +1295,7 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
       }
     ]
   });
-  const prompts = [];
+  const prompts: string[] = [];
   let reviewAttempts = 0;
 
   const runner = new StepRunner({
@@ -1490,7 +1482,7 @@ test("StepRunner applies Step 7 section output under summary without changing fi
 });
 
 test("StepRunner rebuilds Step 7 current review from the last successful Step 6 state on retry and does not leak provisional content", async () => {
-  const prompts = [];
+  const prompts: string[] = [];
   const context = new FileReviewContext({
     filePath: "src/app.ts",
     noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",

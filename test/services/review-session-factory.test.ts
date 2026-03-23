@@ -1,30 +1,58 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SessionConfig } from "@github/copilot-sdk";
 
 import { KnowledgeSvc } from "../../src/services/knowledge.ts";
 import { ReviewSessionFactory } from "../../src/services/review-session-factory.ts";
 
-test("ReviewSessionFactory creates a non-streaming review session with a replaced system message and web_fetch enabled", async () => {
-  const receivedConfigs = [];
-  const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return {
-                  type: "assistant.message",
-                  data: { content: "ok" }
-                };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
+type RecordedReviewSessionConfig = SessionConfig & {
+  hooks: NonNullable<SessionConfig["hooks"]> & {
+    onPreToolUse: NonNullable<
+      NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
+    >;
+  };
+};
+
+function createRecordedConfigs(): RecordedReviewSessionConfig[] {
+  return [];
+}
+
+function assertRecordedReviewSessionConfig(
+  config: SessionConfig
+): asserts config is RecordedReviewSessionConfig {
+  assert.ok(config.hooks);
+  assert.ok(config.hooks.onPreToolUse);
+}
+
+function createRecordingClientManager(
+  recordedConfigs: RecordedReviewSessionConfig[]
+) {
+  return {
+    getClient() {
+      return {
+        async createSession(config: SessionConfig) {
+          assertRecordedReviewSessionConfig(config);
+          recordedConfigs.push(config);
+
+          return {
+            async sendAndWait() {
+              return {
+                type: "assistant.message",
+                data: { content: "ok" }
+              };
+            },
+            async disconnect() {}
+          };
+        }
+      };
     }
+  };
+}
+
+test("ReviewSessionFactory creates a non-streaming review session with a replaced system message and web_fetch enabled", async () => {
+  const receivedConfigs = createRecordedConfigs();
+  const factory = new ReviewSessionFactory({
+    clientManager: createRecordingClientManager(receivedConfigs)
   });
 
   await factory.createSession({
@@ -370,26 +398,9 @@ test("ReviewSessionFactory creates a non-streaming review session with a replace
 });
 
 test("ReviewSessionFactory enforces exact-host web_fetch allowlist when configured", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return {
-                  type: "assistant.message",
-                  data: { content: "ok" }
-                };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     webFetchAllowedHosts: ["docs.example.com"]
   });
 
@@ -486,26 +497,9 @@ test("ReviewSessionFactory enforces exact-host web_fetch allowlist when configur
 });
 
 test("ReviewSessionFactory denies all web_fetch hosts when configured allowlist is empty", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return {
-                  type: "assistant.message",
-                  data: { content: "ok" }
-                };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     webFetchAllowedHosts: []
   });
 
@@ -538,26 +532,9 @@ test("ReviewSessionFactory denies all web_fetch hosts when configured allowlist 
 });
 
 test("ReviewSessionFactory injects built-in Context7 by default for review sessions and still allows explicit disable", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return {
-                  type: "assistant.message",
-                  data: { content: "ok" }
-                };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     knowledgeSvc: new KnowledgeSvc({
       context7ApiKey: "test-api-key",
       userMcpServers: {
@@ -642,26 +619,9 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
 });
 
 test("ReviewSessionFactory enforces wildcard subdomain web_fetch allowlist matching", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return {
-                  type: "assistant.message",
-                  data: { content: "ok" }
-                };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     webFetchAllowedHosts: ["*.example.com"]
   });
 
@@ -769,26 +729,9 @@ test("ReviewSessionFactory enforces wildcard subdomain web_fetch allowlist match
 });
 
 test("ReviewSessionFactory enforces mixed exact-host and wildcard web_fetch allowlist via OR logic", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return {
-                  type: "assistant.message",
-                  data: { content: "ok" }
-                };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     webFetchAllowedHosts: ["react.dev", "*.example.com"]
   });
 
@@ -874,23 +817,9 @@ test("ReviewSessionFactory enforces mixed exact-host and wildcard web_fetch allo
 // ── Denylist runtime semantics TDD (tasks 3.1–3.4) ────────────────────────────
 
 test("ReviewSessionFactory enforces deny-over-allow semantics when denylist is configured", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return { type: "assistant.message", data: { content: "ok" } };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     webFetchAllowedHosts: ["*.example.com"],
     webFetchDeniedHosts: ["internal.example.com"]
   });
@@ -939,23 +868,9 @@ test("ReviewSessionFactory enforces deny-over-allow semantics when denylist is c
 });
 
 test("ReviewSessionFactory enforces wildcard denylist blocking and bare-domain exclusion", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return { type: "assistant.message", data: { content: "ok" } };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     webFetchAllowedHosts: ["*.example.com"],
     webFetchDeniedHosts: ["*.internal.example.com"]
   });
@@ -1022,23 +937,9 @@ test("ReviewSessionFactory enforces wildcard denylist blocking and bare-domain e
 });
 
 test("ReviewSessionFactory enforces denylist comparison rules: case-insensitive, trailing-dot, port exclusion", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return { type: "assistant.message", data: { content: "ok" } };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     webFetchAllowedHosts: ["*.example.com"],
     webFetchDeniedHosts: ["internal.example.com"]
   });
@@ -1109,23 +1010,9 @@ test("ReviewSessionFactory enforces denylist comparison rules: case-insensitive,
 });
 
 test("ReviewSessionFactory enforces denylist-only (no allowlist): denied host blocked, non-denied public host allowed", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs = createRecordedConfigs();
   const factory = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return { type: "assistant.message", data: { content: "ok" } };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs),
     webFetchDeniedHosts: ["evil.com"]
   });
 
@@ -1158,23 +1045,9 @@ test("ReviewSessionFactory enforces denylist-only (no allowlist): denied host bl
   );
 
   // wildcard denylist-only blocks matching subdomain
-  const receivedConfigs2 = [];
+  const receivedConfigs2 = createRecordedConfigs();
   const factory2 = new ReviewSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs2.push(config);
-            return {
-              async sendAndWait() {
-                return { type: "assistant.message", data: { content: "ok" } };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
+    clientManager: createRecordingClientManager(receivedConfigs2),
     webFetchDeniedHosts: ["*.evil.com"]
   });
 
@@ -1235,44 +1108,12 @@ test("ReviewSessionFactory enforces denylist-only (no allowlist): denied host bl
 });
 
 test("ReviewSessionFactory: empty denylist blocks nothing; mixed exact+wildcard deny via OR logic; allow+deny same host is denied", async () => {
-  const makeFactory = (opts) =>
-    new ReviewSessionFactory({
-      clientManager: {
-        getClient() {
-          return {
-            async createSession(config) {
-              return {
-                async sendAndWait() {
-                  return { type: "assistant.message", data: { content: "ok" } };
-                },
-                async disconnect() {}
-              };
-            }
-          };
-        }
-      },
-      ...opts
-    });
 
   // empty denylist: no additional blocking
   {
-    const receivedConfigs = [];
+    const receivedConfigs = createRecordedConfigs();
     const factory = new ReviewSessionFactory({
-      clientManager: {
-        getClient() {
-          return {
-            async createSession(config) {
-              receivedConfigs.push(config);
-              return {
-                async sendAndWait() {
-                  return { type: "assistant.message", data: { content: "ok" } };
-                },
-                async disconnect() {}
-              };
-            }
-          };
-        }
-      },
+      clientManager: createRecordingClientManager(receivedConfigs),
       webFetchAllowedHosts: ["*.example.com"],
       webFetchDeniedHosts: []
     });
@@ -1303,23 +1144,9 @@ test("ReviewSessionFactory: empty denylist blocks nothing; mixed exact+wildcard 
 
   // mixed exact + wildcard denylist deny via OR logic
   {
-    const receivedConfigs = [];
+    const receivedConfigs = createRecordedConfigs();
     const factory = new ReviewSessionFactory({
-      clientManager: {
-        getClient() {
-          return {
-            async createSession(config) {
-              receivedConfigs.push(config);
-              return {
-                async sendAndWait() {
-                  return { type: "assistant.message", data: { content: "ok" } };
-                },
-                async disconnect() {}
-              };
-            }
-          };
-        }
-      },
+      clientManager: createRecordingClientManager(receivedConfigs),
       webFetchAllowedHosts: ["*.example.com", "evil.org"],
       webFetchDeniedHosts: ["internal.example.com", "*.secret.example.com"]
     });
@@ -1354,23 +1181,9 @@ test("ReviewSessionFactory: empty denylist blocks nothing; mixed exact+wildcard 
 
   // host in both allow and deny is denied
   {
-    const receivedConfigs = [];
+    const receivedConfigs = createRecordedConfigs();
     const factory = new ReviewSessionFactory({
-      clientManager: {
-        getClient() {
-          return {
-            async createSession(config) {
-              receivedConfigs.push(config);
-              return {
-                async sendAndWait() {
-                  return { type: "assistant.message", data: { content: "ok" } };
-                },
-                async disconnect() {}
-              };
-            }
-          };
-        }
-      },
+      clientManager: createRecordingClientManager(receivedConfigs),
       webFetchAllowedHosts: ["internal.example.com"],
       webFetchDeniedHosts: ["internal.example.com"]
     });

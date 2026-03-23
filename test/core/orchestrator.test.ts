@@ -4,14 +4,20 @@ import path from "node:path";
 import test from "node:test";
 
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
+import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
+import type { RunStepInput, StepResult } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
+import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+
+type StepEvent = [string, string];
+type OutputCall = [string, string];
 
 test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 7 for a failed Step 2 file or any later files", async () => {
   const fixture = createReviewRepoFixture();
@@ -28,7 +34,7 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
-    const stepEvents = [];
+    const stepEvents: StepEvent[] = [];
     const reviewAttempts = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -156,7 +162,7 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
-    const stepEvents = [];
+    const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: new LocalWorkspaceProvider(),
@@ -313,9 +319,9 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
 
     const successfulNote = plannedNotes.find(
       ({ filePath }) => filePath === successfulFile
-    );
-    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
-    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
+    )!;
+    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile)!;
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile)!;
 
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
     assert.match(successfulNoteContent, /^## Findings/mu);
@@ -354,7 +360,7 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
     );
     const plannedNotes = planNoteFiles(path.join(outputTarget, "files"), reviewableFiles);
     const failedFile = reviewableFiles[1];
-    const executedSteps = [];
+    const executedSteps: Array<[string, string]> = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: {
         resolveRepoRoot(startPath) {
@@ -382,7 +388,7 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
       },
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: {
-        async run({ context, step }) {
+        async run({ context, step }: RunStepInput): Promise<StepResult> {
           executedSteps.push([step.stepId, context.filePath]);
 
           if (step.stepId === "step1-overview") {
@@ -390,8 +396,8 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
 
             return {
               stepId: step.stepId,
-              applyTo(targetContext) {
-                targetContext.setSection("overview", context.getSection("overview"));
+              applyTo(targetContext: FileReviewContext) {
+                targetContext.setSection("overview", context.getSection("overview")!);
               }
             };
           }
@@ -404,10 +410,10 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
 
             return {
               stepId: step.stepId,
-              applyTo(targetContext) {
+              applyTo(targetContext: FileReviewContext) {
                 targetContext.setSection(
                   "dependencies-boundaries",
-                  context.getSection("dependencies-boundaries")
+                  context.getSection("dependencies-boundaries")!
                 );
               }
             };
@@ -421,10 +427,10 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
 
             return {
               stepId: step.stepId,
-              applyTo(targetContext) {
+              applyTo(targetContext: FileReviewContext) {
                 targetContext.setSection(
                   "knowledge-source-of-truth",
-                  context.getSection("knowledge-source-of-truth")
+                  context.getSection("knowledge-source-of-truth")!
                 );
               }
             };
@@ -438,10 +444,10 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
 
             return {
               stepId: step.stepId,
-              applyTo(targetContext) {
+              applyTo(targetContext: FileReviewContext) {
                 targetContext.setSection(
                   "strategy-what-if-scenarios",
-                  context.getSection("strategy-what-if-scenarios")
+                  context.getSection("strategy-what-if-scenarios")!
                 );
               }
             };
@@ -463,7 +469,7 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
 
           return {
             stepId: step.stepId,
-            applyTo(targetContext) {
+            applyTo(targetContext: FileReviewContext) {
               targetContext.updateStructuredState(context.getStructuredState());
             }
           };
@@ -521,8 +527,8 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for initializeRun failure");
 
-    const outputCalls = [];
-    const stepEvents = [];
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       outputSink: {
@@ -540,7 +546,7 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
         publishReviewIndex() {}
       },
       stepRunner: {
-        async run({ context, step }) {
+        async run({ context, step }: RunStepInput): Promise<StepResult> {
           stepEvents.push([step.stepId, context.filePath]);
           throw new Error("should not start steps");
         }
@@ -606,9 +612,9 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
       ),
       reviewableFiles
     );
-    const outputCalls = [];
+    const outputCalls: OutputCall[] = [];
     const writtenNotes = new Map<string, string>();
-    const stepEvents = [];
+    const stepEvents: StepEvent[] = [];
     const failedNotePath = plannedNotes[1].noteFilePath;
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -635,7 +641,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
         publishReviewIndex() {}
       },
       stepRunner: {
-        async run({ context, step }) {
+        async run({ context, step }: RunStepInput): Promise<StepResult> {
           stepEvents.push([step.stepId, context.filePath]);
           throw new Error(`should not start ${step.stepId}`);
         }
@@ -719,8 +725,8 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     const laterNotePath = plannedNotes.find(
       ({ filePath }) => filePath === laterFile
     )!.noteFilePath;
-    const stepEvents = [];
-    const outputCalls = [];
+    const stepEvents: StepEvent[] = [];
+    const outputCalls: OutputCall[] = [];
     const writtenNotes = new Map<string, string>();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -823,9 +829,9 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
-    const outputCalls = [];
+    const outputCalls: OutputCall[] = [];
     const writtenNotes = new Map<string, string>();
-    const stepEvents = [];
+    const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: {
@@ -927,8 +933,8 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
-    const outputCalls = [];
-    const stepEvents = [];
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: {
@@ -1024,8 +1030,8 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
-    const outputCalls = [];
-    const stepEvents = [];
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
     const writtenNotes = new Map<string, string>();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -1133,8 +1139,8 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
-    const outputCalls = [];
-    const stepEvents = [];
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
     const writtenNotes = new Map<string, string>();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -1242,8 +1248,8 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     )!.noteFilePath;
     const firstNotePath = plannedNotes[0].noteFilePath;
     const writtenNotes = new Map<string, string>();
-    const outputCalls = [];
-    const stepEvents = [];
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: {
@@ -1330,8 +1336,8 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
-    const stepEvents = [];
-    const outputCalls = [];
+    const stepEvents: StepEvent[] = [];
+    const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: {
@@ -1343,10 +1349,12 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
         },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        }
+        },
+        publishRunSummary() {},
+        publishReviewIndex() {}
       },
       stepRunner: {
-        async run({ context, step }) {
+        async run({ context, step }: RunStepInput): Promise<StepResult> {
           stepEvents.push([step.stepId, context.filePath]);
 
           if (step.stepId !== "step1-overview") {
@@ -1425,8 +1433,8 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
     const writtenNotes = new Map<string, string>();
-    const outputCalls = [];
-    const stepEvents = [];
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: {
@@ -1447,7 +1455,9 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
         },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        }
+        },
+        publishRunSummary() {},
+        publishReviewIndex() {}
       },
       stepRunner: createStepFailureRunner({
         stepEvents,
@@ -1530,8 +1540,8 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
     const writtenNotes = new Map<string, string>();
-    const outputCalls = [];
-    const stepEvents = [];
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: {
@@ -1548,7 +1558,9 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
           if (skipRecord.filePath === failedFile) {
             throw new Error("skipped log write failed");
           }
-        }
+        },
+        publishRunSummary() {},
+        publishReviewIndex() {}
       },
       stepRunner: createStepFailureRunner({
         stepEvents,
@@ -1599,7 +1611,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
 });
 
 test("ReviewOrchestrator does not initialize local output when Step 0 fails", async () => {
-  const calls = [];
+  const calls: string[] = [];
   const fixture = createReviewRepoFixture();
 
   try {
@@ -1615,7 +1627,9 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
         },
         publishSkippedFile() {
           calls.push("publishSkippedFile");
-        }
+        },
+        publishRunSummary() {},
+        publishReviewIndex() {}
       },
       stepRunner: {
         async run() {
@@ -1844,10 +1858,10 @@ function escapeRegExp(value: string): string {
 }
 
 function createAlwaysSuccessfulStepRunner(
-  stepEvents: Array<[string, string]>
+  stepEvents: StepEvent[]
 ): Pick<StepRunner, "run"> {
   return {
-    async run({ context, step }) {
+    async run({ context, step }: RunStepInput): Promise<StepResult> {
       stepEvents.push([step.stepId, context.filePath]);
 
       return buildSuccessfulStepResult(step.stepId, context.filePath);
@@ -1856,7 +1870,7 @@ function createAlwaysSuccessfulStepRunner(
 }
 
 function createStepFailureRunner(input: {
-  stepEvents: Array<[string, string]>;
+  stepEvents: StepEvent[];
   failedFile: string;
   failedStepId:
     | "step1-overview"
@@ -1872,7 +1886,7 @@ function createStepFailureRunner(input: {
     | "deterministic validation failed";
 }): Pick<StepRunner, "run"> {
   return {
-    async run({ context, step }) {
+    async run({ context, step }: RunStepInput): Promise<StepResult> {
       input.stepEvents.push([step.stepId, context.filePath]);
 
       if (
@@ -1890,20 +1904,13 @@ function createStepFailureRunner(input: {
 }
 
 function buildSuccessfulStepResult(
-  stepId:
-    | "step1-overview"
-    | "step2-dependencies-boundaries"
-    | "step3-knowledge-source-of-truth"
-    | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation"
-    | "step6-cognitive-simulation"
-    | "step7-summary",
+  stepId: string,
   filePath: string
-) {
+): StepResult {
   if (stepId === "step1-overview") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection("overview", buildOverviewResponse(filePath));
       }
     };
@@ -1912,7 +1919,7 @@ function buildSuccessfulStepResult(
   if (stepId === "step2-dependencies-boundaries") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "dependencies-boundaries",
           buildDependenciesResponse(filePath)
@@ -1924,7 +1931,7 @@ function buildSuccessfulStepResult(
   if (stepId === "step3-knowledge-source-of-truth") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "knowledge-source-of-truth",
           buildKnowledgeResponse(filePath)
@@ -1936,7 +1943,7 @@ function buildSuccessfulStepResult(
   if (stepId === "step4-strategy-what-if-scenarios") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "strategy-what-if-scenarios",
           buildStrategyResponse(filePath)
@@ -1948,7 +1955,7 @@ function buildSuccessfulStepResult(
   if (stepId === "step5-validation-interrogation") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.updateStructuredState({
           findings: [
             {
@@ -1969,7 +1976,7 @@ function buildSuccessfulStepResult(
   if (stepId === "step6-cognitive-simulation") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.updateStructuredState({
           findings: [
             {
@@ -1989,7 +1996,7 @@ function buildSuccessfulStepResult(
 
   return {
     stepId,
-    applyTo(targetContext) {
+    applyTo(targetContext: FileReviewContext) {
       targetContext.setSection("summary", buildStep7SummaryResponse(filePath));
     }
   };

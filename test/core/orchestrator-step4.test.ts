@@ -19,7 +19,7 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
-    const observedPrompts = [];
+    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -98,7 +98,7 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
       reviewableFiles
     );
     const failedFile = reviewableFiles[1];
-    const stepEvents = [];
+    const stepEvents: Array<[string, string]> = [];
     const reviewAttempts = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -169,9 +169,9 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
 
     const successfulNote = plannedNotes.find(
       ({ filePath }) => filePath === reviewableFiles[0]
-    );
-    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
-    const laterNote = plannedNotes.find(({ filePath }) => filePath === reviewableFiles[2]);
+    )!;
+    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile)!;
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === reviewableFiles[2])!;
 
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
     assert.match(successfulNoteContent, /^## Summary/mu);
@@ -274,7 +274,7 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile);
+    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile)!;
     const retriedContent = readFileSync(retriedNote.noteFilePath, "utf8");
 
     assert.equal(reviewAttempts.get(`step4-strategy-what-if-scenarios:${retryFile}`), 2);

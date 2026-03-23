@@ -2,10 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { JudgeService } from "../../src/core/judge.ts";
+import type { JudgeSessionProfile } from "../../src/services/judge-session-factory.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 
+type JudgeObservedEvent =
+  | ["createSession", JudgeSessionProfile]
+  | ["sendAndWait", { prompt: string }, number | undefined]
+  | ["disconnect"];
+
 test("JudgeService passes through section content and criteria, and accepts yes-style responses", async () => {
-  const observed = [];
+  const observed: JudgeObservedEvent[] = [];
   const service = new JudgeService({
     judgeSessionFactory: {
       async createSession(profile) {
@@ -42,8 +48,7 @@ test("JudgeService passes through section content and criteria, and accepts yes-
       "createSession",
       {
         model: "gpt-5-mini",
-        systemMessage: service.systemMessage,
-        timeoutMs: 180_000
+        systemMessage: service.systemMessage
       }
     ],
     [

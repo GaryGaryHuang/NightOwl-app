@@ -19,10 +19,10 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
-    const observedProfiles = [];
-    const observedStepEvents = [];
-    const observedPrompts = [];
-    const observedDisconnects = [];
+    const observedProfiles: Array<Record<string, string>> = [];
+    const observedStepEvents: Array<[string, string]> = [];
+    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
+    const observedDisconnects: string[] = [];
     const sourceProvider = new LocalGitProvider();
     const stepRunner = createSevenStepRunner({
       observedDisconnects,
@@ -131,7 +131,7 @@ test("ReviewOrchestrator passes explicit empty Step 6 findings into Step 7 and s
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
-    const observedPrompts = [];
+    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -277,7 +277,7 @@ test("ReviewOrchestrator does not start Step 7 for a failed Step 6 file and cont
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
-    const observedStepEvents = [];
+    const observedStepEvents: Array<[string, string]> = [];
     const reviewAttempts = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -450,7 +450,7 @@ test("ReviewOrchestrator retries Step 7 after judge rejection and publishes only
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile);
+    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile)!;
     const retriedContent = readFileSync(retriedNote.noteFilePath, "utf8");
 
     assert.equal(reviewAttempts.get(`step7-summary:${retryFile}`), 2);
@@ -700,9 +700,9 @@ async function assertStep7Failure(input: {
     assert.equal(reviewAttempts.get(`step7-summary:${failedFile}`), 2);
     assert.equal(reviewAttempts.get(`step7-summary:${laterFile}`), 1);
 
-    const successfulNote = plannedNotes.find(({ filePath }) => filePath === successfulFile);
-    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
-    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
+    const successfulNote = plannedNotes.find(({ filePath }) => filePath === successfulFile)!;
+    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile)!;
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile)!;
 
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
     assert.match(successfulNoteContent, /^## Summary/mu);

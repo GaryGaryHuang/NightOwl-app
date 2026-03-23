@@ -19,10 +19,10 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
-    const observedProfiles = [];
-    const observedStepEvents = [];
-    const observedPrompts = [];
-    const observedDisconnects = [];
+    const observedProfiles: Array<Record<string, string>> = [];
+    const observedStepEvents: Array<[string, string]> = [];
+    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
+    const observedDisconnects: string[] = [];
     const sourceProvider = new LocalGitProvider();
     const stepRunner = createSixStepStructuredStepRunner({
       observedDisconnects,
@@ -134,7 +134,7 @@ test("ReviewOrchestrator passes explicit empty Step 5 findings into Step 6 and a
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
-    const observedPrompts = [];
+    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -238,7 +238,7 @@ test("ReviewOrchestrator uses the same configured thresholds for Step 5 and Step
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
-    const observedPrompts = [];
+    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
     const repoRoot = realpathSync(fixture.repoDir);
     const reviewableFiles = sourceProvider.filterIgnoredFiles(
@@ -522,7 +522,7 @@ test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file and cont
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
-    const observedStepEvents = [];
+    const observedStepEvents: Array<[string, string]> = [];
     const reviewAttempts = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -706,7 +706,7 @@ test("ReviewOrchestrator retries Step 6 after deterministic validation failure a
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile);
+    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile)!;
     const retriedContent = readFileSync(retriedNote.noteFilePath, "utf8");
 
     assert.equal(reviewAttempts.get(`step6-cognitive-simulation:${retryFile}`), 2);
@@ -981,9 +981,9 @@ async function assertStep6Failure(input: {
 
     const successfulNote = plannedNotes.find(
       ({ filePath }) => filePath === successfulFile
-    );
-    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile);
-    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile);
+    )!;
+    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile)!;
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile)!;
 
     const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
     assert.match(successfulNoteContent, /^## Summary/mu);

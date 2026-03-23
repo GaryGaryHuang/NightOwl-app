@@ -5,13 +5,21 @@ import path from "node:path";
 import test from "node:test";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
-import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
+import {
+  ReviewRunInterruptedError,
+  type ReviewRunSummary
+} from "../../src/core/orchestrator.ts";
+import type { RunRequest } from "../../src/core/run-request.ts";
 import { runCli } from "../../src/index.ts";
 
+type ReviewRunSummaryOverrides = Partial<Omit<ReviewRunSummary, "outputTarget">> & {
+  outputTarget?: Partial<ReviewRunSummary["outputTarget"]>;
+};
+
 test("runCli forwards parsed input to the app boundary once", async () => {
-  const seenRequests = [];
-  const stdout = [];
-  const stderr = [];
+  const seenRequests: RunRequest[] = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
 
   const exitCode = await runCli(
     [
@@ -65,8 +73,8 @@ test("runCli forwards parsed input to the app boundary once", async () => {
 });
 
 test("runCli reports a usage error when head_ref is missing", async () => {
-  const stdout = [];
-  const stderr = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
 
   const exitCode = await runCli(["main"], {
     stdout: {
@@ -177,8 +185,8 @@ test("runCli prints artifact paths directly from the completed-run result withou
 });
 
 test("runCli surfaces a clear runtime error when Step 0 session startup fails", async () => {
-  const stdout = [];
-  const stderr = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
   const app = createLocalReviewRunApp({
     workingDirectory: "/workspace/repo",
     sourceProvider: {
@@ -233,8 +241,8 @@ test("runCli surfaces a clear runtime error when Step 0 session startup fails", 
 });
 
 test("runCli does not print partial completed-run counts or artifact lines on fatal runtime failure", async () => {
-  const stdout = [];
-  const stderr = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
 
   const exitCode = await runCli(["main", "feature-branch"], {
     app: {
@@ -266,8 +274,8 @@ test("runCli does not print partial completed-run counts or artifact lines on fa
 
 test("runCli keeps fatal runs on the error path even when artifacts already exist on disk", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-run-cli-"));
-  const stdout = [];
-  const stderr = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
 
   try {
     const basePath = path.join(tempDir, "review", "feature-branch_03131430");
@@ -307,9 +315,9 @@ test("runCli keeps fatal runs on the error path even when artifacts already exis
   }
 });
 
-async function runCliWithResult(result) {
-  const stdout = [];
-  const stderr = [];
+async function runCliWithResult(result: ReviewRunSummary) {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
   const exitCode = await runCli(["main", "feature-branch"], {
     app: {
       async run() {
@@ -331,7 +339,9 @@ async function runCliWithResult(result) {
   return { exitCode, stdout, stderr };
 }
 
-function createCompletedRunResult(overrides = {}) {
+function createCompletedRunResult(
+  overrides: ReviewRunSummaryOverrides = {}
+): ReviewRunSummary {
   const basePath = "/workspace/repo/review/feature-branch_03131430";
   const {
     outputTarget: outputTargetOverrides = {},
@@ -359,7 +369,7 @@ function createCompletedRunResult(overrides = {}) {
   };
 }
 
-function renderExpectedSummary(result) {
+function renderExpectedSummary(result: ReviewRunSummary): string {
   return [
     "Initialized local review run.",
     `Repo root: ${result.repoRoot}`,
@@ -377,8 +387,8 @@ function renderExpectedSummary(result) {
 // ─── Task 4.1: CLI interrupted exit tests ─────────────────────────────────────
 
 test("runCli exits with code 130 when app throws ReviewRunInterruptedError", async () => {
-  const stdout = [];
-  const stderr = [];
+  const stdout: string[] = [];
+  const stderr: string[] = [];
 
   const exitCode = await runCli(["main", "feature-branch"], {
     app: {
@@ -404,7 +414,7 @@ test("runCli exits with code 130 when app throws ReviewRunInterruptedError", asy
 });
 
 test("runCli prints a distinct interrupt message (not the generic error format) for ReviewRunInterruptedError", async () => {
-  const stderr = [];
+  const stderr: string[] = [];
 
   await runCli(["main", "feature-branch"], {
     app: {
@@ -425,8 +435,8 @@ test("runCli prints a distinct interrupt message (not the generic error format) 
 });
 
 test("runCli interrupted message is distinct from the generic error message", async () => {
-  const interruptStderr = [];
-  const genericStderr = [];
+  const interruptStderr: string[] = [];
+  const genericStderr: string[] = [];
 
   await runCli(["main", "feature-branch"], {
     app: {
@@ -464,7 +474,7 @@ test("runCli interrupted message is distinct from the generic error message", as
 });
 
 test("runCli does not print success summary on interrupted run", async () => {
-  const stdout = [];
+  const stdout: string[] = [];
 
   await runCli(["main", "feature-branch"], {
     app: {
@@ -488,7 +498,7 @@ test("runCli does not print success summary on interrupted run", async () => {
 });
 
 test("runCli still exits with code 1 and generic message for a plain Error", async () => {
-  const stderr = [];
+  const stderr: string[] = [];
 
   const exitCode = await runCli(["main", "feature-branch"], {
     app: {

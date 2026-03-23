@@ -4,13 +4,23 @@ import path from "node:path";
 import test from "node:test";
 
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
+import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
+import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { Finding } from "../../src/core/file-review-context.ts";
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
+import type { RunStepInput, StepResult, StepRunner } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
+import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+
+type OutputCall = [string, string];
+type FileReviewPublishResult = Parameters<ReviewOutputSink["publishFileReview"]>[0];
+type SkipRecord = Parameters<ReviewOutputSink["publishSkippedFile"]>[0];
+type RunSummaryPublishResult = Parameters<ReviewOutputSink["publishRunSummary"]>[0];
+type ReviewIndexPublishResult = Parameters<ReviewOutputSink["publishReviewIndex"]>[0];
 
 test("ReviewOrchestrator publishes deterministic summary.md for an all-successful run", async () => {
   const fixture = createReviewRepoFixture();
@@ -501,23 +511,23 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
-    const outputCalls = [];
+    const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       outputSink: {
-        initializeRun(outputTarget) {
+        initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
         },
-        publishFileReview(fileResult) {
+        publishFileReview(fileResult: FileReviewPublishResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
         },
-        publishSkippedFile(skipRecord) {
+        publishSkippedFile(skipRecord: SkipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary(summaryResult) {
+        publishRunSummary(summaryResult: RunSummaryPublishResult) {
           outputCalls.push(["publishRunSummary", summaryResult.content]);
         },
-        publishReviewIndex(indexResult) {
+        publishReviewIndex(indexResult: ReviewIndexPublishResult) {
           outputCalls.push(["publishReviewIndex", indexResult.content]);
         }
       },
@@ -575,23 +585,23 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
   const fixture = createReviewRepoFixture();
 
   try {
-    const outputCalls = [];
+    const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       outputSink: {
-        initializeRun(outputTarget) {
+        initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
         },
-        publishFileReview(fileResult) {
+        publishFileReview(fileResult: FileReviewPublishResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
         },
-        publishSkippedFile(skipRecord) {
+        publishSkippedFile(skipRecord: SkipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary(summaryResult) {
+        publishRunSummary(summaryResult: RunSummaryPublishResult) {
           outputCalls.push(["publishRunSummary", summaryResult.content]);
         },
-        publishReviewIndex(indexResult) {
+        publishReviewIndex(indexResult: ReviewIndexPublishResult) {
           outputCalls.push(["publishReviewIndex", indexResult.content]);
         }
       },
@@ -641,7 +651,7 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
-    const outputCalls = [];
+    const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: {
         resolveRepoRoot(startPath) {
@@ -668,19 +678,19 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
         }
       },
       outputSink: {
-        initializeRun(outputTarget) {
+        initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
         },
-        publishFileReview(fileResult) {
+        publishFileReview(fileResult: FileReviewPublishResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
         },
-        publishSkippedFile(skipRecord) {
+        publishSkippedFile(skipRecord: SkipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary(summaryResult) {
+        publishRunSummary(summaryResult: RunSummaryPublishResult) {
           outputCalls.push(["publishRunSummary", summaryResult.content]);
         },
-        publishReviewIndex(indexResult) {
+        publishReviewIndex(indexResult: ReviewIndexPublishResult) {
           outputCalls.push(["publishReviewIndex", indexResult.content]);
         }
       },
@@ -957,17 +967,17 @@ test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to Review
   }
 });
 
-function createSuccessfulSummaryRunner() {
+function createSuccessfulSummaryRunner(): Pick<StepRunner, "run"> {
   return {
-    async run({ context, step }) {
+    async run({ context, step }: RunStepInput): Promise<StepResult> {
       return buildSuccessfulStepResult(step.stepId, context.filePath);
     }
   };
 }
 
-function createMixedResultRunner(skippedFile: string) {
+function createMixedResultRunner(skippedFile: string): Pick<StepRunner, "run"> {
   return {
-    async run({ context, step }) {
+    async run({ context, step }: RunStepInput): Promise<StepResult> {
       if (
         context.filePath === skippedFile &&
         step.stepId === "step5-validation-interrogation"
@@ -982,9 +992,9 @@ function createMixedResultRunner(skippedFile: string) {
   };
 }
 
-function createAllSkippedRunner(skippedFiles: Set<string>) {
+function createAllSkippedRunner(skippedFiles: Set<string>): Pick<StepRunner, "run"> {
   return {
-    async run({ context, step }) {
+    async run({ context, step }: RunStepInput): Promise<StepResult> {
       if (skippedFiles.has(context.filePath) && step.stepId === "step1-overview") {
         throw new Error(
           `Step ${step.stepId} failed for ${context.filePath}: judge rejected`
@@ -996,11 +1006,11 @@ function createAllSkippedRunner(skippedFiles: Set<string>) {
   };
 }
 
-function buildSuccessfulStepResult(stepId: string, filePath: string) {
+function buildSuccessfulStepResult(stepId: string, filePath: string): StepResult {
   if (stepId === "step1-overview") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection("overview", buildOverviewResponse(filePath));
       }
     };
@@ -1009,7 +1019,7 @@ function buildSuccessfulStepResult(stepId: string, filePath: string) {
   if (stepId === "step2-dependencies-boundaries") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "dependencies-boundaries",
           buildDependenciesResponse(filePath)
@@ -1021,7 +1031,7 @@ function buildSuccessfulStepResult(stepId: string, filePath: string) {
   if (stepId === "step3-knowledge-source-of-truth") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "knowledge-source-of-truth",
           buildKnowledgeResponse(filePath)
@@ -1033,7 +1043,7 @@ function buildSuccessfulStepResult(stepId: string, filePath: string) {
   if (stepId === "step4-strategy-what-if-scenarios") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "strategy-what-if-scenarios",
           buildStrategyResponse(filePath)
@@ -1045,7 +1055,7 @@ function buildSuccessfulStepResult(stepId: string, filePath: string) {
   if (stepId === "step5-validation-interrogation") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.updateStructuredState({
           findings: buildFindingsForFile(filePath)
         });
@@ -1056,7 +1066,7 @@ function buildSuccessfulStepResult(stepId: string, filePath: string) {
   if (stepId === "step6-cognitive-simulation") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.updateStructuredState({
           findings: buildFindingsForFile(filePath)
         });
@@ -1067,7 +1077,7 @@ function buildSuccessfulStepResult(stepId: string, filePath: string) {
   if (stepId === "step7-summary") {
     return {
       stepId,
-      applyTo(targetContext) {
+      applyTo(targetContext: FileReviewContext) {
         targetContext.setSection("summary", buildSummaryResponse(filePath));
       }
     };
@@ -1169,75 +1179,75 @@ function buildSummaryResponse(filePath: string): string {
 }
 
 class CorruptingSummaryOutputSink {
-  #outputTarget;
+  #outputTarget!: OutputTarget;
 
-  initializeRun(outputTarget) {
+  initializeRun(outputTarget: OutputTarget) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
   }
 
-  publishFileReview(fileResult) {
+  publishFileReview(fileResult: FileReviewPublishResult) {
     mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
     writeFileSync(fileResult.noteFilePath, "# CORRUPTED NOTE\n");
   }
 
-  publishSkippedFile(skipRecord) {
+  publishSkippedFile(skipRecord: SkipRecord) {
     appendFileSync(
       this.#outputTarget.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
     );
   }
 
-  publishRunSummary(summaryResult) {
+  publishRunSummary(summaryResult: RunSummaryPublishResult) {
     writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
   }
 
-  publishReviewIndex(indexResult) {
+  publishReviewIndex(indexResult: ReviewIndexPublishResult) {
     writeFileSync(this.#outputTarget.indexPath, indexResult.content);
   }
 }
 
 class CorruptingIndexOutputSink {
-  #outputTarget;
+  #outputTarget!: OutputTarget;
 
-  initializeRun(outputTarget) {
+  initializeRun(outputTarget: OutputTarget) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "# CORRUPTED SKIPPED LOG\n");
     this.#outputTarget = outputTarget;
   }
 
-  publishFileReview(fileResult) {
+  publishFileReview(fileResult: FileReviewPublishResult) {
     mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
     writeFileSync(fileResult.noteFilePath, "# CORRUPTED NOTE\n");
     writeFileSync(path.join(this.#outputTarget.filesPath, "EXTRA DISK FILE.md"), "# extra\n");
   }
 
-  publishSkippedFile(skipRecord) {
+  publishSkippedFile(skipRecord: SkipRecord) {
     appendFileSync(
       this.#outputTarget.skippedPath,
       `CORRUPTED SKIP: ${skipRecord.filePath} ${skipRecord.stepId} ${skipRecord.reason}\n`
     );
   }
 
-  publishRunSummary(summaryResult) {
+  publishRunSummary(summaryResult: RunSummaryPublishResult) {
     writeFileSync(this.#outputTarget.summaryPath, "# CORRUPTED SUMMARY\n");
   }
 
-  publishReviewIndex(indexResult) {
+  publishReviewIndex(indexResult: ReviewIndexPublishResult) {
     writeFileSync(this.#outputTarget.indexPath, indexResult.content);
   }
 }
 
 class SummaryFailingOutputSink {
-  #outputTarget;
-  writtenFileReviews = [];
+  #outputTarget!: OutputTarget;
+  writtenFileReviews: string[] = [];
   publishRunSummaryCalls = 0;
-  summaryPath;
+  summaryPath?: string;
 
-  initializeRun(outputTarget) {
+  initializeRun(outputTarget: OutputTarget) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
@@ -1245,38 +1255,38 @@ class SummaryFailingOutputSink {
     this.summaryPath = outputTarget.summaryPath;
   }
 
-  publishFileReview(fileResult) {
+  publishFileReview(fileResult: FileReviewPublishResult) {
     mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
     writeFileSync(fileResult.noteFilePath, fileResult.content);
     this.writtenFileReviews.push(fileResult.noteFilePath);
   }
 
-  publishSkippedFile(skipRecord) {
+  publishSkippedFile(skipRecord: SkipRecord) {
     appendFileSync(
       this.#outputTarget.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
     );
   }
 
-  publishRunSummary() {
+  publishRunSummary(_summaryResult: RunSummaryPublishResult) {
     this.publishRunSummaryCalls += 1;
     throw new Error("summary write failed");
   }
 
-  publishReviewIndex() {
+  publishReviewIndex(_indexResult: ReviewIndexPublishResult) {
     throw new Error("should not publish index after summary failure");
   }
 }
 
 class IndexFailingOutputSink {
-  #outputTarget;
-  writtenFileReviews = [];
+  #outputTarget!: OutputTarget;
+  writtenFileReviews: string[] = [];
   publishRunSummaryCalls = 0;
   publishReviewIndexCalls = 0;
-  summaryPath;
-  indexPath;
+  summaryPath?: string;
+  indexPath?: string;
 
-  initializeRun(outputTarget) {
+  initializeRun(outputTarget: OutputTarget) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
@@ -1285,35 +1295,35 @@ class IndexFailingOutputSink {
     this.indexPath = outputTarget.indexPath;
   }
 
-  publishFileReview(fileResult) {
+  publishFileReview(fileResult: FileReviewPublishResult) {
     mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
     writeFileSync(fileResult.noteFilePath, fileResult.content);
     this.writtenFileReviews.push(fileResult.noteFilePath);
   }
 
-  publishSkippedFile(skipRecord) {
+  publishSkippedFile(skipRecord: SkipRecord) {
     appendFileSync(
       this.#outputTarget.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
     );
   }
 
-  publishRunSummary(summaryResult) {
+  publishRunSummary(summaryResult: RunSummaryPublishResult) {
     this.publishRunSummaryCalls += 1;
     writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
   }
 
-  publishReviewIndex() {
+  publishReviewIndex(_indexResult: ReviewIndexPublishResult) {
     this.publishReviewIndexCalls += 1;
     throw new Error("index write failed");
   }
 }
 
 class RecordingOutputSink {
-  #outputTarget;
-  calls = [];
+  #outputTarget!: OutputTarget;
+  calls: string[] = [];
 
-  initializeRun(outputTarget) {
+  initializeRun(outputTarget: OutputTarget) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
@@ -1321,13 +1331,13 @@ class RecordingOutputSink {
     this.calls.push("initializeRun");
   }
 
-  publishFileReview(fileResult) {
+  publishFileReview(fileResult: FileReviewPublishResult) {
     mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
     writeFileSync(fileResult.noteFilePath, fileResult.content);
     this.calls.push("publishFileReview");
   }
 
-  publishSkippedFile(skipRecord) {
+  publishSkippedFile(skipRecord: SkipRecord) {
     appendFileSync(
       this.#outputTarget.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
@@ -1335,25 +1345,25 @@ class RecordingOutputSink {
     this.calls.push("publishSkippedFile");
   }
 
-  publishRunSummary(summaryResult) {
+  publishRunSummary(summaryResult: RunSummaryPublishResult) {
     writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
     this.calls.push("publishRunSummary");
   }
 
-  publishReviewIndex(summaryResult) {
-    writeFileSync(this.#outputTarget.indexPath, summaryResult.content);
+  publishReviewIndex(indexResult: ReviewIndexPublishResult) {
+    writeFileSync(this.#outputTarget.indexPath, indexResult.content);
     this.calls.push("publishReviewIndex");
   }
 }
 
 class IndexRecordingOutputSink {
-  #outputTarget;
-  calls = [];
+  #outputTarget!: OutputTarget;
+  calls: string[] = [];
   publishFileReviewCallsAfterIndex = 0;
   publishRunSummaryCallsAfterIndex = 0;
   #indexPublished = false;
 
-  initializeRun(outputTarget) {
+  initializeRun(outputTarget: OutputTarget) {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
@@ -1361,7 +1371,7 @@ class IndexRecordingOutputSink {
     this.calls.push("initializeRun");
   }
 
-  publishFileReview(fileResult) {
+  publishFileReview(fileResult: FileReviewPublishResult) {
     mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
     writeFileSync(fileResult.noteFilePath, fileResult.content);
     if (this.#indexPublished) {
@@ -1370,7 +1380,7 @@ class IndexRecordingOutputSink {
     this.calls.push("publishFileReview");
   }
 
-  publishSkippedFile(skipRecord) {
+  publishSkippedFile(skipRecord: SkipRecord) {
     appendFileSync(
       this.#outputTarget.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
@@ -1378,7 +1388,7 @@ class IndexRecordingOutputSink {
     this.calls.push("publishSkippedFile");
   }
 
-  publishRunSummary(summaryResult) {
+  publishRunSummary(summaryResult: RunSummaryPublishResult) {
     writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
     if (this.#indexPublished) {
       this.publishRunSummaryCallsAfterIndex += 1;
@@ -1386,7 +1396,7 @@ class IndexRecordingOutputSink {
     this.calls.push("publishRunSummary");
   }
 
-  publishReviewIndex(indexResult) {
+  publishReviewIndex(indexResult: ReviewIndexPublishResult) {
     writeFileSync(this.#outputTarget.indexPath, indexResult.content);
     this.#indexPublished = true;
     this.calls.push("publishReviewIndex");

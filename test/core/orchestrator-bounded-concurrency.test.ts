@@ -45,7 +45,7 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
     assert.ok(slowSuccessfulFile);
 
     const metrics = createConcurrencyMetrics(reviewableFiles.length);
-    const outputSink = new BootstrapTrackingOutputSink(metrics);
+    const outputSink = new BootstrapTrackingOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink,

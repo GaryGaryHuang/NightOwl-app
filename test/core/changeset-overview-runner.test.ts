@@ -4,10 +4,11 @@ import test from "node:test";
 import {
   ChangesetOverviewRunner
 } from "../../src/core/changeset-overview-runner.ts";
+import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 
 test("ChangesetOverviewRunner builds Step 0 input from changeset entries and user context", async () => {
-  const profiles = [];
-  const prompts = [];
+  const profiles: ReviewSessionProfile[] = [];
+  const prompts: string[] = [];
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
       async createSession(profile) {
@@ -122,7 +123,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
 });
 
 test("ChangesetOverviewRunner retries once with a fresh session when the first response is blank", async () => {
-  const prompts = [];
+  const prompts: string[] = [];
   let createCalls = 0;
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {

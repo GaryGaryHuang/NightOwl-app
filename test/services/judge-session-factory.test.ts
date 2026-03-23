@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { SessionConfig } from "@github/copilot-sdk";
 
 import { JudgeSessionFactory } from "../../src/services/judge-session-factory.ts";
 
 test("JudgeSessionFactory creates a non-streaming isolated judge session with the expected timeout contract", async () => {
-  const receivedConfigs = [];
+  const receivedConfigs: SessionConfig[] = [];
   const factory = new JudgeSessionFactory({
     clientManager: {
       getClient() {
@@ -36,6 +37,7 @@ test("JudgeSessionFactory creates a non-streaming isolated judge session with th
     {
       availableTools: [],
       model: "gpt-5-mini",
+      onPermissionRequest: receivedConfigs[0].onPermissionRequest,
       streaming: false,
       systemMessage: {
         mode: "replace",
