@@ -115,19 +115,22 @@ export function createLocalReviewRunApp(
       await clientManager.start();
 
       const controller = new AbortController();
-      const handleSignal = (): void => {
-        controller.abort();
+      const handleSigint = (): void => {
+        controller.abort("SIGINT");
+      };
+      const handleSigterm = (): void => {
+        controller.abort("SIGTERM");
       };
 
-      process.on("SIGINT", handleSignal);
-      process.on("SIGTERM", handleSignal);
+      process.on("SIGINT", handleSigint);
+      process.on("SIGTERM", handleSigterm);
 
       try {
         return await orchestrator.run(request, { signal: controller.signal });
       } finally {
         // Remove handlers before stop() to prevent double-fire from SIGTERM during SDK teardown.
-        process.off("SIGINT", handleSignal);
-        process.off("SIGTERM", handleSignal);
+        process.off("SIGINT", handleSigint);
+        process.off("SIGTERM", handleSigterm);
         await stopClientManagerWithTimeout(clientManager, gracefulShutdownTimeoutMs);
       }
     }

@@ -135,19 +135,19 @@ function createBaseOrchestrator(overrides: {
 // ─── Task 1.1: ReviewRunInterruptedError basic tests ─────────────────────────
 
 test("ReviewRunInterruptedError is an instance of Error", () => {
-  const err = new ReviewRunInterruptedError("Run interrupted by external signal.");
+  const err = new ReviewRunInterruptedError();
   assert.ok(err instanceof Error);
   assert.ok(err instanceof ReviewRunInterruptedError);
   assert.equal(err.message, "Run interrupted by external signal.");
 });
 
 test("ReviewRunInterruptedError name property identifies the error type", () => {
-  const err = new ReviewRunInterruptedError("Run interrupted by external signal.");
+  const err = new ReviewRunInterruptedError();
   assert.equal(err.name, "ReviewRunInterruptedError");
 });
 
 test("ReviewRunInterruptedError instanceof distinguishes it from a generic Error", () => {
-  const interrupted = new ReviewRunInterruptedError("interrupted");
+  const interrupted = new ReviewRunInterruptedError();
   const generic = new Error("generic");
   assert.ok(interrupted instanceof ReviewRunInterruptedError);
   assert.ok(!(generic instanceof ReviewRunInterruptedError));
@@ -374,4 +374,131 @@ test("ReviewOrchestrator run without signal option proceeds normally", async () 
   assert.equal(result.plannedFileCount, TEST_FILES.length);
   assert.equal(result.successfulFileCount, TEST_FILES.length);
   assert.equal(result.skippedFileCount, 0);
+});
+
+// ─── Task 1.1: ReviewRunInterruptedError signal property tests ────────────────
+
+test("ReviewRunInterruptedError has signal === 'SIGINT' when constructed with 'SIGINT'", () => {
+  const err = new ReviewRunInterruptedError("SIGINT");
+  assert.equal(err.signal, "SIGINT");
+});
+
+test("ReviewRunInterruptedError has signal === 'SIGTERM' when constructed with 'SIGTERM'", () => {
+  const err = new ReviewRunInterruptedError("SIGTERM");
+  assert.equal(err.signal, "SIGTERM");
+});
+
+test("ReviewRunInterruptedError has signal === undefined when constructed without signal", () => {
+  const err = new ReviewRunInterruptedError();
+  assert.equal(err.signal, undefined);
+});
+
+test("ReviewRunInterruptedError is instanceof ReviewRunInterruptedError and not instanceof a generic Error subclass", () => {
+  const err = new ReviewRunInterruptedError();
+  assert.ok(err instanceof ReviewRunInterruptedError);
+  assert.ok(err instanceof Error);
+  const generic = new Error("generic");
+  assert.ok(!(generic instanceof ReviewRunInterruptedError));
+});
+
+// ─── Task 2.1: Orchestrator signal reason extraction tests ───────────────────
+
+test("ReviewOrchestrator abort with reason 'SIGINT' produces ReviewRunInterruptedError with signal === 'SIGINT'", async () => {
+  const controller = new AbortController();
+
+  const orchestrator = createBaseOrchestrator({
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        if (step.stepId === "step1-overview") {
+          controller.abort("SIGINT");
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGINT"
+  );
+});
+
+test("ReviewOrchestrator abort with reason 'SIGTERM' produces ReviewRunInterruptedError with signal === 'SIGTERM'", async () => {
+  const controller = new AbortController();
+
+  const orchestrator = createBaseOrchestrator({
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        if (step.stepId === "step1-overview") {
+          controller.abort("SIGTERM");
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGTERM"
+  );
+});
+
+test("ReviewOrchestrator abort without reason produces ReviewRunInterruptedError with signal === undefined", async () => {
+  const controller = new AbortController();
+
+  const orchestrator = createBaseOrchestrator({
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        if (step.stepId === "step1-overview") {
+          controller.abort();
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === undefined
+  );
+});
+
+test("ReviewOrchestrator abort with unrecognized string reason produces ReviewRunInterruptedError with signal === undefined", async () => {
+  const controller = new AbortController();
+
+  const orchestrator = createBaseOrchestrator({
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        if (step.stepId === "step1-overview") {
+          controller.abort("SIGHUP");
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === undefined
+  );
+});
+
+test("ReviewOrchestrator abort with non-string reason produces ReviewRunInterruptedError with signal === undefined", async () => {
+  const controller = new AbortController();
+
+  const orchestrator = createBaseOrchestrator({
+    stepRunner: {
+      async run({ step }: { step: { stepId: string } }) {
+        if (step.stepId === "step1-overview") {
+          controller.abort(42);
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === undefined
+  );
 });

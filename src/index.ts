@@ -37,6 +37,14 @@ export async function runCli(
     }
 
     if (error instanceof ReviewRunInterruptedError) {
+      if (error.signal === "SIGTERM") {
+        resolvedRuntime.stderr.error("Review run terminated by SIGTERM.");
+        return 143;
+      }
+      if (error.signal === "SIGINT") {
+        resolvedRuntime.stderr.error("Review run interrupted by SIGINT.");
+        return 130;
+      }
       resolvedRuntime.stderr.error("Review run interrupted.");
       return 130;
     }

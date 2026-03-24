@@ -399,7 +399,7 @@ test("runCli exits with code 130 when app throws ReviewRunInterruptedError", asy
   const exitCode = await runCli(["main", "feature-branch"], {
     app: {
       async run() {
-        throw new ReviewRunInterruptedError("Run interrupted by external signal.");
+        throw new ReviewRunInterruptedError();
       }
     },
     stdout: {
@@ -425,7 +425,7 @@ test("runCli prints a distinct interrupt message (not the generic error format) 
   await runCli(["main", "feature-branch"], {
     app: {
       async run() {
-        throw new ReviewRunInterruptedError("Run interrupted by external signal.");
+        throw new ReviewRunInterruptedError();
       }
     },
     stdout: { log() {} },
@@ -447,7 +447,7 @@ test("runCli interrupted message is distinct from the generic error message", as
   await runCli(["main", "feature-branch"], {
     app: {
       async run() {
-        throw new ReviewRunInterruptedError("Run interrupted by external signal.");
+        throw new ReviewRunInterruptedError();
       }
     },
     stdout: { log() {} },
@@ -485,7 +485,7 @@ test("runCli does not print success summary on interrupted run", async () => {
   await runCli(["main", "feature-branch"], {
     app: {
       async run() {
-        throw new ReviewRunInterruptedError("Run interrupted before finish.");
+        throw new ReviewRunInterruptedError();
       }
     },
     stdout: {
@@ -531,4 +531,69 @@ test("runCli still exits with code 1 for CliUsageError", async () => {
   });
 
   assert.equal(exitCode, 1);
+});
+
+// ─── Task 4.1: CLI per-signal exit code mapping tests ─────────────────────────
+
+test("runCli exits with code 130 and SIGINT-specific message when ReviewRunInterruptedError has signal === 'SIGINT'", async () => {
+  const stderr: string[] = [];
+
+  const exitCode = await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new ReviewRunInterruptedError("SIGINT");
+      }
+    },
+    stdout: { log() {} },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 130);
+  assert.equal(stderr[0], "Review run interrupted by SIGINT.");
+});
+
+test("runCli exits with code 143 and SIGTERM-specific message when ReviewRunInterruptedError has signal === 'SIGTERM'", async () => {
+  const stderr: string[] = [];
+
+  const exitCode = await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new ReviewRunInterruptedError("SIGTERM");
+      }
+    },
+    stdout: { log() {} },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 143);
+  assert.equal(stderr[0], "Review run terminated by SIGTERM.");
+});
+
+test("runCli exits with code 130 and generic message when ReviewRunInterruptedError has signal === undefined", async () => {
+  const stderr: string[] = [];
+
+  const exitCode = await runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        throw new ReviewRunInterruptedError();
+      }
+    },
+    stdout: { log() {} },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 130);
+  assert.equal(stderr[0], "Review run interrupted.");
 });

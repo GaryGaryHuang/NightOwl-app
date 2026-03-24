@@ -1164,6 +1164,71 @@ test("createLocalReviewRunApp SIGTERM during run propagates ReviewRunInterrupted
   assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after SIGTERM");
 });
 
+// ─── Task 3.1: App lifecycle signal identity propagation tests ────────────────
+
+test("createLocalReviewRunApp SIGINT during run produces ReviewRunInterruptedError with signal === 'SIGINT'", async () => {
+  const stopCalls: string[] = [];
+  let sigintFired = false;
+
+  const app = createSignalTestApp({
+    stopCalls,
+    onStep1() {
+      if (!sigintFired) {
+        sigintFired = true;
+        process.emit("SIGINT", "SIGINT");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGINT"
+  );
+});
+
+test("createLocalReviewRunApp SIGTERM during run produces ReviewRunInterruptedError with signal === 'SIGTERM'", async () => {
+  const stopCalls: string[] = [];
+  let sigtermFired = false;
+
+  const app = createSignalTestApp({
+    stopCalls,
+    onStep1() {
+      if (!sigtermFired) {
+        sigtermFired = true;
+        process.emit("SIGTERM", "SIGTERM");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGTERM"
+  );
+});
+
+// ─── Task 3.3: First-signal-wins test ────────────────────────────────────────
+
+test("createLocalReviewRunApp first signal wins when SIGINT then SIGTERM arrive in quick succession", async () => {
+  const stopCalls: string[] = [];
+  let fired = false;
+
+  const app = createSignalTestApp({
+    stopCalls,
+    onStep1() {
+      if (!fired) {
+        fired = true;
+        process.emit("SIGINT", "SIGINT");
+        process.emit("SIGTERM", "SIGTERM");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => app.run(SIGNAL_TEST_REQUEST),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGINT"
+  );
+});
+
 test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after normal run completion", async () => {
   const stopCalls: string[] = [];
   const sigintBefore = process.listenerCount("SIGINT");

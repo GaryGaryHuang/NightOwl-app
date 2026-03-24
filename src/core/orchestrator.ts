@@ -1,10 +1,20 @@
 import path from "node:path";
 
 export class ReviewRunInterruptedError extends Error {
-  constructor(message: string = "Run interrupted by external signal.") {
-    super(message);
+  readonly signal: "SIGINT" | "SIGTERM" | undefined;
+
+  constructor(signal?: "SIGINT" | "SIGTERM") {
+    super("Run interrupted by external signal.");
     this.name = "ReviewRunInterruptedError";
+    this.signal = signal;
   }
+}
+
+function extractSignalName(reason: unknown): "SIGINT" | "SIGTERM" | undefined {
+  if (reason === "SIGINT" || reason === "SIGTERM") {
+    return reason;
+  }
+  return undefined;
 }
 
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
@@ -116,7 +126,7 @@ export class ReviewOrchestrator {
     // Check if the signal was aborted during Step 0 (or before run() was called).
     // This is the only explicit poll — all later boundaries rely on the event listener below.
     if (options?.signal?.aborted) {
-      throw new ReviewRunInterruptedError("Run interrupted by external signal.");
+      throw new ReviewRunInterruptedError(extractSignalName(options.signal.reason));
     }
 
     const branchName = this.#sourceProvider.getCurrentBranch(repoRoot);
@@ -184,7 +194,7 @@ export class ReviewOrchestrator {
       "abort",
       () => {
         runAbortState.error ??= new ReviewRunInterruptedError(
-          "Run interrupted by external signal."
+          extractSignalName(options?.signal?.reason)
         );
       },
       { once: true }
