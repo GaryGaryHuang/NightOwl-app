@@ -13,7 +13,6 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 3,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",
@@ -83,7 +82,6 @@ test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs"
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 0,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",
@@ -127,7 +125,6 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
     repoRoot: String.raw`C:\workspace\repo`,
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 2,
     outputTarget: {
       basePath: String.raw`C:\workspace\review\feature-branch_03131430`,
       filesPath: String.raw`C:\workspace\review\feature-branch_03131430\files`,
@@ -169,7 +166,6 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 2,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",
@@ -209,7 +205,6 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 5,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",
@@ -265,7 +260,6 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 3,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",

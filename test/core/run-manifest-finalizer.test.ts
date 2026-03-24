@@ -11,7 +11,6 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 2,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",
@@ -97,7 +96,6 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 3,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",
@@ -162,7 +160,6 @@ test("RunManifestFinalizer renders an empty files array for zero-file runs", () 
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 0,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",
@@ -197,7 +194,6 @@ test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct pa
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 0,
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
       filesPath: "/workspace/review/feature-branch_03131430/files",

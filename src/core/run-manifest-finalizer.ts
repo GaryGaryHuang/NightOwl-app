@@ -12,7 +12,6 @@ export interface RunManifestRenderInput {
   repoRoot: string;
   baseRef: string;
   headRef: string;
-  plannedFileCount: number;
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
   successfulFiles: SuccessfulFileOutcome[];
@@ -67,7 +66,7 @@ export class RunManifestFinalizer {
         repoRoot: input.repoRoot,
         baseRef: input.baseRef,
         headRef: input.headRef,
-        plannedFileCount: input.plannedFileCount,
+        plannedFileCount: input.plannedNotes.length,
         successfulFileCount: input.successfulFiles.length,
         skippedFileCount: input.skippedFiles.length,
         artifacts: {

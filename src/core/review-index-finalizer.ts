@@ -16,7 +16,6 @@ export interface ReviewIndexRenderInput {
   repoRoot: string;
   baseRef: string;
   headRef: string;
-  plannedFileCount: number;
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
   successfulFiles: SuccessfulFileOutcome[];
@@ -54,7 +53,7 @@ export class ReviewIndexFinalizer {
       `- Repo root: \`${input.repoRoot}\``,
       `- Base ref: \`${input.baseRef}\``,
       `- Head ref: \`${input.headRef}\``,
-      `- Planned files: ${input.plannedFileCount}`,
+      `- Planned files: ${input.plannedNotes.length}`,
       `- Successful files: ${input.successfulFiles.length}`,
       `- Skipped files: ${input.skippedFiles.length}`,
       "",
