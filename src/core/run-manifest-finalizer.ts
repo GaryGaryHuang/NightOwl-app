@@ -76,7 +76,8 @@ export class RunManifestFinalizer {
           summaryPath: input.outputTarget.summaryPath,
           indexPath: input.outputTarget.indexPath,
           skippedPath: input.outputTarget.skippedPath,
-          manifestPath: input.outputTarget.manifestPath
+          manifestPath: input.outputTarget.manifestPath,
+          toolAuditPath: input.outputTarget.toolAuditPath
         },
         files
       },

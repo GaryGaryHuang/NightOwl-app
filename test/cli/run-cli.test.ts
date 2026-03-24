@@ -365,6 +365,7 @@ function createCompletedRunResult(
       summaryPath: `${basePath}/summary.md`,
       indexPath: `${basePath}/index.md`,
       manifestPath: `${basePath}/manifest.json`,
+      toolAuditPath: `${basePath}/tool-audit.jsonl`,
       ...outputTargetOverrides
     },
     plannedFileCount: 2,
@@ -383,6 +384,7 @@ function renderExpectedSummary(result: ReviewRunSummary): string {
     `Summary: ${result.outputTarget.summaryPath}`,
     `Index: ${result.outputTarget.indexPath}`,
     `Manifest: ${result.outputTarget.manifestPath}`,
+    `Tool Audit: ${result.outputTarget.toolAuditPath}`,
     `Skipped: ${result.outputTarget.skippedPath}`,
     `Planned files: ${result.plannedFileCount}`,
     `Successful files: ${result.successfulFileCount}`,
