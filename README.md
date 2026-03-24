@@ -32,7 +32,8 @@ The current repository implements the Step 0 + Step 1 + Step 2 + Step 3 + Step 4
 - run-level aggregate summary foundation for completed runs: the app now writes deterministic `summary.md` with planned / successful / skipped counts, final findings totals from successful files only, and planned-order successful / skipped file lists
 - review index foundation for completed runs: the app now writes deterministic `index.md` as a landing page that links `summary.md`, `skipped.md`, and every planned per-file note in planned order
 - completed-run manifest foundation for completed runs: the app now writes deterministic `manifest.json` after `summary.md` and `index.md`, with repo metadata, aggregate counts, artifact paths, and planned-order per-file outcome records
-- completed-run artifact surface foundation for CLI success output: the success summary now prints the deterministic `Output`, `Files`, `Summary`, `Index`, `Manifest`, and `Skipped` paths plus planned / successful / skipped counts directly from the completed-run result
+- completed-run artifact surface foundation for CLI success output: the success summary now prints the deterministic `Output`, `Files`, `Summary`, `Index`, `Manifest`, `Tool Audit`, and `Skipped` paths plus planned / successful / skipped counts directly from the completed-run result
+- tool-use audit trail foundation for review sessions: every tool decision (allow/deny) from review sessions is appended as a JSONL record to `tool-audit.jsonl` inside the run output directory; the audit path is exposed on the completed-run `OutputTarget`, surfaced in the CLI success output as `Tool Audit:`, and included in `manifest.json` artifacts
 - minimal interruption-state rendering so skipped files keep bootstrap, Step 1, Step 4, or Step 6 snapshots without leaking provisional failed-step content
 - bounded graceful shutdown cleanup after client startup: the app removes SIGINT/SIGTERM handlers before teardown, waits up to a fixed timeout for `clientManager.stop()`, and falls back to `clientManager.forceStop()` when graceful SDK shutdown stalls while still preserving the original run outcome when cleanup fallback succeeds
 - per-signal exit code differentiation: SIGINT exits with code 130 and message `Review run interrupted by SIGINT.`, SIGTERM exits with code 143 and message `Review run terminated by SIGTERM.`, and unrecognized-signal aborts fall back to exit code 130 and `Review run interrupted.`
@@ -55,6 +56,7 @@ Files: /path/to/repo/review/feature-branch_03131430/files
 Summary: /path/to/repo/review/feature-branch_03131430/summary.md
 Index: /path/to/repo/review/feature-branch_03131430/index.md
 Manifest: /path/to/repo/review/feature-branch_03131430/manifest.json
+Tool Audit: /path/to/repo/review/feature-branch_03131430/tool-audit.jsonl
 Skipped: /path/to/repo/review/feature-branch_03131430/skipped.md
 Planned files: 3
 Successful files: 2
@@ -69,6 +71,7 @@ The command also creates:
 - `<output_base_dir>/review/<session_id>/summary.md`
 - `<output_base_dir>/review/<session_id>/index.md`
 - `<output_base_dir>/review/<session_id>/manifest.json`
+- `<output_base_dir>/review/<session_id>/tool-audit.jsonl`
 - one Markdown note per planned file
 
 For successfully processed files, the note is updated from the bootstrap skeleton into a Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 snapshot that begins with:
