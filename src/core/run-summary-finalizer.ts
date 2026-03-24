@@ -1,5 +1,5 @@
 import type { Finding } from "./file-review-context.ts";
-import { deriveFileRiskLevel, type RiskLevel } from "./risk-level.ts";
+import { deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "./risk-level.ts";
 
 export interface SuccessfulFileOutcome {
   filePath: string;
@@ -20,13 +20,6 @@ export interface RunSummaryRenderInput {
   successfulFiles: SuccessfulFileOutcome[];
   skippedFiles: SkippedFileOutcome[];
 }
-
-const RISK_ORDER: Record<RiskLevel, number> = {
-  High: 0,
-  Medium: 1,
-  Low: 2,
-  None: 3
-};
 
 export class RunSummaryFinalizer {
   render(input: RunSummaryRenderInput): string {

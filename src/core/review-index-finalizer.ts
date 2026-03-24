@@ -4,18 +4,13 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "./review-path-resolver.ts";
-import { deriveFileRiskLevel, type RiskLevel } from "./risk-level.ts";
+import { deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "./risk-level.ts";
 import type {
   SkippedFileOutcome,
   SuccessfulFileOutcome
 } from "./run-summary-finalizer.ts";
 
-const RISK_ORDER: Record<RiskLevel, number> = {
-  High: 0,
-  Medium: 1,
-  Low: 2,
-  None: 3
-};
+const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;
 
 export interface ReviewIndexRenderInput {
   repoRoot: string;
@@ -81,7 +76,7 @@ function getSortKey(
   if (successfulFile) {
     return RISK_ORDER[deriveFileRiskLevel(successfulFile.findings)];
   }
-  return 4; // Skipped — always last
+  return SKIPPED_SORT_KEY; // Skipped — always last
 }
 
 function toRelativeLink(basePath: string, targetPath: string): string {
