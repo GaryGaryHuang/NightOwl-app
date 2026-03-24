@@ -61,6 +61,7 @@ export interface ReviewRunSummary {
 export interface ReviewOrchestratorOptions {
   changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
   maxConcurrentFiles?: number;
+  onOutputTargetReady?: (outputTarget: OutputTarget) => void;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   stepRunner: Pick<StepRunner, "run">;
@@ -80,6 +81,7 @@ export class ReviewOrchestrator {
   readonly #reviewIndexFinalizer: ReviewIndexFinalizer;
   readonly #runManifestFinalizer: RunManifestFinalizer;
   readonly #maxConcurrentFiles: number;
+  readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
 
   constructor(options: ReviewOrchestratorOptions) {
     if (
@@ -101,6 +103,7 @@ export class ReviewOrchestrator {
     this.#reviewIndexFinalizer = new ReviewIndexFinalizer();
     this.#runManifestFinalizer = new RunManifestFinalizer();
     this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
+    this.#onOutputTargetReady = options.onOutputTargetReady;
   }
 
   async run(
@@ -148,6 +151,8 @@ export class ReviewOrchestrator {
     const plannedNoteFiles = planNoteFiles(outputTarget.filesPath, reviewableFiles);
 
     this.#outputSink.initializeRun(outputTarget);
+
+    this.#onOutputTargetReady?.(outputTarget);
 
     for (const plannedNote of plannedNoteFiles) {
       this.#outputSink.publishFileReview({

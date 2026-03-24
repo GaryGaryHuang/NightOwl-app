@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
-import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
+import { createLocalReviewRunApp, formatLocalReviewRunSummary } from "../../src/app/review-app.ts";
 import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
@@ -1546,6 +1548,120 @@ test("createLocalReviewRunApp skips stop() and forceStop() when client startup f
   );
 
   assert.deepEqual(stopCalls, []);
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.3: composition root wiring — tool-audit.jsonl integration
+// ---------------------------------------------------------------------------
+
+test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAuditPath after a successful run", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              return {
+                async sendAndWait({ prompt }: { prompt: string }) {
+                  return { data: { content: buildSessionResponse(config, prompt) } };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      reviewConfigProvider: {
+        loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: { must: 80, nice: 90 },
+            mcpServers: {}
+          };
+        }
+      },
+      outputSink: new LocalWorkspaceProvider(),
+      timestampProvider: () => "03241400"
+    });
+
+    const result = await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.ok(
+      result.outputTarget.toolAuditPath.endsWith("tool-audit.jsonl"),
+      "toolAuditPath must end with tool-audit.jsonl"
+    );
+    assert.ok(
+      existsSync(result.outputTarget.toolAuditPath),
+      `tool-audit.jsonl must exist at ${result.outputTarget.toolAuditPath}`
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+// ─── Task 6.3: formatLocalReviewRunSummary Tool Audit line ──────────────────
+
+test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and before Skipped", () => {
+  const basePath = "/workspace/review/feature-branch_03131430";
+  const result = {
+    repoRoot: "/workspace/repo",
+    runContext: { changesetOverview: "## Changeset Overview", userContext: [] },
+    outputTarget: {
+      basePath,
+      filesPath: `${basePath}/files`,
+      summaryPath: `${basePath}/summary.md`,
+      indexPath: `${basePath}/index.md`,
+      manifestPath: `${basePath}/manifest.json`,
+      skippedPath: `${basePath}/skipped.md`,
+      toolAuditPath: `${basePath}/tool-audit.jsonl`
+    },
+    plannedFileCount: 1,
+    successfulFileCount: 1,
+    skippedFileCount: 0
+  };
+
+  const output = formatLocalReviewRunSummary(result);
+  const lines = output.split("\n");
+
+  const manifestIdx = lines.findIndex((l) => l.startsWith("Manifest:"));
+  const toolAuditIdx = lines.findIndex((l) => l.startsWith("Tool Audit:"));
+  const skippedIdx = lines.findIndex((l) => l.startsWith("Skipped:"));
+
+  assert.ok(toolAuditIdx >= 0, "output must include a Tool Audit: line");
+  assert.ok(
+    manifestIdx < toolAuditIdx,
+    "Tool Audit: must appear after Manifest:"
+  );
+  assert.ok(
+    toolAuditIdx < skippedIdx,
+    "Tool Audit: must appear before Skipped:"
+  );
+  assert.equal(
+    lines[toolAuditIdx],
+    `Tool Audit: ${basePath}/tool-audit.jsonl`
+  );
 });
 
 function sleep(ms: number): Promise<void> {

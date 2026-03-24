@@ -24,6 +24,7 @@ import {
   type CopilotClientLike
 } from "../services/session-executor.ts";
 import { ReviewSessionFactory } from "../services/review-session-factory.ts";
+import { ToolAuditWriter } from "../services/tool-audit-writer.ts";
 
 export const LOCAL_REVIEW_RUN_HEADER = "Initialized local review run.";
 const DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
@@ -109,7 +110,11 @@ export function createLocalReviewRunApp(
         stepRunner,
         workingDirectory: options.workingDirectory,
         timestampProvider: options.timestampProvider,
-        maxConcurrentFiles: reviewConfig.maxConcurrentFiles
+        maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
+        onOutputTargetReady: (outputTarget) => {
+          const auditWriter = new ToolAuditWriter(outputTarget.toolAuditPath);
+          reviewSessionFactory.setAuditWriter(auditWriter);
+        }
       });
 
       await clientManager.start();
@@ -178,6 +183,7 @@ export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
     `Summary: ${result.outputTarget.summaryPath}`,
     `Index: ${result.outputTarget.indexPath}`,
     `Manifest: ${result.outputTarget.manifestPath}`,
+    `Tool Audit: ${result.outputTarget.toolAuditPath}`,
     `Skipped: ${result.outputTarget.skippedPath}`,
     `Planned files: ${result.plannedFileCount}`,
     `Successful files: ${result.successfulFileCount}`,

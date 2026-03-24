@@ -6,6 +6,7 @@ import test from "node:test";
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
 import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
+import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
@@ -1670,6 +1671,111 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
 
     assert.deepEqual(calls, []);
     assert.equal(existsSync(outputTarget), false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.2: onOutputTargetReady callback (orchestrator wiring)
+// ---------------------------------------------------------------------------
+
+test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRun() and before per-file workers begin", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const callOrder: string[] = [];
+    let callbackOutputTarget: OutputTarget | undefined;
+
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: {
+        initializeRun(outputTarget) {
+          callOrder.push("initializeRun");
+          callbackOutputTarget = outputTarget;
+        },
+        publishFileReview() {
+          callOrder.push("publishFileReview");
+        },
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {}
+      },
+      stepRunner: {
+        async run(input) {
+          callOrder.push("stepRunner.run");
+          return { stepId: input.step.stepId, applyTo() {} };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({ changesetOverview: "overview", userContext: [] });
+        }
+      },
+      onOutputTargetReady: (outputTarget) => {
+        callOrder.push("onOutputTargetReady");
+        assert.ok(
+          callOrder.includes("initializeRun"),
+          "onOutputTargetReady must be called after initializeRun"
+        );
+        assert.equal(
+          callOrder.filter((c) => c === "stepRunner.run").length,
+          0,
+          "onOutputTargetReady must be called before any per-file step"
+        );
+        assert.equal(outputTarget, callbackOutputTarget);
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      userContext: []
+    });
+
+    assert.ok(callOrder.includes("onOutputTargetReady"), "callback should have been invoked");
+    const initIdx = callOrder.indexOf("initializeRun");
+    const cbIdx = callOrder.indexOf("onOutputTargetReady");
+
+    assert.ok(initIdx < cbIdx, "initializeRun must precede onOutputTargetReady");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator works normally when onOutputTargetReady callback is not provided", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: {
+        async run(input) {
+          return { stepId: input.step.stepId, applyTo() {} };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({ changesetOverview: "overview", userContext: [] });
+        }
+      },
+      // onOutputTargetReady deliberately omitted
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    // Should not throw
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      userContext: []
+    });
+
+    assert.ok(result.outputTarget !== undefined);
   } finally {
     fixture.cleanup();
   }
