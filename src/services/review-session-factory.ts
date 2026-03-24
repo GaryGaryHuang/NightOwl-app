@@ -11,6 +11,7 @@ import {
   SessionExecutor
 } from "./session-executor.ts";
 import type { KnowledgeSvc } from "./knowledge.ts";
+import type { ToolAuditWriter } from "./tool-audit-writer.ts";
 
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
@@ -43,6 +44,7 @@ export class ReviewSessionFactory {
   readonly #webFetchWildcardSuffixes?: readonly string[];
   readonly #webFetchDeniedHosts?: Set<string>;
   readonly #webFetchDeniedWildcardSuffixes?: readonly string[];
+  #auditWriter?: ToolAuditWriter;
 
   constructor(options: ReviewSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
@@ -91,7 +93,8 @@ export class ReviewSessionFactory {
           this.#webFetchAllowedHosts,
           this.#webFetchWildcardSuffixes,
           this.#webFetchDeniedHosts,
-          this.#webFetchDeniedWildcardSuffixes
+          this.#webFetchDeniedWildcardSuffixes,
+          this.#auditWriter
         )
       },
       model: profile.model,
@@ -100,7 +103,7 @@ export class ReviewSessionFactory {
         mode: "replace",
         content: profile.systemMessage
       },
-      onPermissionRequest: createReviewPermissionHandler(profile)
+      onPermissionRequest: createReviewPermissionHandler(profile, this.#auditWriter)
     };
 
     const mcpServers = this.#knowledgeSvc?.getMcpServers(
@@ -119,10 +122,15 @@ export class ReviewSessionFactory {
 
     return new SessionExecutor(session);
   }
+
+  setAuditWriter(writer: ToolAuditWriter): void {
+    this.#auditWriter = writer;
+  }
 }
 
 function createReviewPermissionHandler(
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
+  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  auditWriter?: ToolAuditWriter
 ): PermissionHandler {
   return async (request) => {
     if (
@@ -130,7 +138,47 @@ function createReviewPermissionHandler(
       typeof request.path === "string" &&
       isAllowedReadPath(request.path, profile)
     ) {
+      auditWriter?.append({
+        ts: new Date().toISOString(),
+        tool: "read",
+        decision: "allow",
+        args: { path: request.path }
+      });
+
       return { kind: "approved" };
+    }
+
+    if (request.kind === "read") {
+      const readPath = typeof request.path === "string" ? request.path : undefined;
+      const reason = "Read path is outside the allowed boundary.";
+
+      auditWriter?.append({
+        ts: new Date().toISOString(),
+        tool: "read",
+        decision: "deny",
+        reason,
+        args: readPath !== undefined ? { path: readPath } : {}
+      });
+
+      return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+    }
+
+    if (request.kind === "write") {
+      const fileName =
+        "fileName" in request && typeof request.fileName === "string"
+          ? request.fileName
+          : undefined;
+      const reason = "Write operations are not permitted in review sessions.";
+
+      auditWriter?.append({
+        ts: new Date().toISOString(),
+        tool: "write",
+        decision: "deny",
+        reason,
+        args: fileName !== undefined ? { path: fileName } : {}
+      });
+
+      return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
     }
 
     return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
@@ -142,7 +190,8 @@ function createReviewPreToolUseHook(
   webFetchAllowedHosts?: ReadonlySet<string>,
   webFetchWildcardSuffixes?: readonly string[],
   webFetchDeniedHosts?: ReadonlySet<string>,
-  webFetchDeniedWildcardSuffixes?: readonly string[]
+  webFetchDeniedWildcardSuffixes?: readonly string[],
+  auditWriter?: ToolAuditWriter
 ): PreToolUseHook {
   return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
     if (input.toolName === "web_fetch") {
@@ -155,48 +204,58 @@ function createReviewPreToolUseHook(
           : "";
 
       const parsedUrl = parseAllowedWebFetchUrl(url);
+      let decision: PreToolUseHookResult;
 
       if (!parsedUrl) {
-        return {
+        decision = {
           permissionDecision: "deny",
           permissionDecisionReason:
             "Review sessions only allow web_fetch for absolute public http(s) URLs."
         };
-      }
-
-      if (webFetchAllowedHosts !== undefined) {
+      } else if (webFetchAllowedHosts !== undefined) {
         const normalizedHostname = canonicalizeHostnameForComparison(parsedUrl.hostname);
+
         if (
           !webFetchAllowedHosts.has(normalizedHostname) &&
           !(webFetchWildcardSuffixes ?? []).some((suffix) =>
             normalizedHostname.endsWith(suffix)
           )
         ) {
-          return {
+          decision = {
             permissionDecision: "deny",
             permissionDecisionReason:
               "Review sessions only allow web_fetch for configured public http(s) hosts."
           };
+        } else if (webFetchDeniedHosts !== undefined) {
+          decision = evaluateWebFetchDenyList(
+            normalizedHostname,
+            webFetchDeniedHosts,
+            webFetchDeniedWildcardSuffixes
+          );
+        } else {
+          decision = undefined;
         }
-      }
-
-      if (webFetchDeniedHosts !== undefined) {
+      } else if (webFetchDeniedHosts !== undefined) {
         const normalizedHostname = canonicalizeHostnameForComparison(parsedUrl.hostname);
-        if (
-          webFetchDeniedHosts.has(normalizedHostname) ||
-          (webFetchDeniedWildcardSuffixes ?? []).some((suffix) =>
-            normalizedHostname.endsWith(suffix)
-          )
-        ) {
-          return {
-            permissionDecision: "deny",
-            permissionDecisionReason:
-              "Review sessions only allow web_fetch for configured public http(s) hosts."
-          };
-        }
+
+        decision = evaluateWebFetchDenyList(
+          normalizedHostname,
+          webFetchDeniedHosts,
+          webFetchDeniedWildcardSuffixes
+        );
+      } else {
+        decision = undefined;
       }
 
-      return;
+      auditWriter?.append({
+        ts: new Date().toISOString(),
+        tool: "web_fetch",
+        decision: decision ? "deny" : "allow",
+        ...(decision ? { reason: decision.permissionDecisionReason } : {}),
+        args: { url }
+      });
+
+      return decision;
     }
 
     if (input.toolName !== "bash") {
@@ -211,16 +270,45 @@ function createReviewPreToolUseHook(
         ? input.toolArgs.command
         : "";
 
-    if (isAllowedReadonlyBashCommand(command, profile)) {
-      return;
-    }
+    const decision: PreToolUseHookResult = isAllowedReadonlyBashCommand(command, profile)
+      ? undefined
+      : {
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            "Review sessions only allow repo-local read-only bash analysis commands."
+        };
 
+    auditWriter?.append({
+      ts: new Date().toISOString(),
+      tool: "bash",
+      decision: decision ? "deny" : "allow",
+      ...(decision ? { reason: decision.permissionDecisionReason } : {}),
+      args: { command }
+    });
+
+    return decision;
+  };
+}
+
+function evaluateWebFetchDenyList(
+  normalizedHostname: string,
+  webFetchDeniedHosts: ReadonlySet<string>,
+  webFetchDeniedWildcardSuffixes?: readonly string[]
+): PreToolUseHookResult {
+  if (
+    webFetchDeniedHosts.has(normalizedHostname) ||
+    (webFetchDeniedWildcardSuffixes ?? []).some((suffix) =>
+      normalizedHostname.endsWith(suffix)
+    )
+  ) {
     return {
       permissionDecision: "deny",
       permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
     };
-  };
+  }
+
+  return undefined;
 }
 
 function parseAllowedWebFetchUrl(urlString: string): URL | undefined {

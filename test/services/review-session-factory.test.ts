@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
 import { KnowledgeSvc } from "../../src/services/knowledge.ts";
 import { ReviewSessionFactory } from "../../src/services/review-session-factory.ts";
+import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 
 type RecordedReviewSessionConfig = SessionConfig & {
   hooks: NonNullable<SessionConfig["hooks"]> & {
@@ -1214,5 +1218,353 @@ test("ReviewSessionFactory: empty denylist blocks nothing; mixed exact+wildcard 
           "Review sessions only allow web_fetch for configured public http(s) hosts."
       }
     );
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Tasks 4.1–4.3: Hook audit writer integration
+// ---------------------------------------------------------------------------
+
+function makeAuditSession(auditWriter: ToolAuditWriter) {
+  const recordedConfigs = createRecordedConfigs();
+  const factory = new ReviewSessionFactory({
+    clientManager: createRecordingClientManager(recordedConfigs)
+  });
+
+  factory.setAuditWriter(auditWriter);
+
+  return { factory, recordedConfigs };
+}
+
+function readAuditLines(auditPath: string): ReturnType<typeof JSON.parse>[] {
+  const content = readFileSync(auditPath, "utf8");
+  return content.split("\n").filter((l) => l.length > 0).map((l) => JSON.parse(l));
+}
+
+const BASE_PROFILE = {
+  model: "gpt-5.4-mini",
+  outputBaseDir: "/workspace/repo/packages/app",
+  repoRoot: "/workspace/repo",
+  systemMessage: "system prompt",
+  workingDirectory: "/workspace/repo"
+};
+
+// --- 4.1: onPreToolUse + audit writer ---
+
+test("onPreToolUse hook appends allow record for allowed bash call", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+    const { factory, recordedConfigs } = makeAuditSession(writer);
+
+    await factory.createSession(BASE_PROFILE);
+    const hook = recordedConfigs[0].hooks.onPreToolUse;
+
+    await hook(
+      { timestamp: Date.now(), cwd: "/workspace/repo", toolName: "bash", toolArgs: { command: "git log --oneline -5" } },
+      { sessionId: "s1" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "bash");
+    assert.equal(record.decision, "allow");
+    assert.equal(record.args.command, "git log --oneline -5");
+    assert.equal("reason" in record, false);
+    assert.ok(record.ts.endsWith("Z"));
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("onPreToolUse hook appends deny record for denied bash call", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+    const { factory, recordedConfigs } = makeAuditSession(writer);
+
+    await factory.createSession(BASE_PROFILE);
+    const hook = recordedConfigs[0].hooks.onPreToolUse;
+
+    const result = await hook(
+      { timestamp: Date.now(), cwd: "/workspace/repo", toolName: "bash", toolArgs: { command: "git log; rm -rf /" } },
+      { sessionId: "s1" }
+    );
+
+    assert.ok(result !== undefined && "permissionDecision" in result);
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "bash");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.args.command, "git log; rm -rf /");
+    assert.ok(typeof record.reason === "string" && record.reason.length > 0);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("onPreToolUse hook appends allow record for allowed web_fetch call", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+    const { factory, recordedConfigs } = makeAuditSession(writer);
+
+    await factory.createSession(BASE_PROFILE);
+    const hook = recordedConfigs[0].hooks.onPreToolUse;
+
+    await hook(
+      { timestamp: Date.now(), cwd: "/workspace/repo", toolName: "web_fetch", toolArgs: { url: "https://docs.example.com/guide" } },
+      { sessionId: "s1" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "web_fetch");
+    assert.equal(record.decision, "allow");
+    assert.equal(record.args.url, "https://docs.example.com/guide");
+    assert.equal("reason" in record, false);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("onPreToolUse hook appends deny record for denied web_fetch call", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+    const { factory, recordedConfigs } = makeAuditSession(writer);
+
+    await factory.createSession(BASE_PROFILE);
+    const hook = recordedConfigs[0].hooks.onPreToolUse;
+
+    const result = await hook(
+      { timestamp: Date.now(), cwd: "/workspace/repo", toolName: "web_fetch", toolArgs: { url: "http://localhost:8080" } },
+      { sessionId: "s1" }
+    );
+
+    assert.ok(result !== undefined && "permissionDecision" in result);
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "web_fetch");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.args.url, "http://localhost:8080");
+    assert.ok(typeof record.reason === "string" && record.reason.length > 0);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+// --- 4.2: onPermissionRequest + audit writer ---
+
+test("onPermissionRequest handler appends allow record for allowed read request", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+    const { factory, recordedConfigs } = makeAuditSession(writer);
+
+    await factory.createSession(BASE_PROFILE);
+    const handler = recordedConfigs[0].onPermissionRequest;
+
+    await handler(
+      { kind: "read", path: "/workspace/repo/src/app.ts" },
+      { sessionId: "s1" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "read");
+    assert.equal(record.decision, "allow");
+    assert.equal(record.args.path, "/workspace/repo/src/app.ts");
+    assert.equal("reason" in record, false);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("onPermissionRequest handler appends deny record with explicit reason for denied read request", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+    const { factory, recordedConfigs } = makeAuditSession(writer);
+
+    await factory.createSession(BASE_PROFILE);
+    const handler = recordedConfigs[0].onPermissionRequest;
+
+    await handler(
+      { kind: "read", path: "/tmp/secret.txt" },
+      { sessionId: "s1" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "read");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.reason, "Read path is outside the allowed boundary.");
+    assert.equal(record.args.path, "/tmp/secret.txt");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("onPermissionRequest handler appends deny record with explicit reason for denied write request", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+    const { factory, recordedConfigs } = makeAuditSession(writer);
+
+    await factory.createSession(BASE_PROFILE);
+    const handler = recordedConfigs[0].onPermissionRequest;
+
+    await handler(
+      { kind: "write", fileName: "/workspace/repo/src/app.ts" },
+      { sessionId: "s1" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "write");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.reason, "Write operations are not permitted in review sessions.");
+    assert.equal(record.args.path, "/workspace/repo/src/app.ts");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("onPermissionRequest handler appends deny record with empty args when write request.fileName is missing", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+    const { factory, recordedConfigs } = makeAuditSession(writer);
+
+    await factory.createSession(BASE_PROFILE);
+    const handler = recordedConfigs[0].onPermissionRequest;
+
+    // Simulate a write request without fileName
+    await handler(
+      { kind: "write" } as Parameters<typeof handler>[0],
+      { sessionId: "s1" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "write");
+    assert.equal(record.decision, "deny");
+    assert.deepEqual(record.args, {});
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+// --- 4.3: No audit writer provided ---
+
+test("hooks behave normally and write no audit records when no audit writer is provided", async () => {
+  const recordedConfigs = createRecordedConfigs();
+  const factory = new ReviewSessionFactory({
+    clientManager: createRecordingClientManager(recordedConfigs)
+  });
+
+  // Deliberately NOT calling setAuditWriter
+
+  await factory.createSession(BASE_PROFILE);
+  const hook = recordedConfigs[0].hooks.onPreToolUse;
+  const handler = recordedConfigs[0].onPermissionRequest;
+
+  // These should not throw
+  const bashResult = await hook(
+    { timestamp: Date.now(), cwd: "/workspace/repo", toolName: "bash", toolArgs: { command: "git log" } },
+    { sessionId: "s1" }
+  );
+  const permResult = await handler(
+    { kind: "read", path: "/workspace/repo/src/app.ts" },
+    { sessionId: "s1" }
+  );
+
+  // Policy decisions must be unchanged
+  assert.equal(bashResult, undefined); // allowed
+  assert.deepEqual(permResult, { kind: "approved" }); // allowed
+});
+
+// --- Task 5.1: setAuditWriter() scoping ---
+
+test("ReviewSessionFactory sessions created before setAuditWriter() do not write audit records", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+
+    const recordedConfigs = createRecordedConfigs();
+    const factory = new ReviewSessionFactory({
+      clientManager: createRecordingClientManager(recordedConfigs)
+    });
+
+    // Create session BEFORE setAuditWriter (simulates Step 0)
+    await factory.createSession(BASE_PROFILE);
+    const hookBefore = recordedConfigs[0].hooks.onPreToolUse;
+
+    // Now set the audit writer
+    factory.setAuditWriter(writer);
+
+    // Call the hook from the session created BEFORE setAuditWriter
+    await hookBefore(
+      { timestamp: Date.now(), cwd: "/workspace/repo", toolName: "bash", toolArgs: { command: "git log" } },
+      { sessionId: "s1" }
+    );
+
+    // No audit record should have been written (writer was set after session creation)
+    // ToolAuditWriter is lazy — the file is only created on first append.
+    // Since the session had no writer, no file should exist.
+    assert.equal(existsSync(auditPath), false, "audit file should not exist since no records were written before setAuditWriter");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("ReviewSessionFactory sessions created after setAuditWriter() write audit records", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const writer = new ToolAuditWriter(auditPath);
+
+    const recordedConfigs = createRecordedConfigs();
+    const factory = new ReviewSessionFactory({
+      clientManager: createRecordingClientManager(recordedConfigs)
+    });
+
+    // Set audit writer FIRST, then create session (simulates Step 1-7)
+    factory.setAuditWriter(writer);
+    await factory.createSession(BASE_PROFILE);
+    const hookAfter = recordedConfigs[0].hooks.onPreToolUse;
+
+    await hookAfter(
+      { timestamp: Date.now(), cwd: "/workspace/repo", toolName: "bash", toolArgs: { command: "git log" } },
+      { sessionId: "s2" }
+    );
+
+    const lines = readAuditLines(auditPath);
+
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].tool, "bash");
+    assert.equal(lines[0].decision, "allow");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
   }
 });
