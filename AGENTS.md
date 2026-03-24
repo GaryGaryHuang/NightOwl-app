@@ -46,11 +46,11 @@ The app currently implements:
 - Minimal Step 0 guardrails for `read`, `bash`, and `write`
 - review-session `web_fetch` hostname DNS classification foundation: hostname-based requests now use bounded per-host DNS classification before allow, deny hostnames that fail lookup / timeout / empty-result or resolve to any non-public address, reuse the same contract for redirect hops, and memoize repeated canonical hostnames within one tool decision
 - tool-use audit trail foundation: every tool decision (allow/deny) from review sessions is appended as a JSONL record to `tool-audit.jsonl` inside the run output directory; the audit path is exposed on the completed-run `OutputTarget`, surfaced in the CLI success output as `Tool Audit:`, and included in `manifest.json` artifacts
+- explicit read-only pipeline exceptions in the shell guardrail: `|` is treated as a segment delimiter; every pipe segment is independently validated against the existing whitelist, dangerous-flag, and path-boundary rules; `||` (logical OR) and all other shell combining syntax remain unconditionally denied; the known limitation that literal `|` inside regex alternation arguments (e.g., `grep -E "foo|bar"`) causes denial is documented
 
 The app does **not** yet implement:
 
 - shell-tool compatibility beyond the current literal `bash` hook name coverage reserved by the tool policy spec for equivalent shell names
-- explicit read-only pipeline exceptions inside the shell guardrail instead of the current blanket pipe rejection
 - fail-closed denial with a stable reason when shell policy evaluation itself throws
 
 Do not assume these missing capabilities already exist.
