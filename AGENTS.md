@@ -31,7 +31,7 @@ The app currently implements:
 - risk-level derivation (`deriveFileRiskLevel`) for the four-tier `High`/`Medium`/`Low`/`None` heuristic, exported from `src/core/risk-level.ts`
 - enhanced per-file findings rendering with must-fix-before-nice-to-have grouping and summary statistics line
 - completed-run artifact surface foundation for CLI success output
-- SIGINT/SIGTERM graceful shutdown foundation: signal handler registration in app lifecycle layer, `AbortController`/`AbortSignal` propagation to orchestrator, `ReviewRunInterruptedError` distinct error type, worker safe-boundary abort semantics reusing `runAbortState`, CLI exit code 130 with distinct interrupt message, and bounded post-start client teardown that falls back from `stop()` to `forceStop()` after a fixed timeout
+- SIGINT/SIGTERM graceful shutdown foundation: signal handler registration in app lifecycle layer, `AbortController`/`AbortSignal` propagation to orchestrator, `ReviewRunInterruptedError` distinct error type with `signal` property (`"SIGINT"` | `"SIGTERM"` | `undefined`), worker safe-boundary abort semantics reusing `runAbortState`, per-signal CLI exit codes (SIGINT → 130, SIGTERM → 143, unknown → 130) with distinct interrupt messages (`"Review run interrupted by SIGINT."` / `"Review run terminated by SIGTERM."` / `"Review run interrupted."`), and bounded post-start client teardown that falls back from `stop()` to `forceStop()` after a fixed timeout
 - Minimal `StepRunner` foundation for section-step execution
 - Minimal `StructuredOutputValidator` foundation for findings JSON validation and confidence filtering
 - `JudgeSessionFactory` and `JudgeService` for section-step completion checks
@@ -50,7 +50,7 @@ The app does **not** yet implement:
 - broader external-knowledge tooling beyond the current built-in Context7 plus validated local custom MCP plus exact-host web_fetch host-policy rollout
 - richer `web_fetch` / URL permission-policy integration beyond the current exact-host allowlist foundation
 - remote MCP support
-- rollback / retry / recovery behavior beyond the current graceful shutdown foundation and shared-output abort coordination foundation (deferred: per-signal exit code differentiation, run resume/restart from checkpoint)
+- rollback / retry / recovery behavior beyond the current graceful shutdown foundation and shared-output abort coordination foundation (deferred: run resume/restart from checkpoint)
 - full final review note rendering pipeline
 - richer CLI / export surface beyond the current deterministic `outputTarget` artifact surface plus completed-run counts foundation and machine-readable manifest
 
