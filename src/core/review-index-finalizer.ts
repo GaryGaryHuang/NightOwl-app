@@ -37,14 +37,29 @@ export class ReviewIndexFinalizer {
             const successfulFile = input.successfulFiles.find(
               (f) => f.filePath === plannedNote.filePath
             );
-            const prefix = successfulFile
-              ? `[${deriveFileRiskLevel(successfulFile.findings)}]`
-              : "[Skipped]";
-            const link = toRelativeLink(
-              input.outputTarget.basePath,
-              plannedNote.noteFilePath
-            );
-            return `- ${prefix} [\`${plannedNote.filePath}\`](${link})`;
+              if (successfulFile) {
+                const prefix = `[${deriveFileRiskLevel(successfulFile.findings)}]`;
+                const link = toRelativeLink(
+                  input.outputTarget.basePath,
+                  plannedNote.noteFilePath
+                );
+                return `- ${prefix} [\`${plannedNote.filePath}\`](${link})`;
+              }
+
+              const skippedFile = input.skippedFiles.find(
+                (f) => f.filePath === plannedNote.filePath
+              );
+              if (skippedFile) {
+                const link = toRelativeLink(
+                  input.outputTarget.basePath,
+                  plannedNote.noteFilePath
+                );
+                return `- [Skipped] [\`${plannedNote.filePath}\`](${link})`;
+              }
+
+              throw new Error(
+                `Missing finalized outcome for planned file: ${plannedNote.filePath}`
+              );
           });
 
     return [

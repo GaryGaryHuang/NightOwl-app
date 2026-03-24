@@ -311,3 +311,77 @@ function createFinding(
     confidence
   };
 }
+
+test("ReviewIndexFinalizer throws with identifying message when a planned file is absent from both outcome sets", () => {
+  const finalizer = new ReviewIndexFinalizer();
+
+  assert.throws(
+    () =>
+      finalizer.render({
+        repoRoot: "/workspace/repo",
+        baseRef: "main",
+        headRef: "feature-branch",
+        outputTarget: {
+          basePath: "/workspace/review/feature-branch_03131430",
+          filesPath: "/workspace/review/feature-branch_03131430/files",
+          skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
+          summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
+          indexPath: "/workspace/review/feature-branch_03131430/index.md",
+          manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
+          toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
+        },
+        plannedNotes: [
+          {
+            filePath: "src/missing.ts",
+            noteFilePath: "/workspace/review/feature-branch_03131430/files/src__missing.ts.md"
+          }
+        ],
+        successfulFiles: [],
+        skippedFiles: []
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(
+        error.message,
+        "Missing finalized outcome for planned file: src/missing.ts"
+      );
+      return true;
+    }
+  );
+});
+
+test("ReviewIndexFinalizer labels a file present in both outcome sets as its risk level (successfulFiles wins)", () => {
+  const finalizer = new ReviewIndexFinalizer();
+
+  const rendered = finalizer.render({
+    repoRoot: "/workspace/repo",
+    baseRef: "main",
+    headRef: "feature-branch",
+    outputTarget: {
+      basePath: "/workspace/review/feature-branch_03131430",
+      filesPath: "/workspace/review/feature-branch_03131430/files",
+      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
+      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
+      indexPath: "/workspace/review/feature-branch_03131430/index.md",
+      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
+      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
+    },
+    plannedNotes: [
+      {
+        filePath: "src/both.ts",
+        noteFilePath: "/workspace/review/feature-branch_03131430/files/src__both.ts.md"
+      }
+    ],
+    successfulFiles: [createSuccessfulFile("src/both.ts", [])],
+    skippedFiles: [
+      {
+        filePath: "src/both.ts",
+        stepId: "step1-overview",
+        reason: "judge rejected"
+      }
+    ]
+  });
+
+  assert.match(rendered, /- \[None\] \[`src\/both\.ts`\]/u);
+  assert.doesNotMatch(rendered, /\[Skipped\]/u);
+});
