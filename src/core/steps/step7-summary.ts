@@ -1,5 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
+import { SUMMARY_SECTION } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
 const COMMON_SYSTEM_MESSAGE = [
@@ -58,7 +59,7 @@ export class Step7SummaryStep implements StepDefinition {
     return {
       stepId: this.stepId,
       kind: "section",
-      sectionKey: "summary",
+      sectionKey: SUMMARY_SECTION.key,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep7UserMessage(
@@ -74,7 +75,7 @@ export class Step7SummaryStep implements StepDefinition {
         criteria: buildStep7JudgeCriteria()
       },
       applyTo(targetContext: FileReviewContext, responseText: string) {
-        targetContext.setSection("summary", responseText);
+        targetContext.setSection(SUMMARY_SECTION.key, responseText);
       }
     };
   }

@@ -1,5 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
+import { KNOWLEDGE_SOURCE_OF_TRUTH_SECTION } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
 const COMMON_SYSTEM_MESSAGE = [
@@ -108,7 +109,7 @@ export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
     return {
       stepId: this.stepId,
       kind: "section",
-      sectionKey: "knowledge-source-of-truth",
+      sectionKey: KNOWLEDGE_SOURCE_OF_TRUTH_SECTION.key,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP3_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep3UserMessage(
@@ -126,7 +127,7 @@ export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
         criteria: STEP3_JUDGE_CRITERIA
       },
       applyTo(targetContext: FileReviewContext, responseText: string) {
-        targetContext.setSection("knowledge-source-of-truth", responseText);
+        targetContext.setSection(KNOWLEDGE_SOURCE_OF_TRUTH_SECTION.key, responseText);
       }
     };
   }

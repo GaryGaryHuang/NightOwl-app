@@ -190,8 +190,25 @@ test("Step6CognitiveSimulationStep carries explicit empty findings state in curr
 
   const plan = step.prepare(context);
 
-  assert.match(plan.prompt.userMessage, /<current_review>[\s\S]*## Findings\n無 findings\.\n- 無/u);
+  assert.match(plan.prompt.userMessage, /<current_review>[\s\S]*## Findings\n- 無/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /無 findings\./u);
   assert.doesNotMatch(plan.prompt.userMessage, /Review not yet generated/u);
+});
+
+test("Step6CognitiveSimulationStep uses the canonical finalizer projection for <current_review>", () => {
+  const reviewNoteFinalizer = new ReviewNoteFinalizer();
+  const context = createContextWithStep5Findings();
+  const step = new Step6CognitiveSimulationStep({
+    reviewNoteFinalizer
+  });
+
+  const plan = step.prepare(context);
+  const currentReviewMatch = plan.prompt.userMessage.match(
+    /<current_review>\n([\s\S]*)\n<\/current_review>/u
+  );
+
+  assert.ok(currentReviewMatch, "expected <current_review> block in prompt");
+  assert.equal(currentReviewMatch[1], reviewNoteFinalizer.render(context));
 });
 
 function createContextWithStep5Findings(): FileReviewContext {

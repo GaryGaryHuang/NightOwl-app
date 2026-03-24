@@ -1,3 +1,6 @@
+import type { ReviewSectionKey } from "./review-section-contract.ts";
+import { assertReviewSectionKey } from "./review-section-contract.ts";
+
 export interface FileReviewContextInput {
   filePath: string;
   noteFilePath: string;
@@ -31,7 +34,7 @@ export class FileReviewContext {
   readonly diffContent: string;
   readonly baseRef: string;
   readonly headRef: string;
-  readonly #sections = new Map<string, string>();
+  readonly #sections = new Map<ReviewSectionKey, string>();
   readonly #structuredState: ReviewStructuredState = {};
   #interruption?: ReviewInterruption;
 
@@ -44,14 +47,16 @@ export class FileReviewContext {
   }
 
   setSection(sectionKey: string, content: string): void {
+    assertReviewSectionKey(sectionKey);
     this.#sections.set(sectionKey, content);
   }
 
   getSection(sectionKey: string): string | undefined {
+    assertReviewSectionKey(sectionKey);
     return this.#sections.get(sectionKey);
   }
 
-  getSectionEntries(): Array<[string, string]> {
+  getSectionEntries(): Array<[ReviewSectionKey, string]> {
     return [...this.#sections.entries()];
   }
 

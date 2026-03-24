@@ -27,6 +27,56 @@ test("FileReviewContext preserves immutable execution metadata and starts with n
   assert.deepEqual(context.getSectionEntries(), []);
 });
 
+test("FileReviewContext accepts declared post-findings sections while keeping absent declared sections valid", () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  assert.equal(context.getSection("summary"), undefined);
+
+  context.setSection(
+    "summary",
+    [
+      "## Summary",
+      "### 審查基礎",
+      "- 改動概要：調整主要執行流程。",
+      "- 依據規範：依 repo source-of-truth 與版本假設審查。",
+      "- 審查假設：未擴張到外部知識查證。",
+      "### 行為變更提醒",
+      "- 無",
+      "### 風險評估",
+      "- 整體風險等級：None",
+      "- 風險理由：目前未保留 final findings。"
+    ].join("\n")
+  );
+
+  assert.match(context.getSection("summary") ?? "", /^## Summary/u);
+  assert.equal(context.getSection("overview"), undefined);
+});
+
+test("FileReviewContext rejects undeclared section identifiers on both write and read", () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  assert.throws(
+    () => context.setSection("not-a-declared-section", "unexpected"),
+    /declared section|undeclared section/u
+  );
+  assert.throws(
+    () => context.getSection("not-a-declared-section"),
+    /declared section|undeclared section/u
+  );
+});
+
 test("FileReviewContext stores mutable Overview state while keeping snapshot access isolated", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
@@ -52,7 +102,7 @@ test("FileReviewContext stores mutable Overview state while keeping snapshot acc
   assert.match(context.getSection("overview") ?? "", /^## Overview/u);
 
   const snapshot = context.getSectionEntries();
-  snapshot.push(["other", "should not mutate context"]);
+  snapshot.push(["summary", "should not mutate context"]);
 
   assert.deepEqual(context.getSectionEntries(), [
     [

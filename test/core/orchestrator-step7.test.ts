@@ -192,7 +192,8 @@ test("ReviewOrchestrator passes explicit empty Step 6 findings into Step 7 and s
 
     assert.ok(step7Prompts.length > 0);
     for (const prompt of step7Prompts) {
-      assert.match(prompt.prompt, /<current_review>[\s\S]*## Findings\n無 findings\.\n- 無/u);
+      assert.match(prompt.prompt, /<current_review>[\s\S]*## Findings\n- 無/u);
+      assert.doesNotMatch(prompt.prompt, /無 findings\./u);
       assert.doesNotMatch(prompt.prompt, /<diff/u);
       assert.doesNotMatch(prompt.prompt, /<changeset_context>/u);
     }
@@ -200,7 +201,8 @@ test("ReviewOrchestrator passes explicit empty Step 6 findings into Step 7 and s
     for (const plannedNote of plannedNotes) {
       const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
 
-      assert.match(noteContent, /## Findings\n無 findings\.\n- 無[\s\S]*## Summary/u);
+      assert.match(noteContent, /## Findings\n- 無[\s\S]*## Summary/u);
+      assert.doesNotMatch(noteContent, /無 findings\./u);
       assert.match(noteContent, /### 風險評估/u);
     }
   } finally {

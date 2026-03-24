@@ -1,4 +1,5 @@
 import type { FileReviewContext } from "./file-review-context.ts";
+import { getReviewSectionDefinitionsForSlot } from "./review-section-contract.ts";
 
 export class ReviewNoteFinalizer {
   render(
@@ -7,21 +8,23 @@ export class ReviewNoteFinalizer {
       "filePath" | "getSection" | "getStructuredState" | "getInterruption"
     >
   ): string {
-    const sections = [
-      "overview",
-      "dependencies-boundaries",
-      "knowledge-source-of-truth",
-      "strategy-what-if-scenarios"
-    ]
-      .map((sectionKey) => context.getSection(sectionKey)?.trim())
+    const preFindingsSections = getReviewSectionDefinitionsForSlot("pre-findings")
+      .map((definition) => context.getSection(definition.key)?.trim())
       .filter((section): section is string => Boolean(section));
     const findingsSection = renderFindingsSection(
       context.getStructuredState().findings
     );
-    const summarySection = context.getSection("summary")?.trim();
+    const postFindingsSections = getReviewSectionDefinitionsForSlot("post-findings")
+      .map((definition) => context.getSection(definition.key)?.trim())
+      .filter((section): section is string => Boolean(section));
     const warningBlock = renderInterruptionWarning(context.getInterruption());
 
-    if (sections.length === 0 && !findingsSection && !summarySection && !warningBlock) {
+    if (
+      preFindingsSections.length === 0 &&
+      !findingsSection &&
+      postFindingsSections.length === 0 &&
+      !warningBlock
+    ) {
       return [
         `# ${context.filePath}`,
         "",
@@ -30,7 +33,12 @@ export class ReviewNoteFinalizer {
       ].join("\n");
     }
 
-    if (sections.length === 0 && !findingsSection && !summarySection && warningBlock) {
+    if (
+      preFindingsSections.length === 0 &&
+      !findingsSection &&
+      postFindingsSections.length === 0 &&
+      warningBlock
+    ) {
       return [
         `# ${context.filePath}`,
         "",
@@ -47,9 +55,9 @@ export class ReviewNoteFinalizer {
       `- Source file: \`${context.filePath}\``,
       "",
       ...[
-        ...sections,
+        ...preFindingsSections,
         ...(findingsSection ? [findingsSection] : []),
-        ...(summarySection ? [summarySection] : []),
+        ...postFindingsSections,
         ...(warningBlock ? [warningBlock] : [])
       ].flatMap((section, index) =>
         index === 0 ? [section] : ["", section]
@@ -66,7 +74,7 @@ function renderFindingsSection(
   }
 
   if (findings.length === 0) {
-    return ["## Findings", "無 findings.", "- 無"].join("\n");
+    return ["## Findings", "- 無"].join("\n");
   }
 
   const mustFindings = findings.filter((f) => f.type === "must");

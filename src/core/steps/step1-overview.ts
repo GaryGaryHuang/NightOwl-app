@@ -1,4 +1,5 @@
 import type { FileReviewContext } from "../file-review-context.ts";
+import { OVERVIEW_SECTION } from "../review-section-contract.ts";
 import type { RunContext } from "../run-context.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
@@ -101,7 +102,7 @@ export class Step1OverviewStep implements StepDefinition {
     return {
       stepId: this.stepId,
       kind: "section",
-      sectionKey: "overview",
+      sectionKey: OVERVIEW_SECTION.key,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP1_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep1UserMessage(context, this.#runContext)
@@ -115,7 +116,7 @@ export class Step1OverviewStep implements StepDefinition {
         criteria: STEP1_JUDGE_CRITERIA
       },
       applyTo(targetContext: FileReviewContext, responseText: string) {
-        targetContext.setSection("overview", responseText);
+        targetContext.setSection(OVERVIEW_SECTION.key, responseText);
       }
     };
   }

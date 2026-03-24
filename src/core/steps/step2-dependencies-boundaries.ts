@@ -1,5 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
+import { DEPENDENCIES_BOUNDARIES_SECTION } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
 const COMMON_SYSTEM_MESSAGE = [
@@ -108,7 +109,7 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
     return {
       stepId: this.stepId,
       kind: "section",
-      sectionKey: "dependencies-boundaries",
+      sectionKey: DEPENDENCIES_BOUNDARIES_SECTION.key,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP2_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep2UserMessage(context, this.#reviewNoteFinalizer.render(context))
@@ -122,7 +123,7 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
         criteria: STEP2_JUDGE_CRITERIA
       },
       applyTo(targetContext: FileReviewContext, responseText: string) {
-        targetContext.setSection("dependencies-boundaries", responseText);
+        targetContext.setSection(DEPENDENCIES_BOUNDARIES_SECTION.key, responseText);
       }
     };
   }

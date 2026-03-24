@@ -478,7 +478,8 @@ test("ReviewNoteFinalizer renders empty Findings as `- 無`", () => {
   const rendered = finalizer.render(context);
 
   assert.match(rendered, /^## Findings/mu);
-  assert.match(rendered, /## Findings\n無 findings\.\n- 無/u);
+  assert.match(rendered, /## Findings\n- 無/u);
+  assert.doesNotMatch(rendered, /無 findings\./u);
   assert.doesNotMatch(rendered, /confidence/u);
 });
 
@@ -647,8 +648,61 @@ test("ReviewNoteFinalizer preserves empty Findings before Summary", () => {
 
   const rendered = finalizer.render(context);
 
-  assert.match(rendered, /## Findings\n無 findings\.\n- 無[\s\S]*## Summary/u);
+  assert.match(rendered, /## Findings\n- 無[\s\S]*## Summary/u);
+  assert.doesNotMatch(rendered, /無 findings\./u);
   assert.equal((rendered.match(/^## Summary/mgu) ?? []).length, 1);
+});
+
+test("ReviewNoteFinalizer renders a populated Summary without placeholders when declared pre-findings sections are absent", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  context.setSection(
+    "summary",
+    [
+      "## Summary",
+      "### 審查基礎",
+      "- 改動概要：調整主要執行流程。",
+      "- 依據規範：依 repo source-of-truth 與版本假設審查。",
+      "- 審查假設：未擴張到外部知識查證。",
+      "### 行為變更提醒",
+      "- 無",
+      "### 風險評估",
+      "- 整體風險等級：None",
+      "- 風險理由：目前未保留 final findings。"
+    ].join("\n")
+  );
+
+  const rendered = finalizer.render(context);
+
+  assert.equal(
+    rendered,
+    [
+      "# src/app.ts",
+      "",
+      "- Source file: `src/app.ts`",
+      "",
+      "## Summary",
+      "### 審查基礎",
+      "- 改動概要：調整主要執行流程。",
+      "- 依據規範：依 repo source-of-truth 與版本假設審查。",
+      "- 審查假設：未擴張到外部知識查證。",
+      "### 行為變更提醒",
+      "- 無",
+      "### 風險評估",
+      "- 整體風險等級：None",
+      "- 風險理由：目前未保留 final findings。"
+    ].join("\n")
+  );
+  assert.doesNotMatch(rendered, /Review not yet generated/u);
+  assert.doesNotMatch(rendered, /^## Overview/mu);
+  assert.doesNotMatch(rendered, /^## Findings/mu);
 });
 
 test("ReviewNoteFinalizer renders bootstrap interruption snapshot with deterministic warning block", () => {
@@ -896,7 +950,7 @@ test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must p
   assert.ok(rendered.indexOf("- [nice] P") < rendered.indexOf("- [nice] Q"));
 });
 
-test("ReviewNoteFinalizer renders empty findings with 無 findings. before - 無", () => {
+test("ReviewNoteFinalizer renders empty findings as a single - 無 marker", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = new FileReviewContext({
     filePath: "src/app.ts",
@@ -910,5 +964,6 @@ test("ReviewNoteFinalizer renders empty findings with 無 findings. before - 無
 
   const rendered = finalizer.render(context);
 
-  assert.match(rendered, /## Findings\n無 findings\.\n- 無/u);
+  assert.match(rendered, /## Findings\n- 無/u);
+  assert.doesNotMatch(rendered, /無 findings\./u);
 });

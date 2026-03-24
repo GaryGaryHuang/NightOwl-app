@@ -1,4 +1,5 @@
 import type { FileReviewContext } from "./file-review-context.ts";
+import type { ReviewSectionKey } from "./review-section-contract.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload } from "./structured-output-validator.ts";
@@ -6,7 +7,7 @@ import type { FindingsPayload } from "./structured-output-validator.ts";
 export interface StepExecutionPlan {
   stepId: string;
   kind: "section" | "structured";
-  sectionKey?: string;
+  sectionKey?: ReviewSectionKey;
   structuredTarget?: "findings";
   prompt: {
     systemMessage: string;

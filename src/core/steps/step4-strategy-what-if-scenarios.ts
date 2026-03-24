@@ -1,5 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
+import { STRATEGY_WHAT_IF_SCENARIOS_SECTION } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
 const COMMON_SYSTEM_MESSAGE = [
@@ -118,7 +119,7 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
     return {
       stepId: this.stepId,
       kind: "section",
-      sectionKey: "strategy-what-if-scenarios",
+      sectionKey: STRATEGY_WHAT_IF_SCENARIOS_SECTION.key,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP4_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep4UserMessage(
@@ -135,7 +136,7 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
         criteria: STEP4_JUDGE_CRITERIA
       },
       applyTo(targetContext: FileReviewContext, responseText: string) {
-        targetContext.setSection("strategy-what-if-scenarios", responseText);
+        targetContext.setSection(STRATEGY_WHAT_IF_SCENARIOS_SECTION.key, responseText);
       }
     };
   }

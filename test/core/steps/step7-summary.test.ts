@@ -108,8 +108,9 @@ test("Step7SummaryStep carries explicit empty findings state in current review",
 
   assert.match(
     plan.prompt.userMessage,
-    /<current_review>[\s\S]*## Findings\n無 findings\.\n- 無[\s\S]*<\/current_review>/u
+    /<current_review>[\s\S]*## Findings\n- 無[\s\S]*<\/current_review>/u
   );
+  assert.doesNotMatch(plan.prompt.userMessage, /無 findings\./u);
   assert.doesNotMatch(plan.prompt.userMessage, /<required_risk_level>/u);
   assert.deepEqual(plan.completionCheck, {
     kind: "judge",

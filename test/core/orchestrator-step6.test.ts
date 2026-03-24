@@ -217,7 +217,8 @@ test("ReviewOrchestrator passes explicit empty Step 5 findings into Step 6 and a
 
     assert.ok(step6Prompts.length > 0);
     for (const prompt of step6Prompts) {
-      assert.match(prompt.prompt, /<current_review>[\s\S]*## Findings\n無 findings\.\n- 無/u);
+      assert.match(prompt.prompt, /<current_review>[\s\S]*## Findings\n- 無/u);
+      assert.doesNotMatch(prompt.prompt, /無 findings\./u);
     }
 
     for (const plannedNote of plannedNotes) {
@@ -444,7 +445,8 @@ test("ReviewOrchestrator renders `## Findings` with `- 無` when Step 6 clears p
       const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
 
       assert.match(noteContent, /^## Findings/mu);
-      assert.match(noteContent, /## Findings\n無 findings\.\n- 無/u);
+      assert.match(noteContent, /## Findings\n- 無/u);
+      assert.doesNotMatch(noteContent, /無 findings\./u);
       assert.doesNotMatch(noteContent, /初版 findings/u);
       assert.doesNotMatch(noteContent, /confidence/u);
     }
