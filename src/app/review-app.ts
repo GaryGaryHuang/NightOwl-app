@@ -24,6 +24,7 @@ import {
   type CopilotClientLike
 } from "../services/session-executor.ts";
 import { ReviewSessionFactory } from "../services/review-session-factory.ts";
+import { ToolPolicyGuard } from "../services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../services/tool-audit-writer.ts";
 
 export const LOCAL_REVIEW_RUN_HEADER = "Initialized local review run.";
@@ -83,11 +84,14 @@ export function createLocalReviewRunApp(
           context7ApiKey: process.env.CONTEXT7_API_KEY,
           userMcpServers: reviewConfig.mcpServers
         });
+      const toolPolicyGuard = new ToolPolicyGuard({
+        webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
+        webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts
+      });
       const reviewSessionFactory = new ReviewSessionFactory({
         clientManager,
         knowledgeSvc,
-        webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
-        webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts
+        toolPolicyGuard
       });
       const changesetOverviewRunner =
         options.changesetOverviewRunner ??
