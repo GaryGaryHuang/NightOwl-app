@@ -1497,3 +1497,322 @@ test("tool policy baseline behaves normally without an audit writer", async () =
     { kind: "approved" }
   );
 });
+
+// Pipeline exception tests (Tasks 1.1 + 1.3)
+
+test("tool policy bash pipeline allows two-segment pipeline with whitelisted commands", async () => {
+  // (a) simple two-segment pipeline
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log --oneline | head -20" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline allows three-segment pipeline with whitelisted commands", async () => {
+  // (b) three-segment pipeline
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: 'git diff HEAD~1 | grep "function" | wc -l' }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline allows pipeline with extra whitespace around pipe operators", async () => {
+  // (c) extra whitespace around pipes
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log --oneline  |  head -20" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline allows pipeline with no whitespace around pipe operator", async () => {
+  // (d) no whitespace around pipe
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log|head" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline denies pipeline where one segment is not whitelisted", async () => {
+  // (e) non-whitelisted segment
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log --oneline | curl http://example.com" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies pipeline where one segment has a path outside the allowed boundary", async () => {
+  // (f) out-of-boundary path in segment
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "cat /etc/passwd | head -5" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies pipeline where one segment has a dangerous flag", async () => {
+  // (g) dangerous flag in segment
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log --oneline | sort --output=result.txt" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies pipeline with empty segment from trailing pipe", async () => {
+  // (h) trailing pipe produces empty segment
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log |" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies pipeline with empty segment from leading pipe", async () => {
+  // (i) leading pipe produces empty segment
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "| head -5" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies pipeline with only whitespace segment", async () => {
+  // (j) whitespace-only middle segment
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log |   | head" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies logical OR syntax", async () => {
+  // (k) || logical OR
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git status || echo fail" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies logical OR mixed with pipeline", async () => {
+  // (l) || mixed with pipeline
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log || true | head" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies grep regex alternation containing literal pipe as known limitation", async () => {
+  // (m) known limitation: grep -E "foo|bar" is split at the | inside the pattern
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: 'grep -E "foo|bar" src/file.ts' }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline writes correct audit records for allowed and denied pipeline commands", async () => {
+  // Task 1.3: audit records use full original command string
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-pipeline-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { hook } = createPolicySession({ auditWriter });
+
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log --oneline | head -20" }
+      },
+      { sessionId: "s1" }
+    );
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "git log | curl http://example.com" }
+      },
+      { sessionId: "s1" }
+    );
+
+    const [allowRecord, denyRecord] = readAuditLines(auditPath);
+
+    assert.equal(allowRecord.tool, "bash");
+    assert.equal(allowRecord.decision, "allow");
+    assert.equal(allowRecord.args.command, "git log --oneline | head -20");
+    assert.equal("reason" in allowRecord, false);
+
+    assert.equal(denyRecord.tool, "bash");
+    assert.equal(denyRecord.decision, "deny");
+    assert.equal(
+      denyRecord.reason,
+      "Review sessions only allow repo-local read-only bash analysis commands."
+    );
+    assert.equal(denyRecord.args.command, "git log | curl http://example.com");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});

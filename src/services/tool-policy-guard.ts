@@ -546,19 +546,41 @@ function isAllowedReadonlyBashCommand(
     return false;
   }
 
-  if (/[;&|`><]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
+  // Deny all shell combining syntax except single pipe |
+  if (/[;&`><]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
     return false;
   }
 
-  if (!ALLOWED_BASH_PREFIXES.some((prefix) => matchesAllowedBashPrefix(trimmedCommand, prefix))) {
+  // Deny logical OR || before splitting on single |
+  if (trimmedCommand.includes("||")) {
     return false;
   }
 
-  if (containsDangerousFlag(trimmedCommand)) {
+  // Split on | and validate each segment independently
+  const segments = trimmedCommand.split("|");
+
+  return segments.every((segment) => isAllowedSingleSegment(segment, profile));
+}
+
+function isAllowedSingleSegment(
+  segment: string,
+  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
+): boolean {
+  const trimmed = segment.trim();
+
+  if (!trimmed) {
     return false;
   }
 
-  return hasOnlyAllowedPathArguments(trimmedCommand, profile);
+  if (!ALLOWED_BASH_PREFIXES.some((prefix) => matchesAllowedBashPrefix(trimmed, prefix))) {
+    return false;
+  }
+
+  if (containsDangerousFlag(trimmed)) {
+    return false;
+  }
+
+  return hasOnlyAllowedPathArguments(trimmed, profile);
 }
 
 function matchesAllowedBashPrefix(command: string, prefix: string): boolean {
