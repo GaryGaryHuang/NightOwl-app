@@ -5,6 +5,7 @@ export interface OutputTarget {
   summaryPath: string;
   indexPath: string;
   manifestPath: string;
+  toolAuditPath: string;
 }
 
 export interface ResolveOutputTargetInput {
@@ -39,7 +40,8 @@ export function buildOutputTarget(
     skippedPath: path.join(basePath, "skipped.md"),
     summaryPath: path.join(basePath, "summary.md"),
     indexPath: path.join(basePath, "index.md"),
-    manifestPath: path.join(basePath, "manifest.json")
+    manifestPath: path.join(basePath, "manifest.json"),
+    toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   };
 }
 

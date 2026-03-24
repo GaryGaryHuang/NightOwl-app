@@ -27,6 +27,7 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
+    writeFileSync(outputTarget.toolAuditPath, "");
     this.#outputTarget = outputTarget;
   }
 

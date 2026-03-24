@@ -34,6 +34,12 @@ test("LocalWorkspaceProvider initializes the run directories and skipped.md", ()
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 
@@ -45,10 +51,12 @@ test("LocalWorkspaceProvider initializes the run directories and skipped.md", ()
     assert.equal(existsSync(outputTarget.basePath), true);
     assert.equal(existsSync(outputTarget.filesPath), true);
     assert.equal(existsSync(outputTarget.skippedPath), true);
+    assert.equal(existsSync(outputTarget.toolAuditPath), true);
     assert.equal(existsSync(outputTarget.summaryPath), false);
     assert.equal(existsSync(outputTarget.indexPath), false);
     assert.equal(existsSync(outputTarget.manifestPath), false);
     assert.equal(readFileSync(outputTarget.skippedPath, "utf8"), "");
+    assert.equal(readFileSync(outputTarget.toolAuditPath, "utf8"), "");
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
@@ -82,6 +90,12 @@ test("LocalWorkspaceProvider publishes file review content to the target note pa
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
   const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
@@ -129,6 +143,12 @@ test("LocalWorkspaceProvider appends deterministic skipped-file records to skipp
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 
@@ -188,6 +208,12 @@ test("LocalWorkspaceProvider publishes run summary content to summary.md", () =>
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 
@@ -242,6 +268,12 @@ test("LocalWorkspaceProvider publishes review index content to index.md", () => 
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 
@@ -304,6 +336,12 @@ test("LocalWorkspaceProvider publishes run manifest content to manifest.json", (
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 
@@ -352,6 +390,12 @@ test("LocalWorkspaceProvider classifies path-specific successful snapshot write 
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 
@@ -405,6 +449,12 @@ test("LocalWorkspaceProvider classifies disk-capacity successful snapshot write 
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 
@@ -458,6 +508,12 @@ test("LocalWorkspaceProvider falls back to shared output target fault when succe
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 
@@ -507,6 +563,12 @@ test("LocalWorkspaceProvider treats shared files-path corruption as a shared out
       "review",
       "feature-branch_03131430",
       "manifest.json"
+    ),
+    toolAuditPath: path.join(
+      tempDir,
+      "review",
+      "feature-branch_03131430",
+      "tool-audit.jsonl"
     )
   };
 

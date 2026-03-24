@@ -43,8 +43,27 @@ test("buildOutputTarget returns review output paths", () => {
     skippedPath: "/workspace/review/feature_login_03131430/skipped.md",
     summaryPath: "/workspace/review/feature_login_03131430/summary.md",
     indexPath: "/workspace/review/feature_login_03131430/index.md",
-    manifestPath: "/workspace/review/feature_login_03131430/manifest.json"
+    manifestPath: "/workspace/review/feature_login_03131430/manifest.json",
+    toolAuditPath: "/workspace/review/feature_login_03131430/tool-audit.jsonl"
   });
+});
+
+test("buildOutputTarget includes toolAuditPath under the session basePath", () => {
+  const target = buildOutputTarget({
+    outputBaseDir: "/workspace",
+    branchName: "feature_login",
+    headRef: "feature_login",
+    timestamp: "03131430"
+  });
+
+  assert.ok(
+    target.toolAuditPath.endsWith("tool-audit.jsonl"),
+    "toolAuditPath must end with tool-audit.jsonl"
+  );
+  assert.ok(
+    target.toolAuditPath.startsWith(target.basePath),
+    "toolAuditPath must be under basePath"
+  );
 });
 
 test("planNoteFiles maps a root-level file to a markdown note", () => {

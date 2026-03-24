@@ -401,7 +401,8 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
             summaryPath: result.outputTarget.summaryPath,
             indexPath: result.outputTarget.indexPath,
             skippedPath: result.outputTarget.skippedPath,
-            manifestPath: result.outputTarget.manifestPath
+            manifestPath: result.outputTarget.manifestPath,
+            toolAuditPath: result.outputTarget.toolAuditPath
           },
           files: []
         },
@@ -1745,6 +1746,7 @@ function createExpectedOutputTarget(outputBaseDir: string, sessionId: string) {
     skippedPath: path.join(basePath, "skipped.md"),
     summaryPath: path.join(basePath, "summary.md"),
     indexPath: path.join(basePath, "index.md"),
-    manifestPath: path.join(basePath, "manifest.json")
+    manifestPath: path.join(basePath, "manifest.json"),
+    toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   };
 }

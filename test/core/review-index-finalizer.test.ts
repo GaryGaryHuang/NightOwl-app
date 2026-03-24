@@ -20,7 +20,8 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
       indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json"
+      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
+      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
     },
     plannedNotes: [
       {
@@ -89,7 +90,8 @@ test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs"
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
       indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json"
+      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
+      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
     },
     plannedNotes: [],
     successfulFiles: [],
@@ -132,7 +134,8 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
       skippedPath: String.raw`C:\workspace\review\feature-branch_03131430\skipped.md`,
       summaryPath: String.raw`C:\workspace\review\feature-branch_03131430\summary.md`,
       indexPath: String.raw`C:\workspace\review\feature-branch_03131430\index.md`,
-      manifestPath: String.raw`C:\workspace\review\feature-branch_03131430\manifest.json`
+      manifestPath: String.raw`C:\workspace\review\feature-branch_03131430\manifest.json`,
+      toolAuditPath: String.raw`C:\workspace\review\feature-branch_03131430\tool-audit.jsonl`
     },
     plannedNotes: [
       {
@@ -173,7 +176,8 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
       indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json"
+      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
+      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
     },
     plannedNotes: [
       {
@@ -212,7 +216,8 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
       indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json"
+      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
+      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
     },
     plannedNotes: [
       { filePath: "none.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/none.ts.md" },
@@ -267,7 +272,8 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
       indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json"
+      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
+      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
     },
     plannedNotes: [
       { filePath: "a.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/a.ts.md" },
