@@ -13,6 +13,14 @@ import {
   DEFAULT_WEB_FETCH_REDIRECT_TIMEOUT_MS,
   type WebFetchRedirectResolver
 } from "./web-fetch-redirect-resolver.ts";
+import {
+  canonicalizeHostnameForComparison,
+  DefaultWebFetchHostnameClassifier,
+  DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS,
+  normalizeHostnameForNetworkChecks,
+  UNSAFE_WEB_FETCH_HOSTNAME_REASON,
+  type WebFetchHostnameClassifier
+} from "./web-fetch-hostname-classifier.ts";
 
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
@@ -47,27 +55,40 @@ const ALLOWED_BASH_PREFIXES = [
 ];
 
 const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output"]);
+const UNSAFE_WEB_FETCH_URL_REASON =
+  "Review sessions only allow web_fetch for absolute public http(s) URLs.";
+const CONFIGURED_WEB_FETCH_HOST_REASON =
+  "Review sessions only allow web_fetch for configured public http(s) hosts.";
 
 export interface ToolPolicyGuardOptions {
+  hostnameClassifier?: WebFetchHostnameClassifier;
   redirectResolver?: WebFetchRedirectResolver;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
+  webFetchHostnameClassificationTimeoutMs?: number;
   webFetchRedirectHopLimit?: number;
   webFetchRedirectTimeoutMs?: number;
 }
 
 export class ToolPolicyGuard {
+  readonly #hostnameClassifier: WebFetchHostnameClassifier;
   readonly #redirectResolver: WebFetchRedirectResolver;
   readonly #webFetchAllowedHosts?: Set<string>;
   readonly #webFetchWildcardSuffixes?: readonly string[];
   readonly #webFetchDeniedHosts?: Set<string>;
   readonly #webFetchDeniedWildcardSuffixes?: readonly string[];
+  readonly #webFetchHostnameClassificationTimeoutMs: number;
   readonly #webFetchRedirectHopLimit: number;
   readonly #webFetchRedirectTimeoutMs: number;
 
   constructor(options: ToolPolicyGuardOptions) {
+    this.#hostnameClassifier =
+      options.hostnameClassifier ?? new DefaultWebFetchHostnameClassifier();
     this.#redirectResolver =
       options.redirectResolver ?? new DefaultWebFetchRedirectResolver();
+    this.#webFetchHostnameClassificationTimeoutMs =
+      options.webFetchHostnameClassificationTimeoutMs ??
+      DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS;
     this.#webFetchRedirectHopLimit =
       options.webFetchRedirectHopLimit ?? DEFAULT_WEB_FETCH_REDIRECT_HOP_LIMIT;
     this.#webFetchRedirectTimeoutMs =
@@ -185,15 +206,33 @@ export class ToolPolicyGuard {
 
         const parsedUrl = parseAllowedWebFetchUrl(url);
         let decision: PreToolUseHookResult;
+        const hostnameDecisionCache = new Map<
+          string,
+          Promise<PreToolUseHookResult>
+        >();
+
+        const evaluateResolvedUrl = async (
+          resolvedUrl: URL
+        ): Promise<PreToolUseHookResult> => {
+          const hostPolicyDecision = this.evaluateWebFetchHostPolicy(resolvedUrl);
+
+          if (hostPolicyDecision) {
+            return hostPolicyDecision;
+          }
+
+          return this.evaluateWebFetchHostnameClassification(
+            resolvedUrl,
+            hostnameDecisionCache
+          );
+        };
 
         if (!parsedUrl) {
           decision = {
             permissionDecision: "deny",
-            permissionDecisionReason:
-              "Review sessions only allow web_fetch for absolute public http(s) URLs."
+            permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
           };
         } else {
-          decision = this.evaluateWebFetchHostPolicy(parsedUrl);
+          decision = await evaluateResolvedUrl(parsedUrl);
 
           if (!decision) {
             const redirectResolution = await this.#redirectResolver.resolveRedirectChain(
@@ -207,10 +246,10 @@ export class ToolPolicyGuard {
                   );
 
                   if (!parsedRedirectUrl) {
-                    return "Review sessions only allow web_fetch for absolute public http(s) URLs.";
+                    return UNSAFE_WEB_FETCH_URL_REASON;
                   }
 
-                  return this.evaluateWebFetchHostPolicy(parsedRedirectUrl)
+                  return (await evaluateResolvedUrl(parsedRedirectUrl))
                     ?.permissionDecisionReason;
                 }
               }
@@ -228,13 +267,12 @@ export class ToolPolicyGuard {
                 if (!parsedRedirectUrl) {
                   decision = {
                     permissionDecision: "deny",
-                    permissionDecisionReason:
-                      "Review sessions only allow web_fetch for absolute public http(s) URLs."
+                    permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
                   };
                   break;
                 }
 
-                decision = this.evaluateWebFetchHostPolicy(parsedRedirectUrl);
+                decision = await evaluateResolvedUrl(parsedRedirectUrl);
 
                 if (decision) {
                   break;
@@ -299,8 +337,7 @@ export class ToolPolicyGuard {
       ) {
         return {
           permissionDecision: "deny",
-          permissionDecisionReason:
-            "Review sessions only allow web_fetch for configured public http(s) hosts."
+          permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
         };
       }
     }
@@ -314,6 +351,42 @@ export class ToolPolicyGuard {
     }
 
     return undefined;
+  }
+
+  async evaluateWebFetchHostnameClassification(
+    url: URL,
+    decisionCache: Map<string, Promise<PreToolUseHookResult>>
+  ): Promise<PreToolUseHookResult> {
+    const normalizedHostname = canonicalizeHostnameForComparison(url.hostname);
+
+    if (isIP(normalizedHostname) !== 0) {
+      return undefined;
+    }
+
+    const cachedDecision = decisionCache.get(normalizedHostname);
+
+    if (cachedDecision) {
+      return cachedDecision;
+    }
+
+    const decisionPromise = this.#hostnameClassifier
+      .classifyHostname(normalizedHostname, {
+        timeoutMs: this.#webFetchHostnameClassificationTimeoutMs
+      })
+      .then((classification): PreToolUseHookResult => {
+        if (classification.kind === "denied") {
+          return {
+            permissionDecision: "deny",
+            permissionDecisionReason: classification.reason
+          };
+        }
+
+        return undefined;
+      });
+
+    decisionCache.set(normalizedHostname, decisionPromise);
+
+    return decisionPromise;
   }
 }
 
@@ -330,8 +403,7 @@ function evaluateWebFetchDenyList(
   ) {
     return {
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
+      permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
     };
   }
 
@@ -372,19 +444,6 @@ function parseAllowedWebFetchUrl(urlString: string): URL | undefined {
 
   return parsed;
 }
-
-function normalizeHostnameForNetworkChecks(hostname: string): string {
-  const lowercaseHostname = hostname.toLowerCase();
-
-  return lowercaseHostname.startsWith("[") && lowercaseHostname.endsWith("]")
-    ? lowercaseHostname.slice(1, -1)
-    : lowercaseHostname;
-}
-
-function canonicalizeHostnameForComparison(hostname: string): string {
-  return normalizeHostnameForNetworkChecks(hostname).replace(/\.$/u, "");
-}
-
 function isDisallowedIpv4(hostname: string): boolean {
   const octets = hostname.split(".").map((value) => Number.parseInt(value, 10));
 

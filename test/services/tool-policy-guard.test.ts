@@ -8,6 +8,10 @@ import type { ReviewSessionProfile } from "../../src/services/review-session-fac
 import { ToolPolicyGuard } from "../../src/services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import type {
+  WebFetchHostnameClassification,
+  WebFetchHostnameClassifier
+} from "../../src/services/web-fetch-hostname-classifier.ts";
+import type {
   WebFetchRedirectResolution,
   WebFetchRedirectResolver
 } from "../../src/services/web-fetch-redirect-resolver.ts";
@@ -20,7 +24,9 @@ const BASE_PROFILE: Pick<ReviewSessionProfile, "outputBaseDir" | "repoRoot"> = {
 function createPolicySession(options?: {
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
+  hostnameClassifier?: WebFetchHostnameClassifier;
   redirectResolver?: WebFetchRedirectResolver;
+  webFetchHostnameClassificationTimeoutMs?: number;
   webFetchRedirectHopLimit?: number;
   webFetchRedirectTimeoutMs?: number;
   auditWriter?: ToolAuditWriter;
@@ -32,9 +38,18 @@ function createPolicySession(options?: {
     ...(options?.webFetchDeniedHosts === undefined
       ? {}
       : { webFetchDeniedHosts: options.webFetchDeniedHosts }),
+    hostnameClassifier:
+      options?.hostnameClassifier ??
+      new FakeHostnameClassifier({ kind: "allowed" }),
     redirectResolver:
       options?.redirectResolver ??
       new FakeRedirectResolver({ kind: "resolved", redirectChain: [] }),
+    ...(options?.webFetchHostnameClassificationTimeoutMs === undefined
+      ? {}
+      : {
+          webFetchHostnameClassificationTimeoutMs:
+            options.webFetchHostnameClassificationTimeoutMs
+        }),
     ...(options?.webFetchRedirectHopLimit === undefined
       ? {}
       : { webFetchRedirectHopLimit: options.webFetchRedirectHopLimit }),
@@ -90,6 +105,38 @@ class FakeRedirectResolver implements WebFetchRedirectResolver {
     }
 
     return this.#nextResolution;
+  }
+}
+
+class FakeHostnameClassifier implements WebFetchHostnameClassifier {
+  readonly calls: Array<{
+    hostname: string;
+    timeoutMs: number;
+  }> = [];
+
+  #nextResult:
+    | WebFetchHostnameClassification
+    | ((hostname: string) => Promise<WebFetchHostnameClassification>);
+
+  constructor(
+    result:
+      | WebFetchHostnameClassification
+      | ((hostname: string) => Promise<WebFetchHostnameClassification>)
+  ) {
+    this.#nextResult = result;
+  }
+
+  async classifyHostname(
+    hostname: string,
+    options: { timeoutMs: number }
+  ): Promise<WebFetchHostnameClassification> {
+    this.calls.push({ hostname, timeoutMs: options.timeoutMs });
+
+    if (typeof this.#nextResult === "function") {
+      return this.#nextResult(hostname);
+    }
+
+    return this.#nextResult;
   }
 }
 
@@ -272,6 +319,76 @@ test("tool policy baseline enforces web_fetch public-http(s) guard", async () =>
       permissionDecision: "deny",
       permissionDecisionReason:
         "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+});
+
+test("tool policy baseline applies hostname DNS classification after syntax checks for hostname-based URLs only", async () => {
+  const classifier = new FakeHostnameClassifier({ kind: "allowed" });
+  const { hook } = createPolicySession({ hostnameClassifier: classifier });
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+
+  assert.deepEqual(classifier.calls, [
+    {
+      hostname: "docs.example.com",
+      timeoutMs: 5000
+    }
+  ]);
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "http://192.168.1.10/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
+
+  assert.equal(classifier.calls.length, 1);
+});
+
+test("tool policy baseline denies hostname DNS classification failures with a stable reason", async () => {
+  const classifier = new FakeHostnameClassifier({
+    kind: "denied",
+    reason:
+      "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
+  });
+  const { hook } = createPolicySession({ hostnameClassifier: classifier });
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://internal-proxy.example.com/admin" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
     }
   );
 });
@@ -850,6 +967,37 @@ test("tool policy baseline denies the initial URL before redirect traversal when
   assert.equal(redirectResolver.calls.length, 0);
 });
 
+test("tool policy baseline short-circuits host-policy denials before DNS classification", async () => {
+  const classifier = new FakeHostnameClassifier({ kind: "allowed" });
+  const { hook } = createPolicySession({
+    webFetchAllowedHosts: ["docs.example.com"],
+    hostnameClassifier: classifier,
+    redirectResolver: new FakeRedirectResolver({
+      kind: "resolved",
+      redirectChain: [new URL("https://docs.example.com/guide")]
+    })
+  });
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://react.dev/reference" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  assert.equal(classifier.calls.length, 0);
+});
+
 test("tool policy baseline enforces allowlist and denylist semantics across redirect targets", async () => {
   const allowlistMiss = createPolicySession({
     webFetchAllowedHosts: ["docs.example.com"],
@@ -922,6 +1070,73 @@ test("tool policy baseline enforces allowlist and denylist semantics across redi
         "Review sessions only allow web_fetch for configured public http(s) hosts."
     }
   );
+});
+
+test("tool policy baseline enforces DNS classification across redirect targets", async () => {
+  const classifier = new FakeHostnameClassifier(async (hostname) =>
+    hostname === "internal-proxy.example.com"
+      ? {
+          kind: "denied",
+          reason:
+            "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
+        }
+      : { kind: "allowed" }
+  );
+  const { hook } = createPolicySession({
+    hostnameClassifier: classifier,
+    redirectResolver: new FakeRedirectResolver({
+      kind: "resolved",
+      redirectChain: [new URL("https://internal-proxy.example.com/admin")]
+    })
+  });
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/start" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
+    }
+  );
+});
+
+test("tool policy baseline memoizes hostname DNS classification within one decision using canonical hostnames", async () => {
+  const classifier = new FakeHostnameClassifier({ kind: "allowed" });
+  const { hook } = createPolicySession({
+    hostnameClassifier: classifier,
+    redirectResolver: new FakeRedirectResolver({
+      kind: "resolved",
+      redirectChain: [new URL("https://Docs.Example.Com./reference")]
+    })
+  });
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/start" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+
+  assert.deepEqual(classifier.calls, [
+    {
+      hostname: "docs.example.com",
+      timeoutMs: 5000
+    }
+  ]);
 });
 
 test("tool policy baseline denies unresolved redirect chains conservatively", async () => {

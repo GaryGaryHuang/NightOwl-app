@@ -8,16 +8,36 @@ import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
+import type { WebFetchHostnameClassifier } from "../../src/services/web-fetch-hostname-classifier.ts";
 import type { WebFetchRedirectResolver } from "../../src/services/web-fetch-redirect-resolver.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
 function createResolvedRedirectResolver(redirectChain: URL[] = []): WebFetchRedirectResolver {
   return {
-    async resolveRedirectChain() {
+    async resolveRedirectChain(_initialUrl, options) {
+      for (const redirectTarget of redirectChain) {
+        const denialReason = await options.validateRedirectTarget?.(redirectTarget);
+
+        if (denialReason) {
+          return {
+            kind: "denied",
+            reason: denialReason
+          };
+        }
+      }
+
       return {
         kind: "resolved",
         redirectChain
       };
+    }
+  };
+}
+
+function createAllowingHostnameClassifier(): WebFetchHostnameClassifier {
+  return {
+    async classifyHostname() {
+      return { kind: "allowed" };
     }
   };
 }
@@ -467,6 +487,7 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
+      webFetchHostnameClassifier: createAllowingHostnameClassifier(),
       webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {},
@@ -572,6 +593,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
+      webFetchHostnameClassifier: createAllowingHostnameClassifier(),
       webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {},
@@ -690,6 +712,7 @@ test("createLocalReviewRunApp applies redirect-chain host policy without introdu
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
+      webFetchHostnameClassifier: createAllowingHostnameClassifier(),
       webFetchRedirectResolver: createResolvedRedirectResolver([
         new URL("https://reference.example.net/page")
       ]),
