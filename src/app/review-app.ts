@@ -26,6 +26,7 @@ import {
 import { ReviewSessionFactory } from "../services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../services/tool-audit-writer.ts";
+import type { WebFetchRedirectResolver } from "../services/web-fetch-redirect-resolver.ts";
 
 export const LOCAL_REVIEW_RUN_HEADER = "Initialized local review run.";
 const DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
@@ -47,6 +48,9 @@ export interface CreateLocalReviewRunAppOptions {
   workingDirectory: string;
   timestampProvider?: () => string;
   gracefulShutdownTimeoutMs?: number;
+  webFetchRedirectResolver?: WebFetchRedirectResolver;
+  webFetchRedirectHopLimit?: number;
+  webFetchRedirectTimeoutMs?: number;
 }
 
 type LocalReviewRunClientManager = NonNullable<
@@ -85,8 +89,11 @@ export function createLocalReviewRunApp(
           userMcpServers: reviewConfig.mcpServers
         });
       const toolPolicyGuard = new ToolPolicyGuard({
+        redirectResolver: options.webFetchRedirectResolver,
         webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
-        webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts
+        webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
+        webFetchRedirectHopLimit: options.webFetchRedirectHopLimit,
+        webFetchRedirectTimeoutMs: options.webFetchRedirectTimeoutMs
       });
       const reviewSessionFactory = new ReviewSessionFactory({
         clientManager,

@@ -7,6 +7,12 @@ import path from "node:path";
 
 import type { ReviewSessionProfile } from "./review-session-factory.ts";
 import type { ToolAuditWriter } from "./tool-audit-writer.ts";
+import {
+  DefaultWebFetchRedirectResolver,
+  DEFAULT_WEB_FETCH_REDIRECT_HOP_LIMIT,
+  DEFAULT_WEB_FETCH_REDIRECT_TIMEOUT_MS,
+  type WebFetchRedirectResolver
+} from "./web-fetch-redirect-resolver.ts";
 
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
@@ -43,17 +49,30 @@ const ALLOWED_BASH_PREFIXES = [
 const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output"]);
 
 export interface ToolPolicyGuardOptions {
+  redirectResolver?: WebFetchRedirectResolver;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
+  webFetchRedirectHopLimit?: number;
+  webFetchRedirectTimeoutMs?: number;
 }
 
 export class ToolPolicyGuard {
+  readonly #redirectResolver: WebFetchRedirectResolver;
   readonly #webFetchAllowedHosts?: Set<string>;
   readonly #webFetchWildcardSuffixes?: readonly string[];
   readonly #webFetchDeniedHosts?: Set<string>;
   readonly #webFetchDeniedWildcardSuffixes?: readonly string[];
+  readonly #webFetchRedirectHopLimit: number;
+  readonly #webFetchRedirectTimeoutMs: number;
 
   constructor(options: ToolPolicyGuardOptions) {
+    this.#redirectResolver =
+      options.redirectResolver ?? new DefaultWebFetchRedirectResolver();
+    this.#webFetchRedirectHopLimit =
+      options.webFetchRedirectHopLimit ?? DEFAULT_WEB_FETCH_REDIRECT_HOP_LIMIT;
+    this.#webFetchRedirectTimeoutMs =
+      options.webFetchRedirectTimeoutMs ?? DEFAULT_WEB_FETCH_REDIRECT_TIMEOUT_MS;
+
     if (options.webFetchAllowedHosts === undefined) {
       this.#webFetchAllowedHosts = undefined;
       this.#webFetchWildcardSuffixes = undefined;
@@ -173,39 +192,56 @@ export class ToolPolicyGuard {
             permissionDecisionReason:
               "Review sessions only allow web_fetch for absolute public http(s) URLs."
           };
-        } else if (this.#webFetchAllowedHosts !== undefined) {
-          const normalizedHostname = canonicalizeHostnameForComparison(parsedUrl.hostname);
-
-          if (
-            !this.#webFetchAllowedHosts.has(normalizedHostname) &&
-            !(this.#webFetchWildcardSuffixes ?? []).some((suffix) =>
-              normalizedHostname.endsWith(suffix)
-            )
-          ) {
-            decision = {
-              permissionDecision: "deny",
-              permissionDecisionReason:
-                "Review sessions only allow web_fetch for configured public http(s) hosts."
-            };
-          } else if (this.#webFetchDeniedHosts !== undefined) {
-            decision = evaluateWebFetchDenyList(
-              normalizedHostname,
-              this.#webFetchDeniedHosts,
-              this.#webFetchDeniedWildcardSuffixes
-            );
-          } else {
-            decision = undefined;
-          }
-        } else if (this.#webFetchDeniedHosts !== undefined) {
-          const normalizedHostname = canonicalizeHostnameForComparison(parsedUrl.hostname);
-
-          decision = evaluateWebFetchDenyList(
-            normalizedHostname,
-            this.#webFetchDeniedHosts,
-            this.#webFetchDeniedWildcardSuffixes
-          );
         } else {
-          decision = undefined;
+          decision = this.evaluateWebFetchHostPolicy(parsedUrl);
+
+          if (!decision) {
+            const redirectResolution = await this.#redirectResolver.resolveRedirectChain(
+              parsedUrl,
+              {
+                maxHops: this.#webFetchRedirectHopLimit,
+                timeoutMs: this.#webFetchRedirectTimeoutMs,
+                validateRedirectTarget: async (redirectTarget) => {
+                  const parsedRedirectUrl = parseAllowedWebFetchUrl(
+                    redirectTarget.toString()
+                  );
+
+                  if (!parsedRedirectUrl) {
+                    return "Review sessions only allow web_fetch for absolute public http(s) URLs.";
+                  }
+
+                  return this.evaluateWebFetchHostPolicy(parsedRedirectUrl)
+                    ?.permissionDecisionReason;
+                }
+              }
+            );
+
+            if (redirectResolution.kind === "denied") {
+              decision = {
+                permissionDecision: "deny",
+                permissionDecisionReason: redirectResolution.reason
+              };
+            } else {
+              for (const redirectUrl of redirectResolution.redirectChain) {
+                const parsedRedirectUrl = parseAllowedWebFetchUrl(redirectUrl.toString());
+
+                if (!parsedRedirectUrl) {
+                  decision = {
+                    permissionDecision: "deny",
+                    permissionDecisionReason:
+                      "Review sessions only allow web_fetch for absolute public http(s) URLs."
+                  };
+                  break;
+                }
+
+                decision = this.evaluateWebFetchHostPolicy(parsedRedirectUrl);
+
+                if (decision) {
+                  break;
+                }
+              }
+            }
+          }
         }
 
         auditWriter?.append({
@@ -249,6 +285,35 @@ export class ToolPolicyGuard {
 
       return decision;
     };
+  }
+
+  evaluateWebFetchHostPolicy(url: URL): PreToolUseHookResult {
+    const normalizedHostname = canonicalizeHostnameForComparison(url.hostname);
+
+    if (this.#webFetchAllowedHosts !== undefined) {
+      if (
+        !this.#webFetchAllowedHosts.has(normalizedHostname) &&
+        !(this.#webFetchWildcardSuffixes ?? []).some((suffix) =>
+          normalizedHostname.endsWith(suffix)
+        )
+      ) {
+        return {
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            "Review sessions only allow web_fetch for configured public http(s) hosts."
+        };
+      }
+    }
+
+    if (this.#webFetchDeniedHosts !== undefined) {
+      return evaluateWebFetchDenyList(
+        normalizedHostname,
+        this.#webFetchDeniedHosts,
+        this.#webFetchDeniedWildcardSuffixes
+      );
+    }
+
+    return undefined;
   }
 }
 

@@ -8,7 +8,19 @@ import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
+import type { WebFetchRedirectResolver } from "../../src/services/web-fetch-redirect-resolver.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+
+function createResolvedRedirectResolver(redirectChain: URL[] = []): WebFetchRedirectResolver {
+  return {
+    async resolveRedirectChain() {
+      return {
+        kind: "resolved",
+        redirectChain
+      };
+    }
+  };
+}
 
 test("createLocalReviewRunApp fails before client startup, Step 0, and output initialization when review config is invalid", async () => {
   const fixture = createReviewRepoFixture();
@@ -22,6 +34,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
     let initializeRunCalls = 0;
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
+      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {
           startCalls += 1;
@@ -89,6 +102,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
     let initializeRunCalls = 0;
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
+      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {
           startCalls += 1;
@@ -150,6 +164,7 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
+      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {
           startCalls += 1;
@@ -452,6 +467,7 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
+      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {},
         async stop() {},
@@ -556,6 +572,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
+      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {},
         async stop() {},
@@ -659,6 +676,114 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
         { sessionId: "session-1" }
       ),
       undefined
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("createLocalReviewRunApp applies redirect-chain host policy without introducing a new step failure family", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    const sessionConfigs: SessionConfig[] = [];
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      webFetchRedirectResolver: createResolvedRedirectResolver([
+        new URL("https://reference.example.net/page")
+      ]),
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              sessionConfigs.push(config);
+
+              return {
+                async sendAndWait({ prompt }) {
+                  return {
+                    data: {
+                      content: buildSessionResponse(config, prompt)
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      reviewConfigProvider: {
+        loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: {
+              must: 80,
+              nice: 90
+            },
+            mcpServers: {},
+            webFetchAllowedHosts: ["docs.example.com"]
+          };
+        }
+      },
+      outputSink: {
+        initializeRun() {},
+        publishFileReview() {},
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {}
+      }
+    });
+
+    const result = await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.ok(result.plannedFileCount >= 2);
+    assert.ok(result.successfulFileCount >= 1);
+
+    const reviewSessionConfig = sessionConfigs.find(
+      (config) =>
+        isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
+        config.hooks?.onPreToolUse
+    );
+    const preToolUse = reviewSessionConfig?.hooks?.onPreToolUse;
+
+    assert.ok(preToolUse);
+    const confirmedPreToolUse = preToolUse!;
+    assert.deepEqual(
+      await confirmedPreToolUse(
+        {
+          timestamp: Date.now(),
+          cwd: fixture.repoDir,
+          toolName: "web_fetch",
+          toolArgs: { url: "https://docs.example.com/start" }
+        },
+        { sessionId: "session-1" }
+      ),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Review sessions only allow web_fetch for configured public http(s) hosts."
+      }
     );
   } finally {
     fixture.cleanup();

@@ -7,6 +7,10 @@ import test from "node:test";
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../../src/services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
+import type {
+  WebFetchRedirectResolution,
+  WebFetchRedirectResolver
+} from "../../src/services/web-fetch-redirect-resolver.ts";
 
 const BASE_PROFILE: Pick<ReviewSessionProfile, "outputBaseDir" | "repoRoot"> = {
   outputBaseDir: "/workspace/repo/packages/app",
@@ -16,6 +20,9 @@ const BASE_PROFILE: Pick<ReviewSessionProfile, "outputBaseDir" | "repoRoot"> = {
 function createPolicySession(options?: {
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
+  redirectResolver?: WebFetchRedirectResolver;
+  webFetchRedirectHopLimit?: number;
+  webFetchRedirectTimeoutMs?: number;
   auditWriter?: ToolAuditWriter;
 }) {
   const guard = new ToolPolicyGuard({
@@ -24,7 +31,16 @@ function createPolicySession(options?: {
       : { webFetchAllowedHosts: options.webFetchAllowedHosts }),
     ...(options?.webFetchDeniedHosts === undefined
       ? {}
-      : { webFetchDeniedHosts: options.webFetchDeniedHosts })
+      : { webFetchDeniedHosts: options.webFetchDeniedHosts }),
+    redirectResolver:
+      options?.redirectResolver ??
+      new FakeRedirectResolver({ kind: "resolved", redirectChain: [] }),
+    ...(options?.webFetchRedirectHopLimit === undefined
+      ? {}
+      : { webFetchRedirectHopLimit: options.webFetchRedirectHopLimit }),
+    ...(options?.webFetchRedirectTimeoutMs === undefined
+      ? {}
+      : { webFetchRedirectTimeoutMs: options.webFetchRedirectTimeoutMs })
   });
 
   return {
@@ -32,6 +48,49 @@ function createPolicySession(options?: {
     hook: guard.buildPreToolUseHook(BASE_PROFILE, options?.auditWriter),
     handler: guard.buildPermissionHandler(BASE_PROFILE, options?.auditWriter)
   };
+}
+
+class FakeRedirectResolver implements WebFetchRedirectResolver {
+  readonly calls: Array<{
+    initialUrl: string;
+    maxHops: number;
+    timeoutMs: number;
+    validateRedirectTarget: boolean;
+  }> = [];
+
+  #nextResolution:
+    | WebFetchRedirectResolution
+    | (() => Promise<WebFetchRedirectResolution>);
+
+  constructor(
+    resolution:
+      | WebFetchRedirectResolution
+      | (() => Promise<WebFetchRedirectResolution>)
+  ) {
+    this.#nextResolution = resolution;
+  }
+
+  async resolveRedirectChain(
+    initialUrl: URL,
+    options: {
+      maxHops: number;
+      timeoutMs: number;
+      validateRedirectTarget?: (redirectTarget: URL) => string | Promise<string | undefined> | undefined;
+    }
+  ): Promise<WebFetchRedirectResolution> {
+    this.calls.push({
+      initialUrl: initialUrl.toString(),
+      maxHops: options.maxHops,
+      timeoutMs: options.timeoutMs,
+      validateRedirectTarget: options.validateRedirectTarget !== undefined
+    });
+
+    if (typeof this.#nextResolution === "function") {
+      return this.#nextResolution();
+    }
+
+    return this.#nextResolution;
+  }
 }
 
 function readAuditLines(auditPath: string): ReturnType<typeof JSON.parse>[] {
@@ -733,6 +792,163 @@ test("tool policy baseline enforces denylist semantics over allowlist", async ()
   );
 });
 
+test("tool policy baseline validates redirect chains after the initial URL passes baseline policy", async () => {
+  const redirectResolver = new FakeRedirectResolver({
+    kind: "resolved",
+    redirectChain: [new URL("https://reference.example.net/page")]
+  });
+  const { hook } = createPolicySession({ redirectResolver });
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/start" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.deepEqual(redirectResolver.calls, [
+    {
+      initialUrl: "https://docs.example.com/start",
+      maxHops: 5,
+      timeoutMs: 5000,
+      validateRedirectTarget: true
+    }
+  ]);
+});
+
+test("tool policy baseline denies the initial URL before redirect traversal when initial host policy fails", async () => {
+  const redirectResolver = new FakeRedirectResolver({
+    kind: "resolved",
+    redirectChain: [new URL("https://docs.example.com/guide")]
+  });
+  const { hook } = createPolicySession({
+    webFetchAllowedHosts: ["docs.example.com"],
+    redirectResolver
+  });
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://reference.example.net/start" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+  assert.equal(redirectResolver.calls.length, 0);
+});
+
+test("tool policy baseline enforces allowlist and denylist semantics across redirect targets", async () => {
+  const allowlistMiss = createPolicySession({
+    webFetchAllowedHosts: ["docs.example.com"],
+    redirectResolver: new FakeRedirectResolver({
+      kind: "resolved",
+      redirectChain: [new URL("https://reference.example.net/page")]
+    })
+  });
+
+  assert.deepEqual(
+    await allowlistMiss.hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/start" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+
+  const wildcardAllow = createPolicySession({
+    webFetchAllowedHosts: ["*.example.com"],
+    redirectResolver: new FakeRedirectResolver({
+      kind: "resolved",
+      redirectChain: [new URL("https://api.docs.example.com/reference")]
+    })
+  });
+
+  assert.deepEqual(
+    await wildcardAllow.hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/start" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+
+  const denylistHit = createPolicySession({
+    webFetchAllowedHosts: ["*.example.com"],
+    webFetchDeniedHosts: ["internal.example.com"],
+    redirectResolver: new FakeRedirectResolver({
+      kind: "resolved",
+      redirectChain: [new URL("https://internal.example.com/admin")]
+    })
+  });
+
+  assert.deepEqual(
+    await denylistHit.hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/start" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for configured public http(s) hosts."
+    }
+  );
+});
+
+test("tool policy baseline denies unresolved redirect chains conservatively", async () => {
+  const redirectResolver = new FakeRedirectResolver({
+    kind: "denied",
+    reason: "Review sessions only allow web_fetch when redirect chains resolve safely."
+  });
+  const { hook } = createPolicySession({ redirectResolver });
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/start" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch when redirect chains resolve safely."
+    }
+  );
+});
+
 test("tool policy baseline enforces denylist comparison and denylist-only semantics", async () => {
   const denylist = createPolicySession({
     webFetchAllowedHosts: ["*.example.com"],
@@ -956,6 +1172,44 @@ test("tool policy baseline writes audit records for pre-tool decisions", async (
     assert.equal(denyRecord.decision, "deny");
     assert.equal(denyRecord.args.url, "http://localhost:8080");
     assert.ok(typeof denyRecord.reason === "string" && denyRecord.reason.length > 0);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy baseline writes audit records for redirect-policy denials", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { hook } = createPolicySession({
+      auditWriter,
+      redirectResolver: new FakeRedirectResolver({
+        kind: "denied",
+        reason: "Review sessions only allow web_fetch when redirect chains resolve safely."
+      })
+    });
+
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/start" }
+      },
+      { sessionId: "s1" }
+    );
+
+    const [denyRecord] = readAuditLines(auditPath);
+
+    assert.equal(denyRecord.tool, "web_fetch");
+    assert.equal(denyRecord.decision, "deny");
+    assert.equal(denyRecord.args.url, "https://docs.example.com/start");
+    assert.equal(
+      denyRecord.reason,
+      "Review sessions only allow web_fetch when redirect chains resolve safely."
+    );
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
