@@ -86,8 +86,8 @@ Do **not** treat `npm install -g .` as the product install contract.
 
 ## Copilot SDK Notes
 
-- The app currently uses `@github/copilot-sdk@0.1.33-preview.2`
-- This preview version is intentional because the stable version used during implementation was not compatible with the current Node 25 ESM environment
+- The app currently uses `@github/copilot-sdk@^0.2.0`
+- The current integration has been re-validated against the Node.js / TypeScript `0.2.0` SDK surface; before changing SDK versioning again, re-check the session lifecycle, permission hooks, MCP config types, and test behavior
 - If you change SDK versioning, you must re-check:
   - runtime imports
   - test behavior

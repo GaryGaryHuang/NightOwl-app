@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@github/copilot-sdk": "^0.1.33-preview.2",
+    "@github/copilot-sdk": "^0.2.0",
     "ignore": "^7.0.5"
   },
   "devDependencies": {
