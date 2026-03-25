@@ -844,6 +844,12 @@ class BootstrapTrackingOutputSink {
   ) {
     this.#delegate.publishRunManifest(manifestResult);
   }
+
+  publishChangesetOverview(
+    result: Parameters<LocalWorkspaceProvider["publishChangesetOverview"]>[0]
+  ) {
+    this.#delegate.publishChangesetOverview(result);
+  }
 }
 
 class SummaryFailingOutputSink {
@@ -899,6 +905,8 @@ class SummaryFailingOutputSink {
   publishRunManifest() {
     throw new Error("should not publish manifest after summary failure");
   }
+
+  publishChangesetOverview() {}
 }
 
 class SingleFileSnapshotFailingOutputSink {
@@ -967,6 +975,8 @@ class SingleFileSnapshotFailingOutputSink {
   publishRunManifest(manifestResult: { content: string }) {
     writeFileSync(this.#outputTarget!.manifestPath, manifestResult.content);
   }
+
+  publishChangesetOverview() {}
 }
 
 class SharedTargetSnapshotFailingOutputSink {
@@ -1062,6 +1072,8 @@ class SharedTargetSnapshotFailingOutputSink {
   publishRunManifest(manifestResult: { content: string }) {
     writeFileSync(this.#outputTarget!.manifestPath, manifestResult.content);
   }
+
+  publishChangesetOverview() {}
 }
 
 class SkippedArtifactAbortOutputSink {
@@ -1136,6 +1148,8 @@ class SkippedArtifactAbortOutputSink {
   publishRunManifest(manifestResult: { content: string }) {
     writeFileSync(this.#outputTarget!.manifestPath, manifestResult.content);
   }
+
+  publishChangesetOverview() {}
 }
 
 function sleep(ms: number): Promise<void> {

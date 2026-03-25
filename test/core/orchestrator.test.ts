@@ -545,7 +545,8 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -641,7 +642,8 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -758,7 +760,8 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -863,7 +866,8 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -965,7 +969,8 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1073,7 +1078,8 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1179,7 +1185,8 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1285,7 +1292,8 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1361,7 +1369,8 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -1468,7 +1477,8 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: createStepFailureRunner({
         stepEvents,
@@ -1572,7 +1582,8 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: createStepFailureRunner({
         stepEvents,
@@ -1642,7 +1653,8 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: {
         async run() {
@@ -1700,7 +1712,8 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
         publishSkippedFile() {},
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       },
       stepRunner: {
         async run(input) {
@@ -1776,6 +1789,185 @@ test("ReviewOrchestrator works normally when onOutputTargetReady callback is not
     });
 
     assert.ok(result.outputTarget !== undefined);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+// ─── Task 3.3: publishChangesetOverview timing ───────────────────────────────
+
+test("ReviewOrchestrator writes changeset overview after initializeRun and before per-file bootstrap notes", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const callOrder: string[] = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: {
+        initializeRun() {
+          callOrder.push("initializeRun");
+        },
+        publishFileReview() {
+          callOrder.push("publishFileReview");
+        },
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {},
+        publishChangesetOverview() {
+          callOrder.push("publishChangesetOverview");
+        }
+      },
+      stepRunner: {
+        async run(input) {
+          return { stepId: input.step.stepId, applyTo() {} };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await orchestrator.run({ baseRef: "main", headRef: "feature-branch", userContext: [] });
+
+    const initIdx = callOrder.indexOf("initializeRun");
+    const overviewIdx = callOrder.indexOf("publishChangesetOverview");
+    const firstBootstrapIdx = callOrder.indexOf("publishFileReview");
+
+    assert.ok(initIdx >= 0, "initializeRun must be called");
+    assert.ok(overviewIdx >= 0, "publishChangesetOverview must be called");
+    assert.ok(
+      initIdx < overviewIdx,
+      "publishChangesetOverview must be called after initializeRun"
+    );
+    assert.ok(
+      overviewIdx < firstBootstrapIdx,
+      "publishChangesetOverview must be called before first bootstrap note"
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+// ─── Task 3.4: publishChangesetOverview failure aborts run ───────────────────
+
+test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not proceed to per-file processing", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for publishChangesetOverview failure");
+
+    const calls: string[] = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: {
+        initializeRun() {
+          calls.push("initializeRun");
+        },
+        publishFileReview() {
+          calls.push("publishFileReview");
+        },
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {},
+        publishChangesetOverview() {
+          calls.push("publishChangesetOverview");
+          throw new Error("changeset overview write failed");
+        }
+      },
+      stepRunner: {
+        async run(): Promise<StepResult> {
+          throw new Error("should not start per-file steps");
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /changeset overview write failed/u
+    );
+
+    assert.ok(calls.includes("initializeRun"), "initializeRun must have been called");
+    assert.ok(calls.includes("publishChangesetOverview"), "publishChangesetOverview must have been attempted");
+    assert.equal(calls.filter((c) => c === "publishFileReview").length, 0, "no per-file bootstrap notes should be published");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+// ─── Task 3.5: zero-file run writes changeset overview ───────────────────────
+
+test("ReviewOrchestrator writes changeset overview even for a zero-file run", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    // Ignore all changed files so planned file count is zero
+    fixture.writeFile(".reviewignore", "**\n");
+    fixture.writeFile("README.md", "# ignored file\n");
+    fixture.commitAll("add file that will be ignored");
+
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      outputSink: new LocalWorkspaceProvider(),
+      stepRunner: {
+        async run(input) {
+          return { stepId: input.step.stepId, applyTo() {} };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：空",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      userContext: []
+    });
+
+    assert.equal(result.plannedFileCount, 0, "zero planned files");
+    assert.equal(
+      existsSync(result.outputTarget.changesetOverviewPath),
+      true,
+      "changeset-overview.md must exist after a zero-file run"
+    );
+    assert.match(
+      readFileSync(result.outputTarget.changesetOverviewPath, "utf8"),
+      /Changeset Overview/u
+    );
   } finally {
     fixture.cleanup();
   }

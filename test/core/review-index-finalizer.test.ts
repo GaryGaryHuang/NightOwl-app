@@ -15,6 +15,7 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
@@ -64,6 +65,7 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
       "- Skipped files: 2",
       "",
       "## Run Artifacts",
+      "- [changeset-overview.md](./changeset-overview.md)",
       "- [summary.md](./summary.md)",
       "- [skipped.md](./skipped.md)",
       "",
@@ -84,6 +86,7 @@ test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs"
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
@@ -109,6 +112,7 @@ test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs"
       "- Skipped files: 0",
       "",
       "## Run Artifacts",
+      "- [changeset-overview.md](./changeset-overview.md)",
       "- [summary.md](./summary.md)",
       "- [skipped.md](./skipped.md)",
       "",
@@ -127,6 +131,7 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
     headRef: "feature-branch",
     outputTarget: {
       basePath: String.raw`C:\workspace\review\feature-branch_03131430`,
+      changesetOverviewPath: String.raw`C:\workspace\review\feature-branch_03131430\changeset-overview.md`,
       filesPath: String.raw`C:\workspace\review\feature-branch_03131430\files`,
       skippedPath: String.raw`C:\workspace\review\feature-branch_03131430\skipped.md`,
       summaryPath: String.raw`C:\workspace\review\feature-branch_03131430\summary.md`,
@@ -168,6 +173,7 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
@@ -207,6 +213,7 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
@@ -262,6 +269,7 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
@@ -359,6 +367,7 @@ test("ReviewIndexFinalizer labels a file present in both outcome sets as its ris
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",

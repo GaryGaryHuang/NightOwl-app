@@ -172,6 +172,7 @@ test("runCli prints artifact paths directly from the completed-run result withou
     skippedFileCount: 0,
     outputTarget: {
       basePath,
+      changesetOverviewPath: `${basePath}/changeset-overview.md`,
       filesPath: `${basePath}/files`,
       skippedPath: `${basePath}/skipped.md`,
       summaryPath: `${basePath}/summary.md`,
@@ -360,6 +361,7 @@ function createCompletedRunResult(
     },
     outputTarget: {
       basePath,
+      changesetOverviewPath: `${basePath}/changeset-overview.md`,
       filesPath: `${basePath}/files`,
       skippedPath: `${basePath}/skipped.md`,
       summaryPath: `${basePath}/summary.md`,
@@ -380,6 +382,7 @@ function renderExpectedSummary(result: ReviewRunSummary): string {
     "Initialized local review run.",
     `Repo root: ${result.repoRoot}`,
     `Output: ${result.outputTarget.basePath}`,
+    `Changeset Overview: ${result.outputTarget.changesetOverviewPath}`,
     `Files: ${result.outputTarget.filesPath}`,
     `Summary: ${result.outputTarget.summaryPath}`,
     `Index: ${result.outputTarget.indexPath}`,

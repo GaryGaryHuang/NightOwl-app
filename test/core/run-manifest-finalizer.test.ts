@@ -13,6 +13,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
@@ -49,7 +50,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     rendered,
     JSON.stringify(
       {
-        schemaVersion: 1,
+        schemaVersion: 2,
         repoRoot: "/workspace/repo",
         baseRef: "main",
         headRef: "feature-branch",
@@ -58,6 +59,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
         skippedFileCount: 1,
         artifacts: {
           basePath: "/workspace/review/feature-branch_03131430",
+          changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
           filesPath: "/workspace/review/feature-branch_03131430/files",
           summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
           indexPath: "/workspace/review/feature-branch_03131430/index.md",
@@ -98,6 +100,7 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
@@ -162,6 +165,7 @@ test("RunManifestFinalizer renders an empty files array for zero-file runs", () 
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
@@ -196,6 +200,7 @@ test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct pa
     headRef: "feature-branch",
     outputTarget: {
       basePath: "/workspace/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
       filesPath: "/workspace/review/feature-branch_03131430/files",
       skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
       summaryPath: "/workspace/review/feature-branch_03131430/summary.md",

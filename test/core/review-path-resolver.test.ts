@@ -39,6 +39,7 @@ test("buildOutputTarget returns review output paths", () => {
 
   assert.deepEqual(target, {
     basePath: "/workspace/review/feature_login_03131430",
+    changesetOverviewPath: "/workspace/review/feature_login_03131430/changeset-overview.md",
     filesPath: "/workspace/review/feature_login_03131430/files",
     skippedPath: "/workspace/review/feature_login_03131430/skipped.md",
     summaryPath: "/workspace/review/feature_login_03131430/summary.md",
@@ -48,8 +49,7 @@ test("buildOutputTarget returns review output paths", () => {
   });
 });
 
-test("buildOutputTarget includes toolAuditPath under the session basePath", () => {
-  const target = buildOutputTarget({
+test("buildOutputTarget includes toolAuditPath under the session basePath", () => {  const target = buildOutputTarget({
     outputBaseDir: "/workspace",
     branchName: "feature_login",
     headRef: "feature_login",
@@ -63,6 +63,24 @@ test("buildOutputTarget includes toolAuditPath under the session basePath", () =
   assert.ok(
     target.toolAuditPath.startsWith(target.basePath),
     "toolAuditPath must be under basePath"
+  );
+});
+
+test("buildOutputTarget includes changesetOverviewPath under the session basePath", () => {
+  const target = buildOutputTarget({
+    outputBaseDir: "/workspace",
+    branchName: "feature_login",
+    headRef: "feature_login",
+    timestamp: "03131430"
+  });
+
+  assert.equal(
+    target.changesetOverviewPath,
+    "/workspace/review/feature_login_03131430/changeset-overview.md"
+  );
+  assert.ok(
+    target.changesetOverviewPath.startsWith(target.basePath),
+    "changesetOverviewPath must be under basePath"
   );
 });
 

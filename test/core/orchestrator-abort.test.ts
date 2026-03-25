@@ -74,6 +74,9 @@ function createTrackingOutputSink(): TrackingOutputSink {
     },
     publishRunManifest(_result) {
       calls.push("publishRunManifest");
+    },
+    publishChangesetOverview(_result) {
+      calls.push("publishChangesetOverview");
     }
   };
 }

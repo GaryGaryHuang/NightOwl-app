@@ -81,7 +81,8 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         publishSkippedFile() {},
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -149,7 +150,8 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         publishSkippedFile() {},
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -231,7 +233,8 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
         publishSkippedFile() {},
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -340,7 +343,8 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -541,7 +545,8 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
         publishSkippedFile() {},
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -648,7 +653,8 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
         publishSkippedFile() {},
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -769,7 +775,8 @@ test("createLocalReviewRunApp applies redirect-chain host policy without introdu
         publishSkippedFile() {},
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -893,7 +900,8 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -1004,7 +1012,8 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
         },
         publishRunSummary() {},
         publishReviewIndex() {},
-        publishRunManifest() {}
+        publishRunManifest() {},
+        publishChangesetOverview() {}
       }
     });
 
@@ -1245,7 +1254,8 @@ function createSignalTestApp(options: {
       publishSkippedFile() {},
       publishRunSummary() {},
       publishReviewIndex() {},
-      publishRunManifest() {}
+      publishRunManifest() {},
+      publishChangesetOverview() {}
     },
     changesetOverviewRunner: {
       async run() {
@@ -1789,6 +1799,7 @@ test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and be
     runContext: { changesetOverview: "## Changeset Overview", userContext: [] },
     outputTarget: {
       basePath,
+      changesetOverviewPath: `${basePath}/changeset-overview.md`,
       filesPath: `${basePath}/files`,
       summaryPath: `${basePath}/summary.md`,
       indexPath: `${basePath}/index.md`,
@@ -1821,6 +1832,47 @@ test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and be
     lines[toolAuditIdx],
     `Tool Audit: ${basePath}/tool-audit.jsonl`
   );
+});
+
+// ─── Task 6.2: formatLocalReviewRunSummary Changeset Overview line ────────────
+
+test("formatLocalReviewRunSummary includes Changeset Overview line after Output and before Files", () => {
+  const basePath = "/workspace/review/feature-branch_03131430";
+  const result = {
+    repoRoot: "/workspace/repo",
+    runContext: { changesetOverview: "## Changeset Overview", userContext: [] },
+    outputTarget: {
+      basePath,
+      changesetOverviewPath: `${basePath}/changeset-overview.md`,
+      filesPath: `${basePath}/files`,
+      summaryPath: `${basePath}/summary.md`,
+      indexPath: `${basePath}/index.md`,
+      manifestPath: `${basePath}/manifest.json`,
+      skippedPath: `${basePath}/skipped.md`,
+      toolAuditPath: `${basePath}/tool-audit.jsonl`
+    },
+    plannedFileCount: 1,
+    successfulFileCount: 1,
+    skippedFileCount: 0
+  };
+
+  const output = formatLocalReviewRunSummary(result);
+  const lines = output.split("\n");
+
+  const outputIdx = lines.findIndex((l) => l.startsWith("Output:"));
+  const overviewIdx = lines.findIndex((l) => l.startsWith("Changeset Overview:"));
+  const filesIdx = lines.findIndex((l) => l.startsWith("Files:"));
+
+  assert.ok(overviewIdx >= 0, "output must include a Changeset Overview: line");
+  assert.ok(
+    outputIdx < overviewIdx,
+    "Changeset Overview: must appear after Output:"
+  );
+  assert.ok(
+    overviewIdx < filesIdx,
+    "Changeset Overview: must appear before Files:"
+  );
+  assert.equal(lines[overviewIdx], `Changeset Overview: ${basePath}/changeset-overview.md`);
 });
 
 function sleep(ms: number): Promise<void> {
