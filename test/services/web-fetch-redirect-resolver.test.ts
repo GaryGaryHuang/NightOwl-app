@@ -20,8 +20,9 @@ function createResponse(
     headers: new Headers(headers),
     body: options?.onCancel
       ? {
-          cancel() {
+          cancel(): Promise<void> {
             options.onCancel?.();
+            return Promise.resolve();
           }
         }
       : undefined
