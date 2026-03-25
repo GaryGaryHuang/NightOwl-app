@@ -55,10 +55,13 @@ const ALLOWED_BASH_PREFIXES = [
 ];
 
 const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output"]);
+const SHELL_TOOL_NAMES = new Set(["bash", "sh", "shell"]);
 const UNSAFE_WEB_FETCH_URL_REASON =
   "Review sessions only allow web_fetch for absolute public http(s) URLs.";
 const CONFIGURED_WEB_FETCH_HOST_REASON =
   "Review sessions only allow web_fetch for configured public http(s) hosts.";
+const SHELL_POLICY_FAIL_CLOSED_REASON =
+  "Shell policy evaluation failed; denied as a precaution.";
 
 export interface ToolPolicyGuardOptions {
   hostnameClassifier?: WebFetchHostnameClassifier;
@@ -293,35 +296,52 @@ export class ToolPolicyGuard {
         return decision;
       }
 
-      if (input.toolName !== "bash") {
+      if (!SHELL_TOOL_NAMES.has(input.toolName)) {
         return;
       }
 
-      const command =
-        input.toolArgs &&
-        typeof input.toolArgs === "object" &&
-        "command" in input.toolArgs &&
-        typeof input.toolArgs.command === "string"
-          ? input.toolArgs.command
-          : "";
+      let command = "";
+      try {
+        command =
+          input.toolArgs &&
+          typeof input.toolArgs === "object" &&
+          "command" in input.toolArgs &&
+          typeof input.toolArgs.command === "string"
+            ? (input.toolArgs.command as string)
+            : "";
 
-      const decision: PreToolUseHookResult = isAllowedReadonlyBashCommand(command, profile)
-        ? undefined
-        : {
-            permissionDecision: "deny",
-            permissionDecisionReason:
-              "Review sessions only allow repo-local read-only bash analysis commands."
-          };
+        const allowed = isAllowedReadonlyBashCommand(command, profile);
+        const decision: PreToolUseHookResult = allowed
+          ? undefined
+          : {
+              permissionDecision: "deny",
+              permissionDecisionReason:
+                "Review sessions only allow repo-local read-only bash analysis commands."
+            };
 
-      auditWriter?.append({
-        ts: new Date().toISOString(),
-        tool: "bash",
-        decision: decision ? "deny" : "allow",
-        ...(decision ? { reason: decision.permissionDecisionReason } : {}),
-        args: { command }
-      });
+        auditWriter?.append({
+          ts: new Date().toISOString(),
+          tool: input.toolName,
+          decision: decision ? "deny" : "allow",
+          ...(decision ? { reason: decision.permissionDecisionReason } : {}),
+          args: { command }
+        });
 
-      return decision;
+        return decision;
+      } catch {
+        auditWriter?.append({
+          ts: new Date().toISOString(),
+          tool: input.toolName,
+          decision: "deny",
+          reason: SHELL_POLICY_FAIL_CLOSED_REASON,
+          args: { command }
+        });
+
+        return {
+          permissionDecision: "deny",
+          permissionDecisionReason: SHELL_POLICY_FAIL_CLOSED_REASON
+        };
+      }
     };
   }
 

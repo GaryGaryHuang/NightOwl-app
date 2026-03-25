@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { mock } from "node:test";
 import test from "node:test";
 
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
@@ -1815,4 +1816,396 @@ test("tool policy bash pipeline writes correct audit records for allowed and den
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+});
+
+// ─── shell tool name compatibility (tasks 1.4–1.12) ─────────────────────────
+
+test("tool policy shell name 'sh' with allowed command is allowed", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "sh",
+        toolArgs: { command: "git log --oneline" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy shell name 'shell' with allowed command is allowed", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "shell",
+        toolArgs: { command: "git log --oneline" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy shell name 'sh' with disallowed command is denied", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "sh",
+        toolArgs: { command: "rm -rf /" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy shell name 'shell' with disallowed command is denied", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "shell",
+        toolArgs: { command: "curl http://example.com" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy shell name 'sh' with pipeline command applies pipeline validation", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "sh",
+        toolArgs: { command: "git log --oneline | head -5" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy shell name 'sh' with missing toolArgs is denied", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "sh",
+        toolArgs: undefined
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy shell name 'shell' with missing toolArgs is denied", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "shell",
+        toolArgs: undefined
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy shell name 'sh' and 'shell' audit records use actual toolName", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-shell-names-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { hook } = createPolicySession({ auditWriter });
+
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "sh",
+        toolArgs: { command: "git log --oneline" }
+      },
+      { sessionId: "s1" }
+    );
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "shell",
+        toolArgs: { command: "rm -rf /" }
+      },
+      { sessionId: "s1" }
+    );
+
+    const [shRecord, shellRecord] = readAuditLines(auditPath);
+
+    assert.equal(shRecord.tool, "sh");
+    assert.equal(shRecord.decision, "allow");
+    assert.equal(shRecord.args.command, "git log --oneline");
+
+    assert.equal(shellRecord.tool, "shell");
+    assert.equal(shellRecord.decision, "deny");
+    assert.equal(shellRecord.args.command, "rm -rf /");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy unknown toolName like 'python' is not subject to shell policy", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "python",
+        toolArgs: { command: "import os; os.system('rm -rf /')" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+// ─── shell policy fail-closed error boundary (tasks 2.4–2.9) ────────────────
+
+test("tool policy fail-closed: policy evaluation throwing an Error returns stable deny", async () => {
+  const { hook } = createPolicySession();
+
+  // Simulate isAllowedReadonlyBashCommand throwing by making path.resolve throw
+  mock.method(path, "resolve", () => {
+    throw new Error("simulated path.resolve failure");
+  });
+
+  try {
+    assert.deepEqual(
+      await hook(
+        {
+          timestamp: Date.now(),
+          cwd: "/workspace/repo",
+          toolName: "bash",
+          toolArgs: { command: "git log /workspace/repo" }
+        },
+        { sessionId: "s1" }
+      ),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Shell policy evaluation failed; denied as a precaution."
+      }
+    );
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test("tool policy fail-closed: policy evaluation throwing a non-Error value returns stable deny", async () => {
+  const { hook } = createPolicySession();
+
+  mock.method(path, "resolve", () => {
+    // eslint-disable-next-line @typescript-eslint/no-throw-literal
+    throw "non-error string thrown";
+  });
+
+  try {
+    assert.deepEqual(
+      await hook(
+        {
+          timestamp: Date.now(),
+          cwd: "/workspace/repo",
+          toolName: "bash",
+          toolArgs: { command: "git log /workspace/repo" }
+        },
+        { sessionId: "s1" }
+      ),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason:
+          "Shell policy evaluation failed; denied as a precaution."
+      }
+    );
+  } finally {
+    mock.restoreAll();
+  }
+});
+
+test("tool policy fail-closed: deny audit record has correct fields when throw occurs after extraction", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-failclosed-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { hook } = createPolicySession({ auditWriter });
+
+    mock.method(path, "resolve", () => {
+      throw new Error("simulated path.resolve failure");
+    });
+
+    try {
+      await hook(
+        {
+          timestamp: Date.now(),
+          cwd: "/workspace/repo",
+          toolName: "bash",
+          toolArgs: { command: "git log /workspace/repo" }
+        },
+        { sessionId: "s1" }
+      );
+    } finally {
+      mock.restoreAll();
+    }
+
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "bash");
+    assert.equal(record.decision, "deny");
+    assert.equal(
+      record.reason,
+      "Shell policy evaluation failed; denied as a precaution."
+    );
+    // command was successfully extracted before path.resolve threw
+    assert.equal(record.args.command, "git log /workspace/repo");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy fail-closed: deny audit record has empty command when extraction itself throws", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-failclosed-extract-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { hook } = createPolicySession({ auditWriter });
+
+    // Proxy whose `has` trap throws — triggers throw during `"command" in input.toolArgs`
+    const throwingProxy = new Proxy({} as Record<string, unknown>, {
+      has(): never {
+        throw new Error("has trap throws");
+      }
+    });
+
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: throwingProxy
+      },
+      { sessionId: "s1" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+
+    assert.equal(record.tool, "bash");
+    assert.equal(record.decision, "deny");
+    assert.equal(
+      record.reason,
+      "Shell policy evaluation failed; denied as a precaution."
+    );
+    assert.equal(record.args.command, "");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy fail-closed: normal deny does not use fail-closed reason", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "curl http://example.com" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy fail-closed: web_fetch tool call is unaffected by shell fail-closed boundary", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "https://docs.example.com/guide" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "web_fetch",
+        toolArgs: { url: "http://localhost:3000" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    }
+  );
 });
