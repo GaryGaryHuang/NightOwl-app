@@ -158,11 +158,9 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
           tools: ["*"]
         },
         context7: {
-          type: "local",
-          env: {
-            CUSTOM_FLAG: "1"
-          },
-          tools: ["resolve-library-id"]
+          type: "http",
+          tools: ["resolve-library-id"],
+          timeout: 20000
         }
       }
     }),
@@ -194,14 +192,13 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
   for (const config of receivedConfigs.slice(0, 4)) {
     assert.deepEqual(config.mcpServers, {
       context7: {
-        type: "local",
-        command: "npx",
-        args: ["-y", "@upstash/context7-mcp"],
-        env: {
-          CONTEXT7_API_KEY: "test-api-key",
-          CUSTOM_FLAG: "1"
+        type: "http",
+        url: "https://mcp.context7.com/mcp",
+        headers: {
+          CONTEXT7_API_KEY: "test-api-key"
         },
-        tools: ["resolve-library-id"]
+        tools: ["resolve-library-id"],
+        timeout: 20000
       },
       demo: {
         type: "local",
@@ -255,7 +252,11 @@ test("ReviewSessionFactory injects mixed local and remote MCP entries for review
 
   const reviewMcp = receivedConfigs[0]?.mcpServers;
   assert.ok(reviewMcp);
-  assert.equal(reviewMcp.context7?.type, "local");
+  assert.equal(reviewMcp.context7?.type, "http");
+  assert.equal(
+    (reviewMcp.context7 as { url?: string }).url,
+    "https://mcp.context7.com/mcp"
+  );
   assert.equal(reviewMcp.demo?.type, "local");
   assert.equal((reviewMcp["my-remote"] as { type: string }).type, "http");
   assert.equal(

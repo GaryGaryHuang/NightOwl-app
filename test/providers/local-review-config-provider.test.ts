@@ -105,7 +105,7 @@ test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresh
   }
 });
 
-test("LocalReviewConfigProvider accepts boundary threshold values and a validated partial context7 override while keeping default maxConcurrentFiles", () => {
+test("LocalReviewConfigProvider accepts boundary threshold values and a validated remote-compatible context7 override while keeping default maxConcurrentFiles", () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -114,10 +114,9 @@ test("LocalReviewConfigProvider accepts boundary threshold values and a validate
       JSON.stringify({
         mcpServers: {
           context7: {
-            env: {
-              CUSTOM_FLAG: "1"
-            },
-            tools: ["resolve-library-id"]
+            type: "http",
+            tools: ["resolve-library-id"],
+            timeout: 20000
           }
         },
         confidenceThresholds: {
@@ -137,11 +136,9 @@ test("LocalReviewConfigProvider accepts boundary threshold values and a validate
       },
       mcpServers: {
         context7: {
-          type: "local",
-          env: {
-            CUSTOM_FLAG: "1"
-          },
-          tools: ["resolve-library-id"]
+          type: "http",
+          tools: ["resolve-library-id"],
+          timeout: 20000
         }
       }
     });
@@ -356,9 +353,39 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
       JSON.stringify({
         mcpServers: {
           context7: {
-            env: {
-              API_KEY: 123
+            headers: {
+              Authorization: "Bearer repo-token"
             }
+          }
+        }
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          context7: {
+            url: "https://context7.example.com/mcp"
+          }
+        }
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          context7: {
+            command: "npx"
           }
         }
       })
@@ -1314,7 +1341,7 @@ test("LocalReviewConfigProvider resolves local MCP entries with cwd and timeout 
   }
 });
 
-test("LocalReviewConfigProvider normalizes type stdio to local for non-built-in entries and context7 override", () => {
+test("LocalReviewConfigProvider normalizes type stdio to local for non-built-in entries", () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -1340,44 +1367,77 @@ test("LocalReviewConfigProvider normalizes type stdio to local for non-built-in 
         args: ["-y", "@example/demo-mcp"]
       }
     });
-
-    // context7 override with type:stdio → resolved type is "local"
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: {
-          context7: {
-            type: "stdio",
-            env: { CUSTOM: "1" }
-          }
-        }
-      })
-    );
-    const config = provider.loadReviewConfig(fixture.repoDir);
-    assert.equal(config.mcpServers.context7.type, "local");
-    assert.deepEqual(
-      (config.mcpServers.context7 as { env?: Record<string, string> }).env,
-      { CUSTOM: "1" }
-    );
   } finally {
     fixture.cleanup();
   }
 });
 
-test("LocalReviewConfigProvider rejects context7 override with remote type before Step 0", () => {
+test("LocalReviewConfigProvider accepts same-name context7 override with type http or omitted and rejects unsupported types before Step 0", () => {
   const fixture = createReviewRepoFixture();
 
   try {
     const provider = new LocalReviewConfigProvider();
 
-    // context7 with type:http
     fixture.writeFile(
       ".reviewconfig.json",
       JSON.stringify({
         mcpServers: {
           context7: {
             type: "http",
-            url: "https://context7.example.com"
+            tools: ["resolve-library-id"]
+          }
+        }
+      })
+    );
+    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir).mcpServers, {
+      context7: {
+        type: "http",
+        tools: ["resolve-library-id"]
+      }
+    });
+
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          context7: {
+            timeout: 20000
+          }
+        }
+      })
+    );
+    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir).mcpServers, {
+      context7: {
+        type: "http",
+        timeout: 20000
+      }
+    });
+
+    // context7 with type:local
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          context7: {
+            type: "local",
+            tools: ["resolve-library-id"]
+          }
+        }
+      })
+    );
+    assert.throws(
+      () => provider.loadReviewConfig(fixture.repoDir),
+      /invalid review config/u
+    );
+
+    // context7 with type:stdio
+    fixture.writeFile(
+      ".reviewconfig.json",
+      JSON.stringify({
+        mcpServers: {
+          context7: {
+            type: "stdio",
+            tools: ["resolve-library-id"]
           }
         }
       })
@@ -1394,7 +1454,7 @@ test("LocalReviewConfigProvider rejects context7 override with remote type befor
         mcpServers: {
           context7: {
             type: "sse",
-            url: "https://context7-sse.example.com"
+            tools: ["resolve-library-id"]
           }
         }
       })

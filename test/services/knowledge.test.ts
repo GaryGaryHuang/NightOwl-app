@@ -9,9 +9,8 @@ test("KnowledgeSvc returns built-in Context7 MCP config for the broader review-s
   assert.equal(service.getMcpServers("disabled"), undefined);
   assert.deepEqual(service.getMcpServers("built-in-context7"), {
     context7: {
-      type: "local",
-      command: "npx",
-      args: ["-y", "@upstash/context7-mcp"],
+      type: "http",
+      url: "https://mcp.context7.com/mcp",
       tools: ["*"]
     }
   });
@@ -31,9 +30,8 @@ test("KnowledgeSvc appends non-built-in custom MCP entries alongside built-in co
 
   assert.deepEqual(service.getMcpServers("built-in-context7"), {
     context7: {
-      type: "local",
-      command: "npx",
-      args: ["-y", "@upstash/context7-mcp"],
+      type: "http",
+      url: "https://mcp.context7.com/mcp",
       tools: ["*"]
     },
     demo: {
@@ -45,30 +43,27 @@ test("KnowledgeSvc appends non-built-in custom MCP entries alongside built-in co
   });
 });
 
-test("KnowledgeSvc deep-merges partial context7 overrides and replaces array-valued fields", () => {
+test("KnowledgeSvc merges supported partial context7 overrides and replaces array-valued fields", () => {
   const service = new KnowledgeSvc({
     context7ApiKey: "built-in-key",
     userMcpServers: {
       context7: {
-        type: "local",
-        env: {
-          CUSTOM_FLAG: "1"
-        },
-        tools: ["resolve-library-id"]
+        type: "http",
+        tools: ["resolve-library-id"],
+        timeout: 20000
       }
     }
   });
 
   assert.deepEqual(service.getMcpServers("built-in-context7"), {
     context7: {
-      type: "local",
-      command: "npx",
-      args: ["-y", "@upstash/context7-mcp"],
-      env: {
+      type: "http",
+      url: "https://mcp.context7.com/mcp",
+      headers: {
         CONTEXT7_API_KEY: "built-in-key",
-        CUSTOM_FLAG: "1"
       },
-      tools: ["resolve-library-id"]
+      tools: ["resolve-library-id"],
+      timeout: 20000
     }
   });
 });
@@ -83,10 +78,9 @@ test("KnowledgeSvc passes through CONTEXT7_API_KEY only when configured", () => 
 
   assert.deepEqual(withApiKey.getMcpServers("built-in-context7"), {
     context7: {
-      type: "local",
-      command: "npx",
-      args: ["-y", "@upstash/context7-mcp"],
-      env: {
+      type: "http",
+      url: "https://mcp.context7.com/mcp",
+      headers: {
         CONTEXT7_API_KEY: "test-api-key"
       },
       tools: ["*"]
@@ -94,9 +88,8 @@ test("KnowledgeSvc passes through CONTEXT7_API_KEY only when configured", () => 
   });
   assert.deepEqual(withoutApiKey.getMcpServers("built-in-context7"), {
     context7: {
-      type: "local",
-      command: "npx",
-      args: ["-y", "@upstash/context7-mcp"],
+      type: "http",
+      url: "https://mcp.context7.com/mcp",
       tools: ["*"]
     }
   });
@@ -130,9 +123,8 @@ test("KnowledgeSvc appends remote MCP entries as independent MCPRemoteServerConf
 
   assert.ok(merged);
   assert.deepEqual(merged.context7, {
-    type: "local",
-    command: "npx",
-    args: ["-y", "@upstash/context7-mcp"],
+    type: "http",
+    url: "https://mcp.context7.com/mcp",
     tools: ["*"]
   });
   assert.deepEqual(merged["my-remote"], {
@@ -175,12 +167,11 @@ test("KnowledgeSvc defaults tools to [\"*\"] for remote entries without tools", 
   });
 });
 
-test("KnowledgeSvc deep-merges context7 override with cwd and timeout onto built-in base", () => {
+test("KnowledgeSvc merges context7 timeout override onto the built-in remote base while preserving the fixed URL", () => {
   const service = new KnowledgeSvc({
     userMcpServers: {
       context7: {
-        type: "local",
-        cwd: "/opt/context7",
+        type: "http",
         timeout: 20000
       }
     }
@@ -190,11 +181,9 @@ test("KnowledgeSvc deep-merges context7 override with cwd and timeout onto built
 
   assert.ok(merged);
   assert.deepEqual(merged.context7, {
-    type: "local",
-    command: "npx",
-    args: ["-y", "@upstash/context7-mcp"],
+    type: "http",
+    url: "https://mcp.context7.com/mcp",
     tools: ["*"],
-    cwd: "/opt/context7",
     timeout: 20000
   });
 });

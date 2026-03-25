@@ -257,7 +257,9 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
       sessionConfigs.every(
         (config) =>
           !isChangesetOverviewSystemMessage(config.systemMessage) ||
-          Boolean(config.mcpServers?.context7)
+          (config.mcpServers?.context7?.type === "http" &&
+            (config.mcpServers.context7 as { url?: string }).url ===
+              "https://mcp.context7.com/mcp")
       )
     );
   } finally {
@@ -367,6 +369,9 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
       sessionConfigs.some(
         (config) =>
           config.mcpServers?.context7 &&
+          config.mcpServers.context7.type === "http" &&
+          (config.mcpServers.context7 as { url?: string }).url ===
+            "https://mcp.context7.com/mcp" &&
           isKnowledgeSourceOfTruthSystemMessage(config.systemMessage)
       )
     );

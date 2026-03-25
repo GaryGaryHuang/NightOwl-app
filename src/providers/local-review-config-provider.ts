@@ -96,6 +96,11 @@ function resolveMcpServersFromConfigObject(
       throw new Error("invalid review config");
     }
 
+    if (name === "context7") {
+      resolved[name] = resolveContext7OverrideEntry(rawDefinition);
+      continue;
+    }
+
     const rawType = rawDefinition.type;
     const normalizedType =
       rawType === undefined
@@ -113,17 +118,46 @@ function resolveMcpServersFromConfigObject(
     }
 
     if (normalizedType === "http" || normalizedType === "sse") {
-      if (name === "context7") {
-        throw new Error("invalid review config");
-      }
-
       resolved[name] = resolveRemoteMcpEntry(rawDefinition, normalizedType);
     } else {
-      resolved[name] = resolveLocalMcpEntry(rawDefinition, name === "context7");
+      resolved[name] = resolveLocalMcpEntry(rawDefinition);
     }
   }
 
   return resolved;
+}
+
+function resolveContext7OverrideEntry(
+  rawDefinition: Record<string, unknown>
+): ReviewMcpServerConfig {
+  const rawType = rawDefinition.type;
+
+  if (rawType !== undefined && rawType !== "http") {
+    throw new Error("invalid review config");
+  }
+
+  for (const forbiddenField of [
+    "url",
+    "headers",
+    "command",
+    "args",
+    "env",
+    "cwd"
+  ]) {
+    if (rawDefinition[forbiddenField] !== undefined) {
+      throw new Error("invalid review config");
+    }
+  }
+
+  return {
+    type: "http",
+    ...(rawDefinition.tools === undefined
+      ? {}
+      : { tools: readStringArray(rawDefinition.tools) }),
+    ...(rawDefinition.timeout === undefined
+      ? {}
+      : { timeout: readPositiveInteger(rawDefinition.timeout) })
+  };
 }
 
 function resolveRemoteMcpEntry(
@@ -163,19 +197,11 @@ function resolveRemoteMcpEntry(
 }
 
 function resolveLocalMcpEntry(
-  rawDefinition: Record<string, unknown>,
-  isContext7Override: boolean
+  rawDefinition: Record<string, unknown>
 ): ReviewMcpServerConfig {
   const command = rawDefinition.command;
 
-  if (!isContext7Override) {
-    if (typeof command !== "string" || command.trim().length === 0) {
-      throw new Error("invalid review config");
-    }
-  } else if (
-    command !== undefined &&
-    (typeof command !== "string" || command.trim().length === 0)
-  ) {
+  if (typeof command !== "string" || command.trim().length === 0) {
     throw new Error("invalid review config");
   }
 

@@ -18,9 +18,16 @@ export interface ReviewRemoteMcpServerConfig {
   timeout?: number;
 }
 
+export interface ReviewContext7OverrideConfig {
+  type: "http";
+  tools?: string[];
+  timeout?: number;
+}
+
 export type ReviewMcpServerConfig =
   | ReviewLocalMcpServerConfig
-  | ReviewRemoteMcpServerConfig;
+  | ReviewRemoteMcpServerConfig
+  | ReviewContext7OverrideConfig;
 
 export type ReviewMcpServers = Record<string, ReviewMcpServerConfig>;
 

@@ -1,16 +1,19 @@
 import type {
-  MCPLocalServerConfig,
   MCPRemoteServerConfig,
+  MCPLocalServerConfig,
   MCPServerConfig
 } from "@github/copilot-sdk";
 
 import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
 import type {
+  ReviewContext7OverrideConfig,
   ReviewLocalMcpServerConfig,
   ReviewMcpServerConfig,
   ReviewRemoteMcpServerConfig,
   ReviewMcpServers
 } from "../providers/review-config-provider.ts";
+
+const CONTEXT7_REMOTE_URL = "https://mcp.context7.com/mcp";
 
 export interface KnowledgeSvcOptions {
   context7ApiKey?: string;
@@ -33,10 +36,9 @@ export class KnowledgeSvc {
       return undefined;
     }
 
-    const context7: MCPLocalServerConfig = {
-      type: "local",
-      command: "npx",
-      args: ["-y", "@upstash/context7-mcp"],
+    const context7: MCPRemoteServerConfig = {
+      type: "http",
+      url: CONTEXT7_REMOTE_URL,
       tools: ["*"]
     };
     let context7Config = context7;
@@ -44,7 +46,7 @@ export class KnowledgeSvc {
     if (this.#context7ApiKey) {
       context7Config = {
         ...context7Config,
-        env: {
+        headers: {
           CONTEXT7_API_KEY: this.#context7ApiKey
         }
       };
@@ -55,7 +57,14 @@ export class KnowledgeSvc {
     };
 
     for (const [name, config] of Object.entries(this.#userMcpServers)) {
-      if (isRemoteConfig(config)) {
+      if (name === "context7") {
+        if (!isContext7OverrideConfig(config)) {
+          throw new Error("context7 override must use the built-in remote override shape");
+        }
+
+        context7Config = mergeContext7Config(context7Config, config);
+        merged.context7 = context7Config;
+      } else if (isRemoteConfig(config)) {
         const remoteConfig: MCPRemoteServerConfig = {
           type: config.type,
           url: config.url,
@@ -64,10 +73,11 @@ export class KnowledgeSvc {
           ...(config.timeout === undefined ? {} : { timeout: config.timeout })
         };
         merged[name] = remoteConfig;
-      } else if (name === "context7") {
-        context7Config = mergeContext7Config(context7Config, config);
-        merged.context7 = context7Config;
       } else {
+        if (!isLocalConfig(config)) {
+          throw new Error(`custom MCP '${name}' must use a local or remote MCP shape`);
+        }
+
         if (!config.command) {
           throw new Error(`custom MCP '${name}' is missing command`);
         }
@@ -93,38 +103,35 @@ export class KnowledgeSvc {
 function isRemoteConfig(
   config: ReviewMcpServerConfig
 ): config is ReviewRemoteMcpServerConfig {
-  return config.type === "http" || config.type === "sse";
+  return (config.type === "http" || config.type === "sse") && "url" in config;
+}
+
+function isLocalConfig(
+  config: ReviewMcpServerConfig
+): config is ReviewLocalMcpServerConfig {
+  return config.type === "local";
+}
+
+function isContext7OverrideConfig(
+  config: ReviewMcpServerConfig
+): config is ReviewContext7OverrideConfig {
+  return config.type === "http" && !("url" in config);
 }
 
 function mergeContext7Config(
-  base: MCPLocalServerConfig,
-  override: ReviewLocalMcpServerConfig
-): MCPLocalServerConfig {
-  const env =
-    override.env === undefined
-      ? base.env === undefined
-        ? undefined
-        : { ...base.env }
-      : {
-          ...(base.env ?? {}),
-          ...override.env
-        };
+  base: MCPRemoteServerConfig,
+  override: ReviewContext7OverrideConfig
+): MCPRemoteServerConfig {
   const tools =
     override.tools === undefined
       ? [...base.tools]
       : [...override.tools];
 
   return {
-    type: "local",
-    command: override.command ?? base.command,
-    args: override.args === undefined ? [...base.args] : [...override.args],
+    type: "http",
+    url: base.url,
     tools,
-    ...(env === undefined ? {} : { env }),
-    ...(override.cwd === undefined
-      ? base.cwd === undefined
-        ? {}
-        : { cwd: base.cwd }
-      : { cwd: override.cwd }),
+    ...(base.headers === undefined ? {} : { headers: { ...base.headers } }),
     ...(override.timeout === undefined
       ? base.timeout === undefined
         ? {}
