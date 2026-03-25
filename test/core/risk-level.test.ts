@@ -47,6 +47,7 @@ function createFinding(
   return {
     type,
     title,
+    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
     context: "ctx",
     deviation: "dev",
     impact: "impact",

@@ -312,6 +312,7 @@ function createFinding(
   return {
     type,
     title,
+    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
     context: "ctx",
     deviation: "dev",
     impact: "impact",
@@ -336,7 +337,8 @@ test("ReviewIndexFinalizer throws with identifying message when a planned file i
           summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
           indexPath: "/workspace/review/feature-branch_03131430/index.md",
           manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-          toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
+          toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl",
+          changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md"
         },
         plannedNotes: [
           {

@@ -1125,7 +1125,7 @@ function escapeRegExp(value: string): string {
 
 function lineRangeTraceability(lineStart: number, lineEnd: number) {
   return {
-    kind: "line-range",
+    kind: "line-range" as const,
     lineStart,
     lineEnd
   };

@@ -459,6 +459,7 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
               {
                 type: "must",
                 title: "問題標題",
+                traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
                 context: "具體情境",
                 deviation: "預期與實際有落差",
                 impact: "會造成 correctness 問題",
@@ -2282,6 +2283,7 @@ function buildSuccessfulStepResult(
             {
               type: "must",
               title: "問題標題",
+              traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
               context: "具體情境",
               deviation: "預期與實際有落差",
               impact: "會造成 correctness 問題",
@@ -2303,6 +2305,7 @@ function buildSuccessfulStepResult(
             {
               type: "must",
               title: "問題標題",
+              traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
               context: "具體情境",
               deviation: "預期與實際有落差",
               impact: "會造成 correctness 問題",

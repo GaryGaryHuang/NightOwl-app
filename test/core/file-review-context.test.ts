@@ -318,7 +318,7 @@ test("FileReviewContext stores interruption state separately and returns defensi
 
 function lineRangeTraceability(lineStart: number, lineEnd: number) {
   return {
-    kind: "line-range",
+    kind: "line-range" as const,
     lineStart,
     lineEnd
   };
@@ -326,7 +326,7 @@ function lineRangeTraceability(lineStart: number, lineEnd: number) {
 
 function diffHunkTraceability(hunkHeader: string) {
   return {
-    kind: "diff-hunk",
+    kind: "diff-hunk" as const,
     hunkHeader
   };
 }

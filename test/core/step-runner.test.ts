@@ -1515,6 +1515,7 @@ test("StepRunner rebuilds Step 7 current review from the last successful Step 6 
       {
         type: "must",
         title: "最終 findings",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
         context: "最終情境",
         deviation: "最終落差",
         impact: "最終 impact",
@@ -1638,7 +1639,7 @@ function seedStep4Context(context: FileReviewContext): void {
 
 function lineRangeTraceability(lineStart: number, lineEnd: number) {
   return {
-    kind: "line-range",
+    kind: "line-range" as const,
     lineStart,
     lineEnd
   };
@@ -1646,7 +1647,7 @@ function lineRangeTraceability(lineStart: number, lineEnd: number) {
 
 function diffHunkTraceability(hunkHeader: string) {
   return {
-    kind: "diff-hunk",
+    kind: "diff-hunk" as const,
     hunkHeader
   };
 }

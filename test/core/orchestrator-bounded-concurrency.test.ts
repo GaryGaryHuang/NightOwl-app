@@ -141,6 +141,7 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
         "- Skipped files: 1",
         "",
         "## Run Artifacts",
+        "- [changeset-overview.md](./changeset-overview.md)",
         "- [summary.md](./summary.md)",
         "- [skipped.md](./skipped.md)",
         "",
@@ -734,6 +735,7 @@ function createFinding(type: "must" | "nice", title: string): Finding {
   return {
     type,
     title,
+    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
     context: "具體情境",
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
