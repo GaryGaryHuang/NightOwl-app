@@ -912,6 +912,7 @@ test("StepRunner validates Step 5 structured output and applies filtered finding
                     {
                       type: "must",
                       title: "保留 must",
+                      traceability: lineRangeTraceability(10, 12),
                       context: "具體情境",
                       deviation: "預期與實際有落差",
                       impact: "會造成 correctness 問題",
@@ -921,6 +922,7 @@ test("StepRunner validates Step 5 structured output and applies filtered finding
                     {
                       type: "nice",
                       title: "被過濾的 nice",
+                      traceability: lineRangeTraceability(20, 20),
                       context: "具體情境",
                       deviation: "可改善",
                       impact: "影響可維護性",
@@ -964,6 +966,7 @@ test("StepRunner validates Step 5 structured output and applies filtered finding
       {
         type: "must",
         title: "保留 must",
+        traceability: lineRangeTraceability(10, 12),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -1009,6 +1012,7 @@ test("StepRunner retries the whole Step 5 structured step when deterministic val
                     {
                       type: "must",
                       title: "成功結果",
+                      traceability: lineRangeTraceability(14, 18),
                       context: "具體情境",
                       deviation: "預期與實際有落差",
                       impact: "會造成 correctness 問題",
@@ -1048,6 +1052,7 @@ test("StepRunner retries the whole Step 5 structured step when deterministic val
       {
         type: "must",
         title: "成功結果",
+        traceability: lineRangeTraceability(14, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -1072,6 +1077,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
       {
         type: "must",
         title: "初版 findings",
+        traceability: lineRangeTraceability(30, 32),
         context: "初版情境",
         deviation: "初版落差",
         impact: "初版 impact",
@@ -1093,6 +1099,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
                     {
                       type: "must",
                       title: "最終 findings",
+                      traceability: diffHunkTraceability("@@ -1 +1 @@"),
                       context: "最終情境",
                       deviation: "最終落差",
                       impact: "最終 impact",
@@ -1125,6 +1132,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
       {
         type: "must",
         title: "初版 findings",
+        traceability: lineRangeTraceability(30, 32),
         context: "初版情境",
         deviation: "初版落差",
         impact: "初版 impact",
@@ -1141,6 +1149,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
       {
         type: "must",
         title: "最終 findings",
+        traceability: diffHunkTraceability("@@ -1 +1 @@"),
         context: "最終情境",
         deviation: "最終落差",
         impact: "最終 impact",
@@ -1165,6 +1174,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
       {
         type: "must",
         title: "初版 findings",
+        traceability: lineRangeTraceability(30, 32),
         context: "初版情境",
         deviation: "初版落差",
         impact: "初版 impact",
@@ -1229,6 +1239,7 @@ test("StepRunner applies Step 6 structured output by replacing empty Step 5 find
                     {
                       type: "nice",
                       title: "從空 findings 補出的最終問題",
+                      traceability: lineRangeTraceability(40, 40),
                       context: "最終情境",
                       deviation: "最終落差",
                       impact: "最終 impact",
@@ -1263,6 +1274,7 @@ test("StepRunner applies Step 6 structured output by replacing empty Step 5 find
       {
         type: "nice",
         title: "從空 findings 補出的最終問題",
+        traceability: lineRangeTraceability(40, 40),
         context: "最終情境",
         deviation: "最終落差",
         impact: "最終 impact",
@@ -1287,6 +1299,7 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
       {
         type: "must",
         title: "初版 findings",
+        traceability: lineRangeTraceability(30, 32),
         context: "初版情境",
         deviation: "初版落差",
         impact: "初版 impact",
@@ -1321,6 +1334,7 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
                     {
                       type: "must",
                       title: "成功結果",
+                      traceability: lineRangeTraceability(16, 18),
                       context: "具體情境",
                       deviation: "預期與實際有落差",
                       impact: "會造成 correctness 問題",
@@ -1357,6 +1371,7 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
       {
         type: "must",
         title: "初版 findings",
+        traceability: lineRangeTraceability(30, 32),
         context: "初版情境",
         deviation: "初版落差",
         impact: "初版 impact",
@@ -1373,6 +1388,7 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
       {
         type: "must",
         title: "成功結果",
+        traceability: lineRangeTraceability(16, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -1397,6 +1413,7 @@ test("StepRunner applies Step 7 section output under summary without changing fi
       {
         type: "must",
         title: "最終 findings",
+        traceability: diffHunkTraceability("@@ -1 +1 @@"),
         context: "最終情境",
         deviation: "最終落差",
         impact: "最終 impact",
@@ -1454,6 +1471,7 @@ test("StepRunner applies Step 7 section output under summary without changing fi
       {
         type: "must",
         title: "最終 findings",
+        traceability: diffHunkTraceability("@@ -1 +1 @@"),
         context: "最終情境",
         deviation: "最終落差",
         impact: "最終 impact",
@@ -1471,6 +1489,7 @@ test("StepRunner applies Step 7 section output under summary without changing fi
       {
         type: "must",
         title: "最終 findings",
+        traceability: diffHunkTraceability("@@ -1 +1 @@"),
         context: "最終情境",
         deviation: "最終落差",
         impact: "最終 impact",
@@ -1615,4 +1634,19 @@ function seedStep4Context(context: FileReviewContext): void {
       "  - W3: 觸發條件：多次呼叫；預期正確行為：結果應穩定；待驗證風險/不確定性：狀態是否偏移；與本次改動的關聯：Step 3 已收斂假設"
     ].join("\n")
   );
+}
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
+
+function diffHunkTraceability(hunkHeader: string) {
+  return {
+    kind: "diff-hunk",
+    hunkHeader
+  };
 }

@@ -393,6 +393,7 @@ test("ReviewNoteFinalizer renders Findings after Strategy & What-if Scenarios wi
       {
         type: "must",
         title: "問題標題",
+        traceability: lineRangeTraceability(14, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -410,6 +411,7 @@ test("ReviewNoteFinalizer renders Findings after Strategy & What-if Scenarios wi
   );
   assert.match(rendered, /^## Findings/mu);
   assert.match(rendered, /- \[must\] 問題標題/u);
+  assert.match(rendered, /- Traceability: L14-L18/u);
   assert.match(rendered, /- Context：具體情境/u);
   assert.match(rendered, /- Deviation：預期與實際有落差/u);
   assert.match(rendered, /- Impact：會造成 correctness 問題/u);
@@ -574,6 +576,7 @@ test("ReviewNoteFinalizer renders Summary after Findings without changing Findin
       {
         type: "must",
         title: "最終問題",
+        traceability: diffHunkTraceability("@@ -1 +1 @@"),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -793,6 +796,7 @@ test("ReviewNoteFinalizer renders warning block on top of Step 6 findings snapsh
       {
         type: "must",
         title: "最終問題",
+        traceability: lineRangeTraceability(30, 30),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -829,6 +833,7 @@ test("ReviewNoteFinalizer prepends statistics line before grouped findings", () 
       {
         type: "nice",
         title: "A",
+        traceability: lineRangeTraceability(5, 5),
         context: "ctx",
         deviation: "dev",
         impact: "low",
@@ -838,6 +843,7 @@ test("ReviewNoteFinalizer prepends statistics line before grouped findings", () 
       {
         type: "must",
         title: "B",
+        traceability: lineRangeTraceability(8, 10),
         context: "ctx",
         deviation: "dev",
         impact: "high",
@@ -847,6 +853,7 @@ test("ReviewNoteFinalizer prepends statistics line before grouped findings", () 
       {
         type: "nice",
         title: "C",
+        traceability: diffHunkTraceability("@@ -20,2 +20,4 @@"),
         context: "ctx",
         deviation: "dev",
         impact: "low",
@@ -870,6 +877,9 @@ test("ReviewNoteFinalizer prepends statistics line before grouped findings", () 
   assert.ok(statsIdx < bIdx, "statistics line should come before first finding");
   assert.ok(bIdx < aIdx, "must finding B should come before nice finding A");
   assert.ok(aIdx < cIdx, "nice finding A should come before nice finding C");
+  assert.match(rendered, /- Traceability: L8-L10/u);
+  assert.match(rendered, /- Traceability: L5/u);
+  assert.match(rendered, /- Traceability: @@ -20,2 \+20,4 @@/u);
 });
 
 test("ReviewNoteFinalizer groups all must findings before all nice findings preserving intra-group order", () => {
@@ -887,6 +897,7 @@ test("ReviewNoteFinalizer groups all must findings before all nice findings pres
       {
         type: "must",
         title: "X",
+        traceability: lineRangeTraceability(40, 40),
         context: "ctx",
         deviation: "dev",
         impact: "high",
@@ -896,6 +907,7 @@ test("ReviewNoteFinalizer groups all must findings before all nice findings pres
       {
         type: "must",
         title: "Y",
+        traceability: lineRangeTraceability(42, 43),
         context: "ctx",
         deviation: "dev",
         impact: "high",
@@ -926,6 +938,7 @@ test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must p
       {
         type: "nice",
         title: "P",
+        traceability: lineRangeTraceability(31, 31),
         context: "ctx",
         deviation: "dev",
         impact: "low",
@@ -935,6 +948,7 @@ test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must p
       {
         type: "nice",
         title: "Q",
+        traceability: lineRangeTraceability(42, 43),
         context: "ctx",
         deviation: "dev",
         impact: "low",
@@ -967,3 +981,18 @@ test("ReviewNoteFinalizer renders empty findings as a single - 無 marker", () =
   assert.match(rendered, /## Findings\n- 無/u);
   assert.doesNotMatch(rendered, /無 findings\./u);
 });
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
+
+function diffHunkTraceability(hunkHeader: string) {
+  return {
+    kind: "diff-hunk",
+    hunkHeader
+  };
+}

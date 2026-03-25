@@ -184,6 +184,7 @@ function createFinding(
   return {
     type,
     title,
+    traceability: lineRangeTraceability(14, 18),
     context: "具體情境",
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
@@ -233,11 +234,20 @@ function buildExpectedCurrentReview(): string {
     "## Findings",
     "1 must-fix issue(s), 0 nice-to-have suggestion(s).",
     "- [must] 最終問題",
+    "  - Traceability: L14-L18",
     "  - Context：具體情境",
     "  - Deviation：預期與實際有落差",
     "  - Impact：會造成 correctness 問題",
     "  - Suggestion：補上 final guard"
   ].join("\n");
+}
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
 }
 
 function createBaseContext(): FileReviewContext {

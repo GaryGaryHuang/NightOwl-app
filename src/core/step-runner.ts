@@ -76,6 +76,7 @@ export interface StepRunnerOptions {
     validate(input: {
       validatorId: "findings-json";
       responseText: string;
+      diffContent?: string;
     }): FindingsPayload;
   };
 }
@@ -137,7 +138,8 @@ export class StepRunner {
 
           validatedResponse = this.#structuredOutputValidator.validate({
             validatorId: plan.completionCheck.validatorId,
-            responseText: response
+            responseText: response,
+            diffContent: input.context.diffContent
           });
         }
 

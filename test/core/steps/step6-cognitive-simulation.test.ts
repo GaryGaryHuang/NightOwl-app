@@ -43,6 +43,7 @@ const EXPECTED_SYSTEM_MESSAGE = [
   "- If findings conflict, trace the discrepancy back to the execution path, state transitions, assumptions, or source evidence, and resolve in favor of the conclusion with stronger support.",
   "- You may add a new finding only when it is directly exposed by the simulation or by re-checking a path made necessary by a conflict, inconsistency, or uncertainty in the existing findings.",
   "- IMPORTANT: Apply the same evidence, reachability, and actionability standard used for first-pass findings. Do not retain, add, or modify findings based on theoretical speculation, weak inference, or implausible paths. This step is a verification and reconciliation pass, not a general bug hunt.",
+  "- Every emitted finding must include a `traceability` object that anchors the finding to the reviewed file.",
   "- For every finding retained, modified, or added, assign a `confidence` score (0–100) reflecting how strongly the final evidence supports it.",
   "- The Findings section in <current_review> is a Markdown rendering of the first-pass results, not the original JSON payload, and it does not include confidence scores.",
   "- Treat those findings as provisional results to verify through simulation, not as final conclusions to preserve by default.",
@@ -81,14 +82,18 @@ const EXPECTED_STEP_INSTRUCTION = [
   "",
   "6. For every retained, modified, or newly added finding, assign a `confidence` score (0–100) based on the strength of evidence, path reachability, and clarity of the deviation and impact.",
   "",
-  "7. Apply a final consistency and skepticism pass before output.",
+  "7. Every retained, modified, or newly added finding must include a `traceability` object for the reviewed file:",
+  "   - use `\"kind\": \"line-range\"` with positive integer `lineStart` and `lineEnd` for head-side 1-based file lines",
+  "   - use `\"kind\": \"diff-hunk\"` with `hunkHeader` only when you are anchoring the finding to an actual unified diff hunk header from <diff>",
+  "",
+  "8. Apply a final consistency and skepticism pass before output.",
   "   - Remove any finding that is speculative, weakly supported, redundant, or not defensible after simulation.",
   "   - Output the complete final JSON object.",
   "   - If no valid findings remain, return an empty `findings` array.",
   "",
   "Output the result as a single JSON object with this structure:",
   "",
-  "{\"findings\": [{\"type\": \"must\", \"title\": \"問題標題\", \"context\": \"具體程式位置、條件或情境脈絡\", \"deviation\": \"預期行為與實際行為的落差\", \"impact\": \"若不處理會造成的後果\", \"suggestion\": \"具體且可執行的修正或改善建議\", \"confidence\": 85}]}",
+  "{\"findings\": [{\"type\": \"must\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 14, \"lineEnd\": 18}, \"context\": \"具體程式位置、條件或情境脈絡\", \"deviation\": \"預期行為與實際行為的落差\", \"impact\": \"若不處理會造成的後果\", \"suggestion\": \"具體且可執行的修正或改善建議\", \"confidence\": 85}]}",
   "",
   "If no findings remain, return: {\"findings\": []}",
   "The `type` field must be either `\"must\"` or `\"nice\"`.",
@@ -166,6 +171,7 @@ test("Step6CognitiveSimulationStep prepares the exact Step 6 prompt contract fro
       "## Findings",
       "1 must-fix issue(s), 0 nice-to-have suggestion(s).",
       "- [must] 既有問題",
+      "  - Traceability: L14-L18",
       "  - Context：具體情境",
       "  - Deviation：預期與實際有落差",
       "  - Impact：會造成 correctness 問題",
@@ -219,6 +225,7 @@ function createContextWithStep5Findings(): FileReviewContext {
       {
         type: "must",
         title: "既有問題",
+        traceability: lineRangeTraceability(14, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -296,4 +303,12 @@ function createBaseContext(): FileReviewContext {
   );
 
   return context;
+}
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
 }

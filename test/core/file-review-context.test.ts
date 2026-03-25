@@ -134,6 +134,7 @@ test("FileReviewContext stores structured findings state separately from section
       {
         type: "must",
         title: "問題標題",
+        traceability: lineRangeTraceability(14, 18),
         context: "觸發條件",
         deviation: "預期與實際有落差",
         impact: "會造成可觀察錯誤",
@@ -149,6 +150,7 @@ test("FileReviewContext stores structured findings state separately from section
       {
         type: "must",
         title: "問題標題",
+        traceability: lineRangeTraceability(14, 18),
         context: "觸發條件",
         deviation: "預期與實際有落差",
         impact: "會造成可觀察錯誤",
@@ -173,6 +175,7 @@ test("FileReviewContext replaces structured findings state without leaking snaps
       {
         type: "nice",
         title: "低優先改善",
+        traceability: diffHunkTraceability("@@ -1 +1 @@"),
         context: "初始 findings",
         deviation: "有些不一致",
         impact: "可維護性下降",
@@ -183,9 +186,14 @@ test("FileReviewContext replaces structured findings state without leaking snaps
   });
 
   const snapshot = context.getStructuredState();
+  if (!snapshot.findings?.[0]?.traceability || snapshot.findings[0].traceability.kind !== "diff-hunk") {
+    throw new Error("expected traceability snapshot");
+  }
+  snapshot.findings[0].traceability.hunkHeader = "@@ mutated @@";
   snapshot.findings?.push({
     type: "must",
     title: "不應污染原始狀態",
+    traceability: lineRangeTraceability(20, 20),
     context: "外部 snapshot mutation",
     deviation: "snapshot 被直接修改",
     impact: "正式 state 不應受影響",
@@ -198,6 +206,7 @@ test("FileReviewContext replaces structured findings state without leaking snaps
       {
         type: "nice",
         title: "低優先改善",
+        traceability: diffHunkTraceability("@@ -1 +1 @@"),
         context: "初始 findings",
         deviation: "有些不一致",
         impact: "可維護性下降",
@@ -216,6 +225,7 @@ test("FileReviewContext replaces structured findings state without leaking snaps
       {
         type: "must",
         title: "從空 findings 補回正式結果",
+        traceability: lineRangeTraceability(22, 24),
         context: "Step 6 最終情境",
         deviation: "最終檢查後仍有落差",
         impact: "會造成 correctness 問題",
@@ -230,6 +240,7 @@ test("FileReviewContext replaces structured findings state without leaking snaps
       {
         type: "must",
         title: "從空 findings 補回正式結果",
+        traceability: lineRangeTraceability(22, 24),
         context: "Step 6 最終情境",
         deviation: "最終檢查後仍有落差",
         impact: "會造成 correctness 問題",
@@ -238,6 +249,34 @@ test("FileReviewContext replaces structured findings state without leaking snaps
       }
     ]
   });
+});
+
+test("FileReviewContext throws a readable error when a formal finding is missing traceability", () => {
+  const context = new FileReviewContext({
+    filePath: "src/app.ts",
+    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
+    baseRef: "main",
+    headRef: "feature-branch"
+  });
+
+  assert.throws(
+    () =>
+      context.updateStructuredState({
+        findings: [
+          {
+            type: "must",
+            title: "缺少 traceability 的不合法 finding",
+            context: "具體情境",
+            deviation: "預期與實際有落差",
+            impact: "會造成 correctness 問題",
+            suggestion: "補上 traceability",
+            confidence: 85
+          }
+        ] as unknown as NonNullable<ReturnType<FileReviewContext["getStructuredState"]>["findings"]>
+      }),
+    /Formal finding "缺少 traceability 的不合法 finding" is missing required traceability\./u
+  );
 });
 
 test("FileReviewContext stores interruption state separately and returns defensive copies", () => {
@@ -276,3 +315,18 @@ test("FileReviewContext stores interruption state separately and returns defensi
 
   assert.equal(context.getInterruption(), undefined);
 });
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
+
+function diffHunkTraceability(hunkHeader: string) {
+  return {
+    kind: "diff-hunk",
+    hunkHeader
+  };
+}

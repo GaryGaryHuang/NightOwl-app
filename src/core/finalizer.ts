@@ -1,4 +1,7 @@
-import type { FileReviewContext } from "./file-review-context.ts";
+import type {
+  FileReviewContext,
+  FindingTraceability
+} from "./file-review-context.ts";
 import { getReviewSectionDefinitionsForSlot } from "./review-section-contract.ts";
 
 export class ReviewNoteFinalizer {
@@ -86,12 +89,25 @@ function renderFindingsSection(
     statsLine,
     ...[...mustFindings, ...niceFindings].flatMap((finding) => [
       `- [${finding.type}] ${finding.title}`,
+      `  - Traceability: ${formatTraceability(finding.traceability)}`,
       `  - Context：${finding.context}`,
       `  - Deviation：${finding.deviation}`,
       `  - Impact：${finding.impact}`,
       `  - Suggestion：${finding.suggestion}`
     ])
   ].join("\n");
+}
+
+function formatTraceability(traceability: FindingTraceability): string {
+  if (traceability.kind === "diff-hunk") {
+    return traceability.hunkHeader;
+  }
+
+  if (traceability.lineStart === traceability.lineEnd) {
+    return `L${traceability.lineStart}`;
+  }
+
+  return `L${traceability.lineStart}-L${traceability.lineEnd}`;
 }
 
 function renderInterruptionWarning(

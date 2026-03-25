@@ -13,6 +13,7 @@ test("StructuredOutputValidator accepts schema-valid findings JSON", () => {
         {
           type: "must",
           title: "問題標題",
+          traceability: lineRangeTraceability(14, 18),
           context: "具體情境",
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
@@ -28,6 +29,7 @@ test("StructuredOutputValidator accepts schema-valid findings JSON", () => {
       {
         type: "must",
         title: "問題標題",
+        traceability: lineRangeTraceability(14, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -73,6 +75,7 @@ test("StructuredOutputValidator rejects schema-invalid findings payloads", () =>
             {
               type: "must",
               title: "",
+              traceability: lineRangeTraceability(14, 18),
               context: "具體情境",
               deviation: "預期與實際有落差",
               impact: "會造成 correctness 問題",
@@ -94,6 +97,7 @@ test("StructuredOutputValidator rejects schema-invalid findings payloads", () =>
             {
               type: "must",
               title: "問題標題",
+              traceability: lineRangeTraceability(14, 18),
               context: "具體情境",
               deviation: "預期與實際有落差",
               impact: "會造成 correctness 問題",
@@ -116,6 +120,7 @@ test("StructuredOutputValidator filters findings by default confidence threshold
         {
           type: "must",
           title: "保留 must",
+          traceability: lineRangeTraceability(10, 12),
           context: "具體情境",
           deviation: "預期與實際有落差",
           impact: "影響 correctness",
@@ -125,6 +130,7 @@ test("StructuredOutputValidator filters findings by default confidence threshold
         {
           type: "must",
           title: "移除 must",
+          traceability: lineRangeTraceability(15, 15),
           context: "具體情境",
           deviation: "預期與實際有落差",
           impact: "影響 correctness",
@@ -134,6 +140,7 @@ test("StructuredOutputValidator filters findings by default confidence threshold
         {
           type: "nice",
           title: "保留 nice",
+          traceability: diffHunkTraceability("@@ -20,2 +20,4 @@"),
           context: "具體情境",
           deviation: "可再調整",
           impact: "影響可維護性",
@@ -143,6 +150,7 @@ test("StructuredOutputValidator filters findings by default confidence threshold
         {
           type: "nice",
           title: "移除 nice",
+          traceability: lineRangeTraceability(30, 31),
           context: "具體情境",
           deviation: "可再調整",
           impact: "影響可維護性",
@@ -150,7 +158,12 @@ test("StructuredOutputValidator filters findings by default confidence threshold
           confidence: 89
         }
       ]
-    })
+    }),
+    diffContent: [
+      "@@ -20,2 +20,4 @@",
+      "-old()",
+      "+new()"
+    ].join("\n")
   });
 
   assert.deepEqual(result, {
@@ -158,6 +171,7 @@ test("StructuredOutputValidator filters findings by default confidence threshold
       {
         type: "must",
         title: "保留 must",
+        traceability: lineRangeTraceability(10, 12),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "影響 correctness",
@@ -167,6 +181,7 @@ test("StructuredOutputValidator filters findings by default confidence threshold
       {
         type: "nice",
         title: "保留 nice",
+        traceability: diffHunkTraceability("@@ -20,2 +20,4 @@"),
         context: "具體情境",
         deviation: "可再調整",
         impact: "影響可維護性",
@@ -192,6 +207,7 @@ test("StructuredOutputValidator filters findings by supplied confidence threshol
         {
           type: "must",
           title: "保留 must",
+          traceability: lineRangeTraceability(3, 3),
           context: "具體情境",
           deviation: "預期與實際有落差",
           impact: "影響 correctness",
@@ -201,6 +217,7 @@ test("StructuredOutputValidator filters findings by supplied confidence threshol
         {
           type: "must",
           title: "移除 must",
+          traceability: lineRangeTraceability(4, 5),
           context: "具體情境",
           deviation: "預期與實際有落差",
           impact: "影響 correctness",
@@ -210,6 +227,7 @@ test("StructuredOutputValidator filters findings by supplied confidence threshol
         {
           type: "nice",
           title: "保留 nice",
+          traceability: lineRangeTraceability(8, 10),
           context: "具體情境",
           deviation: "可再調整",
           impact: "影響可維護性",
@@ -219,6 +237,7 @@ test("StructuredOutputValidator filters findings by supplied confidence threshol
         {
           type: "nice",
           title: "移除 nice",
+          traceability: diffHunkTraceability("@@ -30,1 +30,2 @@"),
           context: "具體情境",
           deviation: "可再調整",
           impact: "影響可維護性",
@@ -226,7 +245,8 @@ test("StructuredOutputValidator filters findings by supplied confidence threshol
           confidence: 84
         }
       ]
-    })
+    }),
+    diffContent: "@@ -30,1 +30,2 @@\n-old\n+new\n"
   });
 
   assert.deepEqual(result, {
@@ -234,6 +254,7 @@ test("StructuredOutputValidator filters findings by supplied confidence threshol
       {
         type: "must",
         title: "保留 must",
+        traceability: lineRangeTraceability(3, 3),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "影響 correctness",
@@ -243,6 +264,7 @@ test("StructuredOutputValidator filters findings by supplied confidence threshol
       {
         type: "nice",
         title: "保留 nice",
+        traceability: lineRangeTraceability(8, 10),
         context: "具體情境",
         deviation: "可再調整",
         impact: "影響可維護性",
@@ -263,3 +285,153 @@ test("StructuredOutputValidator accepts an empty findings array", () => {
 
   assert.deepEqual(result, { findings: [] });
 });
+
+test("StructuredOutputValidator rejects findings without traceability", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "缺少 traceability",
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        })
+      }),
+    /deterministic validation failed/u
+  );
+});
+
+test("StructuredOutputValidator rejects unsupported traceability kinds", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "不支援 kind",
+              traceability: {
+                kind: "file-offset",
+                offsetStart: 1,
+                offsetEnd: 2
+              },
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        })
+      }),
+    /deterministic validation failed/u
+  );
+});
+
+test("StructuredOutputValidator rejects line-range traceability with inverted bounds", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "行號倒置",
+              traceability: lineRangeTraceability(20, 19),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        })
+      }),
+    /deterministic validation failed/u
+  );
+});
+
+test("StructuredOutputValidator rejects diff-hunk traceability when the header is unknown", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "未知 hunk",
+              traceability: diffHunkTraceability("@@ -40,2 +40,3 @@"),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        }),
+        diffContent: "@@ -1 +1 @@\n-old\n+new\n"
+      }),
+    /deterministic validation failed/u
+  );
+});
+
+test("StructuredOutputValidator rejects diff-hunk traceability when the diff has no hunk headers", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "無 hunk diff",
+              traceability: diffHunkTraceability("@@ -1 +1 @@"),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        }),
+        diffContent: "diff --git a/src/app.ts b/src/app.ts\nindex 123..456 100644\n"
+      }),
+    /deterministic validation failed/u
+  );
+});
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
+
+function diffHunkTraceability(hunkHeader: string) {
+  return {
+    kind: "diff-hunk",
+    hunkHeader
+  };
+}

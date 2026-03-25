@@ -778,6 +778,7 @@ function buildStep5JsonResponse(): string {
       {
         type: "must",
         title: "初版 findings",
+        traceability: lineRangeTraceability(14, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -794,6 +795,7 @@ function buildStep6JsonResponse(): string {
       {
         type: "must",
         title: "最終 findings",
+        traceability: lineRangeTraceability(20, 22),
         context: "模擬後確認的具體情境",
         deviation: "經 simulation 後確認最終落差",
         impact: "會造成 correctness 問題",
@@ -818,6 +820,15 @@ function buildSummaryResponse(filePath: string, label = filePath): string {
     `- 風險理由：${label} 仍存在需關注的 final findings，且其風險判斷受到目前審查假設與範圍邊界影響。`
   ].join("\n");
 }
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
+
 
 function buildStepResponse(
   stepId:

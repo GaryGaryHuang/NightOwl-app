@@ -2,7 +2,10 @@ import {
   DEFAULT_CONFIDENCE_THRESHOLDS,
   type ConfidenceThresholds
 } from "./confidence-thresholds.ts";
-import type { Finding } from "./file-review-context.ts";
+import type {
+  Finding,
+  FindingTraceability
+} from "./file-review-context.ts";
 
 export interface FindingsPayload {
   findings: Finding[];
@@ -24,6 +27,7 @@ export class StructuredOutputValidator {
   validate(input: {
     validatorId: "findings-json";
     responseText: string;
+    diffContent?: string;
   }): FindingsPayload {
     if (input.validatorId !== "findings-json") {
       throw new Error("deterministic validation failed");
@@ -52,7 +56,10 @@ export class StructuredOutputValidator {
       throw new Error("deterministic validation failed");
     }
 
-    const validatedFindings = findings.map(validateFinding);
+    const hunkHeaders = collectUnifiedDiffHunkHeaders(input.diffContent);
+    const validatedFindings = findings.map((finding) =>
+      validateFinding(finding, hunkHeaders)
+    );
 
     return {
       findings: validatedFindings.filter((finding) =>
@@ -64,7 +71,10 @@ export class StructuredOutputValidator {
   }
 }
 
-function validateFinding(input: unknown): Finding {
+function validateFinding(
+  input: unknown,
+  hunkHeaders: Set<string>
+): Finding {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error("deterministic validation failed");
   }
@@ -72,6 +82,7 @@ function validateFinding(input: unknown): Finding {
   const finding = input as Record<string, unknown>;
   const type = validateStringField(finding.type);
   const title = validateStringField(finding.title);
+  const traceability = validateTraceability(finding.traceability, hunkHeaders);
   const context = validateStringField(finding.context);
   const deviation = validateStringField(finding.deviation);
   const impact = validateStringField(finding.impact);
@@ -94,12 +105,80 @@ function validateFinding(input: unknown): Finding {
   return {
     type,
     title,
+    traceability,
     context,
     deviation,
     impact,
     suggestion,
     confidence
   };
+}
+
+function validateTraceability(
+  input: unknown,
+  hunkHeaders: Set<string>
+): FindingTraceability {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error("deterministic validation failed");
+  }
+
+  const traceability = input as Record<string, unknown>;
+  const kind = validateStringField(traceability.kind);
+
+  if (kind === "line-range") {
+    const lineStart = validatePositiveInteger(traceability.lineStart);
+    const lineEnd = validatePositiveInteger(traceability.lineEnd);
+
+    if (lineEnd < lineStart) {
+      throw new Error("deterministic validation failed");
+    }
+
+    return {
+      kind,
+      lineStart,
+      lineEnd
+    };
+  }
+
+  if (kind === "diff-hunk") {
+    const hunkHeader = validateStringField(traceability.hunkHeader);
+
+    if (!hunkHeaders.has(hunkHeader)) {
+      throw new Error("deterministic validation failed");
+    }
+
+    return {
+      kind,
+      hunkHeader
+    };
+  }
+
+  throw new Error("deterministic validation failed");
+}
+
+function validatePositiveInteger(value: unknown): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value <= 0
+  ) {
+    throw new Error("deterministic validation failed");
+  }
+
+  return value;
+}
+
+function collectUnifiedDiffHunkHeaders(diffContent?: string): Set<string> {
+  if (!diffContent) {
+    return new Set();
+  }
+
+  return new Set(
+    diffContent
+      .split("\n")
+      .filter((line) => /^@@ .* @@(?: .*|)$/u.test(line.trim()))
+      .map((line) => line.trim())
+  );
 }
 
 function validateStringField(value: unknown): string {

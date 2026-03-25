@@ -161,6 +161,7 @@ test("ReviewOrchestrator passes explicit empty Step 5 findings into Step 6 and a
                           {
                             type: "must",
                             title: `Step6 restored ${filePath}`,
+                            traceability: lineRangeTraceability(30, 32),
                             context: "模擬路徑重新確認",
                             deviation: "first-pass 未涵蓋最終偏差",
                             impact: "會造成 correctness 問題",
@@ -267,6 +268,7 @@ test("ReviewOrchestrator uses the same configured thresholds for Step 5 and Step
                           {
                             type: "must",
                             title: "低門檻 step5 must",
+                            traceability: lineRangeTraceability(14, 18),
                             context: "具體情境",
                             deviation: "預期與實際有落差",
                             impact: "影響 correctness",
@@ -276,6 +278,7 @@ test("ReviewOrchestrator uses the same configured thresholds for Step 5 and Step
                           {
                             type: "nice",
                             title: "低門檻 step5 nice",
+                            traceability: lineRangeTraceability(20, 20),
                             context: "具體情境",
                             deviation: "可改善",
                             impact: "影響可維護性",
@@ -296,6 +299,7 @@ test("ReviewOrchestrator uses the same configured thresholds for Step 5 and Step
                           {
                             type: "must",
                             title: "低門檻 step6 must",
+                            traceability: lineRangeTraceability(30, 32),
                             context: "模擬路徑重新確認",
                             deviation: "最終偏差確認",
                             impact: "會造成 correctness 問題",
@@ -305,6 +309,7 @@ test("ReviewOrchestrator uses the same configured thresholds for Step 5 and Step
                           {
                             type: "nice",
                             title: "低門檻 step6 nice",
+                            traceability: lineRangeTraceability(34, 35),
                             context: "模擬路徑重新確認",
                             deviation: "最終偏差確認",
                             impact: "影響可維護性",
@@ -662,6 +667,7 @@ test("ReviewOrchestrator retries Step 6 after deterministic validation failure a
                         {
                           type: "must",
                           title: `${filePath} final attempt ${attempt}`,
+                          traceability: lineRangeTraceability(30, 32),
                           context: "具體情境",
                           deviation: "預期與實際有落差",
                           impact: "會造成 correctness 問題",
@@ -763,6 +769,7 @@ test("ReviewOrchestrator aborts Step 6 after schema-invalid JSON retry exhaustio
               {
                 type: "must",
                 title: "",
+                traceability: lineRangeTraceability(30, 32),
                 context: "具體情境",
                 deviation: "預期與實際有落差",
                 impact: "會造成 correctness 問題",
@@ -1060,6 +1067,7 @@ function buildStep5JsonResponse(): string {
       {
         type: "must",
         title: "初版 findings",
+        traceability: lineRangeTraceability(14, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -1076,6 +1084,7 @@ function buildStep6JsonResponse(): string {
       {
         type: "must",
         title: "最終 findings",
+        traceability: lineRangeTraceability(20, 22),
         context: "模擬後確認的具體情境",
         deviation: "經 simulation 後確認最終落差",
         impact: "會造成 correctness 問題",
@@ -1100,6 +1109,15 @@ function buildStep7SummaryResponse(filePath: string): string {
     "- 風險理由：final findings 仍需留意。"
   ].join("\n");
 }
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
+
 
 function buildStepResponse(
   stepId:

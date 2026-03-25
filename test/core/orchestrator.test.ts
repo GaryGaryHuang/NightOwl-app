@@ -1835,6 +1835,7 @@ function buildStep5JsonResponse(): string {
       {
         type: "must",
         title: "問題標題",
+        traceability: lineRangeTraceability(14, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -1851,6 +1852,7 @@ function buildStep6JsonResponse(): string {
       {
         type: "must",
         title: "問題標題",
+        traceability: lineRangeTraceability(20, 22),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -1875,6 +1877,15 @@ function buildStep7SummaryResponse(filePath: string): string {
     "- 風險理由：final findings 仍需留意。"
   ].join("\n");
 }
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
+
 
 function buildStepResponse(
   stepId:

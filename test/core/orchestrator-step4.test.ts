@@ -341,6 +341,7 @@ function buildStep5JsonResponse(): string {
       {
         type: "must",
         title: "問題標題",
+        traceability: lineRangeTraceability(14, 18),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -357,6 +358,7 @@ function buildStep6JsonResponse(): string {
       {
         type: "must",
         title: "問題標題",
+        traceability: lineRangeTraceability(20, 22),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -439,6 +441,15 @@ function extractDiffPath(prompt: string): string {
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
+
+function lineRangeTraceability(lineStart: number, lineEnd: number) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
+
 
 function detectStepId(
   systemMessage: string

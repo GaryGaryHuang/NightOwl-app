@@ -9,9 +9,25 @@ export interface FileReviewContextInput {
   headRef: string;
 }
 
+export interface FindingLineRangeTraceability {
+  kind: "line-range";
+  lineStart: number;
+  lineEnd: number;
+}
+
+export interface FindingDiffHunkTraceability {
+  kind: "diff-hunk";
+  hunkHeader: string;
+}
+
+export type FindingTraceability =
+  | FindingLineRangeTraceability
+  | FindingDiffHunkTraceability;
+
 export interface Finding {
   type: "must" | "nice";
   title: string;
+  traceability: FindingTraceability;
   context: string;
   deviation: string;
   impact: string;
@@ -62,16 +78,12 @@ export class FileReviewContext {
 
   updateStructuredState(patch: Partial<ReviewStructuredState>): void {
     if (Object.hasOwn(patch, "findings")) {
-      this.#structuredState.findings = patch.findings?.map((finding) => ({
-        ...finding
-      }));
+      this.#structuredState.findings = patch.findings?.map(cloneFinding);
     }
   }
 
   getStructuredState(): ReviewStructuredState {
-    const findings = this.#structuredState.findings?.map((finding) => ({
-      ...finding
-    }));
+    const findings = this.#structuredState.findings?.map(cloneFinding);
 
     return findings ? { findings } : {};
   }
@@ -87,4 +99,23 @@ export class FileReviewContext {
   getInterruption(): ReviewInterruption | undefined {
     return this.#interruption ? { ...this.#interruption } : undefined;
   }
+}
+
+function cloneFinding(finding: Finding): Finding {
+  const traceability = requireFindingTraceability(finding);
+
+  return {
+    ...finding,
+    traceability: { ...traceability }
+  };
+}
+
+function requireFindingTraceability(finding: Finding): FindingTraceability {
+  if (!finding.traceability) {
+    throw new Error(
+      `Formal finding \"${finding.title}\" is missing required traceability.`
+    );
+  }
+
+  return finding.traceability;
 }
