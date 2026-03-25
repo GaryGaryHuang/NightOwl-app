@@ -126,6 +126,7 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
         "- Skipped files: 0",
         "",
         "## Run Artifacts",
+        "- [changeset-overview.md](./changeset-overview.md)",
         "- [summary.md](./summary.md)",
         "- [skipped.md](./skipped.md)",
         "",
@@ -133,7 +134,7 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
         ...expectedIndexFileNoteLines
       ].join("\n")
     );
-    assert.match(manifestContent, /"schemaVersion": 1/u);
+    assert.match(manifestContent, /"schemaVersion": 2/u);
     assert.match(manifestContent, /"manifestPath": ".*manifest\.json"/u);
     assert.match(manifestContent, /"successfulFileCount": 2/u);
   } finally {
@@ -388,7 +389,7 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
       readFileSync(result.outputTarget.manifestPath, "utf8"),
       JSON.stringify(
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           repoRoot: result.repoRoot,
           baseRef: "main",
           headRef: "feature-branch",
@@ -397,6 +398,7 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
           skippedFileCount: 0,
           artifacts: {
             basePath: result.outputTarget.basePath,
+            changesetOverviewPath: result.outputTarget.changesetOverviewPath,
             filesPath: result.outputTarget.filesPath,
             summaryPath: result.outputTarget.summaryPath,
             indexPath: result.outputTarget.indexPath,
@@ -483,6 +485,7 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
         `- Skipped files: ${reviewableFiles.length}`,
         "",
         "## Run Artifacts",
+        "- [changeset-overview.md](./changeset-overview.md)",
         "- [summary.md](./summary.md)",
         "- [skipped.md](./skipped.md)",
         "",
@@ -583,6 +586,7 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
         "- Skipped files: 1",
         "",
         "## Run Artifacts",
+        "- [changeset-overview.md](./changeset-overview.md)",
         "- [summary.md](./summary.md)",
         "- [skipped.md](./skipped.md)",
         "",
@@ -644,6 +648,7 @@ test("ReviewOrchestrator publishes index.md for zero planned files with explicit
         "- Skipped files: 0",
         "",
         "## Run Artifacts",
+        "- [changeset-overview.md](./changeset-overview.md)",
         "- [summary.md](./summary.md)",
         "- [skipped.md](./skipped.md)",
         "",
@@ -683,7 +688,8 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
         },
         publishRunManifest(manifestResult: RunManifestPublishResult) {
           outputCalls.push(["publishRunManifest", manifestResult.content]);
-        }
+        },
+        publishChangesetOverview() {}
       },
       stepRunner: {
         async run({ step }) {
@@ -760,7 +766,8 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
         },
         publishRunManifest(manifestResult: RunManifestPublishResult) {
           outputCalls.push(["publishRunManifest", manifestResult.content]);
-        }
+        },
+        publishChangesetOverview() {}
       },
       stepRunner: {
         async run() {
@@ -852,7 +859,8 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
         },
         publishRunManifest(manifestResult: RunManifestPublishResult) {
           outputCalls.push(["publishRunManifest", manifestResult.content]);
-        }
+        },
+        publishChangesetOverview() {}
       },
       stepRunner: createSuccessfulSummaryRunner(),
       changesetOverviewRunner: {
@@ -1462,6 +1470,8 @@ class CorruptingSummaryOutputSink {
   publishRunManifest(manifestResult: RunManifestPublishResult) {
     writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
   }
+
+  publishChangesetOverview() {}
 }
 
 class CorruptingIndexOutputSink {
@@ -1498,6 +1508,8 @@ class CorruptingIndexOutputSink {
   publishRunManifest(manifestResult: RunManifestPublishResult) {
     writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
   }
+
+  publishChangesetOverview() {}
 }
 
 class SummaryFailingOutputSink {
@@ -1539,6 +1551,8 @@ class SummaryFailingOutputSink {
   publishRunManifest(_manifestResult: RunManifestPublishResult) {
     throw new Error("should not publish manifest after summary failure");
   }
+
+  publishChangesetOverview() {}
 }
 
 class IndexFailingOutputSink {
@@ -1584,6 +1598,8 @@ class IndexFailingOutputSink {
   publishRunManifest(_manifestResult: RunManifestPublishResult) {
     throw new Error("should not publish manifest after index failure");
   }
+
+  publishChangesetOverview() {}
 }
 
 class ManifestFailingOutputSink {
@@ -1633,6 +1649,8 @@ class ManifestFailingOutputSink {
     this.publishRunManifestCalls += 1;
     throw new Error("manifest write failed");
   }
+
+  publishChangesetOverview() {}
 }
 
 class RecordingOutputSink {
@@ -1674,6 +1692,10 @@ class RecordingOutputSink {
   publishRunManifest(manifestResult: RunManifestPublishResult) {
     writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
     this.calls.push("publishRunManifest");
+  }
+
+  publishChangesetOverview() {
+    this.calls.push("publishChangesetOverview");
   }
 }
 
@@ -1731,6 +1753,10 @@ class IndexRecordingOutputSink {
     this.#manifestPublished = true;
     this.calls.push("publishRunManifest");
   }
+
+  publishChangesetOverview() {
+    this.calls.push("publishChangesetOverview");
+  }
 }
 
 function escapeRegExp(value: string): string {
@@ -1742,6 +1768,7 @@ function createExpectedOutputTarget(outputBaseDir: string, sessionId: string) {
 
   return {
     basePath,
+    changesetOverviewPath: path.join(basePath, "changeset-overview.md"),
     filesPath: path.join(basePath, "files"),
     skippedPath: path.join(basePath, "skipped.md"),
     summaryPath: path.join(basePath, "summary.md"),
