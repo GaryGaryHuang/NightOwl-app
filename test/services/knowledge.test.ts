@@ -214,6 +214,56 @@ test("KnowledgeSvc passes through cwd and timeout for local custom entries", () 
   });
 });
 
+test("KnowledgeSvc passes through type stdio for local custom entries without normalization", () => {
+  const service = new KnowledgeSvc({
+    userMcpServers: {
+      demo: {
+        type: "stdio",
+        command: "npx",
+        args: ["-y", "@example/demo-mcp"],
+        tools: ["*"]
+      }
+    }
+  });
+
+  const merged = service.getMcpServers("built-in-context7");
+
+  assert.ok(merged);
+  assert.deepEqual(merged.demo, {
+    type: "stdio",
+    command: "npx",
+    args: ["-y", "@example/demo-mcp"],
+    tools: ["*"]
+  });
+});
+
+test("KnowledgeSvc passes through type stdio with cwd and timeout for local custom entries", () => {
+  const service = new KnowledgeSvc({
+    userMcpServers: {
+      demo: {
+        type: "stdio",
+        command: "node",
+        args: ["server.js"],
+        cwd: "/opt/mcp-servers/demo",
+        timeout: 15000,
+        tools: ["*"]
+      }
+    }
+  });
+
+  const merged = service.getMcpServers("built-in-context7");
+
+  assert.ok(merged);
+  assert.deepEqual(merged.demo, {
+    type: "stdio",
+    command: "node",
+    args: ["server.js"],
+    tools: ["*"],
+    cwd: "/opt/mcp-servers/demo",
+    timeout: 15000
+  });
+});
+
 test("KnowledgeSvc returns undefined for disabled mode even with remote entries", () => {
   const service = new KnowledgeSvc({
     userMcpServers: {

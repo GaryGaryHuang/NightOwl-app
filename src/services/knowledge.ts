@@ -83,7 +83,7 @@ export class KnowledgeSvc {
         }
 
         const resolvedConfig: MCPLocalServerConfig = {
-          type: "local",
+          type: config.type,
           command: config.command,
           args: config.args === undefined ? [] : [...config.args],
           tools: config.tools === undefined ? ["*"] : [...config.tools],
@@ -109,7 +109,7 @@ function isRemoteConfig(
 function isLocalConfig(
   config: ReviewMcpServerConfig
 ): config is ReviewLocalMcpServerConfig {
-  return config.type === "local";
+  return config.type === "local" || config.type === "stdio";
 }
 
 function isContext7OverrideConfig(
