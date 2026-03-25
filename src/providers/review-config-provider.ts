@@ -1,7 +1,7 @@
 import type { ConfidenceThresholds } from "../core/confidence-thresholds.ts";
 
 export interface ReviewLocalMcpServerConfig {
-  type: "local";
+  type: "local" | "stdio";
   command?: string;
   args?: string[];
   env?: Record<string, string>;
