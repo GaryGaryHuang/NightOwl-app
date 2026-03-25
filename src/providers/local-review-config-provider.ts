@@ -102,25 +102,24 @@ function resolveMcpServersFromConfigObject(
     }
 
     const rawType = rawDefinition.type;
-    const normalizedType =
+    const resolvedType =
       rawType === undefined
         ? "local"
-        : rawType === "stdio"
-          ? "local"
-          : rawType;
+        : rawType;
 
     if (
-      normalizedType !== "local" &&
-      normalizedType !== "http" &&
-      normalizedType !== "sse"
+      resolvedType !== "local" &&
+      resolvedType !== "stdio" &&
+      resolvedType !== "http" &&
+      resolvedType !== "sse"
     ) {
       throw new Error("invalid review config");
     }
 
-    if (normalizedType === "http" || normalizedType === "sse") {
-      resolved[name] = resolveRemoteMcpEntry(rawDefinition, normalizedType);
+    if (resolvedType === "http" || resolvedType === "sse") {
+      resolved[name] = resolveRemoteMcpEntry(rawDefinition, resolvedType);
     } else {
-      resolved[name] = resolveLocalMcpEntry(rawDefinition);
+      resolved[name] = resolveLocalMcpEntry(rawDefinition, resolvedType);
     }
   }
 
@@ -197,7 +196,8 @@ function resolveRemoteMcpEntry(
 }
 
 function resolveLocalMcpEntry(
-  rawDefinition: Record<string, unknown>
+  rawDefinition: Record<string, unknown>,
+  type: "local" | "stdio"
 ): ReviewMcpServerConfig {
   const command = rawDefinition.command;
 
@@ -206,7 +206,7 @@ function resolveLocalMcpEntry(
   }
 
   return {
-    type: "local",
+    type,
     ...(command === undefined ? {} : { command }),
     ...(rawDefinition.args === undefined
       ? {}

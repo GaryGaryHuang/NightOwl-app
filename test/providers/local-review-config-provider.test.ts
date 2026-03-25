@@ -1341,13 +1341,13 @@ test("LocalReviewConfigProvider resolves local MCP entries with cwd and timeout 
   }
 });
 
-test("LocalReviewConfigProvider normalizes type stdio to local for non-built-in entries", () => {
+test("LocalReviewConfigProvider passes through type stdio for non-built-in entries without normalization", () => {
   const fixture = createReviewRepoFixture();
 
   try {
     const provider = new LocalReviewConfigProvider();
 
-    // non-built-in entry with type:stdio → resolved type is "local"
+    // non-built-in entry with type:stdio → resolved type remains "stdio" (no normalization)
     fixture.writeFile(
       ".reviewconfig.json",
       JSON.stringify({
@@ -1362,7 +1362,7 @@ test("LocalReviewConfigProvider normalizes type stdio to local for non-built-in 
     );
     assert.deepEqual(provider.loadReviewConfig(fixture.repoDir).mcpServers, {
       demo: {
-        type: "local",
+        type: "stdio",
         command: "npx",
         args: ["-y", "@example/demo-mcp"]
       }
