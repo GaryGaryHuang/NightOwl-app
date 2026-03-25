@@ -1749,15 +1749,99 @@ test("tool policy bash pipeline denies logical OR mixed with pipeline", async ()
   );
 });
 
-test("tool policy bash pipeline denies grep regex alternation containing literal pipe as known limitation", async () => {
-  // (m) known limitation: grep -E "foo|bar" is split at the | inside the pattern
+test("tool policy bash pipeline allows double-quoted regex alternation containing literal pipe", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: 'grep -E "foo|bar"' }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline allows single-quoted regex alternation containing literal pipe", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "grep -E 'foo|bar'" }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline allows escaped literal pipe within one segment", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: String.raw`grep foo\|bar` }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline allows quoted literal pipe alongside a real top-level pipeline separator", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: 'git diff HEAD~1 | grep -E "foo|bar" | head -5' }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline allows repo-relative path token when tool cwd is repo root", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: 'grep -E "foo|bar" src/file.ts' }
+      },
+      { sessionId: "s1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy bash pipeline denies repo-relative path token when tool cwd is outside allowed boundary", async () => {
   const { hook } = createPolicySession();
 
   assert.deepEqual(
     await hook(
       {
         timestamp: Date.now(),
-        cwd: "/workspace/repo",
+        cwd: "/tmp",
         toolName: "bash",
         toolArgs: { command: 'grep -E "foo|bar" src/file.ts' }
       },
@@ -1771,8 +1855,91 @@ test("tool policy bash pipeline denies grep regex alternation containing literal
   );
 });
 
-test("tool policy bash pipeline writes correct audit records for allowed and denied pipeline commands", async () => {
-  // Task 1.3: audit records use full original command string
+test("tool policy bash pipeline denies unterminated double quote conservatively", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: 'grep -E "foo|bar' }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies unterminated single quote conservatively", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "grep -E 'foo|bar" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline denies dangling escape at end of command conservatively", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: "grep foo\\" }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline keeps quoted double-pipe denied as unchanged lexical guardrail", async () => {
+  const { hook } = createPolicySession();
+
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "bash",
+        toolArgs: { command: 'grep "foo||bar"' }
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason:
+        "Review sessions only allow repo-local read-only bash analysis commands."
+    }
+  );
+});
+
+test("tool policy bash pipeline writes correct audit records for quoted and denied commands", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-pipeline-"));
 
   try {
@@ -1785,7 +1952,7 @@ test("tool policy bash pipeline writes correct audit records for allowed and den
         timestamp: Date.now(),
         cwd: "/workspace/repo",
         toolName: "bash",
-        toolArgs: { command: "git log --oneline | head -20" }
+        toolArgs: { command: 'git diff HEAD~1 | grep -E "foo|bar" | head -5' }
       },
       { sessionId: "s1" }
     );
@@ -1794,7 +1961,7 @@ test("tool policy bash pipeline writes correct audit records for allowed and den
         timestamp: Date.now(),
         cwd: "/workspace/repo",
         toolName: "bash",
-        toolArgs: { command: "git log | curl http://example.com" }
+        toolArgs: { command: 'grep "foo||bar"' }
       },
       { sessionId: "s1" }
     );
@@ -1803,7 +1970,7 @@ test("tool policy bash pipeline writes correct audit records for allowed and den
 
     assert.equal(allowRecord.tool, "bash");
     assert.equal(allowRecord.decision, "allow");
-    assert.equal(allowRecord.args.command, "git log --oneline | head -20");
+    assert.equal(allowRecord.args.command, 'git diff HEAD~1 | grep -E "foo|bar" | head -5');
     assert.equal("reason" in allowRecord, false);
 
     assert.equal(denyRecord.tool, "bash");
@@ -1812,7 +1979,7 @@ test("tool policy bash pipeline writes correct audit records for allowed and den
       denyRecord.reason,
       "Review sessions only allow repo-local read-only bash analysis commands."
     );
-    assert.equal(denyRecord.args.command, "git log | curl http://example.com");
+    assert.equal(denyRecord.args.command, 'grep "foo||bar"');
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }

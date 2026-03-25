@@ -310,7 +310,7 @@ export class ToolPolicyGuard {
             ? (input.toolArgs.command as string)
             : "";
 
-        const allowed = isAllowedReadonlyBashCommand(command, profile);
+        const allowed = isAllowedReadonlyBashCommand(command, profile, input.cwd);
         const decision: PreToolUseHookResult = allowed
           ? undefined
           : {
@@ -558,7 +558,8 @@ function isAllowedReadPath(
 
 function isAllowedReadonlyBashCommand(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
+  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  commandCwd?: string
 ): boolean {
   const trimmedCommand = command.trim();
 
@@ -576,15 +577,89 @@ function isAllowedReadonlyBashCommand(
     return false;
   }
 
-  // Split on | and validate each segment independently
-  const segments = trimmedCommand.split("|");
+  const segments = splitTopLevelPipelineSegments(trimmedCommand);
 
-  return segments.every((segment) => isAllowedSingleSegment(segment, profile));
+  if (!segments) {
+    return false;
+  }
+
+  return segments.every((segment) => isAllowedSingleSegment(segment, profile, commandCwd));
+}
+
+function splitTopLevelPipelineSegments(command: string): string[] | undefined {
+  const segments: string[] = [];
+  let currentSegment = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaping = false;
+
+  for (const char of command) {
+    if (escaping) {
+      currentSegment += char;
+      escaping = false;
+      continue;
+    }
+
+    if (inSingleQuote) {
+      currentSegment += char;
+
+      if (char === "'") {
+        inSingleQuote = false;
+      }
+
+      continue;
+    }
+
+    if (char === "\\") {
+      currentSegment += char;
+      escaping = true;
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      currentSegment += char;
+
+      if (char === '"') {
+        inDoubleQuote = false;
+      }
+
+      continue;
+    }
+
+    if (char === "'") {
+      currentSegment += char;
+      inSingleQuote = true;
+      continue;
+    }
+
+    if (char === '"') {
+      currentSegment += char;
+      inDoubleQuote = true;
+      continue;
+    }
+
+    if (char === "|") {
+      segments.push(currentSegment);
+      currentSegment = "";
+      continue;
+    }
+
+    currentSegment += char;
+  }
+
+  if (escaping || inSingleQuote || inDoubleQuote) {
+    return undefined;
+  }
+
+  segments.push(currentSegment);
+
+  return segments;
 }
 
 function isAllowedSingleSegment(
   segment: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
+  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  commandCwd?: string
 ): boolean {
   const trimmed = segment.trim();
 
@@ -600,7 +675,7 @@ function isAllowedSingleSegment(
     return false;
   }
 
-  return hasOnlyAllowedPathArguments(trimmed, profile);
+  return hasOnlyAllowedPathArguments(trimmed, profile, commandCwd);
 }
 
 function matchesAllowedBashPrefix(command: string, prefix: string): boolean {
@@ -609,9 +684,14 @@ function matchesAllowedBashPrefix(command: string, prefix: string): boolean {
 
 function hasOnlyAllowedPathArguments(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
+  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  commandCwd?: string
 ): boolean {
   const tokens = command.split(/\s+/u).filter(Boolean);
+  const baseDirectory =
+    typeof commandCwd === "string" && commandCwd.trim()
+      ? commandCwd
+      : profile.repoRoot;
 
   for (const token of tokens.slice(1)) {
     if (token === "--") {
@@ -624,7 +704,7 @@ function hasOnlyAllowedPathArguments(
 
     if (
       looksLikePath(token) &&
-      !isAllowedReadPath(resolvePathToken(token), profile)
+      !isAllowedReadPath(resolvePathToken(token, baseDirectory), profile)
     ) {
       return false;
     }
@@ -643,7 +723,7 @@ function looksLikePath(token: string): boolean {
   );
 }
 
-function resolvePathToken(token: string): string {
+function resolvePathToken(token: string, baseDirectory: string): string {
   if (token === "~") {
     return process.env.HOME ?? token;
   }
@@ -652,7 +732,11 @@ function resolvePathToken(token: string): string {
     return path.join(process.env.HOME ?? "", token.slice(2));
   }
 
-  return token;
+  if (path.isAbsolute(token)) {
+    return token;
+  }
+
+  return path.resolve(baseDirectory, token);
 }
 
 function containsDangerousFlag(command: string): boolean {
