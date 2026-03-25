@@ -23,6 +23,10 @@ export interface RunManifestResult {
   content: string;
 }
 
+export interface ChangesetOverviewResult {
+  content: string;
+}
+
 export type SuccessfulSnapshotFaultScope =
   | "single-file-output-fault"
   | "shared-output-target-fault";
@@ -46,6 +50,7 @@ export interface ReviewOutputSink {
   publishRunSummary(summaryResult: RunSummaryResult): void;
   publishReviewIndex(indexResult: ReviewIndexResult): void;
   publishRunManifest(manifestResult: RunManifestResult): void;
+  publishChangesetOverview(result: ChangesetOverviewResult): void;
 }
 
 export function resolveSuccessfulSnapshotFailureAssessment(

@@ -10,6 +10,7 @@ import path from "node:path";
 
 import type { OutputTarget } from "../core/review-path-resolver.ts";
 import type {
+  ChangesetOverviewResult,
   FileReviewResult,
   ReviewIndexResult,
   ReviewOutputSink,
@@ -110,6 +111,17 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
     }
 
     writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
+  }
+
+  publishChangesetOverview(result: ChangesetOverviewResult): void {
+    if (!this.#outputTarget) {
+      throw new Error("Run output target has not been initialized.");
+    }
+
+    const content = result.content.endsWith("\n")
+      ? result.content
+      : result.content + "\n";
+    writeFileSync(this.#outputTarget.changesetOverviewPath, content);
   }
 }
 

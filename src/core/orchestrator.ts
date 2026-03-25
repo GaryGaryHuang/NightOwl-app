@@ -152,6 +152,8 @@ export class ReviewOrchestrator {
 
     this.#outputSink.initializeRun(outputTarget);
 
+    this.#outputSink.publishChangesetOverview({ content: runContext.changesetOverview });
+
     this.#onOutputTargetReady?.(outputTarget);
 
     for (const plannedNote of plannedNoteFiles) {

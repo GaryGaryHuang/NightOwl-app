@@ -73,6 +73,7 @@ export class ReviewIndexFinalizer {
       `- Skipped files: ${input.skippedFiles.length}`,
       "",
       "## Run Artifacts",
+      `- [changeset-overview.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.changesetOverviewPath)})`,
       `- [summary.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.summaryPath)})`,
       `- [skipped.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.skippedPath)})`,
       "",

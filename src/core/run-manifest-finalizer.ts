@@ -62,7 +62,7 @@ export class RunManifestFinalizer {
 
     return JSON.stringify(
       {
-        schemaVersion: 1,
+        schemaVersion: 2,
         repoRoot: input.repoRoot,
         baseRef: input.baseRef,
         headRef: input.headRef,
@@ -71,6 +71,7 @@ export class RunManifestFinalizer {
         skippedFileCount: input.skippedFiles.length,
         artifacts: {
           basePath: input.outputTarget.basePath,
+          changesetOverviewPath: input.outputTarget.changesetOverviewPath,
           filesPath: input.outputTarget.filesPath,
           summaryPath: input.outputTarget.summaryPath,
           indexPath: input.outputTarget.indexPath,

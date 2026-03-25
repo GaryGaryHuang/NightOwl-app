@@ -196,6 +196,7 @@ export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
     LOCAL_REVIEW_RUN_HEADER,
     `Repo root: ${result.repoRoot}`,
     `Output: ${result.outputTarget.basePath}`,
+    `Changeset Overview: ${result.outputTarget.changesetOverviewPath}`,
     `Files: ${result.outputTarget.filesPath}`,
     `Summary: ${result.outputTarget.summaryPath}`,
     `Index: ${result.outputTarget.indexPath}`,
