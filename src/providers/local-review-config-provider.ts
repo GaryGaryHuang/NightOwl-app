@@ -96,43 +96,108 @@ function resolveMcpServersFromConfigObject(
       throw new Error("invalid review config");
     }
 
-    const command = rawDefinition.command;
-    const isContext7Override = name === "context7";
+    const rawType = rawDefinition.type;
+    const normalizedType =
+      rawType === undefined
+        ? "local"
+        : rawType === "stdio"
+          ? "local"
+          : rawType;
 
-    if (!isContext7Override) {
-      if (typeof command !== "string" || command.trim().length === 0) {
-        throw new Error("invalid review config");
-      }
-    } else if (
-      command !== undefined &&
-      (typeof command !== "string" || command.trim().length === 0)
+    if (
+      normalizedType !== "local" &&
+      normalizedType !== "http" &&
+      normalizedType !== "sse"
     ) {
       throw new Error("invalid review config");
     }
 
-    const type =
-      rawDefinition.type === undefined ? "local" : rawDefinition.type;
+    if (normalizedType === "http" || normalizedType === "sse") {
+      if (name === "context7") {
+        throw new Error("invalid review config");
+      }
 
-    if (type !== "local") {
-      throw new Error("invalid review config");
+      resolved[name] = resolveRemoteMcpEntry(rawDefinition, normalizedType);
+    } else {
+      resolved[name] = resolveLocalMcpEntry(rawDefinition, name === "context7");
     }
-
-    resolved[name] = {
-      type,
-      ...(command === undefined ? {} : { command }),
-      ...(rawDefinition.args === undefined
-        ? {}
-        : { args: readStringArray(rawDefinition.args) }),
-      ...(rawDefinition.env === undefined
-        ? {}
-        : { env: readStringRecord(rawDefinition.env) }),
-      ...(rawDefinition.tools === undefined
-        ? {}
-        : { tools: readStringArray(rawDefinition.tools) })
-    } satisfies ReviewMcpServerConfig;
   }
 
   return resolved;
+}
+
+function resolveRemoteMcpEntry(
+  rawDefinition: Record<string, unknown>,
+  type: "http" | "sse"
+): ReviewMcpServerConfig {
+  const url = rawDefinition.url;
+
+  if (typeof url !== "string" || url.length === 0) {
+    throw new Error("invalid review config");
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    throw new Error("invalid review config");
+  }
+
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    throw new Error("invalid review config");
+  }
+
+  return {
+    type,
+    url,
+    ...(rawDefinition.headers === undefined
+      ? {}
+      : { headers: readStringRecord(rawDefinition.headers) }),
+    ...(rawDefinition.tools === undefined
+      ? {}
+      : { tools: readStringArray(rawDefinition.tools) }),
+    ...(rawDefinition.timeout === undefined
+      ? {}
+      : { timeout: readPositiveInteger(rawDefinition.timeout) })
+  };
+}
+
+function resolveLocalMcpEntry(
+  rawDefinition: Record<string, unknown>,
+  isContext7Override: boolean
+): ReviewMcpServerConfig {
+  const command = rawDefinition.command;
+
+  if (!isContext7Override) {
+    if (typeof command !== "string" || command.trim().length === 0) {
+      throw new Error("invalid review config");
+    }
+  } else if (
+    command !== undefined &&
+    (typeof command !== "string" || command.trim().length === 0)
+  ) {
+    throw new Error("invalid review config");
+  }
+
+  return {
+    type: "local",
+    ...(command === undefined ? {} : { command }),
+    ...(rawDefinition.args === undefined
+      ? {}
+      : { args: readStringArray(rawDefinition.args) }),
+    ...(rawDefinition.env === undefined
+      ? {}
+      : { env: readStringRecord(rawDefinition.env) }),
+    ...(rawDefinition.tools === undefined
+      ? {}
+      : { tools: readStringArray(rawDefinition.tools) }),
+    ...(rawDefinition.cwd === undefined
+      ? {}
+      : { cwd: readNonEmptyString(rawDefinition.cwd) }),
+    ...(rawDefinition.timeout === undefined
+      ? {}
+      : { timeout: readPositiveInteger(rawDefinition.timeout) })
+  };
 }
 
 function resolveWebFetchAllowedHostsFromConfigObject(
@@ -200,6 +265,22 @@ function readStringRecord(value: unknown): Record<string, string> {
   }
 
   return result;
+}
+
+function readPositiveInteger(value: unknown): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error("invalid review config");
+  }
+
+  return value;
+}
+
+function readNonEmptyString(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error("invalid review config");
+  }
+
+  return value;
 }
 
 function readWebFetchHostEntry(value: unknown): string {
