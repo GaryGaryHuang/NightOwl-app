@@ -101,3 +101,139 @@ test("KnowledgeSvc passes through CONTEXT7_API_KEY only when configured", () => 
     }
   });
 });
+
+test("KnowledgeSvc appends remote MCP entries as independent MCPRemoteServerConfig alongside built-in context7", () => {
+  const service = new KnowledgeSvc({
+    userMcpServers: {
+      "my-remote": {
+        type: "http",
+        url: "https://mcp.example.com/v1",
+        tools: ["*"]
+      },
+      "auth-mcp": {
+        type: "sse",
+        url: "https://sse.example.com/mcp",
+        headers: { Authorization: "Bearer tok" },
+        tools: ["search"],
+        timeout: 60000
+      },
+      demo: {
+        type: "local",
+        command: "npx",
+        args: ["-y", "@example/demo-mcp"],
+        tools: ["*"]
+      }
+    }
+  });
+
+  const merged = service.getMcpServers("built-in-context7");
+
+  assert.ok(merged);
+  assert.deepEqual(merged.context7, {
+    type: "local",
+    command: "npx",
+    args: ["-y", "@upstash/context7-mcp"],
+    tools: ["*"]
+  });
+  assert.deepEqual(merged["my-remote"], {
+    type: "http",
+    url: "https://mcp.example.com/v1",
+    tools: ["*"]
+  });
+  assert.deepEqual(merged["auth-mcp"], {
+    type: "sse",
+    url: "https://sse.example.com/mcp",
+    headers: { Authorization: "Bearer tok" },
+    tools: ["search"],
+    timeout: 60000
+  });
+  assert.deepEqual(merged.demo, {
+    type: "local",
+    command: "npx",
+    args: ["-y", "@example/demo-mcp"],
+    tools: ["*"]
+  });
+});
+
+test("KnowledgeSvc defaults tools to [\"*\"] for remote entries without tools", () => {
+  const service = new KnowledgeSvc({
+    userMcpServers: {
+      "no-tools": {
+        type: "http",
+        url: "https://mcp.example.com/v1"
+      }
+    }
+  });
+
+  const merged = service.getMcpServers("built-in-context7");
+
+  assert.ok(merged);
+  assert.deepEqual(merged["no-tools"], {
+    type: "http",
+    url: "https://mcp.example.com/v1",
+    tools: ["*"]
+  });
+});
+
+test("KnowledgeSvc deep-merges context7 override with cwd and timeout onto built-in base", () => {
+  const service = new KnowledgeSvc({
+    userMcpServers: {
+      context7: {
+        type: "local",
+        cwd: "/opt/context7",
+        timeout: 20000
+      }
+    }
+  });
+
+  const merged = service.getMcpServers("built-in-context7");
+
+  assert.ok(merged);
+  assert.deepEqual(merged.context7, {
+    type: "local",
+    command: "npx",
+    args: ["-y", "@upstash/context7-mcp"],
+    tools: ["*"],
+    cwd: "/opt/context7",
+    timeout: 20000
+  });
+});
+
+test("KnowledgeSvc passes through cwd and timeout for local custom entries", () => {
+  const service = new KnowledgeSvc({
+    userMcpServers: {
+      demo: {
+        type: "local",
+        command: "node",
+        args: ["server.js"],
+        cwd: "/opt/mcp-servers/demo",
+        timeout: 15000
+      }
+    }
+  });
+
+  const merged = service.getMcpServers("built-in-context7");
+
+  assert.ok(merged);
+  assert.deepEqual(merged.demo, {
+    type: "local",
+    command: "node",
+    args: ["server.js"],
+    tools: ["*"],
+    cwd: "/opt/mcp-servers/demo",
+    timeout: 15000
+  });
+});
+
+test("KnowledgeSvc returns undefined for disabled mode even with remote entries", () => {
+  const service = new KnowledgeSvc({
+    userMcpServers: {
+      "my-remote": {
+        type: "http",
+        url: "https://mcp.example.com/v1"
+      }
+    }
+  });
+
+  assert.equal(service.getMcpServers("disabled"), undefined);
+});

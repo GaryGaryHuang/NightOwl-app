@@ -216,6 +216,62 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
   assert.ok(receivedConfigs.every((config) => config.excludedTools === undefined));
 });
 
+test("ReviewSessionFactory injects mixed local and remote MCP entries for review sessions and keeps judge sessions MCP-free", async () => {
+  const receivedConfigs = createRecordedConfigs();
+  const factory = new ReviewSessionFactory({
+    clientManager: createRecordingClientManager(receivedConfigs),
+    knowledgeSvc: new KnowledgeSvc({
+      userMcpServers: {
+        demo: {
+          type: "local",
+          command: "npx",
+          args: ["-y", "@example/demo-mcp"],
+          tools: ["*"]
+        },
+        "my-remote": {
+          type: "http",
+          url: "https://mcp.example.com/v1",
+          tools: ["*"]
+        },
+        "auth-sse": {
+          type: "sse",
+          url: "https://sse.example.com/mcp",
+          headers: { Authorization: "Bearer tok" },
+          timeout: 30000
+        }
+      }
+    }),
+    toolPolicyGuard: new ToolPolicyGuard({})
+  });
+
+  // review session: should include all MCP
+  await factory.createSession(BASE_PROFILE);
+  // explicitly disabled: no MCP
+  await factory.createSession({
+    ...BASE_PROFILE,
+    systemMessage: "disabled prompt",
+    knowledgeMode: "disabled"
+  });
+
+  const reviewMcp = receivedConfigs[0]?.mcpServers;
+  assert.ok(reviewMcp);
+  assert.equal(reviewMcp.context7?.type, "local");
+  assert.equal(reviewMcp.demo?.type, "local");
+  assert.equal((reviewMcp["my-remote"] as { type: string }).type, "http");
+  assert.equal(
+    (reviewMcp["my-remote"] as { url: string }).url,
+    "https://mcp.example.com/v1"
+  );
+  assert.equal((reviewMcp["auth-sse"] as { type: string }).type, "sse");
+  assert.equal(
+    (reviewMcp["auth-sse"] as { timeout?: number }).timeout,
+    30000
+  );
+
+  // disabled session: no MCP
+  assert.equal(receivedConfigs[1]?.mcpServers, undefined);
+});
+
 test("ReviewSessionFactory only passes audit writer to sessions created after setAuditWriter", async () => {
   const receivedConfigs = createRecordedConfigs();
   const toolPolicyGuard = new SpyToolPolicyGuard();

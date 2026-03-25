@@ -483,6 +483,85 @@ test("createLocalReviewRunApp keeps Step 5 custom MCP startup failure on the exi
   });
 });
 
+test("createLocalReviewRunApp keeps Step 0 remote MCP startup failure on the existing retry-and-abort path", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    let remoteMcpFailures = 0;
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              if (
+                config.mcpServers?.["my-remote"] &&
+                isChangesetOverviewSystemMessage(config.systemMessage)
+              ) {
+                remoteMcpFailures += 1;
+                throw new Error("remote mcp startup failed");
+              }
+
+              return {
+                async sendAndWait() {
+                  return {
+                    data: {
+                      content: "## Changeset Overview\n- 調整範圍：feature"
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      reviewConfigProvider: {
+        loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: { must: 80, nice: 90 },
+            mcpServers: {
+              "my-remote": {
+                type: "http",
+                url: "https://mcp.example.com/v1",
+                tools: ["*"]
+              }
+            }
+          };
+        }
+      }
+    });
+
+    await assert.rejects(
+      () =>
+        app.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: []
+        }),
+      /remote mcp startup failed/u
+    );
+
+    assert.ok(remoteMcpFailures >= 2);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("createLocalReviewRunApp keeps per-file remote MCP startup failure on the existing retry-and-skip path", async () => {
+  await assertPerFileRemoteMcpStartupFailureSkipsOneFile({
+    stepMatcher: isStrategyWhatIfSystemMessage
+  });
+});
+
 test("createLocalReviewRunApp exposes runtime web_fetch guardrails without introducing a new step failure family", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -1029,6 +1108,106 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
     assert.match(
       skippedRecords[0]?.reason ?? "",
       /custom mcp startup failed/u
+    );
+  } finally {
+    fixture.cleanup();
+  }
+}
+
+async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
+  stepMatcher(systemMessage: unknown): boolean;
+}): Promise<void> {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add changed file for remote MCP startup failure coverage");
+
+    const skippedRecords: SkipRecord[] = [];
+    let remoteMcpFailures = 0;
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              if (config.mcpServers?.["my-remote"] && input.stepMatcher(config.systemMessage)) {
+                remoteMcpFailures += 1;
+
+                if (remoteMcpFailures <= 2) {
+                  throw new Error("remote mcp startup failed");
+                }
+              }
+
+              return {
+                async sendAndWait({ prompt }) {
+                  return {
+                    data: {
+                      content: buildSessionResponse(config, prompt)
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      reviewConfigProvider: {
+        loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: { must: 80, nice: 90 },
+            mcpServers: {
+              "my-remote": {
+                type: "http",
+                url: "https://mcp.example.com/v1",
+                tools: ["*"]
+              }
+            }
+          };
+        }
+      },
+      outputSink: {
+        initializeRun() {},
+        publishFileReview() {},
+        publishSkippedFile(skipRecord) {
+          skippedRecords.push(skipRecord);
+        },
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {},
+        publishChangesetOverview() {}
+      }
+    });
+
+    const result = await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: []
+    });
+
+    assert.ok(remoteMcpFailures >= 2);
+    assert.equal(result.skippedFileCount, 1);
+    assert.match(
+      skippedRecords[0]?.reason ?? "",
+      /remote mcp startup failed/u
     );
   } finally {
     fixture.cleanup();
