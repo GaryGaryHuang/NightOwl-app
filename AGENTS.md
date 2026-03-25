@@ -47,11 +47,8 @@ The app currently implements:
 - review-session `web_fetch` hostname DNS classification foundation: hostname-based requests now use bounded per-host DNS classification before allow, deny hostnames that fail lookup / timeout / empty-result or resolve to any non-public address, reuse the same contract for redirect hops, and memoize repeated canonical hostnames within one tool decision
 - tool-use audit trail foundation: every tool decision (allow/deny) from review sessions is appended as a JSONL record to `tool-audit.jsonl` inside the run output directory; the audit path is exposed on the completed-run `OutputTarget`, surfaced in the CLI success output as `Tool Audit:`, and included in `manifest.json` artifacts
 - explicit read-only pipeline exceptions in the shell guardrail: `|` is treated as a segment delimiter; every pipe segment is independently validated against the existing whitelist, dangerous-flag, and path-boundary rules; `||` (logical OR) and all other shell combining syntax remain unconditionally denied; the known limitation that literal `|` inside regex alternation arguments (e.g., `grep -E "foo|bar"`) causes denial is documented
-
-The app does **not** yet implement:
-
-- shell-tool compatibility beyond the current literal `bash` hook name coverage reserved by the tool policy spec for equivalent shell names
-- fail-closed denial with a stable reason when shell policy evaluation itself throws
+- shell tool name compatibility: `buildPreToolUseHook` now recognizes `"bash"`, `"sh"`, and `"shell"` as equivalent shell tool names; all three are subject to the same bash policy evaluation (whitelist prefix matching, pipeline validation, dangerous-flag check, and path-boundary check); audit records use the actual `toolName` rather than a hardcoded `"bash"` string
+- shell policy fail-closed error boundary: if the shell policy evaluation itself throws any uncaught exception, `buildPreToolUseHook` catches it, records a deny audit entry with `reason: "Shell policy evaluation failed; denied as a precaution."`, and returns that stable deny result without re-throwing; the `command` variable is pre-initialized to `""` so the audit record always includes a `command` field regardless of where the throw occurred
 
 Do not assume these missing capabilities already exist.
 
