@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FileReviewContext } from "../../src/core/file-review-context.ts";
 import { ReviewNoteFinalizer } from "../../src/core/finalizer.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { Step2DependenciesBoundariesStep } from "../../src/core/steps/step2-dependencies-boundaries.ts";
@@ -14,66 +13,68 @@ import {
   type StepExecutionPlan,
   StepRunner
 } from "../../src/core/step-runner.ts";
-import { SessionExecutor } from "../../src/services/session-executor.ts";
+import {
+  applySection,
+  createReviewSessionFactory,
+  createStepRunnerContext,
+  diffHunkTraceability,
+  lineRangeTraceability,
+  seedStep4Context
+} from "../helpers/step-runner-contract-fixture.ts";
 
-function applySection(sectionKey: string): StepExecutionPlan["applyTo"] {
-  return (targetContext, response) => {
-    assert.ok(typeof response === "string");
-    targetContext.setSection(sectionKey, response);
+function createSectionTestStep(input: {
+  stepId?: string;
+  sectionKey?: string;
+  systemMessage?: string;
+  userMessage?: string;
+  completionCheck?: StepExecutionPlan["completionCheck"];
+  reviewProfile?: StepExecutionPlan["reviewProfile"];
+  applyTo?: StepExecutionPlan["applyTo"];
+}) {
+  return {
+    stepId: input.stepId ?? "step1-overview",
+    prepare() {
+      return {
+        stepId: input.stepId ?? "step1-overview",
+        kind: "section" as const,
+        sectionKey: input.sectionKey ?? "overview",
+        prompt: {
+          systemMessage: input.systemMessage ?? "system prompt",
+          userMessage: input.userMessage ?? "user prompt"
+        },
+        reviewProfile: input.reviewProfile ?? {
+          model: "gpt-5-mini",
+          timeoutMs: 300_000
+        },
+        ...(input.completionCheck === undefined
+          ? {}
+          : { completionCheck: input.completionCheck }),
+        applyTo: input.applyTo ?? applySection(input.sectionKey ?? "overview")
+      };
+    }
   };
 }
 
 test("StepRunner returns an apply-able result without mutating state or writing output directly", async () => {
   const lifecycle: unknown[] = [];
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession(profile) {
+    reviewSessionFactory: createReviewSessionFactory({
+      onCreateSession(profile) {
         lifecycle.push(["createSession", profile]);
-
-        return new SessionExecutor({
-          async sendAndWait(prompt, timeoutMs) {
-            lifecycle.push(["sendAndWait", prompt, timeoutMs]);
-            return {
-              data: {
-                content: "## Overview\n- 整體理解：測試用概覽"
-              }
-            };
-          },
-          async disconnect() {
-            lifecycle.push(["disconnect"]);
-          }
-        });
+      },
+      onSendAndWait({ prompt, timeoutMs }) {
+        lifecycle.push(["sendAndWait", { prompt }, timeoutMs]);
+        return "## Overview\n- 整體理解：測試用概覽";
+      },
+      onDisconnect() {
+        lifecycle.push(["disconnect"]);
       }
-    }
+    })
   });
 
   const result = await runner.run({
-    step: {
-      stepId: "step1-overview",
-      prepare() {
-        return {
-          stepId: "step1-overview",
-          kind: "section",
-          sectionKey: "overview",
-          prompt: {
-            systemMessage: "system prompt",
-            userMessage: "user prompt"
-          },
-          reviewProfile: {
-            model: "gpt-5-mini",
-            timeoutMs: 300_000
-          },
-          applyTo: applySection("overview")
-        };
-      }
-    },
+    step: createSectionTestStep({}),
     context,
     outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo",
@@ -104,52 +105,19 @@ test("StepRunner returns an apply-able result without mutating state or writing 
 });
 
 test("StepRunner fails on blank responses and does not apply any state", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: "   "
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return "   ";
       }
-    }
+    })
   });
 
   await assert.rejects(
     () =>
       runner.run({
-        step: {
-          stepId: "step1-overview",
-          prepare() {
-            return {
-              stepId: "step1-overview",
-              kind: "section",
-              sectionKey: "overview",
-              prompt: {
-                systemMessage: "system prompt",
-                userMessage: "user prompt"
-              },
-              reviewProfile: {
-                model: "gpt-5-mini",
-                timeoutMs: 300_000
-              },
-              applyTo: applySection("overview")
-            };
-          }
-        },
+        step: createSectionTestStep({}),
         context,
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
@@ -160,13 +128,7 @@ test("StepRunner fails on blank responses and does not apply any state", async (
 });
 
 test("StepRunner wraps prepare failures with step and file context", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   const runner = new StepRunner({
     reviewSessionFactory: {
       async createSession() {
@@ -194,37 +156,23 @@ test("StepRunner wraps prepare failures with step and file context", async () =>
 
 test("StepRunner retries the whole section-step when judge rejects the first attempt and applies only the successful retry", async () => {
   const lifecycle: unknown[] = [];
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   let reviewAttempts = 0;
   let judgeAttempts = 0;
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession(profile) {
+    reviewSessionFactory: createReviewSessionFactory({
+      onCreateSession(profile) {
         lifecycle.push(["review.createSession", profile]);
-
-        return new SessionExecutor({
-          async sendAndWait(prompt, timeoutMs) {
-            reviewAttempts += 1;
-            lifecycle.push(["review.sendAndWait", prompt, timeoutMs, reviewAttempts]);
-
-            return {
-              data: {
-                content: `## Overview\n- 整體理解：attempt ${reviewAttempts}`
-              }
-            };
-          },
-          async disconnect() {
-            lifecycle.push(["review.disconnect", reviewAttempts]);
-          }
-        });
+      },
+      onSendAndWait({ prompt, timeoutMs }) {
+        reviewAttempts += 1;
+        lifecycle.push(["review.sendAndWait", prompt, timeoutMs, reviewAttempts]);
+        return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
+      },
+      onDisconnect() {
+        lifecycle.push(["review.disconnect", reviewAttempts]);
       }
-    },
+    }),
     judgeService: {
       async evaluate(input) {
         judgeAttempts += 1;
@@ -240,29 +188,12 @@ test("StepRunner retries the whole section-step when judge rejects the first att
   });
 
   const result = await runner.run({
-    step: {
-      stepId: "step1-overview",
-      prepare() {
-        return {
-          stepId: "step1-overview",
-          kind: "section",
-          sectionKey: "overview",
-          prompt: {
-            systemMessage: "system prompt",
-            userMessage: "user prompt"
-          },
-          reviewProfile: {
-            model: "gpt-5-mini",
-            timeoutMs: 300_000
-          },
-          completionCheck: {
-            kind: "judge",
-            criteria: "must contain overview fields"
-          },
-          applyTo: applySection("overview")
-        };
+    step: createSectionTestStep({
+      completionCheck: {
+        kind: "judge",
+        criteria: "must contain overview fields"
       }
-    },
+    }),
     context,
     outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo",
@@ -277,31 +208,15 @@ test("StepRunner retries the whole section-step when judge rejects the first att
 });
 
 test("StepRunner fails after retry exhaustion on judge rejection and does not apply provisional state", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   let reviewAttempts = 0;
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            reviewAttempts += 1;
-
-            return {
-              data: {
-                content: `## Overview\n- 整體理解：attempt ${reviewAttempts}`
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        reviewAttempts += 1;
+        return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
       }
-    },
+    }),
     judgeService: {
       async evaluate() {
         return { passed: false, cause: "judge rejected" };
@@ -312,29 +227,12 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
   await assert.rejects(
     () =>
       runner.run({
-        step: {
-          stepId: "step1-overview",
-          prepare() {
-            return {
-              stepId: "step1-overview",
-              kind: "section",
-              sectionKey: "overview",
-              prompt: {
-                systemMessage: "system prompt",
-                userMessage: "user prompt"
-              },
-              reviewProfile: {
-                model: "gpt-5-mini",
-                timeoutMs: 300_000
-              },
-              completionCheck: {
-                kind: "judge",
-                criteria: "must contain overview fields"
-              },
-              applyTo: applySection("overview")
-            };
+        step: createSectionTestStep({
+          completionCheck: {
+            kind: "judge",
+            criteria: "must contain overview fields"
           }
-        },
+        }),
         context,
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
@@ -347,32 +245,16 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
 });
 
 test("StepRunner retries the whole step on judge timeout with fresh review and judge attempts", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   let reviewAttempts = 0;
   let judgeAttempts = 0;
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            reviewAttempts += 1;
-
-            return {
-              data: {
-                content: `## Overview\n- 整體理解：attempt ${reviewAttempts}`
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        reviewAttempts += 1;
+        return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
       }
-    },
+    }),
     judgeService: {
       async evaluate() {
         judgeAttempts += 1;
@@ -387,29 +269,12 @@ test("StepRunner retries the whole step on judge timeout with fresh review and j
   });
 
   const result = await runner.run({
-    step: {
-      stepId: "step1-overview",
-      prepare() {
-        return {
-          stepId: "step1-overview",
-          kind: "section",
-          sectionKey: "overview",
-          prompt: {
-            systemMessage: "system prompt",
-            userMessage: "user prompt"
-          },
-          reviewProfile: {
-            model: "gpt-5-mini",
-            timeoutMs: 300_000
-          },
-          completionCheck: {
-            kind: "judge",
-            criteria: "must contain overview fields"
-          },
-          applyTo: applySection("overview")
-        };
+    step: createSectionTestStep({
+      completionCheck: {
+        kind: "judge",
+        criteria: "must contain overview fields"
       }
-    },
+    }),
     context,
     outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
@@ -422,28 +287,13 @@ test("StepRunner retries the whole step on judge timeout with fresh review and j
 });
 
 test("StepRunner does not duplicate contextual prefixes for judge failures", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: "## Overview\n- 整體理解：attempt 1"
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return "## Overview\n- 整體理解：attempt 1";
       }
-    },
+    }),
     judgeService: {
       async evaluate() {
         throw new Error("judge timeout");
@@ -454,29 +304,12 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
   await assert.rejects(
     () =>
       runner.run({
-        step: {
-          stepId: "step1-overview",
-          prepare() {
-            return {
-              stepId: "step1-overview",
-              kind: "section",
-              sectionKey: "overview",
-              prompt: {
-                systemMessage: "system prompt",
-                userMessage: "user prompt"
-              },
-              reviewProfile: {
-                model: "gpt-5-mini",
-                timeoutMs: 300_000
-              },
-              completionCheck: {
-                kind: "judge",
-                criteria: "must contain overview fields"
-              },
-              applyTo: applySection("overview")
-            };
+        step: createSectionTestStep({
+          completionCheck: {
+            kind: "judge",
+            criteria: "must contain overview fields"
           }
-        },
+        }),
         context,
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
@@ -486,13 +319,7 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
 });
 
 test("StepRunner retries the whole step when review session startup fails and eventually succeeds", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   let createAttempts = 0;
   const runner = new StepRunner({
     reviewSessionFactory: {
@@ -503,15 +330,16 @@ test("StepRunner retries the whole step when review session startup fails and ev
           throw new Error("review startup failed");
         }
 
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: "## Overview\n- 整體理解：attempt 2"
-              }
-            };
-          },
-          async disconnect() {}
+        return createReviewSessionFactory({
+          onSendAndWait() {
+            return "## Overview\n- 整體理解：attempt 2";
+          }
+        }).createSession({
+          knowledgeMode: "built-in-context7",
+          model: "gpt-5-mini",
+          outputBaseDir: "/workspace/output",
+          repoRoot: "/workspace/repo",
+          systemMessage: "system prompt"
         });
       }
     },
@@ -523,29 +351,12 @@ test("StepRunner retries the whole step when review session startup fails and ev
   });
 
   const result = await runner.run({
-    step: {
-      stepId: "step1-overview",
-      prepare() {
-        return {
-          stepId: "step1-overview",
-          kind: "section",
-          sectionKey: "overview",
-          prompt: {
-            systemMessage: "system prompt",
-            userMessage: "user prompt"
-          },
-          reviewProfile: {
-            model: "gpt-5-mini",
-            timeoutMs: 300_000
-          },
-          completionCheck: {
-            kind: "judge",
-            criteria: "must contain overview fields"
-          },
-          applyTo: applySection("overview")
-        };
+    step: createSectionTestStep({
+      completionCheck: {
+        kind: "judge",
+        criteria: "must contain overview fields"
       }
-    },
+    }),
     context,
     outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
@@ -557,13 +368,7 @@ test("StepRunner retries the whole step when review session startup fails and ev
 });
 
 test("StepRunner reports standardized review startup failure after retry exhaustion", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   let createAttempts = 0;
   const runner = new StepRunner({
     reviewSessionFactory: {
@@ -582,29 +387,12 @@ test("StepRunner reports standardized review startup failure after retry exhaust
   await assert.rejects(
     () =>
       runner.run({
-        step: {
-          stepId: "step1-overview",
-          prepare() {
-            return {
-              stepId: "step1-overview",
-              kind: "section",
-              sectionKey: "overview",
-              prompt: {
-                systemMessage: "system prompt",
-                userMessage: "user prompt"
-              },
-              reviewProfile: {
-                model: "gpt-5-mini",
-                timeoutMs: 300_000
-              },
-              completionCheck: {
-                kind: "judge",
-                criteria: "must contain overview fields"
-              },
-              applyTo: applySection("overview")
-            };
+        step: createSectionTestStep({
+          completionCheck: {
+            kind: "judge",
+            criteria: "must contain overview fields"
           }
-        },
+        }),
         context,
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
@@ -617,13 +405,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
 
 test("StepRunner rebuilds Step 2 current review from the last successful state on retry and does not leak provisional content", async () => {
   const prompts: string[] = [];
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   context.setSection(
     "overview",
     [
@@ -638,33 +420,22 @@ test("StepRunner rebuilds Step 2 current review from the last successful state o
   );
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait(options) {
-            prompts.push(options.prompt);
-
-            return {
-              data: {
-                content: [
-                  "## Dependencies & Boundaries",
-                  "- 相依清單：",
-                  "  - 無外部相依",
-                  "- 隱含相依：",
-                  "  - 無"
-                ].join("\n")
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait({ prompt }) {
+        prompts.push(prompt);
+        return [
+          "## Dependencies & Boundaries",
+          "- 相依清單：",
+          "  - 無外部相依",
+          "- 隱含相依：",
+          "  - 無"
+        ].join("\n");
       }
-    },
+    }),
     judgeService: {
       async evaluate(input) {
         if (prompts.length === 1) {
           assert.doesNotMatch(input.sectionContent, /provisional step 2/u);
-
           return { passed: false, cause: "judge rejected" };
         }
 
@@ -696,13 +467,7 @@ test("StepRunner rebuilds Step 2 current review from the last successful state o
 
 test("StepRunner rebuilds Step 3 current review from the last successful Step 2 state on retry and does not leak provisional content", async () => {
   const prompts: string[] = [];
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   context.setSection(
     "overview",
     [
@@ -727,35 +492,24 @@ test("StepRunner rebuilds Step 3 current review from the last successful Step 2 
   );
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait(options) {
-            prompts.push(options.prompt);
-
-            return {
-              data: {
-                content: [
-                  "## Knowledge & Source of Truth",
-                  "- 版本／文件參考：",
-                  "  - 無",
-                  "- 採用規則與假設：",
-                  "  - 依 repo 內設定檔推論版本約束",
-                  "- 排除範圍：",
-                  "  - 外部官方文件查證不在本次 foundation 範圍內"
-                ].join("\n")
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait({ prompt }) {
+        prompts.push(prompt);
+        return [
+          "## Knowledge & Source of Truth",
+          "- 版本／文件參考：",
+          "  - 無",
+          "- 採用規則與假設：",
+          "  - 依 repo 內設定檔推論版本約束",
+          "- 排除範圍：",
+          "  - 外部官方文件查證不在本次 foundation 範圍內"
+        ].join("\n");
       }
-    },
+    }),
     judgeService: {
       async evaluate(input) {
         if (prompts.length === 1) {
           assert.doesNotMatch(input.sectionContent, /provisional step 3/u);
-
           return { passed: false, cause: "judge rejected" };
         }
 
@@ -787,13 +541,7 @@ test("StepRunner rebuilds Step 3 current review from the last successful Step 2 
 
 test("StepRunner rebuilds Step 4 current review from the last successful Step 3 state on retry and does not leak provisional content", async () => {
   const prompts: string[] = [];
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   context.setSection(
     "overview",
     [
@@ -830,35 +578,24 @@ test("StepRunner rebuilds Step 4 current review from the last successful Step 3 
   );
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait(options) {
-            prompts.push(options.prompt);
-
-            return {
-              data: {
-                content: [
-                  "## Strategy & What-if Scenarios",
-                  "- 高風險區域：",
-                  "  - state transition：本次改動調整 value 更新流程",
-                  "- What-if 假設情境：",
-                  "  - W1: 觸發條件：value 為空；預期正確行為：應維持 fallback；待驗證風險/不確定性：新分支是否略過 fallback；與本次改動的關聯：diff 調整路徑",
-                  "  - W2: 觸發條件：依賴回傳異常；預期正確行為：應保留錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示邊界",
-                  "  - W3: 觸發條件：多次呼叫；預期正確行為：結果應穩定；待驗證風險/不確定性：狀態是否偏移；與本次改動的關聯：Step 3 已收斂假設"
-                ].join("\n")
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait({ prompt }) {
+        prompts.push(prompt);
+        return [
+          "## Strategy & What-if Scenarios",
+          "- 高風險區域：",
+          "  - state transition：本次改動調整 value 更新流程",
+          "- What-if 假設情境：",
+          "  - W1: 觸發條件：value 為空；預期正確行為：應維持 fallback；待驗證風險/不確定性：新分支是否略過 fallback；與本次改動的關聯：diff 調整路徑",
+          "  - W2: 觸發條件：依賴回傳異常；預期正確行為：應保留錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示邊界",
+          "  - W3: 觸發條件：多次呼叫；預期正確行為：結果應穩定；待驗證風險/不確定性：狀態是否偏移；與本次改動的關聯：Step 3 已收斂假設"
+        ].join("\n");
       }
-    },
+    }),
     judgeService: {
       async evaluate(input) {
         if (prompts.length === 1) {
           assert.doesNotMatch(input.sectionContent, /provisional step 4/u);
-
           return { passed: false, cause: "judge rejected" };
         }
 
@@ -890,54 +627,39 @@ test("StepRunner rebuilds Step 4 current review from the last successful Step 3 
 });
 
 test("StepRunner validates Step 5 structured output and applies filtered findings without using judge", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   seedStep4Context(context);
   let judgeCalls = 0;
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: JSON.stringify({
-                  findings: [
-                    {
-                      type: "must",
-                      title: "保留 must",
-                      traceability: lineRangeTraceability(10, 12),
-                      context: "具體情境",
-                      deviation: "預期與實際有落差",
-                      impact: "會造成 correctness 問題",
-                      suggestion: "補上 guard",
-                      confidence: 80
-                    },
-                    {
-                      type: "nice",
-                      title: "被過濾的 nice",
-                      traceability: lineRangeTraceability(20, 20),
-                      context: "具體情境",
-                      deviation: "可改善",
-                      impact: "影響可維護性",
-                      suggestion: "補上整理",
-                      confidence: 89
-                    }
-                  ]
-                })
-              }
-            };
-          },
-          async disconnect() {}
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "保留 must",
+              traceability: lineRangeTraceability(10, 12),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 80
+            },
+            {
+              type: "nice",
+              title: "被過濾的 nice",
+              traceability: lineRangeTraceability(20, 20),
+              context: "具體情境",
+              deviation: "可改善",
+              impact: "影響可維護性",
+              suggestion: "補上整理",
+              confidence: 89
+            }
+          ]
         });
       }
-    },
+    }),
     judgeService: {
       async evaluate() {
         judgeCalls += 1;
@@ -978,56 +700,37 @@ test("StepRunner validates Step 5 structured output and applies filtered finding
 });
 
 test("StepRunner retries the whole Step 5 structured step when deterministic validation fails first", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   seedStep4Context(context);
   const prompts: string[] = [];
   let reviewAttempts = 0;
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait(options) {
-            prompts.push(options.prompt);
-            reviewAttempts += 1;
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait({ prompt }) {
+        prompts.push(prompt);
+        reviewAttempts += 1;
 
-            if (reviewAttempts === 1) {
-              return {
-                data: {
-                  content: "{\"findings\":[}"
-                }
-              };
+        if (reviewAttempts === 1) {
+          return "{\"findings\":[}";
+        }
+
+        return JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "成功結果",
+              traceability: lineRangeTraceability(14, 18),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 85
             }
-
-            return {
-              data: {
-                content: JSON.stringify({
-                  findings: [
-                    {
-                      type: "must",
-                      title: "成功結果",
-                      traceability: lineRangeTraceability(14, 18),
-                      context: "具體情境",
-                      deviation: "預期與實際有落差",
-                      impact: "會造成 correctness 問題",
-                      suggestion: "補上 guard",
-                      confidence: 85
-                    }
-                  ]
-                })
-              }
-            };
-          },
-          async disconnect() {}
+          ]
         });
       }
-    },
+    }),
     structuredOutputValidator: new StructuredOutputValidator()
   });
 
@@ -1064,13 +767,7 @@ test("StepRunner retries the whole Step 5 structured step when deterministic val
 });
 
 test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with final findings", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   seedStep4Context(context);
   context.updateStructuredState({
     findings: [
@@ -1088,33 +785,24 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
   });
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: JSON.stringify({
-                  findings: [
-                    {
-                      type: "must",
-                      title: "最終 findings",
-                      traceability: diffHunkTraceability("@@ -1 +1 @@"),
-                      context: "最終情境",
-                      deviation: "最終落差",
-                      impact: "最終 impact",
-                      suggestion: "最終建議",
-                      confidence: 91
-                    }
-                  ]
-                })
-              }
-            };
-          },
-          async disconnect() {}
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "最終 findings",
+              traceability: diffHunkTraceability("@@ -1 +1 @@"),
+              context: "最終情境",
+              deviation: "最終落差",
+              impact: "最終 impact",
+              suggestion: "最終建議",
+              confidence: 91
+            }
+          ]
         });
       }
-    },
+    }),
     structuredOutputValidator: new StructuredOutputValidator()
   });
 
@@ -1161,13 +849,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
 });
 
 test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with empty final findings", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   seedStep4Context(context);
   context.updateStructuredState({
     findings: [
@@ -1185,20 +867,11 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
   });
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: JSON.stringify({ findings: [] })
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return JSON.stringify({ findings: [] });
       }
-    },
+    }),
     structuredOutputValidator: new StructuredOutputValidator()
   });
 
@@ -1217,44 +890,29 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
 });
 
 test("StepRunner applies Step 6 structured output by replacing empty Step 5 findings with final findings", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   seedStep4Context(context);
   context.updateStructuredState({ findings: [] });
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: JSON.stringify({
-                  findings: [
-                    {
-                      type: "nice",
-                      title: "從空 findings 補出的最終問題",
-                      traceability: lineRangeTraceability(40, 40),
-                      context: "最終情境",
-                      deviation: "最終落差",
-                      impact: "最終 impact",
-                      suggestion: "最終建議",
-                      confidence: 93
-                    }
-                  ]
-                })
-              }
-            };
-          },
-          async disconnect() {}
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return JSON.stringify({
+          findings: [
+            {
+              type: "nice",
+              title: "從空 findings 補出的最終問題",
+              traceability: lineRangeTraceability(40, 40),
+              context: "最終情境",
+              deviation: "最終落差",
+              impact: "最終 impact",
+              suggestion: "最終建議",
+              confidence: 93
+            }
+          ]
         });
       }
-    },
+    }),
     structuredOutputValidator: new StructuredOutputValidator()
   });
 
@@ -1286,13 +944,7 @@ test("StepRunner applies Step 6 structured output by replacing empty Step 5 find
 });
 
 test("StepRunner retries the whole Step 6 structured step when deterministic validation fails first without mutating Step 5 findings", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   seedStep4Context(context);
   context.updateStructuredState({
     findings: [
@@ -1312,44 +964,31 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
   let reviewAttempts = 0;
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait(options) {
-            prompts.push(options.prompt);
-            reviewAttempts += 1;
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait({ prompt }) {
+        prompts.push(prompt);
+        reviewAttempts += 1;
 
-            if (reviewAttempts === 1) {
-              return {
-                data: {
-                  content: "{\"findings\":[}"
-                }
-              };
+        if (reviewAttempts === 1) {
+          return "{\"findings\":[}";
+        }
+
+        return JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "成功結果",
+              traceability: lineRangeTraceability(16, 18),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 final guard",
+              confidence: 91
             }
-
-            return {
-              data: {
-                content: JSON.stringify({
-                  findings: [
-                    {
-                      type: "must",
-                      title: "成功結果",
-                      traceability: lineRangeTraceability(16, 18),
-                      context: "具體情境",
-                      deviation: "預期與實際有落差",
-                      impact: "會造成 correctness 問題",
-                      suggestion: "補上 final guard",
-                      confidence: 91
-                    }
-                  ]
-                })
-              }
-            };
-          },
-          async disconnect() {}
+          ]
         });
       }
-    },
+    }),
     structuredOutputValidator: new StructuredOutputValidator()
   });
 
@@ -1400,13 +1039,7 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
 });
 
 test("StepRunner applies Step 7 section output under summary without changing findings", async () => {
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   seedStep4Context(context);
   context.updateStructuredState({
     findings: [
@@ -1424,31 +1057,22 @@ test("StepRunner applies Step 7 section output under summary without changing fi
   });
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: [
-                  "## Summary",
-                  "### 審查基礎",
-                  "- 改動概要：調整主要執行流程。",
-                  "- 依據規範：依 repo source-of-truth 與版本假設審查。",
-                  "- 審查假設：未擴張到外部知識查證。",
-                  "### 行為變更提醒",
-                  "- 無",
-                  "### 風險評估",
-                  "- 整體風險等級：Medium",
-                  "- 風險理由：final findings 仍需留意。"
-                ].join("\n")
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return [
+          "## Summary",
+          "### 審查基礎",
+          "- 改動概要：調整主要執行流程。",
+          "- 依據規範：依 repo source-of-truth 與版本假設審查。",
+          "- 審查假設：未擴張到外部知識查證。",
+          "### 行為變更提醒",
+          "- 無",
+          "### 風險評估",
+          "- 整體風險等級：Medium",
+          "- 風險理由：final findings 仍需留意。"
+        ].join("\n");
       }
-    },
+    }),
     judgeService: {
       async evaluate() {
         return { passed: true };
@@ -1502,20 +1126,14 @@ test("StepRunner applies Step 7 section output under summary without changing fi
 
 test("StepRunner rebuilds Step 7 current review from the last successful Step 6 state on retry and does not leak provisional content", async () => {
   const prompts: string[] = [];
-  const context = new FileReviewContext({
-    filePath: "src/app.ts",
-    noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
-    diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
-    baseRef: "main",
-    headRef: "feature-branch"
-  });
+  const context = createStepRunnerContext();
   seedStep4Context(context);
   context.updateStructuredState({
     findings: [
       {
         type: "must",
         title: "最終 findings",
-        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        traceability: lineRangeTraceability(1, 1),
         context: "最終情境",
         deviation: "最終落差",
         impact: "最終 impact",
@@ -1526,38 +1144,27 @@ test("StepRunner rebuilds Step 7 current review from the last successful Step 6 
   });
 
   const runner = new StepRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait(options) {
-            prompts.push(options.prompt);
-
-            return {
-              data: {
-                content: [
-                  "## Summary",
-                  "### 審查基礎",
-                  "- 改動概要：調整主要執行流程。",
-                  "- 依據規範：依 repo source-of-truth 與版本假設審查。",
-                  "- 審查假設：未擴張到外部知識查證。",
-                  "### 行為變更提醒",
-                  "- 無",
-                  "### 風險評估",
-                  "- 整體風險等級：Medium",
-                  "- 風險理由：final findings 仍需留意。"
-                ].join("\n")
-              }
-            };
-          },
-          async disconnect() {}
-        });
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait({ prompt }) {
+        prompts.push(prompt);
+        return [
+          "## Summary",
+          "### 審查基礎",
+          "- 改動概要：調整主要執行流程。",
+          "- 依據規範：依 repo source-of-truth 與版本假設審查。",
+          "- 審查假設：未擴張到外部知識查證。",
+          "### 行為變更提醒",
+          "- 無",
+          "### 風險評估",
+          "- 整體風險等級：Medium",
+          "- 風險理由：final findings 仍需留意。"
+        ].join("\n");
       }
-    },
+    }),
     judgeService: {
       async evaluate(input) {
         if (prompts.length === 1) {
           assert.doesNotMatch(input.sectionContent, /provisional step 7/u);
-
           return { passed: false, cause: "judge rejected" };
         }
 
@@ -1587,67 +1194,3 @@ test("StepRunner rebuilds Step 7 current review from the last successful Step 6 
 
   assert.match(context.getSection("summary") ?? "", /^## Summary/u);
 });
-
-function seedStep4Context(context: FileReviewContext): void {
-  context.setSection(
-    "overview",
-    [
-      "## Overview",
-      "- 整體理解：測試用概覽",
-      "- 行為變更：無行為變更",
-      "- 檔案職責：維護 app value",
-      "- 改動目的：調整常數",
-      "- 影響範圍：src/app.ts",
-      "- 測試覆蓋觀察：未見對應測試異動"
-    ].join("\n")
-  );
-  context.setSection(
-    "dependencies-boundaries",
-    [
-      "## Dependencies & Boundaries",
-      "- 相依清單：",
-      "  - 無外部相依",
-      "- 隱含相依：",
-      "  - 無"
-    ].join("\n")
-  );
-  context.setSection(
-    "knowledge-source-of-truth",
-    [
-      "## Knowledge & Source of Truth",
-      "- 版本／文件參考：",
-      "  - 無",
-      "- 採用規則與假設：",
-      "  - 依 repo 內設定檔推論版本約束",
-      "- 排除範圍：",
-      "  - 外部官方文件查證不在本次 foundation 範圍內"
-    ].join("\n")
-  );
-  context.setSection(
-    "strategy-what-if-scenarios",
-    [
-      "## Strategy & What-if Scenarios",
-      "- 高風險區域：",
-      "  - state transition：本次改動調整 value 更新流程",
-      "- What-if 假設情境：",
-      "  - W1: 觸發條件：value 為空；預期正確行為：應維持 fallback；待驗證風險/不確定性：新分支是否略過 fallback；與本次改動的關聯：diff 調整路徑",
-      "  - W2: 觸發條件：依賴回傳異常；預期正確行為：應保留錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示邊界",
-      "  - W3: 觸發條件：多次呼叫；預期正確行為：結果應穩定；待驗證風險/不確定性：狀態是否偏移；與本次改動的關聯：Step 3 已收斂假設"
-    ].join("\n")
-  );
-}
-
-function lineRangeTraceability(lineStart: number, lineEnd: number) {
-  return {
-    kind: "line-range" as const,
-    lineStart,
-    lineEnd
-  };
-}
-
-function diffHunkTraceability(hunkHeader: string) {
-  return {
-    kind: "diff-hunk" as const,
-    hunkHeader
-  };
-}
