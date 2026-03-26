@@ -15,7 +15,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { escapeRegExp } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
 type OutputCall = [string, string];
 type FileReviewPublishResult = Parameters<ReviewOutputSink["publishFileReview"]>[0];
@@ -1282,7 +1282,7 @@ function buildSuccessfulStepResult(
       applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "strategy-what-if-scenarios",
-          buildStrategyResponse(filePath)
+          buildStrategyResponse(filePath, { whatIfStyle: "minimal" })
         );
       }
     };
@@ -1373,52 +1373,6 @@ function createFinding(
 
 function countFindings(filePath: string, type: "must" | "nice"): number {
   return buildFindingsForFile(filePath).filter((finding) => finding.type === type).length;
-}
-
-function buildOverviewResponse(filePath: string): string {
-  return [
-    "## Overview",
-    `- 整體理解：${filePath} 位於本次 changeset 中`,
-    "- 行為變更：無行為變更",
-    `- 檔案職責：負責 ${filePath}`,
-    "- 改動目的：調整測試資料",
-    `- 影響範圍：${filePath}`,
-    "- 測試覆蓋觀察：未見對應測試異動"
-  ].join("\n");
-}
-
-function buildDependenciesResponse(filePath: string): string {
-  return [
-    "## Dependencies & Boundaries",
-    "- 相依清單：",
-    `  - \`[${filePath}:valueService]\` → 提供 value 更新 → Consume`,
-    "    - Contract：輸入 value 並回傳更新結果",
-    "    - 評估：此 diff 維持既有 boundary",
-    "- 隱含相依：",
-    "  - 無"
-  ].join("\n");
-}
-
-function buildKnowledgeResponse(filePath: string): string {
-  return [
-    "## Knowledge & Source of Truth",
-    "- 版本／文件參考：",
-    `  - ${filePath} package.json — repo-native source`,
-    "- 採用規則與假設：",
-    "  - 依 repo 內設定檔與版本檔推論行為約束",
-    "- 排除範圍：",
-    "  - 外部官方文件查證不在本次 foundation 範圍內"
-  ].join("\n");
-}
-
-function buildStrategyResponse(filePath: string): string {
-  return [
-    "## Strategy & What-if Scenarios",
-    "- 高風險區域：",
-    `  - state transition：${filePath} 這次改動調整了主要執行路徑，值得驗證狀態切換是否一致`,
-    "- What-if 假設情境：",
-    `  - W1: 觸發條件：${filePath} 輸入為空；預期正確行為：應維持既有 fallback；待驗證風險/不確定性：新分支是否略過 fallback；與本次改動的關聯：diff 直接調整處理流程`
-  ].join("\n");
 }
 
 function buildSummaryResponse(

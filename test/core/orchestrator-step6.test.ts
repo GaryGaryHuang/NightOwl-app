@@ -12,7 +12,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { escapeRegExp } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 6", async () => {
   const fixture = createReviewRepoFixture();
@@ -1014,54 +1014,6 @@ async function assertStep6Failure(input: {
   }
 }
 
-function buildOverviewResponse(filePath: string): string {
-  return [
-    "## Overview",
-    `- 整體理解：${filePath} 位於本次 changeset 中`,
-    "- 行為變更：無行為變更",
-    `- 檔案職責：負責 ${filePath}`,
-    "- 改動目的：調整測試資料",
-    `- 影響範圍：${filePath}`,
-    "- 測試覆蓋觀察：未見對應測試異動"
-  ].join("\n");
-}
-
-function buildDependenciesResponse(filePath: string): string {
-  return [
-    "## Dependencies & Boundaries",
-    "- 相依清單：",
-    `  - \`[${filePath}:valueService]\` → 提供 value 更新 → Consume`,
-    "    - Contract：輸入 value 並回傳更新結果",
-    "    - 評估：此 diff 維持既有 boundary",
-    "- 隱含相依：",
-    "  - 無"
-  ].join("\n");
-}
-
-function buildKnowledgeResponse(filePath: string): string {
-  return [
-    "## Knowledge & Source of Truth",
-    "- 版本／文件參考：",
-    `  - ${filePath} package.json — repo-native source`,
-    "- 採用規則與假設：",
-    "  - 依 repo 內設定檔與版本檔推論行為約束",
-    "- 排除範圍：",
-    "  - 外部官方文件查證不在本次 foundation 範圍內"
-  ].join("\n");
-}
-
-function buildStrategyResponse(filePath: string): string {
-  return [
-    "## Strategy & What-if Scenarios",
-    "- 高風險區域：",
-    `  - state transition：${filePath} 這次改動調整了主要執行路徑，值得驗證狀態切換是否一致`,
-    "- What-if 假設情境：",
-    `  - W1: 觸發條件：${filePath} 輸入為空；預期正確行為：應維持既有 fallback；待驗證風險/不確定性：新分支是否略過 fallback；與本次改動的關聯：diff 直接調整處理流程`,
-    `  - W2: 觸發條件：${filePath} 依賴回傳異常；預期正確行為：應保留既有錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示 dependency boundary`,
-    `  - W3: 觸發條件：${filePath} 重複執行；預期正確行為：結果應保持穩定；待驗證風險/不確定性：狀態是否累積偏移；與本次改動的關聯：Step 3 已收斂假設與範圍`
-  ].join("\n");
-}
-
 function buildStep5JsonResponse(): string {
   return JSON.stringify({
     findings: [
@@ -1111,15 +1063,6 @@ function buildStep7SummaryResponse(filePath: string): string {
   ].join("\n");
 }
 
-function lineRangeTraceability(lineStart: number, lineEnd: number) {
-  return {
-    kind: "line-range",
-    lineStart,
-    lineEnd
-  };
-}
-
-
 function buildStepResponse(
   stepId:
     | "step1-overview"
@@ -1156,41 +1099,6 @@ function buildStepResponse(
   }
 
   return buildStep7SummaryResponse(filePath);
-}
-
-function detectStepId(systemMessage: string):
-  | "step1-overview"
-  | "step2-dependencies-boundaries"
-  | "step3-knowledge-source-of-truth"
-  | "step4-strategy-what-if-scenarios"
-  | "step5-validation-interrogation"
-  | "step6-cognitive-simulation"
-  | "step7-summary" {
-  if (/## Current Step: Overview/u.test(systemMessage)) {
-    return "step1-overview";
-  }
-
-  if (/## Current Step: Dependencies & Boundaries/u.test(systemMessage)) {
-    return "step2-dependencies-boundaries";
-  }
-
-  if (/## Current Step: Knowledge & Source of Truth/u.test(systemMessage)) {
-    return "step3-knowledge-source-of-truth";
-  }
-
-  if (/## Current Step: Strategy & What-if Scenarios/u.test(systemMessage)) {
-    return "step4-strategy-what-if-scenarios";
-  }
-
-  if (/## Current Step: Validation & Interrogation/u.test(systemMessage)) {
-    return "step5-validation-interrogation";
-  }
-
-  if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
-    return "step6-cognitive-simulation";
-  }
-
-  return "step7-summary";
 }
 
 function extractDiffPath(prompt: string): string {
