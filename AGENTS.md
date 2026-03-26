@@ -1,126 +1,155 @@
-# NightOwl App Agent Guide
+# AGENTS.md — NightOwl App
 
-## Purpose
+NightOwl is a local Code Review CLI that uses the GitHub Copilot SDK to automate a multi-step Code Review SOP. Given two Git refs, it produces structured Markdown review reports.
 
-This repository contains the NightOwl application code. It is a local code review CLI built with the GitHub Copilot SDK.
+## Setup
 
-Use this file as the execution guide for coding agents working in `NightOwl-app`.
+```bash
+npm install        # Install dependencies
+npm test           # Build + run all tests (primary verification command)
+npm run build      # Produce dist/
+npm run typecheck  # Type check (tsc --noEmit)
+npm link           # Dev only: symlink the review command locally
+```
 
-## Current Product State
+Run locally without building:
 
-The app currently implements:
+```bash
+npm run review -- main feature-branch
+```
 
-- CLI parsing for `review <base_ref> <head_ref> [--repo <path>] [--context <value>]`
-- Local review run bootstrap
-- Review output planning under `<output_base_dir>/review/<session_id>/`
-- `.reviewignore` filtering
-- Step 0 (Changeset Overview) execution
-- `RunContext` creation and retention
-- Step 1 (Overview) execution for each planned file
-- Step 2 (Dependencies & Boundaries) execution for each planned file
-- repo-native-first review-session foundation with built-in Context7 available across Step 0 and Step 1–7
-- Step 4 (Strategy & What-if Scenarios) foundation for each planned file
-- Step 5 (Validation & Interrogation) foundation for each planned file
-- Step 6 (Cognitive Simulation) foundation for each planned file
-- Step 7 (Summary) foundation for each planned file
-- skipped-file pipeline foundation for Step 1–7 exhaustion
-- output-failure taxonomy foundation for current bootstrap / snapshot / skipped-artifact output edges
-- run-level aggregate summary foundation for completed runs with four-tier risk distribution section and risk-sorted per-file lines
-- review index foundation for completed runs with risk-sorted file entries and `[RiskLevel]`/`[Skipped]` indicators
-- completed-run manifest foundation for completed runs with deterministic aggregate metadata, artifact paths, and planned-order per-file outcome records
-- risk-level derivation (`deriveFileRiskLevel`) for the four-tier `High`/`Medium`/`Low`/`None` heuristic, exported from `src/core/risk-level.ts`
-- enhanced per-file findings rendering with must-fix-before-nice-to-have grouping, summary statistics line, and per-finding traceability line
-- completed-run artifact surface foundation for CLI success output
-- SIGINT/SIGTERM graceful shutdown foundation: signal handler registration in app lifecycle layer, `AbortController`/`AbortSignal` propagation to orchestrator, `ReviewRunInterruptedError` distinct error type with `signal` property (`"SIGINT"` | `"SIGTERM"` | `undefined`), worker safe-boundary abort semantics reusing `runAbortState`, per-signal CLI exit codes (SIGINT → 130, SIGTERM → 143, unknown → 130) with distinct interrupt messages (`"Review run interrupted by SIGINT."` / `"Review run terminated by SIGTERM."` / `"Review run interrupted."`), and bounded post-start client teardown that falls back from `stop()` to `forceStop()` after a fixed timeout
-- Minimal `StepRunner` foundation for section-step execution
-- Minimal `StructuredOutputValidator` foundation for findings JSON validation, traceability enforcement, and confidence filtering
-- `JudgeSessionFactory` and `JudgeService` for section-step completion checks
-- Judge-based completion-check flow for Step 1, Step 2, Step 3, Step 4, and Step 7 with retry once semantics
-- Deterministic validation flow for Step 5 and Step 6 findings JSON with repo-local `confidenceThresholds` overrides plus documented defaults
-- Repo-local `.reviewconfig.json` `maxConcurrentFiles` wiring with documented default `5`
-- bounded concurrency between planned files while keeping Step 1–7 sequential inside each file
-- structured successful-snapshot output health assessment during the post-bootstrap per-file worker phase, plus shared-output abort coordination for shared output target faults
-- Minimal per-file review state and note rendering for bootstrap, Step 1, Step 2, Step 3, Step 4, Step 5, Step 6, and Step 7 snapshots
-- Deterministic interrupted-note warning blocks and `skipped.md` records when Step 1–7 exhaust retry
-- Minimal session foundation for Copilot SDK integration
-- Minimal Step 0 guardrails for `read`, `bash`, and `write`
-- review-session `web_fetch` hostname DNS classification foundation: hostname-based requests now use bounded per-host DNS classification before allow, deny hostnames that fail lookup / timeout / empty-result or resolve to any non-public address, reuse the same contract for redirect hops, and memoize repeated canonical hostnames within one tool decision
-- tool-use audit trail foundation: every tool decision (allow/deny) from review sessions is appended as a JSONL record to `tool-audit.jsonl` inside the run output directory; the audit path is exposed on the completed-run `OutputTarget`, surfaced in the CLI success output as `Tool Audit:`, and included in `manifest.json` artifacts
-- explicit read-only pipeline exceptions in the shell guardrail: top-level single `|` is treated as a segment delimiter; quoted or escaped literal `|` remains inside the current segment; repo-relative path tokens are resolved against the shell tool `cwd` before the existing repo-local boundary check; every resulting pipe segment is independently validated against the existing whitelist, dangerous-flag, and path-boundary rules; `||` (logical OR) and all other shell combining syntax remain unconditionally denied
-- shell tool name compatibility: `buildPreToolUseHook` now recognizes `"bash"`, `"sh"`, and `"shell"` as equivalent shell tool names; all three are subject to the same bash policy evaluation (whitelist prefix matching, pipeline validation, dangerous-flag check, and path-boundary check); audit records use the actual `toolName` rather than a hardcoded `"bash"` string
-- custom MCP `type: "stdio"` pass-through: `ReviewLocalMcpServerConfig.type` now accepts `"local" | "stdio"` union; neither the config parse layer nor `KnowledgeSvc` normalizes `"stdio"` to `"local"`; both values are passed through to `MCPLocalServerConfig.type` in the SDK session config as-is
-- shell policy fail-closed error boundary: if the shell policy evaluation itself throws any uncaught exception, `buildPreToolUseHook` catches it, records a deny audit entry with `reason: "Shell policy evaluation failed; denied as a precaution."`, and returns that stable deny result without re-throwing; the `command` variable is pre-initialized to `""` so the audit record always includes a `command` field regardless of where the throw occurred
+Node.js ≥ 22.7.0. The toolchain uses Node's native TypeScript execution with no external build dependencies.
 
-Do not assume these missing capabilities already exist.
+## Architecture
 
-## Install And Run Contract
+```
+src/
+├── bin/review.ts          CLI entry point
+├── cli/parser.ts          CLI parsing → RunRequest
+├── index.ts               runCli(): error handling, exit code
+├── app/review-app.ts      Composition root: wire all dependencies, lifecycle
+├── core/
+│   ├── orchestrator.ts    Core flow control
+│   ├── step-runner.ts     Step execution: execute → completion check → retry
+│   ├── steps/             Step 1–7 strategy modules (one file per step)
+│   ├── file-review-context.ts   Single-file source of truth
+│   ├── finalizer.ts       Review notes Markdown render
+│   ├── run-summary-finalizer.ts
+│   ├── review-index-finalizer.ts
+│   ├── run-manifest-finalizer.ts
+│   ├── review-path-resolver.ts  Output path planning & collision handling
+│   ├── risk-level.ts      Four-tier risk derivation (High/Medium/Low/None)
+│   ├── structured-output-validator.ts  Step 5/6 JSON validation
+│   ├── judge.ts           JudgeService: Step 1–4, 7 completion check
+│   └── changeset-overview-runner.ts   Step 0 execution
+├── providers/             External I/O adapters
+│   ├── local-git-provider.ts
+│   ├── local-workspace-provider.ts
+│   ├── local-review-config-provider.ts
+│   └── review-*.ts        Interface definitions
+└── services/              SDK session management
+    ├── session-executor.ts         Copilot Client lifecycle
+    ├── review-session-factory.ts   Review session creation
+    ├── judge-session-factory.ts    Judge session creation
+    ├── knowledge.ts                KnowledgeSvc: MCP configuration
+    ├── tool-policy-guard.ts        Tool permission hook
+    ├── tool-audit-writer.ts        JSONL audit log
+    ├── web-fetch-hostname-classifier.ts
+    └── web-fetch-redirect-resolver.ts
+```
 
-Prerequisites:
+### Key Config Files
 
-- Node.js >= 22.7.0 (the project uses `node:module` `stripTypeScriptTypes` for build and Node's native TypeScript execution for development)
+| File | Purpose |
+|------|---------|
+| `tsconfig.json` | TypeScript compiler configuration |
+| `scripts/build.mjs` | ESBuild build script |
+| `.reviewconfig.json` | Review runtime settings (optional, placed at repo root) |
+| `.reviewignore` | File filtering (`.gitignore` syntax) |
 
-Formal CLI installation:
+### Layer Boundaries
 
-- Use a published package or package artifact
-- Current local verification path: `npm pack` then `npm install -g ./nightowl-<version>.tgz`
+Strictly follow these layers. Do not merge or cross boundaries:
 
-Local development workflow:
+| Layer | Responsibility | Does NOT |
+|-------|---------------|----------|
+| `cli/` | Parse CLI input → `RunRequest` | Wire providers or handle lifecycle |
+| `app/` | Composition root, lifecycle, signal handling | Contain business logic |
+| `core/orchestrator` | Flow control: Step 0 → path planning → fan-out → Step 1–7 → finalizers | Assemble prompts or write to disk directly |
+| `core/step-runner` | Step execution + completion check + retry | Mutate `FileReviewContext` or write to disk |
+| `core/steps/*` | Define prompt profile and completion check type per step | Create sessions or configure MCP |
+| `providers/` | External I/O (Git, file writing, config reading) | Contain business logic |
+| `services/` | SDK session lifecycle, tool policy, MCP injection | Control flow |
 
-- `npm install`
-- `npm link`
+### Key Design Rules
 
-Do **not** treat `npm install -g .` as the product install contract.
+- **`FileReviewContext` is the single source of truth for each file.** On-disk notes are snapshot projections only; they must not be read back.
+- **Completion check precedes state update.** Step responses must pass judge or deterministic validation before being written to `FileReviewContext`. The Orchestrator applies updates via `StepResult.applyTo(context)`.
+- **Step 0 is run-level**, not a per-file step. It does not go through `StepRunner` and does not implement `ISopStep`.
+- **Bounded concurrency**: files are processed in parallel (default 5); within each file, Steps 1–7 run strictly in sequence.
+- **Retry once**: a failed step retries once; if it fails again, the file is demoted to skipped. A Step 0 failure aborts the entire run.
 
-## Development Rules
+## Testing
 
-- Follow TDD. Add or update tests before finalizing implementation changes.
-- Keep changes aligned with the current accepted OpenSpec change. Do not invent new product behavior outside that scope.
-- If implementation reveals a design conflict, update the relevant OpenSpec artifacts before continuing.
-- Preserve repo-specific guardrails:
-  - `read` must stay within documented path boundaries
-  - `bash` must stay read-only and within documented boundaries
-  - arbitrary agent `write` operations must remain restricted
-- Do not silently widen tool permissions.
-- If a capability is explicitly deferred in the active change, do not “sneak it in” as part of unrelated implementation.
-- The current Step 1 + Step 2 + Step 3 + Step 4 + Step 5 + Step 6 + Step 7 foundation now includes skipped-file downgrade for Step 1–7 exhaustion, a conservative output-failure taxonomy foundation, structured successful-snapshot output health assessment during the post-bootstrap per-file worker phase, shared-output abort coordination for concurrent shared output target faults, a deterministic run-level aggregate summary foundation, a deterministic review index foundation, a deterministic completed-run manifest foundation, completed-run artifact surface exposure in the CLI, repo-local `confidenceThresholds` wiring for Step 5 / Step 6 deterministic filtering, required per-finding traceability across formal findings state and rendered `## Findings`, repo-local `maxConcurrentFiles` wiring for bounded per-file concurrency, and built-in Context7 plus validated local and remote custom MCP plus redirect-aware web_fetch host-policy rollout through `KnowledgeSvc`: Step 0 and Step 1–7 review sessions are now repo-native-first with built-in Context7 plus validated `.reviewconfig.json` `mcpServers` merge (built-in Context7 uses the fixed remote HTTP endpoint `https://mcp.context7.com/mcp`; local custom MCP still uses `type: "local"` / `"stdio"` with optional `cwd` / `timeout`; remote custom MCP still uses `type: "http"` / `"sse"` with `url` / optional `headers` / `timeout`; same-name `context7` override is limited to built-in `tools` / `timeout` overrides and cannot supply auth headers) available only when genuine knowledge gaps remain, judge sessions remain MCP-free, built-in `web_fetch` is now available to review sessions with an initial-request URL guardrail, bounded redirect preflight over `301` / `302` / `303` / `307` / `308` (fixed internal `5`-hop / `5000ms` budget), bounded hostname DNS classification for every hostname-bearing initial URL and redirect hop (fixed internal `5000ms` per canonical hostname, deny on lookup failure / timeout / empty-result / any non-public resolved address, repeated canonical hostnames memoized within one tool decision), optional `.reviewconfig.json` `webFetchAllowedHosts` exact-host and wildcard-subdomain allowlist (`*.`-prefixed entries match any subdomain at any depth, exact and wildcard entries coexist via OR logic, empty allowlists deny all hosts), and optional `.reviewconfig.json` `webFetchDeniedHosts` exact-host and wildcard-subdomain denylist (same grammar as allowlist, evaluated after allowlist with deny-over-allow semantics, denylist-only config is valid and only blocks matching hosts from the baseline-allowed space); the initial URL and every resolved redirect target reuse the same baseline public-URL, host-policy, and hostname-DNS-classification checks, unresolved redirect traversal is denied conservatively, Step 1–4 and Step 7 remain judge-backed section-steps, Step 4 remains strategy-only, Step 5 remains first-pass findings only, Step 6 remains findings-finalization only, Step 7 remains per-file-summary only, Step 7 `## Summary` now uses the same `High` / `Medium` / `Low` / `None` risk vocabulary as run-level artifacts without introducing extra prompt-side risk inputs, `summary.md` / `index.md` / `manifest.json` still derive labels and paths directly from finalized formal findings plus the preplanned completed-run output target rather than Step 7 prose, a four-tier file risk-level heuristic (`High` / `Medium` / `Low` / `None`) is now derived from finalized findings and used to risk-sort `index.md` file entries and `summary.md` successful-file lines (stable within the same risk level by planned order), `[RiskLevel]` prefix indicators appear on every file entry in `index.md` and `summary.md` (`[Skipped]` for skipped files), `summary.md` includes a `## Risk Distribution` section with per-level counts, per-file findings sections in notes are now rendered with must-fix items grouped before nice-to-have items plus a summary statistics line (`N must-fix issue(s), M nice-to-have suggestion(s).`) and a `Traceability:` line per finding, empty findings now render as `- 無`, retry once is enabled, invalid `.reviewconfig.json` values for supported fields fail the run before Step 0 begins, missing config falls back to the documented `must=80` / `nice=90` thresholds, `maxConcurrentFiles=5`, empty custom MCP set, no repo-local host allowlist, and no repo-local host denylist, built-in Context7 API key pass-through is optional via `CONTEXT7_API_KEY` and runs without that key remain valid, output target planning and bootstrap notes still complete before any file enters Step 1, single-file Step 1–7 execution remains sequential, successful snapshot write failures only downgrade a file to skipped when the output boundary can positively classify them as file-local and the interrupted snapshot plus skipped record still succeed, ambiguous or failed successful-snapshot assessments conservatively fall back to shared output target faults, same-process concurrent skipped writes are serialized enough to keep each record intact, shared output target faults now stop new file dispatch and make active siblings stop at safe boundaries without writing new per-file output, `initializeRun()` / bootstrap note publish remain pre-fan-out fatal paths, `publishRunSummary()` / `publishReviewIndex()` / `publishRunManifest()` remain run-finalization fatal paths, completed runs publish `summary.md`, then `index.md`, then `manifest.json` after all per-file artifacts are finalized, CLI success output reports the deterministic `Output`, `Files`, `Summary`, `Index`, `Manifest`, `Tool Audit:`, and `Skipped` paths plus planned/successful/skipped counts directly from the completed-run result without reading artifacts from disk, and Step 0 remains fatal.
+```bash
+npm test                   # Full test suite (build first, then node --test)
+npm run test:watch         # Watch mode
+npm run test:coverage      # Test coverage
+```
+
+Run a single test file (requires build first):
+
+```bash
+npm run build && node --test dist/test/core/orchestrator.test.js
+```
+
+- Tests run against JS files under `dist/`; after modifying `src/`, always run `npm run build` first
+- Test structure mirrors `src/`: `test/core/orchestrator.test.ts` corresponds to `src/core/orchestrator.ts`
+- Follow TDD: write or update tests before implementing
+- Uses the Node.js built-in test runner (`node:test`); no external test frameworks
+- Tests inject stubs/mocks through interfaces; no external mocking frameworks
+- Orchestrator tests are split across multiple files (`orchestrator-*.test.ts`), each focusing on specific behavior
+
+## Code Conventions
+
+- TypeScript strict mode
+- Language: Traditional Chinese for prose and user-facing text; English for code identifiers and established terms
+- Terminology follows existing project conventions (Traditional Chinese for prose, English for code identifiers and established terms such as `FileReviewContext`, `completion check`)
+- Prefer minimal, explicit implementations; no speculative abstractions
+- Do not create helpers or abstractions for one-time operations
+- Do not perform refactors not explicitly requested by the task (extract function, rename, move files)
+- Do not add docstrings, comments, or type annotations to unmodified code
+
+## Guardrails — DO NOT bypass
+
+These are product safety boundaries that must not be circumvented or relaxed:
+
+- **Repo workspace is read-only**: the review process must not write to the repo workspace
+- **Bash allowlist**: only read-only analysis commands are permitted (git queries, cat, ls, grep, etc.); write or side-effect operations are forbidden
+- **Path boundaries**: bash path access is restricted to `repo_root` and `<output_base_dir>/review/**`
+- **Shell composition syntax**: `;`, `&&`, `||`, background execution, and command substitution are forbidden; the only exception is read-only pipelines `|`
+- **`web_fetch` security**: only public HTTP(S) URLs are allowed; hostname DNS classification, redirect verification, and host allowlist/denylist are all enabled
+- **Tool audit**: every tool decision (allow/deny) is logged to `tool-audit.jsonl`
+- **Tool policy fail-closed**: if shell policy evaluation itself errors, conservatively deny and log
+- **No silent privilege escalation**: do not smuggle new tool permissions into unrelated implementations
 
 ## Copilot SDK Notes
 
-- The app currently uses `@github/copilot-sdk@^0.2.0`
-- The current integration has been re-validated against the Node.js / TypeScript `0.2.0` SDK surface; before changing SDK versioning again, re-check the session lifecycle, permission hooks, MCP config types, and test behavior
-- If you change SDK versioning, you must re-check:
-  - runtime imports
-  - test behavior
-  - the active OpenSpec design notes
-
-## Verification
-
-Primary verification command:
-
-```bash
-npm test
-```
-
-Before finishing a change, ensure:
-
-- all relevant tests are updated
-- `npm test` is green
-- README still matches current runtime behavior
-- `AGENTS.md` is updated if the install contract, completed capability set, or major guardrail boundary has changed
+- Currently using `@github/copilot-sdk@^0.2.0`
+- Before changing the SDK version, re-verify: runtime imports, session lifecycle, permission hooks, MCP config types, and test behavior
+- Review sessions implement tool permission control via `hooks.onPreToolUse`
 
 ## Commit Guidance
 
 - Use Conventional Commits
-- Keep app code commits separate from `NightOwl-specs` commits
-- Prefer commits that group one coherent functional increment
+- Keep code changes and documentation changes in separate commits
+- Prefer grouping a coherent feature increment into a single commit
 
-## Working Style Expectations
+## Verification Checklist
 
-- Prefer minimal, explicit implementations over speculative abstractions
-- Keep architecture boundaries clear:
-  - CLI parses input
-  - app boundary composes dependencies
-  - orchestrator controls flow
-  - providers handle external I/O
-  - services encapsulate SDK lifecycle
-- Do not collapse these layers just to save files
+Before finalizing a change, confirm:
+
+- [ ] Related tests have been added or updated
+- [ ] `npm test` passes entirely
+- [ ] README.md still reflects current behavior
+- [ ] If install contracts, completed capabilities, or major safety boundaries changed, update this file
