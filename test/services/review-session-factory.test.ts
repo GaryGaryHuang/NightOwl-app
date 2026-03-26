@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import path from "node:path";
-import { tmpdir } from "node:os";
 import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
@@ -11,6 +9,15 @@ import {
   type ToolPolicyGuardOptions
 } from "../../src/services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
+import {
+  BASE_REVIEW_PROFILE,
+  createAuditFileFixture,
+  createContext7Override,
+  createLocalMcpServer,
+  createRecordedConfigs,
+  createRemoteMcpServer,
+  createSessionRecordingClientManager
+} from "../helpers/review-session-runtime-contract-fixture.ts";
 
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
@@ -23,49 +30,12 @@ type RecordedReviewSessionConfig = SessionConfig & {
   onPermissionRequest: PermissionHandler;
 };
 
-const BASE_PROFILE = {
-  model: "gpt-5.4-mini",
-  outputBaseDir: "/workspace/repo/packages/app",
-  repoRoot: "/workspace/repo",
-  systemMessage: "system prompt",
-  workingDirectory: "/workspace/repo"
-};
-
-function createRecordedConfigs(): RecordedReviewSessionConfig[] {
-  return [];
-}
-
 function assertRecordedReviewSessionConfig(
   config: SessionConfig
 ): asserts config is RecordedReviewSessionConfig {
   assert.ok(config.hooks);
   assert.ok(config.hooks.onPreToolUse);
   assert.ok(config.onPermissionRequest);
-}
-
-function createRecordingClientManager(
-  recordedConfigs: RecordedReviewSessionConfig[]
-) {
-  return {
-    getClient() {
-      return {
-        async createSession(config: SessionConfig) {
-          assertRecordedReviewSessionConfig(config);
-          recordedConfigs.push(config);
-
-          return {
-            async sendAndWait() {
-              return {
-                type: "assistant.message",
-                data: { content: "ok" }
-              };
-            },
-            async disconnect() {}
-          };
-        }
-      };
-    }
-  };
 }
 
 class SpyToolPolicyGuard extends ToolPolicyGuard {
@@ -75,11 +45,11 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
   });
   readonly preToolUseCalls: Array<{
     auditWriter?: ToolAuditWriter;
-    profile: Pick<typeof BASE_PROFILE, "repoRoot" | "outputBaseDir">;
+    profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">;
   }> = [];
   readonly permissionCalls: Array<{
     auditWriter?: ToolAuditWriter;
-    profile: Pick<typeof BASE_PROFILE, "repoRoot" | "outputBaseDir">;
+    profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">;
   }> = [];
 
   constructor(options: ToolPolicyGuardOptions = {}) {
@@ -87,44 +57,53 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
   }
 
   override buildPreToolUseHook(
-    profile: Pick<typeof BASE_PROFILE, "repoRoot" | "outputBaseDir">,
+    profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">,
     auditWriter?: ToolAuditWriter
   ): PreToolUseHook {
     this.preToolUseCalls.push({ auditWriter, profile });
-
     return this.preToolUseHook;
   }
 
   override buildPermissionHandler(
-    profile: Pick<typeof BASE_PROFILE, "repoRoot" | "outputBaseDir">,
+    profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">,
     auditWriter?: ToolAuditWriter
   ): PermissionHandler {
     this.permissionCalls.push({ auditWriter, profile });
-
     return this.permissionHandler;
   }
 }
 
 test("ReviewSessionFactory creates a non-streaming review session and delegates hook construction to ToolPolicyGuard", async () => {
-  const receivedConfigs = createRecordedConfigs();
+  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const toolPolicyGuard = new SpyToolPolicyGuard();
   const factory = new ReviewSessionFactory({
-    clientManager: createRecordingClientManager(receivedConfigs),
+    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
+      assertRecordedReviewSessionConfig(config);
+      return {
+        async sendAndWait() {
+          return {
+            type: "assistant.message",
+            data: { content: "ok" }
+          };
+        },
+        async disconnect() {}
+      };
+    }),
     toolPolicyGuard
   });
 
-  await factory.createSession(BASE_PROFILE);
+  await factory.createSession(BASE_REVIEW_PROFILE);
 
   assert.deepEqual(toolPolicyGuard.preToolUseCalls, [
     {
       auditWriter: undefined,
-      profile: BASE_PROFILE
+      profile: BASE_REVIEW_PROFILE
     }
   ]);
   assert.deepEqual(toolPolicyGuard.permissionCalls, [
     {
       auditWriter: undefined,
-      profile: BASE_PROFILE
+      profile: BASE_REVIEW_PROFILE
     }
   ]);
   assert.deepEqual(receivedConfigs, [
@@ -142,49 +121,55 @@ test("ReviewSessionFactory creates a non-streaming review session and delegates 
       workingDirectory: "/workspace/repo"
     }
   ]);
+  assert.equal(receivedConfigs[0]?.excludedTools, undefined);
 });
 
 test("ReviewSessionFactory injects built-in Context7 by default for review sessions and still allows explicit disable", async () => {
-  const receivedConfigs = createRecordedConfigs();
+  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const factory = new ReviewSessionFactory({
-    clientManager: createRecordingClientManager(receivedConfigs),
+    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
+      assertRecordedReviewSessionConfig(config);
+      return {
+        async sendAndWait() {
+          return {
+            type: "assistant.message",
+            data: { content: "ok" }
+          };
+        },
+        async disconnect() {}
+      };
+    }),
     knowledgeSvc: new KnowledgeSvc({
       context7ApiKey: "test-api-key",
       userMcpServers: {
-        demo: {
-          type: "local",
-          command: "npx",
-          args: ["-y", "@example/demo-mcp"],
-          tools: ["*"]
-        },
-        context7: {
-          type: "http",
+        demo: createLocalMcpServer(),
+        context7: createContext7Override({
           tools: ["resolve-library-id"],
           timeout: 20000
-        }
+        })
       }
     }),
     toolPolicyGuard: new ToolPolicyGuard({})
   });
 
-  await factory.createSession(BASE_PROFILE);
+  await factory.createSession(BASE_REVIEW_PROFILE);
   await factory.createSession({
-    ...BASE_PROFILE,
+    ...BASE_REVIEW_PROFILE,
     model: "gpt-5-mini",
     systemMessage: "step1 system prompt"
   });
   await factory.createSession({
-    ...BASE_PROFILE,
+    ...BASE_REVIEW_PROFILE,
     model: "gpt-5-mini",
     systemMessage: "step3 system prompt",
     knowledgeMode: "built-in-context7"
   });
   await factory.createSession({
-    ...BASE_PROFILE,
+    ...BASE_REVIEW_PROFILE,
     systemMessage: "step5 system prompt"
   });
   await factory.createSession({
-    ...BASE_PROFILE,
+    ...BASE_REVIEW_PROFILE,
     systemMessage: "explicitly disabled system prompt",
     knowledgeMode: "disabled"
   });
@@ -200,12 +185,7 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
         tools: ["resolve-library-id"],
         timeout: 20000
       },
-      demo: {
-        type: "local",
-        command: "npx",
-        args: ["-y", "@example/demo-mcp"],
-        tools: ["*"]
-      }
+      demo: createLocalMcpServer()
     });
   }
 
@@ -214,22 +194,24 @@ test("ReviewSessionFactory injects built-in Context7 by default for review sessi
 });
 
 test("ReviewSessionFactory injects mixed local and remote MCP entries for review sessions and keeps judge sessions MCP-free", async () => {
-  const receivedConfigs = createRecordedConfigs();
+  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const factory = new ReviewSessionFactory({
-    clientManager: createRecordingClientManager(receivedConfigs),
+    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
+      assertRecordedReviewSessionConfig(config);
+      return {
+        async sendAndWait() {
+          return {
+            type: "assistant.message",
+            data: { content: "ok" }
+          };
+        },
+        async disconnect() {}
+      };
+    }),
     knowledgeSvc: new KnowledgeSvc({
       userMcpServers: {
-        demo: {
-          type: "local",
-          command: "npx",
-          args: ["-y", "@example/demo-mcp"],
-          tools: ["*"]
-        },
-        "my-remote": {
-          type: "http",
-          url: "https://mcp.example.com/v1",
-          tools: ["*"]
-        },
+        demo: createLocalMcpServer(),
+        "my-remote": createRemoteMcpServer(),
         "auth-sse": {
           type: "sse",
           url: "https://sse.example.com/mcp",
@@ -241,11 +223,9 @@ test("ReviewSessionFactory injects mixed local and remote MCP entries for review
     toolPolicyGuard: new ToolPolicyGuard({})
   });
 
-  // review session: should include all MCP
-  await factory.createSession(BASE_PROFILE);
-  // explicitly disabled: no MCP
+  await factory.createSession(BASE_REVIEW_PROFILE);
   await factory.createSession({
-    ...BASE_PROFILE,
+    ...BASE_REVIEW_PROFILE,
     systemMessage: "disabled prompt",
     knowledgeMode: "disabled"
   });
@@ -268,30 +248,42 @@ test("ReviewSessionFactory injects mixed local and remote MCP entries for review
     (reviewMcp["auth-sse"] as { timeout?: number }).timeout,
     30000
   );
-
-  // disabled session: no MCP
   assert.equal(receivedConfigs[1]?.mcpServers, undefined);
 });
 
 test("ReviewSessionFactory only passes audit writer to sessions created after setAuditWriter", async () => {
-  const receivedConfigs = createRecordedConfigs();
+  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const toolPolicyGuard = new SpyToolPolicyGuard();
   const factory = new ReviewSessionFactory({
-    clientManager: createRecordingClientManager(receivedConfigs),
+    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
+      assertRecordedReviewSessionConfig(config);
+      return {
+        async sendAndWait() {
+          return {
+            type: "assistant.message",
+            data: { content: "ok" }
+          };
+        },
+        async disconnect() {}
+      };
+    }),
     toolPolicyGuard
   });
 
-  await factory.createSession(BASE_PROFILE);
+  await factory.createSession(BASE_REVIEW_PROFILE);
 
-  const auditWriter = new ToolAuditWriter(
-    path.join(tmpdir(), `nightowl-audit-${Date.now()}.jsonl`)
-  );
-  factory.setAuditWriter(auditWriter);
+  const auditFixture = createAuditFileFixture();
+  try {
+    const auditWriter = new ToolAuditWriter(auditFixture.auditPath);
+    factory.setAuditWriter(auditWriter);
 
-  await factory.createSession(BASE_PROFILE);
+    await factory.createSession(BASE_REVIEW_PROFILE);
 
-  assert.equal(toolPolicyGuard.preToolUseCalls[0]?.auditWriter, undefined);
-  assert.equal(toolPolicyGuard.permissionCalls[0]?.auditWriter, undefined);
-  assert.equal(toolPolicyGuard.preToolUseCalls[1]?.auditWriter, auditWriter);
-  assert.equal(toolPolicyGuard.permissionCalls[1]?.auditWriter, auditWriter);
+    assert.equal(toolPolicyGuard.preToolUseCalls[0]?.auditWriter, undefined);
+    assert.equal(toolPolicyGuard.permissionCalls[0]?.auditWriter, undefined);
+    assert.equal(toolPolicyGuard.preToolUseCalls[1]?.auditWriter, auditWriter);
+    assert.equal(toolPolicyGuard.permissionCalls[1]?.auditWriter, auditWriter);
+  } finally {
+    auditFixture.cleanup();
+  }
 });

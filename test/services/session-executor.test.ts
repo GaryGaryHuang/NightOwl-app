@@ -3,28 +3,16 @@ import test from "node:test";
 
 import {
   CopilotClientManager,
-  type CopilotClientLike,
-  type SessionLike,
   SessionExecutor
 } from "../../src/services/session-executor.ts";
+import {
+  createLifecycleClientFactory
+} from "../helpers/review-session-runtime-contract-fixture.ts";
 
 test("CopilotClientManager starts and stops the underlying client", async () => {
   const lifecycle: string[] = [];
   const manager = new CopilotClientManager({
-    createClient(): CopilotClientLike {
-      return {
-        async start() {
-          lifecycle.push("start");
-        },
-        async stop() {
-          lifecycle.push("stop");
-        },
-        async forceStop() {},
-        async createSession() {
-          throw new Error("createSession should not be called in this test");
-        }
-      };
-    }
+    createClient: createLifecycleClientFactory(lifecycle)
   });
 
   await manager.start();
@@ -36,22 +24,7 @@ test("CopilotClientManager starts and stops the underlying client", async () => 
 test("CopilotClientManager forceStop() forwards to the underlying client", async () => {
   const lifecycle: string[] = [];
   const manager = new CopilotClientManager({
-    createClient(): CopilotClientLike {
-      return {
-        async start() {
-          lifecycle.push("start");
-        },
-        async stop() {
-          lifecycle.push("stop");
-        },
-        async forceStop() {
-          lifecycle.push("forceStop");
-        },
-        async createSession() {
-          throw new Error("createSession should not be called in this test");
-        }
-      };
-    }
+    createClient: createLifecycleClientFactory(lifecycle)
   });
 
   await manager.start();
@@ -63,19 +36,11 @@ test("CopilotClientManager forceStop() forwards to the underlying client", async
 test("CopilotClientManager forceStop() is a no-op before startup", async () => {
   let createClientCalls = 0;
   const manager = new CopilotClientManager({
-    createClient(): CopilotClientLike {
+    createClient() {
       createClientCalls += 1;
-
-      return {
-        async start() {},
-        async stop() {},
-        async forceStop() {
-          throw new Error("forceStop should not be called before startup");
-        },
-        async createSession() {
-          throw new Error("createSession should not be called in this test");
-        }
-      };
+      return createLifecycleClientFactory([], {
+        forceStopShouldThrowBeforeStart: true
+      })();
     }
   });
 
@@ -86,8 +51,8 @@ test("CopilotClientManager forceStop() is a no-op before startup", async () => {
 
 test("SessionExecutor sendAndWait returns the assistant message content and disconnects afterwards", async () => {
   const calls: Array<[string, unknown?]> = [];
-  const session: SessionLike = {
-    async sendAndWait(prompt) {
+  const session = {
+    async sendAndWait(prompt: { prompt: string }) {
       calls.push(["sendAndWait", prompt]);
       return {
         type: "assistant.message",
@@ -113,7 +78,7 @@ test("SessionExecutor sendAndWait returns the assistant message content and disc
 
 test("SessionExecutor returns undefined for empty assistant content and still disconnects", async () => {
   const calls: Array<[string, unknown?]> = [];
-  const session: SessionLike = {
+  const session = {
     async sendAndWait() {
       calls.push(["sendAndWait"]);
       return {
@@ -137,7 +102,7 @@ test("SessionExecutor returns undefined for empty assistant content and still di
 
 test("SessionExecutor propagates sendAndWait failures and still disconnects", async () => {
   const calls: Array<[string, unknown?]> = [];
-  const session: SessionLike = {
+  const session = {
     async sendAndWait() {
       calls.push(["sendAndWait"]);
       throw new Error("copilot unavailable");

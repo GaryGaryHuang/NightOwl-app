@@ -3,29 +3,15 @@ import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
 import { JudgeSessionFactory } from "../../src/services/judge-session-factory.ts";
+import {
+  createRecordedConfigs,
+  createSessionRecordingClientManager
+} from "../helpers/review-session-runtime-contract-fixture.ts";
 
 test("JudgeSessionFactory creates a non-streaming isolated judge session with the expected timeout contract", async () => {
-  const receivedConfigs: SessionConfig[] = [];
+  const receivedConfigs = createRecordedConfigs<SessionConfig>();
   const factory = new JudgeSessionFactory({
-    clientManager: {
-      getClient() {
-        return {
-          async createSession(config) {
-            receivedConfigs.push(config);
-            return {
-              async sendAndWait() {
-                return {
-                  data: {
-                    content: "Y"
-                  }
-                };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    }
+    clientManager: createSessionRecordingClientManager(receivedConfigs)
   });
 
   await factory.createSession({
