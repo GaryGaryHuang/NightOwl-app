@@ -1,177 +1,66 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
 
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
+import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
 test("LocalWorkspaceProvider initializes the run directories and skipped.md", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
 
   try {
-    const provider = new LocalWorkspaceProvider();
+    fixture.provider.initializeRun(fixture.outputTarget);
 
-    provider.initializeRun(outputTarget);
-
-    assert.equal(existsSync(outputTarget.basePath), true);
-    assert.equal(existsSync(outputTarget.filesPath), true);
-    assert.equal(existsSync(outputTarget.skippedPath), true);
-    assert.equal(existsSync(outputTarget.toolAuditPath), true);
-    assert.equal(existsSync(outputTarget.summaryPath), false);
-    assert.equal(existsSync(outputTarget.indexPath), false);
-    assert.equal(existsSync(outputTarget.manifestPath), false);
-    assert.equal(readFileSync(outputTarget.skippedPath, "utf8"), "");
-    assert.equal(readFileSync(outputTarget.toolAuditPath, "utf8"), "");
+    assert.equal(existsSync(fixture.outputTarget.basePath), true);
+    assert.equal(existsSync(fixture.outputTarget.filesPath), true);
+    assert.equal(existsSync(fixture.outputTarget.skippedPath), true);
+    assert.equal(existsSync(fixture.outputTarget.toolAuditPath), true);
+    assert.equal(existsSync(fixture.outputTarget.summaryPath), false);
+    assert.equal(existsSync(fixture.outputTarget.indexPath), false);
+    assert.equal(existsSync(fixture.outputTarget.manifestPath), false);
+    assert.equal(existsSync(fixture.outputTarget.changesetOverviewPath), false);
+    assert.equal(fixture.readFile(fixture.outputTarget.skippedPath), "");
+    assert.equal(fixture.readFile(fixture.outputTarget.toolAuditPath), "");
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider publishes file review content to the target note path", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
-  const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
+  const fixture = createWorkspaceProviderFixture();
+  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
 
   try {
-    const provider = new LocalWorkspaceProvider();
-
-    provider.initializeRun(outputTarget);
-    provider.publishFileReview({
+    fixture.provider.initializeRun(fixture.outputTarget);
+    fixture.provider.publishFileReview({
       noteFilePath,
       content: "# src/app.ts\n\nPending review.\n"
     });
 
-    assert.equal(readFileSync(noteFilePath, "utf8"), "# src/app.ts\n\nPending review.\n");
+    assert.equal(fixture.readFile(noteFilePath), "# src/app.ts\n\nPending review.\n");
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider appends deterministic skipped-file records to skipped.md", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
 
   try {
-    const provider = new LocalWorkspaceProvider();
-
-    provider.initializeRun(outputTarget);
-    provider.publishSkippedFile({
+    fixture.provider.initializeRun(fixture.outputTarget);
+    fixture.provider.publishSkippedFile({
       filePath: "src/app.ts",
       stepId: "step5-validation-interrogation",
       reason: "deterministic validation failed"
     });
-    provider.publishSkippedFile({
+    fixture.provider.publishSkippedFile({
       filePath: "src/other.ts",
       stepId: "step7-summary",
       reason: "judge rejected"
     });
 
     assert.equal(
-      readFileSync(outputTarget.skippedPath, "utf8"),
+      fixture.readFile(fixture.outputTarget.skippedPath),
       [
         "- `src/app.ts` — step5-validation-interrogation — deterministic validation failed",
         "- `src/other.ts` — step7-summary — judge rejected",
@@ -179,53 +68,16 @@ test("LocalWorkspaceProvider appends deterministic skipped-file records to skipp
       ].join("\n")
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider publishes run summary content to summary.md", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
 
   try {
-    const provider = new LocalWorkspaceProvider();
-
-    provider.initializeRun(outputTarget);
-    provider.publishRunSummary({
+    fixture.provider.initializeRun(fixture.outputTarget);
+    fixture.provider.publishRunSummary({
       content: [
         "# Review Summary",
         "",
@@ -236,57 +88,20 @@ test("LocalWorkspaceProvider publishes run summary content to summary.md", () =>
     });
 
     assert.equal(
-      readFileSync(outputTarget.summaryPath, "utf8"),
+      fixture.readFile(fixture.outputTarget.summaryPath),
       ["# Review Summary", "", "- Planned files: 1", "- Successful files: 1", "- Skipped files: 0"].join("\n")
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider publishes review index content to index.md", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
 
   try {
-    const provider = new LocalWorkspaceProvider();
-
-    provider.initializeRun(outputTarget);
-    provider.publishReviewIndex({
+    fixture.provider.initializeRun(fixture.outputTarget);
+    fixture.provider.publishReviewIndex({
       content: [
         "# Review Index",
         "",
@@ -298,7 +113,7 @@ test("LocalWorkspaceProvider publishes review index content to index.md", () => 
     });
 
     assert.equal(
-      readFileSync(outputTarget.indexPath, "utf8"),
+      fixture.readFile(fixture.outputTarget.indexPath),
       [
         "# Review Index",
         "",
@@ -309,392 +124,171 @@ test("LocalWorkspaceProvider publishes review index content to index.md", () => 
       ].join("\n")
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider publishes run manifest content to manifest.json", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
 
   try {
-    const provider = new LocalWorkspaceProvider();
-
-    provider.initializeRun(outputTarget);
-    provider.publishRunManifest({
+    fixture.provider.initializeRun(fixture.outputTarget);
+    fixture.provider.publishRunManifest({
       content: '{\n  "schemaVersion": 1\n}'
     });
 
     assert.equal(
-      readFileSync(outputTarget.manifestPath, "utf8"),
+      fixture.readFile(fixture.outputTarget.manifestPath),
       '{\n  "schemaVersion": 1\n}'
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider classifies path-specific successful snapshot write failures as single-file output faults when the shared files path remains healthy", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
+  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
+  const error = Object.assign(new Error("name too long"), {
+    code: "ENAMETOOLONG",
+    path: noteFilePath
+  });
 
   try {
-    const provider = new LocalWorkspaceProvider();
-    const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
-    const error = Object.assign(new Error("name too long"), {
-      code: "ENAMETOOLONG",
-      path: noteFilePath
-    });
-
-    provider.initializeRun(outputTarget);
+    fixture.provider.initializeRun(fixture.outputTarget);
 
     assert.deepEqual(
-      provider.assessSuccessfulSnapshotFailure({
+      fixture.provider.assessSuccessfulSnapshotFailure({
         noteFilePath,
         error
       }),
       { faultScope: "single-file-output-fault" }
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider classifies disk-capacity successful snapshot write failures as shared output target faults", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
+  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
+  const error = Object.assign(new Error("disk full"), {
+    code: "ENOSPC",
+    path: noteFilePath
+  });
 
   try {
-    const provider = new LocalWorkspaceProvider();
-    const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
-    const error = Object.assign(new Error("disk full"), {
-      code: "ENOSPC",
-      path: noteFilePath
-    });
-
-    provider.initializeRun(outputTarget);
+    fixture.provider.initializeRun(fixture.outputTarget);
 
     assert.deepEqual(
-      provider.assessSuccessfulSnapshotFailure({
+      fixture.provider.assessSuccessfulSnapshotFailure({
         noteFilePath,
         error
       }),
       { faultScope: "shared-output-target-fault" }
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider falls back to shared output target fault when successful snapshot classification is inconclusive", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
+  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
 
   try {
-    const provider = new LocalWorkspaceProvider();
-    const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
-
-    provider.initializeRun(outputTarget);
+    fixture.provider.initializeRun(fixture.outputTarget);
 
     assert.deepEqual(
-      provider.assessSuccessfulSnapshotFailure({
+      fixture.provider.assessSuccessfulSnapshotFailure({
         noteFilePath,
         error: new Error("note write failed")
       }),
       { faultScope: "shared-output-target-fault" }
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider treats shared files-path corruption as a shared output target fault", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "skipped.md"
-    ),
-    summaryPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "summary.md"
-    ),
-    indexPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "index.md"
-    ),
-    manifestPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "manifest.json"
-    ),
-    toolAuditPath: path.join(
-      tempDir,
-      "review",
-      "feature-branch_03131430",
-      "tool-audit.jsonl"
-    )
-  };
+  const fixture = createWorkspaceProviderFixture();
+  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
+  const error = Object.assign(new Error("path collision"), {
+    code: "EEXIST",
+    path: fixture.outputTarget.filesPath
+  });
 
   try {
-    const provider = new LocalWorkspaceProvider();
-    const noteFilePath = path.join(outputTarget.filesPath, "src__app.ts.md");
-    const error = Object.assign(new Error("path collision"), {
-      code: "EEXIST",
-      path: outputTarget.filesPath
-    });
-
-    provider.initializeRun(outputTarget);
-    rmSync(outputTarget.filesPath, { recursive: true, force: true });
-    writeFileSync(outputTarget.filesPath, "not-a-directory");
+    fixture.provider.initializeRun(fixture.outputTarget);
+    rmSync(fixture.outputTarget.filesPath, { recursive: true, force: true });
+    writeFileSync(fixture.outputTarget.filesPath, "not-a-directory");
 
     assert.deepEqual(
-      provider.assessSuccessfulSnapshotFailure({
+      fixture.provider.assessSuccessfulSnapshotFailure({
         noteFilePath,
         error
       }),
       { faultScope: "shared-output-target-fault" }
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider publishes changeset overview content to changeset-overview.md", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(tempDir, "review", "feature-branch_03131430", "skipped.md"),
-    summaryPath: path.join(tempDir, "review", "feature-branch_03131430", "summary.md"),
-    indexPath: path.join(tempDir, "review", "feature-branch_03131430", "index.md"),
-    manifestPath: path.join(tempDir, "review", "feature-branch_03131430", "manifest.json"),
-    toolAuditPath: path.join(tempDir, "review", "feature-branch_03131430", "tool-audit.jsonl")
-  };
+  const fixture = createWorkspaceProviderFixture();
 
   try {
-    const provider = new LocalWorkspaceProvider();
-
-    provider.initializeRun(outputTarget);
-    provider.publishChangesetOverview({
+    fixture.provider.initializeRun(fixture.outputTarget);
+    fixture.provider.publishChangesetOverview({
       content: "## Changeset Overview\n\n- Modified `src/app.ts`\n"
     });
 
     assert.equal(
-      readFileSync(outputTarget.changesetOverviewPath, "utf8"),
+      fixture.readFile(fixture.outputTarget.changesetOverviewPath),
       "## Changeset Overview\n\n- Modified `src/app.ts`\n"
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider appends trailing newline when changeset overview content does not end with one", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(tempDir, "review", "feature-branch_03131430", "skipped.md"),
-    summaryPath: path.join(tempDir, "review", "feature-branch_03131430", "summary.md"),
-    indexPath: path.join(tempDir, "review", "feature-branch_03131430", "index.md"),
-    manifestPath: path.join(tempDir, "review", "feature-branch_03131430", "manifest.json"),
-    toolAuditPath: path.join(tempDir, "review", "feature-branch_03131430", "tool-audit.jsonl")
-  };
+  const fixture = createWorkspaceProviderFixture();
 
   try {
-    const provider = new LocalWorkspaceProvider();
-
-    provider.initializeRun(outputTarget);
-    provider.publishChangesetOverview({
+    fixture.provider.initializeRun(fixture.outputTarget);
+    fixture.provider.publishChangesetOverview({
       content: "## Changeset Overview\n\n- Modified `src/app.ts`"
     });
 
     assert.equal(
-      readFileSync(outputTarget.changesetOverviewPath, "utf8"),
+      fixture.readFile(fixture.outputTarget.changesetOverviewPath),
       "## Changeset Overview\n\n- Modified `src/app.ts`\n"
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
 
 test("LocalWorkspaceProvider writes changeset overview to the correct path under basePath", () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const outputTarget = {
-    basePath: path.join(tempDir, "review", "feature-branch_03131430"),
-    changesetOverviewPath: path.join(tempDir, "review", "feature-branch_03131430", "changeset-overview.md"),
-    filesPath: path.join(tempDir, "review", "feature-branch_03131430", "files"),
-    skippedPath: path.join(tempDir, "review", "feature-branch_03131430", "skipped.md"),
-    summaryPath: path.join(tempDir, "review", "feature-branch_03131430", "summary.md"),
-    indexPath: path.join(tempDir, "review", "feature-branch_03131430", "index.md"),
-    manifestPath: path.join(tempDir, "review", "feature-branch_03131430", "manifest.json"),
-    toolAuditPath: path.join(tempDir, "review", "feature-branch_03131430", "tool-audit.jsonl")
-  };
+  const fixture = createWorkspaceProviderFixture();
 
   try {
-    const provider = new LocalWorkspaceProvider();
+    fixture.provider.initializeRun(fixture.outputTarget);
+    fixture.provider.publishChangesetOverview({ content: "overview content" });
 
-    provider.initializeRun(outputTarget);
-    provider.publishChangesetOverview({ content: "overview content" });
-
-    assert.equal(existsSync(outputTarget.changesetOverviewPath), true);
+    assert.equal(existsSync(fixture.outputTarget.changesetOverviewPath), true);
     assert.ok(
-      outputTarget.changesetOverviewPath.startsWith(outputTarget.basePath),
+      fixture.outputTarget.changesetOverviewPath.startsWith(fixture.outputTarget.basePath),
       "changesetOverviewPath must be under basePath"
     );
     assert.ok(
-      outputTarget.changesetOverviewPath.endsWith("changeset-overview.md"),
+      fixture.outputTarget.changesetOverviewPath.endsWith("changeset-overview.md"),
       "changesetOverviewPath must end with changeset-overview.md"
     );
   } finally {
-    rmSync(tempDir, { force: true, recursive: true });
+    fixture.cleanup();
   }
 });
