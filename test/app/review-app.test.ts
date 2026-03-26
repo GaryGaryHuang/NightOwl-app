@@ -9,7 +9,6 @@ import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import {
   buildSessionResponse,
   createResolvedRedirectResolver,
-  extractSystemMessageContent,
   isChangesetOverviewSystemMessage,
   isJudgeSystemMessage,
   isKnowledgeSourceOfTruthSystemMessage,
