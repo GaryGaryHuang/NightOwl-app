@@ -1,90 +1,45 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { LocalReviewConfigProvider } from "../../src/providers/local-review-config-provider.ts";
-import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import {
+  buildExpectedReviewConfig,
+  createReviewConfigProviderFixture
+} from "../helpers/review-config-provider-contract-fixture.ts";
 
 test("LocalReviewConfigProvider falls back to the documented default review config when .reviewconfig.json is missing", () => {
-  const fixture = createReviewRepoFixture();
+  const configFixture = createReviewConfigProviderFixture();
 
   try {
-    const provider = new LocalReviewConfigProvider();
-
-    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
-      maxConcurrentFiles: 5,
-      confidenceThresholds: {
-        must: 80,
-        nice: 90
-      },
-      mcpServers: {}
-    });
+    assert.deepEqual(configFixture.loadReviewConfig(), buildExpectedReviewConfig());
   } finally {
-    fixture.cleanup();
+    configFixture.cleanup();
   }
 });
 
 test("LocalReviewConfigProvider falls back to defaults when maxConcurrentFiles or confidenceThresholds are absent", () => {
-  const fixture = createReviewRepoFixture();
+  const configFixture = createReviewConfigProviderFixture();
 
   try {
-    const provider = new LocalReviewConfigProvider();
+    configFixture.writeReviewConfig({});
+    assert.deepEqual(configFixture.loadReviewConfig(), buildExpectedReviewConfig());
 
-    fixture.writeFile(".reviewconfig.json", JSON.stringify({}));
-    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
-      maxConcurrentFiles: 5,
-      confidenceThresholds: {
-        must: 80,
-        nice: 90
-      },
-      mcpServers: {}
+    configFixture.writeReviewConfig({
+      maxConcurrentFiles: 2
     });
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        maxConcurrentFiles: 2
-      })
+    assert.deepEqual(
+      configFixture.loadReviewConfig(),
+      buildExpectedReviewConfig({ maxConcurrentFiles: 2 })
     );
-    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
-      maxConcurrentFiles: 2,
-      confidenceThresholds: {
-        must: 80,
-        nice: 90
-      },
-      mcpServers: {}
-    });
   } finally {
-    fixture.cleanup();
+    configFixture.cleanup();
   }
 });
 
 test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresholds from the same config file", () => {
-  const fixture = createReviewRepoFixture();
+  const configFixture = createReviewConfigProviderFixture();
 
   try {
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        maxConcurrentFiles: 2,
-        confidenceThresholds: {
-          must: 70,
-          nice: 85
-        },
-        mcpServers: {
-          demo: {
-            type: "local",
-            command: "npx",
-            args: ["-y", "@example/demo-mcp"],
-            tools: ["*"]
-          }
-        },
-        webFetchAllowedHosts: [" Docs.Example.Com. ", "react.dev"]
-      })
-    );
-
-    const provider = new LocalReviewConfigProvider();
-
-    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
+    configFixture.writeReviewConfig({
       maxConcurrentFiles: 2,
       confidenceThresholds: {
         must: 70,
@@ -98,350 +53,242 @@ test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresh
           tools: ["*"]
         }
       },
-      webFetchAllowedHosts: ["docs.example.com", "react.dev"]
+      webFetchAllowedHosts: [" Docs.Example.Com. ", "react.dev"]
     });
+    assert.deepEqual(
+      configFixture.loadReviewConfig(),
+      buildExpectedReviewConfig({
+        maxConcurrentFiles: 2,
+        confidenceThresholds: {
+          must: 70,
+          nice: 85
+        },
+        mcpServers: {
+          demo: {
+            type: "local",
+            command: "npx",
+            args: ["-y", "@example/demo-mcp"],
+            tools: ["*"]
+          }
+        },
+        webFetchAllowedHosts: ["docs.example.com", "react.dev"]
+      })
+    );
   } finally {
-    fixture.cleanup();
+    configFixture.cleanup();
   }
 });
 
 test("LocalReviewConfigProvider accepts boundary threshold values and a validated remote-compatible context7 override while keeping default maxConcurrentFiles", () => {
-  const fixture = createReviewRepoFixture();
+  const configFixture = createReviewConfigProviderFixture();
 
   try {
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: {
-          context7: {
-            type: "http",
-            tools: ["resolve-library-id"],
-            timeout: 20000
-          }
-        },
-        confidenceThresholds: {
-          must: 0,
-          nice: 100
-        }
-      })
-    );
-
-    const provider = new LocalReviewConfigProvider();
-
-    assert.deepEqual(provider.loadReviewConfig(fixture.repoDir), {
-      maxConcurrentFiles: 5,
-      confidenceThresholds: {
-        must: 0,
-        nice: 100
-      },
+    configFixture.writeReviewConfig({
       mcpServers: {
         context7: {
           type: "http",
           tools: ["resolve-library-id"],
           timeout: 20000
         }
+      },
+      confidenceThresholds: {
+        must: 0,
+        nice: 100
       }
     });
+    assert.deepEqual(
+      configFixture.loadReviewConfig(),
+      buildExpectedReviewConfig({
+        confidenceThresholds: {
+          must: 0,
+          nice: 100
+        },
+        mcpServers: {
+          context7: {
+            type: "http",
+            tools: ["resolve-library-id"],
+            timeout: 20000
+          }
+        }
+      })
+    );
   } finally {
-    fixture.cleanup();
+    configFixture.cleanup();
   }
 });
 
 test("LocalReviewConfigProvider rejects malformed or invalid review config", () => {
-  const fixture = createReviewRepoFixture();
+  const configFixture = createReviewConfigProviderFixture();
 
   try {
-    const provider = new LocalReviewConfigProvider();
-
-    fixture.writeFile(".reviewconfig.json", "{");
+    configFixture.writeRawReviewConfig("{");
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(".reviewconfig.json", JSON.stringify([]));
+    configFixture.writeReviewConfig([]);
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        maxConcurrentFiles: 0
-      })
-    );
+    configFixture.writeReviewConfig({
+      maxConcurrentFiles: 0
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        maxConcurrentFiles: -1
-      })
-    );
+    configFixture.writeReviewConfig({
+      maxConcurrentFiles: -1
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        maxConcurrentFiles: 2.5
-      })
-    );
+    configFixture.writeReviewConfig({
+      maxConcurrentFiles: 2.5
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        maxConcurrentFiles: "2"
-      })
-    );
+    configFixture.writeReviewConfig({
+      maxConcurrentFiles: "2"
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        confidenceThresholds: []
-      })
-    );
+    configFixture.writeReviewConfig({
+      confidenceThresholds: []
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        confidenceThresholds: {
-          musst: 70
+    configFixture.writeReviewConfig({
+      confidenceThresholds: {
+        musst: 70
+      }
+    });
+    assert.throws(
+      () => configFixture.loadReviewConfig(),
+      /invalid review config/u
+    );
+
+    configFixture.writeReviewConfig({
+      confidenceThresholds: {
+        must: 101
+      }
+    });
+    assert.throws(
+      () => configFixture.loadReviewConfig(),
+      /invalid review config/u
+    );
+
+    configFixture.writeReviewConfig({
+      confidenceThresholds: {
+        nice: "85"
+      }
+    });
+    assert.throws(
+      () => configFixture.loadReviewConfig(),
+      /invalid review config/u
+    );
+
+    configFixture.writeReviewConfig({
+      mcpServers: []
+    });
+    assert.throws(
+      () => configFixture.loadReviewConfig(),
+      /invalid review config/u
+    );
+
+    configFixture.writeReviewConfig({
+      mcpServers: {
+        demo: {
+          type: "local"
         }
-      })
-    );
+      }
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        confidenceThresholds: {
-          must: 101
+    configFixture.writeReviewConfig({
+      mcpServers: {
+        demo: {
+          type: "remote",
+          command: "https://example.com/mcp"
         }
-      })
-    );
+      }
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        confidenceThresholds: {
-          nice: "85"
+    configFixture.writeReviewConfig({
+      mcpServers: {
+        demo: {
+          type: "local",
+          command: "npx",
+          args: "--bad"
         }
-      })
-    );
+      }
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: []
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: {
-          demo: {
-            type: "local"
+    configFixture.writeReviewConfig({
+      mcpServers: {
+        context7: {
+          headers: {
+            Authorization: "Bearer repo-token"
           }
         }
-      })
-    );
+      }
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: {
-          demo: {
-            type: "remote",
-            command: "https://example.com/mcp"
-          }
+    configFixture.writeReviewConfig({
+      mcpServers: {
+        context7: {
+          url: "https://context7.example.com/mcp"
         }
-      })
-    );
+      }
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: {
-          demo: {
-            type: "local",
-            command: "npx",
-            args: "--bad"
-          }
+    configFixture.writeReviewConfig({
+      mcpServers: {
+        context7: {
+          command: "npx"
         }
-      })
-    );
+      }
+    });
     assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
+      () => configFixture.loadReviewConfig(),
       /invalid review config/u
     );
 
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: {
-          context7: {
-            headers: {
-              Authorization: "Bearer repo-token"
-            }
-          }
-        }
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: {
-          context7: {
-            url: "https://context7.example.com/mcp"
-          }
-        }
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        mcpServers: {
-          context7: {
-            command: "npx"
-          }
-        }
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        webFetchAllowedHosts: "docs.example.com"
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        webFetchAllowedHosts: [123]
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        webFetchAllowedHosts: ["   "]
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        webFetchAllowedHosts: ["https://docs.example.com"]
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        webFetchAllowedHosts: ["docs.example.com:8443"]
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        webFetchAllowedHosts: ["docs.example.com/guide"]
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
-
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        webFetchAllowedHosts: ["192.168.1.10"]
-      })
-    );
-    assert.throws(
-      () => provider.loadReviewConfig(fixture.repoDir),
-      /invalid review config/u
-    );
   } finally {
-    fixture.cleanup();
+    configFixture.cleanup();
   }
 });
