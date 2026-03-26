@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
-import { readFileSync, realpathSync } from "node:fs";
-import path from "node:path";
 import test from "node:test";
 
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
-import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
@@ -12,7 +9,33 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStandardStep5JsonResponse, buildStandardStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import {
+  type StepId,
+  collectReviewableFiles,
+  createObservedStepRunner,
+  createStepResponseRouter,
+  loadPlannedNoteContents
+} from "../helpers/orchestrator-step-contract-fixture.ts";
+import {
+  buildStandardStep5JsonResponse,
+  buildStandardStep6JsonResponse,
+  buildStandardStep7SummaryResponse,
+  buildStrategyResponse,
+  detectStepId,
+  extractDiffPath
+} from "../helpers/orchestrator-fixture.ts";
+
+const buildStepResponse = createStepResponseRouter({
+  step5Response() {
+    return buildStandardStep5JsonResponse();
+  },
+  step6Response() {
+    return buildStandardStep6JsonResponse();
+  },
+  step7Response(filePath: string) {
+    return buildStandardStep7SummaryResponse(filePath);
+  }
+});
 
 test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Findings afterwards", async () => {
   const fixture = createReviewRepoFixture();
@@ -20,13 +43,20 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
   try {
     fixture.writeFile(".reviewignore", "dist/**\n");
 
-    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
+    const observedDisconnects: string[] = [];
+    const observedProfiles: Array<Record<string, string>> = [];
+    const observedStepEvents: Array<[StepId, string]> = [];
+    const observedPrompts: Array<{ stepId: StepId; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: new LocalWorkspaceProvider(),
-      stepRunner: createStep5AwareRunner({
-        observedPrompts
+      stepRunner: createObservedStepRunner({
+        observedDisconnects,
+        observedProfiles,
+        observedPrompts,
+        observedStepEvents,
+        buildStepResponse
       }),
       changesetOverviewRunner: {
         async run() {
@@ -47,12 +77,10 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
       userContext: []
     });
 
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const { reviewableFiles } = collectReviewableFiles({
+      sourceProvider,
+      repoDir: fixture.repoDir
+    });
     const step5Prompt = observedPrompts.find(
       ({ stepId }) => stepId === "step5-validation-interrogation"
     );
@@ -63,16 +91,17 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
     );
     assert.doesNotMatch(step5Prompt?.prompt ?? "", /^## Findings/mu);
 
-    for (const plannedNote of plannedNotes) {
-      const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
-
-      assert.match(noteContent, /^## Strategy & What-if Scenarios/mu);
-      assert.match(noteContent, /^## Findings/mu);
+    for (const plannedNote of loadPlannedNoteContents(
+      result.outputTarget,
+      reviewableFiles
+    )) {
+      assert.match(plannedNote.content, /^## Strategy & What-if Scenarios/mu);
+      assert.match(plannedNote.content, /^## Findings/mu);
       assert.match(
-        noteContent,
+        plannedNote.content,
         /## Strategy & What-if Scenarios[\s\S]*## Findings/u
       );
-      assert.doesNotMatch(noteContent, /confidence/u);
+      assert.doesNotMatch(plannedNote.content, /confidence/u);
     }
   } finally {
     fixture.cleanup();
@@ -88,16 +117,10 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
     fixture.commitAll("add third changed file for step4 exhaustion");
 
     const sourceProvider = new LocalGitProvider();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
-    const plannedNotes = planNoteFiles(
-      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
-      reviewableFiles
-    );
+    const { reviewableFiles } = collectReviewableFiles({
+      sourceProvider,
+      repoDir: fixture.repoDir
+    });
     const failedFile = reviewableFiles[1];
     const stepEvents: Array<[string, string]> = [];
     const reviewAttempts = new Map();
@@ -168,25 +191,26 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
       undefined
     );
 
+    const plannedNotes = loadPlannedNoteContents(
+      result.outputTarget,
+      reviewableFiles
+    );
     const successfulNote = plannedNotes.find(
       ({ filePath }) => filePath === reviewableFiles[0]
     )!;
     const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile)!;
     const laterNote = plannedNotes.find(({ filePath }) => filePath === reviewableFiles[2])!;
 
-    const successfulNoteContent = readFileSync(successfulNote.noteFilePath, "utf8");
-    assert.match(successfulNoteContent, /^## Summary/mu);
+    assert.match(successfulNote.content, /^## Summary/mu);
 
-    const failedNoteContent = readFileSync(failedNote.noteFilePath, "utf8");
-    assert.match(failedNoteContent, /^## Knowledge & Source of Truth/mu);
-    assert.doesNotMatch(failedNoteContent, /^## Strategy & What-if Scenarios/mu);
-    assert.doesNotMatch(failedNoteContent, /^## Findings/mu);
-    assert.match(failedNoteContent, /> \[!WARNING\] Review Interrupted/u);
-    assert.match(failedNoteContent, /step4-strategy-what-if-scenarios/u);
-    assert.match(failedNoteContent, /empty review response/u);
+    assert.match(failedNote.content, /^## Knowledge & Source of Truth/mu);
+    assert.doesNotMatch(failedNote.content, /^## Strategy & What-if Scenarios/mu);
+    assert.doesNotMatch(failedNote.content, /^## Findings/mu);
+    assert.match(failedNote.content, /> \[!WARNING\] Review Interrupted/u);
+    assert.match(failedNote.content, /step4-strategy-what-if-scenarios/u);
+    assert.match(failedNote.content, /empty review response/u);
 
-    const laterNoteContent = readFileSync(laterNote.noteFilePath, "utf8");
-    assert.match(laterNoteContent, /^## Summary/mu);
+    assert.match(laterNote.content, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }
@@ -201,11 +225,10 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
     const reviewAttempts = new Map();
     const judgeAttempts = new Map();
     const sourceProvider = new LocalGitProvider();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
+    const { reviewableFiles } = collectReviewableFiles({
+      sourceProvider,
+      repoDir: fixture.repoDir
+    });
     const retryFile = reviewableFiles[1];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -274,83 +297,18 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
       userContext: []
     });
 
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
+    const plannedNotes = loadPlannedNoteContents(
+      result.outputTarget,
+      reviewableFiles
+    );
     const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile)!;
-    const retriedContent = readFileSync(retriedNote.noteFilePath, "utf8");
 
     assert.equal(reviewAttempts.get(`step4-strategy-what-if-scenarios:${retryFile}`), 2);
     assert.equal(judgeAttempts.get(`step4-strategy-what-if-scenarios:${retryFile}`), 2);
-    assert.match(retriedContent, /attempt 2/u);
-    assert.doesNotMatch(retriedContent, /attempt 1/u);
-    assert.match(retriedContent, /^## Findings/mu);
+    assert.match(retriedNote.content, /attempt 2/u);
+    assert.doesNotMatch(retriedNote.content, /attempt 1/u);
+    assert.match(retriedNote.content, /^## Findings/mu);
   } finally {
     fixture.cleanup();
   }
 });
-
-function buildStepResponse(
-  stepId:
-    | "step1-overview"
-    | "step2-dependencies-boundaries"
-    | "step3-knowledge-source-of-truth"
-    | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation"
-    | "step6-cognitive-simulation"
-    | "step7-summary",
-  filePath: string
-): string {
-  if (stepId === "step1-overview") {
-    return buildOverviewResponse(filePath);
-  }
-
-  if (stepId === "step2-dependencies-boundaries") {
-    return buildDependenciesResponse(filePath);
-  }
-
-  if (stepId === "step3-knowledge-source-of-truth") {
-    return buildKnowledgeResponse(filePath);
-  }
-
-  if (stepId === "step4-strategy-what-if-scenarios") {
-    return buildStrategyResponse(filePath);
-  }
-
-  if (stepId === "step5-validation-interrogation") {
-    return buildStandardStep5JsonResponse();
-  }
-
-  if (stepId === "step6-cognitive-simulation") {
-    return buildStandardStep6JsonResponse();
-  }
-
-  return buildStandardStep7SummaryResponse(filePath);
-}
-
-function createStep5AwareRunner(input: {
-  observedPrompts: Array<{ stepId: string; prompt: string }>;
-}): StepRunner {
-  return new StepRunner({
-    reviewSessionFactory: {
-      async createSession(profile) {
-        const stepId = detectStepId(profile.systemMessage);
-
-        return new SessionExecutor({
-          async sendAndWait(options) {
-            const filePath = extractDiffPath(options.prompt);
-
-            input.observedPrompts.push({ stepId, prompt: options.prompt });
-
-            return { data: { content: buildStepResponse(stepId, filePath) } };
-          },
-          async disconnect() {}
-        });
-      }
-    },
-    structuredOutputValidator: new StructuredOutputValidator(),
-    judgeService: {
-      async evaluate() {
-        return { passed: true };
-      }
-    }
-  });
-}
