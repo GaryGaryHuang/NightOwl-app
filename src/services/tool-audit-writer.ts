@@ -12,6 +12,9 @@ export interface ToolAuditRecord {
   };
 }
 
+/**
+ * Append tool-decision audit records to the JSONL log on a best-effort basis.
+ */
 export class ToolAuditWriter {
   readonly #auditFilePath: string;
 

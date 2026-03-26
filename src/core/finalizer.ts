@@ -4,6 +4,9 @@ import type {
 } from "./file-review-context.ts";
 import { getReviewSectionDefinitionsForSlot } from "./review-section-contract.ts";
 
+/**
+ * Render the canonical in-memory file state into the Markdown review note shape.
+ */
 export class ReviewNoteFinalizer {
   render(
     context: Pick<
@@ -22,6 +25,7 @@ export class ReviewNoteFinalizer {
       .filter((section): section is string => Boolean(section));
     const warningBlock = renderInterruptionWarning(context.getInterruption());
 
+    // Bootstrap snapshots are intentionally minimal until the first real section lands.
     if (
       preFindingsSections.length === 0 &&
       !findingsSection &&
@@ -84,6 +88,7 @@ function renderFindingsSection(
   const niceFindings = findings.filter((f) => f.type === "nice");
   const statsLine = `${mustFindings.length} must-fix issue(s), ${niceFindings.length} nice-to-have suggestion(s).`;
 
+  // Keep must findings ahead of nice findings so the rendered note is stable and severity-ordered.
   return [
     "## Findings",
     statsLine,

@@ -3,6 +3,7 @@ import type { ReviewNoteFinalizer } from "../finalizer.ts";
 import { SUMMARY_SECTION } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
+// Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [
   "You are a senior code reviewer with expertise in correctness verification, contract-boundary analysis, and behavioral-regression detection. You are executing one designated step of the Code Review SOP.",
   "Your task in each invocation is to complete only the current step and produce the exact output required for that step.",
@@ -47,6 +48,9 @@ export interface Step7SummaryStepOptions {
   reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
 }
 
+/**
+ * Final section step: turn the completed note into a reader-facing summary without duplicating the detailed findings.
+ */
 export class Step7SummaryStep implements StepDefinition {
   readonly stepId = "step7-summary";
   readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
@@ -82,6 +86,7 @@ export class Step7SummaryStep implements StepDefinition {
 }
 
 function buildStep7UserMessage(currentReview: string): string {
+  // Summary is derived from the fully rendered note so it can synthesize the final findings context and all prior sections together.
   return [
     "<current_review>",
     currentReview,

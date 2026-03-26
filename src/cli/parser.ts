@@ -9,6 +9,9 @@ export class CliUsageError extends Error {
 
 const USAGE = "review <base_ref> <head_ref> [--repo <path>] [--context <value>]";
 
+/**
+ * Parse the review command into the RunRequest consumed by the app layer.
+ */
 export function parseReviewCommand(argv: string[]): RunRequest {
   const positionals: string[] = [];
   const userContext: string[] = [];
@@ -36,6 +39,7 @@ export function parseReviewCommand(argv: string[]): RunRequest {
         throw new CliUsageError(`Missing value for --context\nUsage: ${USAGE}`);
       }
 
+      // Preserve repeated --context values in the order the user supplied them.
       userContext.push(value);
       index += 1;
       continue;

@@ -21,10 +21,15 @@ import type {
   SkipRecord
 } from "./review-output-sink.ts";
 
+/**
+ * Local Markdown output sink for per-file notes and run-level artifacts.
+ * It also classifies write failures so the orchestrator can decide between skip and abort.
+ */
 export class LocalWorkspaceProvider implements ReviewOutputSink {
   #outputTarget?: OutputTarget;
 
   initializeRun(outputTarget: OutputTarget): void {
+    // Create shared run directories up front and truncate append-only artifacts before workers start.
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
@@ -44,6 +49,7 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
       return { faultScope: "shared-output-target-fault" };
     }
 
+    // Use errno plus the failing path to distinguish a one-file write problem from a shared target fault.
     const code =
       isErrnoException(input.error) && typeof input.error.code === "string"
         ? input.error.code
@@ -118,6 +124,7 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
       throw new Error("Run output target has not been initialized.");
     }
 
+    // Keep the overview snapshot newline-terminated so the rendered output stays stable.
     const content = result.content.endsWith("\n")
       ? result.content
       : result.content + "\n";

@@ -6,6 +6,9 @@ import ignore from "ignore";
 
 import type { ReviewSourceProvider } from "./review-source-provider.ts";
 
+/**
+ * Local git source adapter backed by the repository's `git` executable.
+ */
 export class LocalGitProvider implements ReviewSourceProvider {
   resolveRepoRoot(startPath: string): string {
     return runGit(path.resolve(startPath), ["rev-parse", "--show-toplevel"]);
@@ -31,6 +34,7 @@ export class LocalGitProvider implements ReviewSourceProvider {
     baseRef: string,
     headRef: string
   ): string[] {
+    // Step 0 needs name-status output so it can see deleted files as part of the full changeset.
     const output = runGit(repoRoot, [
       "diff",
       `${baseRef}...${headRef}`,
@@ -64,6 +68,7 @@ export class LocalGitProvider implements ReviewSourceProvider {
 
     const matcher = ignore().add(readFileSync(reviewIgnorePath, "utf8"));
 
+    // `.reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
     return files.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
   }
 }

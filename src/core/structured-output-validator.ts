@@ -15,6 +15,9 @@ export interface StructuredOutputValidatorOptions {
   confidenceThresholds?: ConfidenceThresholds;
 }
 
+/**
+ * Deterministically validate structured findings JSON before it is written into review state.
+ */
 export class StructuredOutputValidator {
   readonly #confidenceThresholds: ConfidenceThresholds;
 
@@ -61,6 +64,7 @@ export class StructuredOutputValidator {
       validateFinding(finding, hunkHeaders)
     );
 
+    // Validation happens first; threshold filtering trims low-confidence findings after the payload is structurally sound.
     return {
       findings: validatedFindings.filter((finding) =>
         finding.type === "must"

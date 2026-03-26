@@ -39,6 +39,9 @@ export interface DefaultWebFetchHostnameClassifierOptions {
   lookupFn?: WebFetchHostnameLookupLike;
 }
 
+/**
+ * Resolve every address for a hostname and deny on timeout, lookup failure, or any non-public result.
+ */
 export class DefaultWebFetchHostnameClassifier
   implements WebFetchHostnameClassifier {
   readonly #lookupFn: WebFetchHostnameLookupLike;
@@ -52,6 +55,7 @@ export class DefaultWebFetchHostnameClassifier
     options: { timeoutMs: number }
   ): Promise<WebFetchHostnameClassification> {
     const canonicalHostname = canonicalizeHostnameForComparison(hostname);
+    // Use all:true so the policy can inspect every resolved address instead of trusting the first one.
     const lookupPromise = this.#lookupFn(canonicalHostname, {
       all: true,
       verbatim: true

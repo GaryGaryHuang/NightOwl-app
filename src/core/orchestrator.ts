@@ -69,6 +69,9 @@ export interface ReviewOrchestratorOptions {
   timestampProvider?: () => string;
 }
 
+/**
+ * Coordinate the full review run: Step 0, per-file fan-out, and final run-level artifacts.
+ */
 export class ReviewOrchestrator {
   readonly #changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
   readonly #sourceProvider: ReviewSourceProvider;
@@ -117,6 +120,7 @@ export class ReviewOrchestrator {
       request.baseRef,
       request.headRef
     );
+    // Step 0 must complete first because its RunContext feeds the per-file Overview step.
     const runContext = await this.#changesetOverviewRunner.run({
       model: "gpt-5.4-mini",
       changedFilesList: changesetEntries,
@@ -156,6 +160,7 @@ export class ReviewOrchestrator {
 
     this.#onOutputTargetReady?.(outputTarget);
 
+    // Publish bootstrap snapshots before any per-file step runs so every file starts from the same skeleton.
     for (const plannedNote of plannedNoteFiles) {
       this.#outputSink.publishFileReview({
         noteFilePath: plannedNote.noteFilePath,
@@ -171,6 +176,7 @@ export class ReviewOrchestrator {
       });
     }
 
+    // Steps 2–7 each receive the progressively rendered note via <current_review> so each step builds on prior output.
     const steps = [
       new Step1OverviewStep({ runContext }),
       new Step2DependenciesBoundariesStep({
@@ -210,6 +216,7 @@ export class ReviewOrchestrator {
     const sharedAbortState: AbortState = {};
     const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
     let skippedAppendQueue = Promise.resolve();
+    // skipped.md is shared across workers, so serialize appends through a promise queue.
     const publishSkippedFileSerialized = (skipRecord: {
       filePath: string;
       stepId: string;
@@ -310,6 +317,7 @@ export class ReviewOrchestrator {
     );
     let nextPlannedIndex = 0;
 
+    // Each worker pulls the next file atomically from the shared cursor until no work remains.
     const claimNextWorkItem = (): PlannedFileWorkItem | undefined => {
       if (input.runAbortState.error) {
         return undefined;
@@ -384,6 +392,7 @@ export class ReviewOrchestrator {
     let diffContent: string;
 
     try {
+      // Load the file diff once so the per-file state machine can operate on a stable snapshot.
       diffContent = this.#sourceProvider.getDiff(
         input.repoRoot,
         input.request.baseRef,
@@ -492,6 +501,7 @@ export class ReviewOrchestrator {
           content: this.#finalizer.render(fileContext)
         });
       } catch (outputError) {
+        // A snapshot write failure is classified before deciding whether the run should abort or the file should skip.
         const assessment = resolveSuccessfulSnapshotFailureAssessment(
           this.#outputSink,
           {

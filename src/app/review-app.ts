@@ -64,6 +64,10 @@ export interface ReviewApp {
   run(request: RunRequest): Promise<ReviewRunSummary>;
 }
 
+/**
+ * Composition root for a single local review run.
+ * The repo-root-dependent pieces are assembled inside run() after repo root resolution.
+ */
 export function createLocalReviewRunApp(
   options: CreateLocalReviewRunAppOptions
 ): ReviewApp {
@@ -129,6 +133,7 @@ export function createLocalReviewRunApp(
         timestampProvider: options.timestampProvider,
         maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
         onOutputTargetReady: (outputTarget) => {
+          // Wire the audit writer only after the run output path exists; Step 0 sessions created earlier are not audited.
           const auditWriter = new ToolAuditWriter(outputTarget.toolAuditPath);
           reviewSessionFactory.setAuditWriter(auditWriter);
         }
@@ -136,6 +141,7 @@ export function createLocalReviewRunApp(
 
       await clientManager.start();
 
+      // Translate process signals into a shared AbortSignal so the orchestrator can stop cooperatively.
       const controller = new AbortController();
       const handleSigint = (): void => {
         controller.abort("SIGINT");
@@ -159,6 +165,9 @@ export function createLocalReviewRunApp(
   };
 }
 
+/**
+ * Try a graceful client shutdown first, then forceStop() if stop() exceeds the timeout.
+ */
 async function stopClientManagerWithTimeout(
   clientManager: LocalReviewRunClientManager,
   timeoutMs: number

@@ -20,6 +20,9 @@ export interface KnowledgeSvcOptions {
   userMcpServers?: ReviewMcpServers;
 }
 
+/**
+ * Build the MCP server map for review sessions from the fixed Context7 base plus repo-local overrides.
+ */
 export class KnowledgeSvc {
   readonly #context7ApiKey?: string;
   readonly #userMcpServers: ReviewMcpServers;
@@ -58,6 +61,7 @@ export class KnowledgeSvc {
 
     for (const [name, config] of Object.entries(this.#userMcpServers)) {
       if (name === "context7") {
+        // Context7 is special: repo-local config may only override the supported fields on the built-in remote shape.
         if (!isContext7OverrideConfig(config)) {
           throw new Error("context7 override must use the built-in remote override shape");
         }
@@ -65,6 +69,7 @@ export class KnowledgeSvc {
         context7Config = mergeContext7Config(context7Config, config);
         merged.context7 = context7Config;
       } else if (isRemoteConfig(config)) {
+        // Clone remote entries so session setup cannot mutate the parsed repo config object.
         const remoteConfig: MCPRemoteServerConfig = {
           type: config.type,
           url: config.url,

@@ -16,6 +16,9 @@ export interface JudgeServiceOptions {
   judgeSessionFactory: Pick<JudgeSessionFactory, "createSession">;
 }
 
+/**
+ * Run the dedicated completion-check session for section steps and normalize its Y/N response.
+ */
 export class JudgeService {
   readonly systemMessage = [
     "You are a completion checker. Evaluate whether the content in <section> satisfies the requirements explicitly listed in <criteria>.",
@@ -65,6 +68,7 @@ export class JudgeService {
         throw new Error("judge timeout");
       }
 
+      // Keep the acceptance check intentionally narrow: only y/yes counts as pass.
       const normalized = response?.trim().toLowerCase();
 
       if (normalized === "y" || normalized === "yes") {

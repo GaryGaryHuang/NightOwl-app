@@ -27,6 +27,9 @@ export interface ChangesetOverviewRunnerOptions {
   reviewSessionFactory: ReviewSessionFactoryLike;
 }
 
+/**
+ * Run the run-level Step 0 review once, retrying only if the response is blank or the session fails.
+ */
 export class ChangesetOverviewRunner {
   readonly #reviewSessionFactory: ReviewSessionFactoryLike;
 
@@ -56,6 +59,7 @@ export class ChangesetOverviewRunner {
           });
         }
 
+        // Step 0 only succeeds when it produces a non-empty overview.
         lastError = new Error(
           "Step 0 changeset overview did not produce a non-empty response."
         );
@@ -71,6 +75,8 @@ export class ChangesetOverviewRunner {
   }
 }
 
+// Duplicated in each step file and here to keep step definitions self-contained.
+// When modifying, keep all copies in sync.
 const COMMON_SYSTEM_MESSAGE = [
   "You are a senior code reviewer with expertise in correctness verification, contract-boundary analysis, and behavioral-regression detection. You are executing one designated step of the Code Review SOP.",
   "Your task in each invocation is to complete only the current step and produce the exact output required for that step.",

@@ -17,6 +17,9 @@ import type {
   ReviewConfigProvider
 } from "./review-config-provider.ts";
 
+/**
+ * Load repo-local review config and normalize the supported overrides.
+ */
 export class LocalReviewConfigProvider implements ReviewConfigProvider {
   loadReviewConfig(repoRoot: string): ReviewConfig {
     const configPath = path.join(repoRoot, ".reviewconfig.json");
@@ -47,6 +50,7 @@ export class LocalReviewConfigProvider implements ReviewConfigProvider {
       const message =
         error instanceof Error ? error.message : "invalid review config";
 
+      // Re-throw with the file path so invalid config errors point back to the source file.
       throw new Error(`${message} at ${configPath}`);
     }
   }
@@ -97,6 +101,7 @@ function resolveMcpServersFromConfigObject(
     }
 
     if (name === "context7") {
+      // Keep the built-in Context7 endpoint fixed; repo-local config may only adjust tools and timeout.
       resolved[name] = resolveContext7OverrideEntry(rawDefinition);
       continue;
     }

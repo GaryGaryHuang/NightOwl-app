@@ -3,6 +3,7 @@ import type { ReviewNoteFinalizer } from "../finalizer.ts";
 import { KNOWLEDGE_SOURCE_OF_TRUTH_SECTION } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
+// Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [
   "You are a senior code reviewer with expertise in correctness verification, contract-boundary analysis, and behavioral-regression detection. You are executing one designated step of the Code Review SOP.",
   "Your task in each invocation is to complete only the current step and produce the exact output required for that step.",
@@ -97,6 +98,9 @@ export interface Step3KnowledgeSourceOfTruthStepOptions {
   reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
 }
 
+/**
+ * Close the knowledge gaps that materially affect later review, while pinning the rules and assumptions that govern the rest of the SOP.
+ */
 export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
   readonly stepId = "step3-knowledge-source-of-truth";
   readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;

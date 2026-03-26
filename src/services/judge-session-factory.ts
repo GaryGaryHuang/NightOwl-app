@@ -16,6 +16,9 @@ export interface JudgeSessionFactoryOptions {
   };
 }
 
+/**
+ * Build isolated judge sessions that are intended to stay text-only and never expose tool access.
+ */
 export class JudgeSessionFactory {
   readonly #clientManager: JudgeSessionFactoryOptions["clientManager"];
 
@@ -25,6 +28,7 @@ export class JudgeSessionFactory {
 
   async createSession(profile: JudgeSessionProfile): Promise<SessionExecutor> {
     const sessionConfig: SessionConfig = {
+      // No tools are exposed here, so the judge session can only evaluate the supplied text.
       availableTools: [],
       model: profile.model,
       onPermissionRequest: approveAll,

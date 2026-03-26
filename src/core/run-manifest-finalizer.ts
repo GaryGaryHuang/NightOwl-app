@@ -18,6 +18,9 @@ export interface RunManifestRenderInput {
   skippedFiles: SkippedFileOutcome[];
 }
 
+/**
+ * Render a deterministic machine-readable manifest of the completed review run.
+ */
 export class RunManifestFinalizer {
   render(input: RunManifestRenderInput): string {
     const files = input.plannedNotes.map((plannedNote) => {

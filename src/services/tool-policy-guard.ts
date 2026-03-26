@@ -73,6 +73,9 @@ export interface ToolPolicyGuardOptions {
   webFetchRedirectTimeoutMs?: number;
 }
 
+/**
+ * Enforce the review session tool boundary for web_fetch, shell, and file access.
+ */
 export class ToolPolicyGuard {
   readonly #hostnameClassifier: WebFetchHostnameClassifier;
   readonly #redirectResolver: WebFetchRedirectResolver;
@@ -141,6 +144,7 @@ export class ToolPolicyGuard {
     auditWriter?: ToolAuditWriter
   ): PermissionHandler {
     return async (request) => {
+      // File permissions are fail-closed: only repo/output-boundary reads are allowed, and writes are always denied.
       if (
         request.kind === "read" &&
         typeof request.path === "string" &&
@@ -172,6 +176,7 @@ export class ToolPolicyGuard {
       }
 
       if (request.kind === "write") {
+        // Review sessions must remain observational, so tool-triggered writes are rejected categorically.
         const fileName =
           "fileName" in request && typeof request.fileName === "string"
             ? request.fileName
@@ -199,16 +204,18 @@ export class ToolPolicyGuard {
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
       if (input.toolName === "web_fetch") {
+        // web_fetch is evaluated conservatively: URL shape first, then host policy, then DNS/redirect checks.
         const url =
           input.toolArgs &&
           typeof input.toolArgs === "object" &&
           "url" in input.toolArgs &&
-          typeof input.toolArgs.url === "string"
+            typeof input.toolArgs.url === "string"
             ? input.toolArgs.url
             : "";
 
         const parsedUrl = parseAllowedWebFetchUrl(url);
         let decision: PreToolUseHookResult;
+        // Cache hostname classification within a single hook invocation so redirects do not repeat DNS lookups.
         const hostnameDecisionCache = new Map<
           string,
           Promise<PreToolUseHookResult>
@@ -302,6 +309,7 @@ export class ToolPolicyGuard {
 
       let command = "";
       try {
+        // Shell access is limited to repo-local read-only analysis commands.
         command =
           input.toolArgs &&
           typeof input.toolArgs === "object" &&

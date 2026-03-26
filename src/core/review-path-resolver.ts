@@ -22,6 +22,7 @@ export interface PlannedNoteFile {
 }
 
 export function buildSessionId(input: ResolveOutputTargetInput): string {
+  // Sanitize the branch-derived prefix so session IDs stay filesystem-safe and deterministic.
   const candidate = sanitizeSegment(input.branchName ?? input.headRef);
   const fallback = sanitizeSegment(input.headRef);
   const prefix = candidate || fallback || "review";
@@ -51,9 +52,11 @@ export function planNoteFiles(
   filesPath: string,
   changedFiles: string[]
 ): PlannedNoteFile[] {
+  // Start from the basename and prepend parent segments only as needed until every note filename is unique.
   const depths = new Map(changedFiles.map((filePath) => [filePath, 1]));
 
   while (true) {
+    // Recompute the whole mapping each pass so collision resolution stays deterministic.
     const collisions = new Map();
 
     for (const filePath of changedFiles) {

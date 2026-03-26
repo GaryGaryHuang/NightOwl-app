@@ -21,6 +21,9 @@ export interface RunSummaryRenderInput {
   skippedFiles: SkippedFileOutcome[];
 }
 
+/**
+ * Render the run-level summary from finalized per-file outcomes and derived risk levels.
+ */
 export class RunSummaryFinalizer {
   render(input: RunSummaryRenderInput): string {
     const totalMust = input.successfulFiles.reduce(

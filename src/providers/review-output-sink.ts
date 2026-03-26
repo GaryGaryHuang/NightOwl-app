@@ -58,6 +58,7 @@ export function resolveSuccessfulSnapshotFailureAssessment(
   input: SuccessfulSnapshotFailureInput
 ): SuccessfulSnapshotFailureAssessment {
   try {
+    // Default to the conservative shared-target classification unless the sink can prove a single-file fault.
     return (
       outputSink.assessSuccessfulSnapshotFailure?.(input) ?? {
         faultScope: "shared-output-target-fault"

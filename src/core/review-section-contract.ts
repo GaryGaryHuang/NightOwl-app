@@ -13,6 +13,7 @@ export interface ReviewSectionContract {
   definitionsBySlot: Readonly<Record<ReviewSectionRenderSlot, readonly ReviewSectionDefinition[]>>;
 }
 
+// Central contract for which review sections exist, which step owns each section, and where the finalizer renders them.
 export const OVERVIEW_SECTION = {
   key: "overview",
   stepId: "step1-overview",
@@ -41,6 +42,7 @@ export const STRATEGY_WHAT_IF_SCENARIOS_SECTION = {
   order: 4
 } as const satisfies ReviewSectionDefinition;
 
+// Post-findings: the Summary step synthesizes the final findings and all prior sections, so it must render after them.
 export const SUMMARY_SECTION = {
   key: "summary",
   stepId: "step7-summary",
@@ -60,6 +62,9 @@ export type ReviewSectionKey = (typeof REVIEW_SECTION_DEFINITIONS)[number]["key"
 
 const REVIEW_SECTION_CONTRACT = buildReviewSectionContract(REVIEW_SECTION_DEFINITIONS);
 
+/**
+ * Freeze and validate the section contract once so all step writers and finalizers share the same canonical layout.
+ */
 export function buildReviewSectionContract(
   definitions: readonly ReviewSectionDefinition[]
 ): ReviewSectionContract {
@@ -107,6 +112,7 @@ export function assertReviewSectionKey(sectionKey: string): asserts sectionKey i
   }
 }
 
+// Lookup helpers read from the frozen contract so callers cannot drift from the declared section ordering.
 export function getReviewSectionDefinition(
   sectionKey: ReviewSectionKey
 ): ReviewSectionDefinition {

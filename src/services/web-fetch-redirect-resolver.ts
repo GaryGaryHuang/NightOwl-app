@@ -44,6 +44,9 @@ export interface DefaultWebFetchRedirectResolverOptions {
   fetchFn?: WebFetchResolverFetchLike;
 }
 
+/**
+ * Follow redirects manually so each hop can be validated before the next request is trusted.
+ */
 export class DefaultWebFetchRedirectResolver
   implements WebFetchRedirectResolver {
   readonly #fetchFn: WebFetchResolverFetchLike;
@@ -128,6 +131,7 @@ export class DefaultWebFetchRedirectResolver
         );
 
         if (redirectTargetValidationReason) {
+          // Reject the chain immediately when the next hop fails the caller's policy check.
           return {
             kind: "denied",
             reason: redirectTargetValidationReason

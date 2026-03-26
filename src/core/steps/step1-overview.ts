@@ -3,6 +3,8 @@ import { OVERVIEW_SECTION } from "../review-section-contract.ts";
 import type { RunContext } from "../run-context.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
+// Duplicated in each step file and changeset-overview-runner.ts to keep step definitions self-contained.
+// When modifying, keep all copies in sync.
 const COMMON_SYSTEM_MESSAGE = [
   "You are a senior code reviewer with expertise in correctness verification, contract-boundary analysis, and behavioral-regression detection. You are executing one designated step of the Code Review SOP.",
   "Your task in each invocation is to complete only the current step and produce the exact output required for that step.",
@@ -90,6 +92,9 @@ export interface Step1OverviewStepOptions {
   runContext: RunContext;
 }
 
+/**
+ * First per-file step: turn the shared Step 0 context plus the file diff into the working overview for later steps.
+ */
 export class Step1OverviewStep implements StepDefinition {
   readonly stepId = "step1-overview";
   readonly #runContext: RunContext;
@@ -126,6 +131,7 @@ function buildStep1UserMessage(
   context: FileReviewContext,
   runContext: RunContext
 ): string {
+  // Keep Step 0's shared changeset framing adjacent to the file diff so the model can situate this file before deeper analysis starts.
   return [
     "<changeset_context>",
     runContext.changesetOverview,

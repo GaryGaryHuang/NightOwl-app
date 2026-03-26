@@ -3,6 +3,7 @@ import type { ReviewNoteFinalizer } from "../finalizer.ts";
 import { STRATEGY_WHAT_IF_SCENARIOS_SECTION } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
+// Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [
   "You are a senior code reviewer with expertise in correctness verification, contract-boundary analysis, and behavioral-regression detection. You are executing one designated step of the Code Review SOP.",
   "Your task in each invocation is to complete only the current step and produce the exact output required for that step.",
@@ -107,6 +108,9 @@ export interface Step4StrategyWhatIfScenariosStepOptions {
   reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
 }
 
+/**
+ * Convert the accumulated context into a small set of change-specific validation hypotheses for the finding stages.
+ */
 export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
   readonly stepId = "step4-strategy-what-if-scenarios";
   readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;

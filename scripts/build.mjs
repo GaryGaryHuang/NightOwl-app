@@ -1,3 +1,5 @@
+// Build with Node's native stripTypeScriptTypes (no tsc or bundler dependency).
+// Specifiers are rewritten .ts → .js so the dist/ output runs as plain ESM.
 import { stripTypeScriptTypes } from "node:module";
 import {
   chmodSync,

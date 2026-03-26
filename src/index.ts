@@ -19,6 +19,9 @@ interface ResolvedCliRuntime {
   stderr: Pick<typeof console, "error">;
 }
 
+/**
+ * Thin CLI entrypoint: parse args, run the app, and translate failures into exit codes.
+ */
 export async function runCli(
   argv: string[],
   runtime: CliRuntime = {}
@@ -37,6 +40,7 @@ export async function runCli(
     }
 
     if (error instanceof ReviewRunInterruptedError) {
+      // Preserve conventional shell exit codes for signal-driven shutdowns.
       if (error.signal === "SIGTERM") {
         resolvedRuntime.stderr.error("Review run terminated by SIGTERM.");
         return 143;
@@ -56,6 +60,9 @@ export async function runCli(
   }
 }
 
+/**
+ * Build the production runtime, while letting tests inject fakes.
+ */
 export function createDefaultCliRuntime(
   runtime: CliRuntime = {}
 ): ResolvedCliRuntime {

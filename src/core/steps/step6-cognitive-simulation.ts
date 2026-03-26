@@ -3,6 +3,7 @@ import type { ReviewNoteFinalizer } from "../finalizer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import type { FindingsPayload } from "../structured-output-validator.ts";
 
+// Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [
   "You are a senior code reviewer with expertise in correctness verification, contract-boundary analysis, and behavioral-regression detection. You are executing one designated step of the Code Review SOP.",
   "Your task in each invocation is to complete only the current step and produce the exact output required for that step.",
@@ -105,6 +106,9 @@ export interface Step6CognitiveSimulationStepOptions {
   reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
 }
 
+/**
+ * Reconcile the first-pass findings through end-to-end simulation before they become the final findings set.
+ */
 export class Step6CognitiveSimulationStep implements StepDefinition {
   readonly stepId = "step6-cognitive-simulation";
   readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
@@ -134,6 +138,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         validatorId: "findings-json"
       },
       applyTo(targetContext: FileReviewContext, response: string | FindingsPayload) {
+        // Step 6 replaces the provisional findings with the post-simulation final set.
         const findings =
           typeof response === "string" ? [] : response.findings;
 

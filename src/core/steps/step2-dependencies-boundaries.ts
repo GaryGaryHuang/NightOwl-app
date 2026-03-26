@@ -3,6 +3,7 @@ import type { ReviewNoteFinalizer } from "../finalizer.ts";
 import { DEPENDENCIES_BOUNDARIES_SECTION } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 
+// Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [
   "You are a senior code reviewer with expertise in correctness verification, contract-boundary analysis, and behavioral-regression detection. You are executing one designated step of the Code Review SOP.",
   "Your task in each invocation is to complete only the current step and produce the exact output required for that step.",
@@ -97,6 +98,9 @@ export interface Step2DependenciesBoundariesStepOptions {
   reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
 }
 
+/**
+ * Map only the dependency contracts and interaction boundaries that later validation may need to reason about.
+ */
 export class Step2DependenciesBoundariesStep implements StepDefinition {
   readonly stepId = "step2-dependencies-boundaries";
   readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
@@ -133,6 +137,7 @@ function buildStep2UserMessage(
   context: FileReviewContext,
   currentReview: string
 ): string {
+  // Re-render the current note so this step can extend the prior Overview instead of re-deriving it from scratch.
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
     context.diffContent,

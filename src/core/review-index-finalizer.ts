@@ -10,6 +10,7 @@ import type {
   SuccessfulFileOutcome
 } from "./run-summary-finalizer.ts";
 
+// Derives from RISK_ORDER key count so skipped items always sort after every known risk level.
 const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;
 
 export interface ReviewIndexRenderInput {
@@ -22,6 +23,9 @@ export interface ReviewIndexRenderInput {
   skippedFiles: SkippedFileOutcome[];
 }
 
+/**
+ * Render the run index with deterministic artifact links and severity-ordered file notes.
+ */
 export class ReviewIndexFinalizer {
   render(input: ReviewIndexRenderInput): string {
     const sortedNotes = [...input.plannedNotes].sort((a, b) => {
@@ -91,6 +95,7 @@ function getSortKey(
   if (successfulFile) {
     return RISK_ORDER[deriveFileRiskLevel(successfulFile.findings)];
   }
+  // Skipped files are intentionally sorted after every successful file.
   return SKIPPED_SORT_KEY; // Skipped — always last
 }
 

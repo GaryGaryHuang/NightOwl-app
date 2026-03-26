@@ -44,6 +44,10 @@ export interface ReviewInterruption {
   reason: string;
 }
 
+/**
+ * Single-source-of-truth state for one reviewed file.
+ * The in-memory state is cloned on reads so snapshots cannot mutate canonical review data.
+ */
 export class FileReviewContext {
   readonly filePath: string;
   readonly noteFilePath: string;
@@ -76,8 +80,10 @@ export class FileReviewContext {
     return [...this.#sections.entries()];
   }
 
+  // Findings are replaced wholesale, not merged, because Step 6 produces the complete final set.
   updateStructuredState(patch: Partial<ReviewStructuredState>): void {
     if (Object.hasOwn(patch, "findings")) {
+      // Keep formal findings detached from caller-owned arrays and objects.
       this.#structuredState.findings = patch.findings?.map(cloneFinding);
     }
   }
@@ -85,6 +91,7 @@ export class FileReviewContext {
   getStructuredState(): ReviewStructuredState {
     const findings = this.#structuredState.findings?.map(cloneFinding);
 
+    // Return a defensive copy so renderers see the current canonical state without mutating it.
     return findings ? { findings } : {};
   }
 

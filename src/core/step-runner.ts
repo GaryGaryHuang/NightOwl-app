@@ -81,6 +81,9 @@ export interface StepRunnerOptions {
   };
 }
 
+/**
+ * Execute one SOP step, validate its completion, and return a deferred state update for the orchestrator.
+ */
 export class StepRunner {
   readonly #reviewSessionFactory: StepReviewSessionFactoryLike;
   readonly #judgeService?: StepRunnerOptions["judgeService"];
@@ -111,6 +114,7 @@ export class StepRunner {
         );
 
         if (!response) {
+          // Blank assistant output is treated as a failed step so the caller can retry or skip.
           throw new Error("empty review response");
         }
 
@@ -146,6 +150,7 @@ export class StepRunner {
         return {
           stepId: plan.stepId,
           applyTo(context: FileReviewContext) {
+            // Defer canonical state mutation until the orchestrator accepts the validated step result.
             plan.applyTo(context, validatedResponse);
           }
         };

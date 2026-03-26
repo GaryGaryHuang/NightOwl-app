@@ -26,6 +26,9 @@ export interface CopilotClientManagerOptions {
   createClient?: () => CopilotClientLike;
 }
 
+/**
+ * Own the single Copilot client instance for one review run.
+ */
 export class CopilotClientManager {
   readonly #createClient: () => CopilotClientLike;
   #client?: CopilotClientLike;
@@ -80,10 +83,12 @@ export class SessionExecutor {
         { prompt },
         timeoutMs
       );
+      // Treat blank assistant output as missing content so callers can retry or fail fast.
       const content = response?.data?.content?.trim();
 
       return content ? content : undefined;
     } finally {
+      // Each executor is one-shot: release the in-memory session immediately after the exchange.
       await this.#session.disconnect();
     }
   }

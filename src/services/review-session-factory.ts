@@ -28,6 +28,9 @@ export interface ReviewSessionFactoryOptions {
   toolPolicyGuard: ToolPolicyGuard;
 }
 
+/**
+ * Build review sessions with review-specific tool policy, knowledge injection, and optional audit wiring.
+ */
 export class ReviewSessionFactory {
   readonly #clientManager: ReviewSessionFactoryOptions["clientManager"];
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
@@ -60,6 +63,7 @@ export class ReviewSessionFactory {
       )
     };
 
+    // Default to built-in Context7 unless a step explicitly opts out of knowledge mode.
     const mcpServers = this.#knowledgeSvc?.getMcpServers(
       profile.knowledgeMode ?? "built-in-context7"
     );
