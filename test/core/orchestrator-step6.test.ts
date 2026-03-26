@@ -12,7 +12,26 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import {
+  assertObservedProfilesUseExpectedModels,
+  collectReviewableFiles,
+  createObservedStepRunner,
+  createStepResponseRouter,
+  loadPlannedNoteContents
+} from "../helpers/orchestrator-step-contract-fixture.ts";
+import { buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildStandardStep7SummaryResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+
+const buildStepResponse = createStepResponseRouter({
+  step5Response() {
+    return buildSimulationStep5JsonResponse();
+  },
+  step6Response() {
+    return buildSimulationStep6JsonResponse();
+  },
+  step7Response(filePath: string) {
+    return buildStandardStep7SummaryResponse(filePath);
+  }
+});
 
 test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 6", async () => {
   const fixture = createReviewRepoFixture();
@@ -25,11 +44,12 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
     const observedDisconnects: string[] = [];
     const sourceProvider = new LocalGitProvider();
-    const stepRunner = createSixStepStructuredStepRunner({
+    const stepRunner = createObservedStepRunner({
       observedDisconnects,
       observedProfiles,
       observedPrompts,
-      observedStepEvents
+      observedStepEvents,
+      buildStepResponse
     });
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
@@ -55,11 +75,10 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     });
 
     const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
+    const { repoRoot, reviewableFiles } = collectReviewableFiles({
+      sourceProvider,
+      repoDir: fixture.repoDir
+    });
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
 
     assert.equal(result.repoRoot, repoRoot);
@@ -79,22 +98,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     assert.equal(observedDisconnects.length, reviewableFiles.length * 7);
     assert.equal(observedProfiles.length, reviewableFiles.length * 7);
 
-    for (const profile of observedProfiles) {
-      assert.equal(profile.outputBaseDir, outputBaseDir);
-      assert.equal(profile.repoRoot, repoRoot);
-      assert.equal(profile.workingDirectory, repoRoot);
-
-      if (/## Current Step: Overview/u.test(profile.systemMessage)) {
-        assert.equal(profile.model, "gpt-5-mini");
-      } else if (
-        /## Current Step: Knowledge & Source of Truth/u.test(profile.systemMessage) ||
-        /## Current Step: Summary/u.test(profile.systemMessage)
-      ) {
-        assert.equal(profile.model, "gpt-5-mini");
-      } else {
-        assert.equal(profile.model, "gpt-5.4-mini");
-      }
-    }
+    assertObservedProfilesUseExpectedModels(observedProfiles, outputBaseDir, repoRoot);
 
     const step6Prompt = observedPrompts.find(
       ({ stepId }) => stepId === "step6-cognitive-simulation"
@@ -109,8 +113,11 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     assert.equal(existsSync(result.outputTarget.filesPath), true);
     assert.equal(existsSync(result.outputTarget.skippedPath), true);
 
-    for (const plannedNote of plannedNotes) {
-      const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
+    for (const plannedNote of loadPlannedNoteContents(
+      result.outputTarget,
+      reviewableFiles
+    )) {
+      const noteContent = plannedNote.content;
 
       assert.match(noteContent, /^## Findings/mu);
       assert.match(
@@ -962,81 +969,4 @@ async function assertStep6Failure(input: {
   } finally {
     fixture.cleanup();
   }
-}
-
-function buildStepResponse(
-  stepId:
-    | "step1-overview"
-    | "step2-dependencies-boundaries"
-    | "step3-knowledge-source-of-truth"
-    | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation"
-    | "step6-cognitive-simulation"
-    | "step7-summary",
-  filePath: string
-): string {
-  if (stepId === "step1-overview") {
-    return buildOverviewResponse(filePath);
-  }
-
-  if (stepId === "step2-dependencies-boundaries") {
-    return buildDependenciesResponse(filePath);
-  }
-
-  if (stepId === "step3-knowledge-source-of-truth") {
-    return buildKnowledgeResponse(filePath);
-  }
-
-  if (stepId === "step4-strategy-what-if-scenarios") {
-    return buildStrategyResponse(filePath);
-  }
-
-  if (stepId === "step5-validation-interrogation") {
-    return buildSimulationStep5JsonResponse();
-  }
-
-  if (stepId === "step6-cognitive-simulation") {
-    return buildSimulationStep6JsonResponse();
-  }
-
-  return buildStandardStep7SummaryResponse(filePath);
-}
-
-function createSixStepStructuredStepRunner(input: {
-  observedDisconnects: string[];
-  observedProfiles: Array<Record<string, string>>;
-  observedPrompts: Array<Record<string, string>>;
-  observedStepEvents: Array<[string, string]>;
-}): StepRunner {
-  return new StepRunner({
-    reviewSessionFactory: {
-      async createSession(profile) {
-        input.observedProfiles.push(profile);
-        const stepId = detectStepId(profile.systemMessage);
-
-        return new SessionExecutor({
-          async sendAndWait(options) {
-            const filePath = extractDiffPath(options.prompt);
-            input.observedPrompts.push({ stepId, prompt: options.prompt });
-            input.observedStepEvents.push([stepId, filePath]);
-
-            return {
-              data: {
-                content: buildStepResponse(stepId, filePath)
-              }
-            };
-          },
-          async disconnect() {
-            input.observedDisconnects.push(stepId);
-          }
-        });
-      }
-    },
-    structuredOutputValidator: new StructuredOutputValidator(),
-    judgeService: {
-      async evaluate() {
-        return { passed: true };
-      }
-    }
-  });
 }
