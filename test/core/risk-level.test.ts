@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
+import { createFinding } from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
 test("deriveFileRiskLevel returns High for a must finding at the 90 confidence threshold", () => {
   assert.equal(deriveFileRiskLevel([createFinding("must", 90)]), "High");
@@ -10,8 +11,8 @@ test("deriveFileRiskLevel returns High for a must finding at the 90 confidence t
 test("deriveFileRiskLevel returns Medium for must findings below the 90 confidence threshold", () => {
   assert.equal(
     deriveFileRiskLevel([
-      createFinding("must", 89, "must below threshold"),
-      createFinding("nice", 95, "nice context")
+      createFinding("must", 89, { title: "must below threshold" }),
+      createFinding("nice", 95, { title: "nice context" })
     ]),
     "Medium"
   );
@@ -28,8 +29,8 @@ test("deriveFileRiskLevel returns None for an empty findings array", () => {
 test("deriveFileRiskLevel returns High when any must finding meets the threshold even if others are below it", () => {
   assert.equal(
     deriveFileRiskLevel([
-      createFinding("must", 82, "lower-confidence must"),
-      createFinding("must", 96, "threshold-meeting must")
+      createFinding("must", 82, { title: "lower-confidence must" }),
+      createFinding("must", 96, { title: "threshold-meeting must" })
     ]),
     "High"
   );
@@ -38,20 +39,3 @@ test("deriveFileRiskLevel returns High when any must finding meets the threshold
 test("deriveFileRiskLevel returns None for undefined findings", () => {
   assert.equal(deriveFileRiskLevel(undefined), "None");
 });
-
-function createFinding(
-  type: "must" | "nice",
-  confidence: number,
-  title = `${type} finding`
-) {
-  return {
-    type,
-    title,
-    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-    context: "ctx",
-    deviation: "dev",
-    impact: "impact",
-    suggestion: "fix it",
-    confidence
-  };
-}

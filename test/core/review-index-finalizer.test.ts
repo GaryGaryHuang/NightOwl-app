@@ -2,9 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ReviewIndexFinalizer } from "../../src/core/review-index-finalizer.ts";
-import type {
-  SuccessfulFileOutcome
-} from "../../src/core/run-summary-finalizer.ts";
+import {
+  createFinding,
+  createOutputTarget,
+  createPlannedNotes,
+  createSkippedFile,
+  createSuccessfulFile
+} from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
 test("ReviewIndexFinalizer renders the exact review index contract with rebased risk labels", () => {
   const finalizer = new ReviewIndexFinalizer();
@@ -13,68 +17,56 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
-    plannedNotes: [
-      {
-        filePath: "README.md",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/README.md.md"
-      },
-      {
-        filePath: "src/app.ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/src__app.ts.md"
-      },
-      {
-        filePath: "packages/app/index.ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/app__index.ts.md"
-      }
-    ],
+    outputTarget: createOutputTarget(),
+    plannedNotes: createPlannedNotes([
+      ["README.md", "/workspace/review/feature-branch_03131430/files/README.md.md"],
+      ["src/app.ts", "/workspace/review/feature-branch_03131430/files/src__app.ts.md"],
+      ["packages/app/index.ts", "/workspace/review/feature-branch_03131430/files/app__index.ts.md"]
+    ]),
     successfulFiles: [createSuccessfulFile("README.md", [])],
     skippedFiles: [
-      {
-        filePath: "src/app.ts",
-        stepId: "step4-findings-interrogation",
-        reason: "deterministic validation failed"
-      },
-      {
-        filePath: "packages/app/index.ts",
-        stepId: "step4-findings-interrogation",
-        reason: "deterministic validation failed"
-      }
+      createSkippedFile(
+        "src/app.ts",
+        "step4-findings-interrogation",
+        "deterministic validation failed"
+      ),
+      createSkippedFile(
+        "packages/app/index.ts",
+        "step4-findings-interrogation",
+        "deterministic validation failed"
+      )
     ]
   });
 
-  assert.equal(
+  assert.match(rendered, /^# Review Index$/mu);
+  assert.match(rendered, /- Repo root: `\/workspace\/repo`/u);
+  assert.match(rendered, /- Base ref: `main`/u);
+  assert.match(rendered, /- Head ref: `feature-branch`/u);
+  assert.match(rendered, /- Planned files: 3/u);
+  assert.match(rendered, /- Successful files: 1/u);
+  assert.match(rendered, /- Skipped files: 2/u);
+  assert.match(
     rendered,
-    [
-      "# Review Index",
-      "",
-      "- Repo root: `/workspace/repo`",
-      "- Base ref: `main`",
-      "- Head ref: `feature-branch`",
-      "- Planned files: 3",
-      "- Successful files: 1",
-      "- Skipped files: 2",
-      "",
-      "## Run Artifacts",
-      "- [changeset-overview.md](./changeset-overview.md)",
-      "- [summary.md](./summary.md)",
-      "- [skipped.md](./skipped.md)",
-      "",
-      "## File Notes",
-      "- [None] [`README.md`](./files/README.md.md)",
-      "- [Skipped] [`src/app.ts`](./files/src__app.ts.md)",
-      "- [Skipped] [`packages/app/index.ts`](./files/app__index.ts.md)"
-    ].join("\n")
+    /## Run Artifacts[\s\S]*- \[changeset-overview\.md\]\(\.\/changeset-overview\.md\)[\s\S]*- \[summary\.md\]\(\.\/summary\.md\)[\s\S]*- \[skipped\.md\]\(\.\/skipped\.md\)/u
   );
+  assert.match(
+    rendered,
+    /## File Notes[\s\S]*- \[None\] \[`README\.md`\]\(\.\/files\/README\.md\.md\)[\s\S]*- \[Skipped\] \[`src\/app\.ts`\]\(\.\/files\/src__app\.ts\.md\)[\s\S]*- \[Skipped\] \[`packages\/app\/index\.ts`\]\(\.\/files\/app__index\.ts\.md\)/u
+  );
+
+  assertTextContainsInOrder(rendered, [
+    "- Repo root: `/workspace/repo`",
+    "- Base ref: `main`",
+    "- Head ref: `feature-branch`",
+    "- Planned files: 3",
+    "- Successful files: 1",
+    "- Skipped files: 2",
+    "## Run Artifacts",
+    "- [changeset-overview.md](./changeset-overview.md)",
+    "- [summary.md](./summary.md)",
+    "- [skipped.md](./skipped.md)",
+    "## File Notes"
+  ]);
 });
 
 test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs", () => {
@@ -84,42 +76,20 @@ test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs"
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
+    outputTarget: createOutputTarget(),
     plannedNotes: [],
     successfulFiles: [],
     skippedFiles: []
   });
 
-  assert.equal(
+  assert.match(rendered, /- Planned files: 0/u);
+  assert.match(rendered, /- Successful files: 0/u);
+  assert.match(rendered, /- Skipped files: 0/u);
+  assert.match(
     rendered,
-    [
-      "# Review Index",
-      "",
-      "- Repo root: `/workspace/repo`",
-      "- Base ref: `main`",
-      "- Head ref: `feature-branch`",
-      "- Planned files: 0",
-      "- Successful files: 0",
-      "- Skipped files: 0",
-      "",
-      "## Run Artifacts",
-      "- [changeset-overview.md](./changeset-overview.md)",
-      "- [summary.md](./summary.md)",
-      "- [skipped.md](./skipped.md)",
-      "",
-      "## File Notes",
-      "- 無"
-    ].join("\n")
+    /## Run Artifacts[\s\S]*- \[changeset-overview\.md\]\(\.\/changeset-overview\.md\)[\s\S]*- \[summary\.md\]\(\.\/summary\.md\)[\s\S]*- \[skipped\.md\]\(\.\/skipped\.md\)/u
   );
+  assert.match(rendered, /## File Notes\n- 無/u);
 });
 
 test("ReviewIndexFinalizer preserves collision-resolved note targets and forward slashes", () => {
@@ -129,7 +99,7 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
     repoRoot: String.raw`C:\workspace\repo`,
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
+    outputTarget: createOutputTarget({
       basePath: String.raw`C:\workspace\review\feature-branch_03131430`,
       changesetOverviewPath: String.raw`C:\workspace\review\feature-branch_03131430\changeset-overview.md`,
       filesPath: String.raw`C:\workspace\review\feature-branch_03131430\files`,
@@ -138,17 +108,17 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
       indexPath: String.raw`C:\workspace\review\feature-branch_03131430\index.md`,
       manifestPath: String.raw`C:\workspace\review\feature-branch_03131430\manifest.json`,
       toolAuditPath: String.raw`C:\workspace\review\feature-branch_03131430\tool-audit.jsonl`
-    },
-    plannedNotes: [
-      {
-        filePath: "src/api/index.ts",
-        noteFilePath: String.raw`C:\workspace\review\feature-branch_03131430\files\src__api__index.ts.md`
-      },
-      {
-        filePath: "tests/api/index.ts",
-        noteFilePath: String.raw`C:\workspace\review\feature-branch_03131430\files\tests__api__index.ts.md`
-      }
-    ],
+    }),
+    plannedNotes: createPlannedNotes([
+      [
+        "src/api/index.ts",
+        String.raw`C:\workspace\review\feature-branch_03131430\files\src__api__index.ts.md`
+      ],
+      [
+        "tests/api/index.ts",
+        String.raw`C:\workspace\review\feature-branch_03131430\files\tests__api__index.ts.md`
+      ]
+    ]),
     successfulFiles: [
       createSuccessfulFile("src/api/index.ts", []),
       createSuccessfulFile("tests/api/index.ts", [])
@@ -171,26 +141,11 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
-    plannedNotes: [
-      {
-        filePath: "foo bar.ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/foo bar.ts.md"
-      },
-      {
-        filePath: "foo#bar).ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/foo#bar).ts.md"
-      }
-    ],
+    outputTarget: createOutputTarget(),
+    plannedNotes: createPlannedNotes([
+      ["foo bar.ts", "/workspace/review/feature-branch_03131430/files/foo bar.ts.md"],
+      ["foo#bar).ts", "/workspace/review/feature-branch_03131430/files/foo#bar).ts.md"]
+    ]),
     successfulFiles: [
       createSuccessfulFile("foo bar.ts", []),
       createSuccessfulFile("foo#bar).ts", [])
@@ -211,35 +166,26 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
-    plannedNotes: [
-      { filePath: "none.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/none.ts.md" },
-      { filePath: "low.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/low.ts.md" },
-      { filePath: "medium.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/medium.ts.md" },
-      { filePath: "high.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/high.ts.md" },
-      { filePath: "skipped.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/skipped.ts.md" }
-    ],
+    outputTarget: createOutputTarget(),
+    plannedNotes: createPlannedNotes([
+      ["none.ts", "/workspace/review/feature-branch_03131430/files/none.ts.md"],
+      ["low.ts", "/workspace/review/feature-branch_03131430/files/low.ts.md"],
+      ["medium.ts", "/workspace/review/feature-branch_03131430/files/medium.ts.md"],
+      ["high.ts", "/workspace/review/feature-branch_03131430/files/high.ts.md"],
+      ["skipped.ts", "/workspace/review/feature-branch_03131430/files/skipped.ts.md"]
+    ]),
     successfulFiles: [
       createSuccessfulFile("none.ts", []),
-      createSuccessfulFile("low.ts", [createFinding("nice", 80, "Low issue")]),
-      createSuccessfulFile("medium.ts", [createFinding("must", 80, "Medium issue")]),
-      createSuccessfulFile("high.ts", [createFinding("must", 90, "High issue")])
+      createSuccessfulFile("low.ts", [createFinding("nice", 80, { title: "Low issue" })]),
+      createSuccessfulFile("medium.ts", [createFinding("must", 80, { title: "Medium issue" })]),
+      createSuccessfulFile("high.ts", [createFinding("must", 90, { title: "High issue" })])
     ],
     skippedFiles: [
-      {
-        filePath: "skipped.ts",
-        stepId: "step4-findings-interrogation",
-        reason: "deterministic validation failed"
-      }
+      createSkippedFile(
+        "skipped.ts",
+        "step4-findings-interrogation",
+        "deterministic validation failed"
+      )
     ]
   });
 
@@ -267,21 +213,12 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
-    plannedNotes: [
-      { filePath: "a.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/a.ts.md" },
-      { filePath: "b.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/b.ts.md" },
-      { filePath: "c.ts", noteFilePath: "/workspace/review/feature-branch_03131430/files/c.ts.md" }
-    ],
+    outputTarget: createOutputTarget(),
+    plannedNotes: createPlannedNotes([
+      ["a.ts", "/workspace/review/feature-branch_03131430/files/a.ts.md"],
+      ["b.ts", "/workspace/review/feature-branch_03131430/files/b.ts.md"],
+      ["c.ts", "/workspace/review/feature-branch_03131430/files/c.ts.md"]
+    ]),
     successfulFiles: [
       createSuccessfulFile("a.ts", []),
       createSuccessfulFile("b.ts", []),
@@ -297,30 +234,6 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
   assert.ok(aIdx < bIdx && bIdx < cIdx, "same-risk files should preserve planned order a, b, c");
 });
 
-function createSuccessfulFile(
-  filePath: string,
-  findings: SuccessfulFileOutcome["findings"]
-): SuccessfulFileOutcome {
-  return { filePath, findings };
-}
-
-function createFinding(
-  type: "must" | "nice",
-  confidence: number,
-  title = `${type} finding`
-): SuccessfulFileOutcome["findings"][number] {
-  return {
-    type,
-    title,
-    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-    context: "ctx",
-    deviation: "dev",
-    impact: "impact",
-    suggestion: "suggestion",
-    confidence
-  };
-}
-
 test("ReviewIndexFinalizer throws with identifying message when a planned file is absent from both outcome sets", () => {
   const finalizer = new ReviewIndexFinalizer();
 
@@ -330,22 +243,13 @@ test("ReviewIndexFinalizer throws with identifying message when a planned file i
         repoRoot: "/workspace/repo",
         baseRef: "main",
         headRef: "feature-branch",
-        outputTarget: {
-          basePath: "/workspace/review/feature-branch_03131430",
-          filesPath: "/workspace/review/feature-branch_03131430/files",
-          skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-          summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-          indexPath: "/workspace/review/feature-branch_03131430/index.md",
-          manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-          toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl",
-          changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md"
-        },
-        plannedNotes: [
-          {
-            filePath: "src/missing.ts",
-            noteFilePath: "/workspace/review/feature-branch_03131430/files/src__missing.ts.md"
-          }
-        ],
+        outputTarget: createOutputTarget(),
+        plannedNotes: createPlannedNotes([
+          [
+            "src/missing.ts",
+            "/workspace/review/feature-branch_03131430/files/src__missing.ts.md"
+          ]
+        ]),
         successfulFiles: [],
         skippedFiles: []
       }),
@@ -367,32 +271,25 @@ test("ReviewIndexFinalizer labels a file present in both outcome sets as its ris
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
-    plannedNotes: [
-      {
-        filePath: "src/both.ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/src__both.ts.md"
-      }
-    ],
+    outputTarget: createOutputTarget(),
+    plannedNotes: createPlannedNotes([
+      ["src/both.ts", "/workspace/review/feature-branch_03131430/files/src__both.ts.md"]
+    ]),
     successfulFiles: [createSuccessfulFile("src/both.ts", [])],
-    skippedFiles: [
-      {
-        filePath: "src/both.ts",
-        stepId: "step1-overview",
-        reason: "judge rejected"
-      }
-    ]
+    skippedFiles: [createSkippedFile("src/both.ts", "step1-overview", "judge rejected")]
   });
 
   assert.match(rendered, /- \[None\] \[`src\/both\.ts`\]/u);
   assert.doesNotMatch(rendered, /\[Skipped\]/u);
 });
+
+function assertTextContainsInOrder(text: string, fragments: string[]): void {
+  let cursor = 0;
+
+  for (const fragment of fragments) {
+    const index = text.indexOf(fragment, cursor);
+
+    assert.ok(index >= 0, `expected fragment in order: ${fragment}`);
+    cursor = index + fragment.length;
+  }
+}

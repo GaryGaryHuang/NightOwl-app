@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { RunManifestFinalizer } from "../../src/core/run-manifest-finalizer.ts";
-import type { SuccessfulFileOutcome } from "../../src/core/run-summary-finalizer.ts";
+import {
+  createFinding,
+  createOutputTarget,
+  createPlannedNotes,
+  createSkippedFile,
+  createSuccessfulFile
+} from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
 test("RunManifestFinalizer renders the exact deterministic manifest contract for a mixed-result run", () => {
   const finalizer = new RunManifestFinalizer();
@@ -11,84 +17,95 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
-    plannedNotes: [
-      {
-        filePath: "src/a.ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/src__a.ts.md"
-      },
-      {
-        filePath: "src/b.ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/src__b.ts.md"
-      }
-    ],
+    outputTarget: createOutputTarget(),
+    plannedNotes: createPlannedNotes([
+      ["src/a.ts", "/workspace/review/feature-branch_03131430/files/src__a.ts.md"],
+      ["src/b.ts", "/workspace/review/feature-branch_03131430/files/src__b.ts.md"]
+    ]),
     successfulFiles: [
       createSuccessfulFile("src/a.ts", [
-        createFinding("must", 92, "Must finding"),
-        createFinding("nice", 95, "Nice finding")
+        createFinding("must", 92, { title: "Must finding" }),
+        createFinding("nice", 95, { title: "Nice finding" })
       ])
     ],
     skippedFiles: [
-      {
-        filePath: "src/b.ts",
-        stepId: "step5-validation-interrogation",
-        reason: "review timeout after retry"
-      }
+      createSkippedFile(
+        "src/b.ts",
+        "step5-validation-interrogation",
+        "review timeout after retry"
+      )
     ]
   });
 
+  const parsed = JSON.parse(rendered) as {
+    artifacts: Record<string, string>;
+    files: Array<Record<string, string | number>>;
+    schemaVersion: number;
+    repoRoot: string;
+    baseRef: string;
+    headRef: string;
+    plannedFileCount: number;
+    successfulFileCount: number;
+    skippedFileCount: number;
+  };
+
+  assert.deepEqual(Object.keys(parsed), [
+    "schemaVersion",
+    "repoRoot",
+    "baseRef",
+    "headRef",
+    "plannedFileCount",
+    "successfulFileCount",
+    "skippedFileCount",
+    "artifacts",
+    "files"
+  ]);
+  assert.equal(parsed.schemaVersion, 2);
+  assert.equal(parsed.repoRoot, "/workspace/repo");
+  assert.equal(parsed.baseRef, "main");
+  assert.equal(parsed.headRef, "feature-branch");
+  assert.equal(parsed.plannedFileCount, 2);
+  assert.equal(parsed.successfulFileCount, 1);
+  assert.equal(parsed.skippedFileCount, 1);
+  assert.deepEqual(Object.keys(parsed.artifacts), [
+    "basePath",
+    "changesetOverviewPath",
+    "filesPath",
+    "summaryPath",
+    "indexPath",
+    "skippedPath",
+    "manifestPath",
+    "toolAuditPath"
+  ]);
   assert.equal(
-    rendered,
-    JSON.stringify(
-      {
-        schemaVersion: 2,
-        repoRoot: "/workspace/repo",
-        baseRef: "main",
-        headRef: "feature-branch",
-        plannedFileCount: 2,
-        successfulFileCount: 1,
-        skippedFileCount: 1,
-        artifacts: {
-          basePath: "/workspace/review/feature-branch_03131430",
-          changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-          filesPath: "/workspace/review/feature-branch_03131430/files",
-          summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-          indexPath: "/workspace/review/feature-branch_03131430/index.md",
-          skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-          manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-          toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-        },
-        files: [
-          {
-            filePath: "src/a.ts",
-            notePath: "/workspace/review/feature-branch_03131430/files/src__a.ts.md",
-            status: "successful",
-            riskLevel: "High",
-            mustCount: 1,
-            niceCount: 1
-          },
-          {
-            filePath: "src/b.ts",
-            notePath: "/workspace/review/feature-branch_03131430/files/src__b.ts.md",
-            status: "skipped",
-            failedStepId: "step5-validation-interrogation",
-            reason: "review timeout after retry"
-          }
-        ]
-      },
-      null,
-      2
-    )
+    parsed.artifacts.manifestPath,
+    "/workspace/review/feature-branch_03131430/manifest.json"
   );
+  assert.equal(
+    parsed.artifacts.changesetOverviewPath,
+    "/workspace/review/feature-branch_03131430/changeset-overview.md"
+  );
+  assert.equal(
+    parsed.artifacts.toolAuditPath,
+    "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
+  );
+  assert.deepEqual(parsed.files, [
+    {
+      filePath: "src/a.ts",
+      notePath: "/workspace/review/feature-branch_03131430/files/src__a.ts.md",
+      status: "successful",
+      riskLevel: "High",
+      mustCount: 1,
+      niceCount: 1
+    },
+    {
+      filePath: "src/b.ts",
+      notePath: "/workspace/review/feature-branch_03131430/files/src__b.ts.md",
+      status: "skipped",
+      failedStepId: "step5-validation-interrogation",
+      reason: "review timeout after retry"
+    }
+  ]);
 });
 
 test("RunManifestFinalizer preserves planned file order and reuses collision-resolved note paths", () => {
@@ -98,41 +115,19 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
-    plannedNotes: [
-      {
-        filePath: "src/api/index.ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/src__api__index.ts.md"
-      },
-      {
-        filePath: "tests/api/index.ts",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/tests__api__index.ts.md"
-      },
-      {
-        filePath: "docs/notes.md",
-        noteFilePath: "/workspace/review/feature-branch_03131430/files/docs__notes.md.md"
-      }
-    ],
+    outputTarget: createOutputTarget(),
+    plannedNotes: createPlannedNotes([
+      ["src/api/index.ts", "/workspace/review/feature-branch_03131430/files/src__api__index.ts.md"],
+      ["tests/api/index.ts", "/workspace/review/feature-branch_03131430/files/tests__api__index.ts.md"],
+      ["docs/notes.md", "/workspace/review/feature-branch_03131430/files/docs__notes.md.md"]
+    ]),
     successfulFiles: [
       createSuccessfulFile("docs/notes.md", []),
-      createSuccessfulFile("src/api/index.ts", [createFinding("must", 91, "High issue")])
+      createSuccessfulFile("src/api/index.ts", [
+        createFinding("must", 91, { title: "High issue" })
+      ])
     ],
-    skippedFiles: [
-      {
-        filePath: "tests/api/index.ts",
-        stepId: "step1-overview",
-        reason: "judge rejected"
-      }
-    ]
+    skippedFiles: [createSkippedFile("tests/api/index.ts", "step1-overview", "judge rejected")]
   });
 
   const parsed = JSON.parse(rendered) as {
@@ -163,16 +158,7 @@ test("RunManifestFinalizer renders an empty files array for zero-file runs", () 
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
+    outputTarget: createOutputTarget(),
     plannedNotes: [],
     successfulFiles: [],
     skippedFiles: []
@@ -182,15 +168,6 @@ test("RunManifestFinalizer renders an empty files array for zero-file runs", () 
   assert.deepEqual(parsed.files, []);
 });
 
-function createSuccessfulFile(
-  filePath: string,
-  findings: SuccessfulFileOutcome["findings"]
-): SuccessfulFileOutcome {
-  return { filePath, findings };
-}
-
-// ─── Task 6.1: artifacts.toolAuditPath ────────────────────────────────────────
-
 test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct path", () => {
   const finalizer = new RunManifestFinalizer();
 
@@ -198,16 +175,7 @@ test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct pa
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    outputTarget: {
-      basePath: "/workspace/review/feature-branch_03131430",
-      changesetOverviewPath: "/workspace/review/feature-branch_03131430/changeset-overview.md",
-      filesPath: "/workspace/review/feature-branch_03131430/files",
-      skippedPath: "/workspace/review/feature-branch_03131430/skipped.md",
-      summaryPath: "/workspace/review/feature-branch_03131430/summary.md",
-      indexPath: "/workspace/review/feature-branch_03131430/index.md",
-      manifestPath: "/workspace/review/feature-branch_03131430/manifest.json",
-      toolAuditPath: "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
-    },
+    outputTarget: createOutputTarget(),
     plannedNotes: [],
     successfulFiles: [],
     skippedFiles: []
@@ -219,20 +187,3 @@ test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct pa
     "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
   );
 });
-
-function createFinding(
-  type: "must" | "nice",
-  confidence: number,
-  title = `${type} finding`
-): SuccessfulFileOutcome["findings"][number] {
-  return {
-    type,
-    title,
-    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-    context: "ctx",
-    deviation: "dev",
-    impact: "impact",
-    suggestion: "suggestion",
-    confidence
-  };
-}

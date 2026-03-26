@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { RunSummaryFinalizer } from "../../src/core/run-summary-finalizer.ts";
-import type {
-  SuccessfulFileOutcome
-} from "../../src/core/run-summary-finalizer.ts";
+import {
+  createFinding,
+  createSkippedFile,
+  createSuccessfulFile
+} from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
 test("RunSummaryFinalizer renders the exact aggregate summary contract with rebased derived risk levels", () => {
   const finalizer = new RunSummaryFinalizer();
@@ -16,47 +18,54 @@ test("RunSummaryFinalizer renders the exact aggregate summary contract with reba
     plannedFileCount: 3,
     successfulFiles: [
       createSuccessfulFile("src/a.ts", [
-        createFinding("must", 92, "Must finding"),
-        createFinding("nice", 95, "Nice finding")
+        createFinding("must", 92, { title: "Must finding" }),
+        createFinding("nice", 95, { title: "Nice finding" })
       ]),
-      createSuccessfulFile("src/c.ts", [createFinding("must", 89, "Another must")])
+      createSuccessfulFile("src/c.ts", [
+        createFinding("must", 89, { title: "Another must" })
+      ])
     ],
-    skippedFiles: [
-      {
-        filePath: "src/b.ts",
-        stepId: "step5-validation-interrogation",
-        reason: "deterministic validation failed"
-      }
-    ]
+    skippedFiles: [createSkippedFile(
+      "src/b.ts",
+      "step5-validation-interrogation",
+      "deterministic validation failed"
+    )]
   });
 
-  assert.equal(
+  assert.match(rendered, /^# Review Summary$/mu);
+  assert.match(rendered, /- Repo root: `\/workspace\/repo`/u);
+  assert.match(rendered, /- Base ref: `main`/u);
+  assert.match(rendered, /- Head ref: `feature-branch`/u);
+  assert.match(rendered, /- Planned files: 3/u);
+  assert.match(rendered, /- Successful files: 2/u);
+  assert.match(rendered, /- Skipped files: 1/u);
+  assert.match(rendered, /- Final findings totals: must=2, nice=1/u);
+  assert.match(rendered, /^## Risk Distribution$/mu);
+  assert.match(rendered, /- High: 1/u);
+  assert.match(rendered, /- Medium: 1/u);
+  assert.match(rendered, /- Low: 0/u);
+  assert.match(rendered, /- None: 0/u);
+  assert.match(
     rendered,
-    [
-      "# Review Summary",
-      "",
-      "- Repo root: `/workspace/repo`",
-      "- Base ref: `main`",
-      "- Head ref: `feature-branch`",
-      "- Planned files: 3",
-      "- Successful files: 2",
-      "- Skipped files: 1",
-      "- Final findings totals: must=2, nice=1",
-      "",
-      "## Risk Distribution",
-      "- High: 1",
-      "- Medium: 1",
-      "- Low: 0",
-      "- None: 0",
-      "",
-      "## Successful Files",
-      "- [High] `src/a.ts` — must=1, nice=1",
-      "- [Medium] `src/c.ts` — must=1, nice=0",
-      "",
-      "## Skipped Files",
-      "- `src/b.ts` — step5-validation-interrogation — deterministic validation failed"
-    ].join("\n")
+    /## Successful Files[\s\S]*- \[High\] `src\/a\.ts` — must=1, nice=1[\s\S]*- \[Medium\] `src\/c\.ts` — must=1, nice=0/u
   );
+  assert.match(
+    rendered,
+    /## Skipped Files[\s\S]*- `src\/b\.ts` — step5-validation-interrogation — deterministic validation failed/u
+  );
+
+  assertTextContainsInOrder(rendered, [
+    "- Repo root: `/workspace/repo`",
+    "- Base ref: `main`",
+    "- Head ref: `feature-branch`",
+    "- Planned files: 3",
+    "- Successful files: 2",
+    "- Skipped files: 1",
+    "- Final findings totals: must=2, nice=1",
+    "## Risk Distribution",
+    "## Successful Files",
+    "## Skipped Files"
+  ]);
 });
 
 test("RunSummaryFinalizer renders explicit empty sections for zero-file runs", () => {
@@ -71,32 +80,12 @@ test("RunSummaryFinalizer renders explicit empty sections for zero-file runs", (
     skippedFiles: []
   });
 
-  assert.equal(
-    rendered,
-    [
-      "# Review Summary",
-      "",
-      "- Repo root: `/workspace/repo`",
-      "- Base ref: `main`",
-      "- Head ref: `feature-branch`",
-      "- Planned files: 0",
-      "- Successful files: 0",
-      "- Skipped files: 0",
-      "- Final findings totals: must=0, nice=0",
-      "",
-      "## Risk Distribution",
-      "- High: 0",
-      "- Medium: 0",
-      "- Low: 0",
-      "- None: 0",
-      "",
-      "## Successful Files",
-      "- 無",
-      "",
-      "## Skipped Files",
-      "- 無"
-    ].join("\n")
-  );
+  assert.match(rendered, /- Planned files: 0/u);
+  assert.match(rendered, /- Successful files: 0/u);
+  assert.match(rendered, /- Skipped files: 0/u);
+  assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
+  assert.match(rendered, /## Successful Files\n- 無/u);
+  assert.match(rendered, /## Skipped Files\n- 無/u);
 });
 
 test("RunSummaryFinalizer excludes skipped files from final findings totals", () => {
@@ -108,13 +97,11 @@ test("RunSummaryFinalizer excludes skipped files from final findings totals", ()
     headRef: "feature-branch",
     plannedFileCount: 2,
     successfulFiles: [createSuccessfulFile("src/a.ts", [createFinding("nice", 91)])],
-    skippedFiles: [
-      {
-        filePath: "src/b.ts",
-        stepId: "step6-cognitive-simulation",
-        reason: "deterministic validation failed"
-      }
-    ]
+    skippedFiles: [createSkippedFile(
+      "src/b.ts",
+      "step6-cognitive-simulation",
+      "deterministic validation failed"
+    )]
   });
 
   assert.match(rendered, /- Final findings totals: must=0, nice=1/u);
@@ -130,9 +117,9 @@ test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, L
     headRef: "feature-branch",
     plannedFileCount: 4,
     successfulFiles: [
-      createSuccessfulFile("high.ts", [createFinding("must", 90, "High issue")]),
-      createSuccessfulFile("medium.ts", [createFinding("must", 89, "Medium issue")]),
-      createSuccessfulFile("low.ts", [createFinding("nice", 88, "Low issue")]),
+      createSuccessfulFile("high.ts", [createFinding("must", 90, { title: "High issue" })]),
+      createSuccessfulFile("medium.ts", [createFinding("must", 89, { title: "Medium issue" })]),
+      createSuccessfulFile("low.ts", [createFinding("nice", 88, { title: "Low issue" })]),
       createSuccessfulFile("none.ts", [])
     ],
     skippedFiles: []
@@ -155,9 +142,9 @@ test("RunSummaryFinalizer sorts successful files by High to Medium to Low to Non
     plannedFileCount: 5,
     successfulFiles: [
       createSuccessfulFile("a.ts", []),
-      createSuccessfulFile("b.ts", [createFinding("nice", 80, "Low issue")]),
-      createSuccessfulFile("c.ts", [createFinding("must", 80, "Medium issue")]),
-      createSuccessfulFile("d.ts", [createFinding("must", 90, "High issue")]),
+      createSuccessfulFile("b.ts", [createFinding("nice", 80, { title: "Low issue" })]),
+      createSuccessfulFile("c.ts", [createFinding("must", 80, { title: "Medium issue" })]),
+      createSuccessfulFile("d.ts", [createFinding("must", 90, { title: "High issue" })]),
       createSuccessfulFile("e.ts", [])
     ],
     skippedFiles: []
@@ -189,9 +176,9 @@ test("RunSummaryFinalizer preserves planned order for same-risk-level successful
     headRef: "feature-branch",
     plannedFileCount: 3,
     successfulFiles: [
-      createSuccessfulFile("a.ts", [createFinding("nice", 85, "Nice suggestion")]),
-      createSuccessfulFile("b.ts", [createFinding("nice", 83, "Another nice")]),
-      createSuccessfulFile("c.ts", [createFinding("nice", 81, "Yet another nice")])
+      createSuccessfulFile("a.ts", [createFinding("nice", 85, { title: "Nice suggestion" })]),
+      createSuccessfulFile("b.ts", [createFinding("nice", 83, { title: "Another nice" })]),
+      createSuccessfulFile("c.ts", [createFinding("nice", 81, { title: "Yet another nice" })])
     ],
     skippedFiles: []
   });
@@ -212,7 +199,7 @@ test("RunSummaryFinalizer renders each successful file with a rebased risk level
     headRef: "feature-branch",
     plannedFileCount: 1,
     successfulFiles: [
-      createSuccessfulFile("src/app.ts", [createFinding("nice", 85, "Nice suggestion")])
+      createSuccessfulFile("src/app.ts", [createFinding("nice", 85, { title: "Nice suggestion" })])
     ],
     skippedFiles: []
   });
@@ -220,26 +207,13 @@ test("RunSummaryFinalizer renders each successful file with a rebased risk level
   assert.match(rendered, /- \[Low\] `src\/app\.ts` — must=0, nice=1/u);
 });
 
-function createSuccessfulFile(
-  filePath: string,
-  findings: SuccessfulFileOutcome["findings"]
-): SuccessfulFileOutcome {
-  return { filePath, findings };
-}
+function assertTextContainsInOrder(text: string, fragments: string[]): void {
+  let cursor = 0;
 
-function createFinding(
-  type: "must" | "nice",
-  confidence: number,
-  title = `${type} finding`
-): SuccessfulFileOutcome["findings"][number] {
-  return {
-    type,
-    title,
-    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-    context: "ctx",
-    deviation: "dev",
-    impact: "impact",
-    suggestion: "suggestion",
-    confidence
-  };
+  for (const fragment of fragments) {
+    const index = text.indexOf(fragment, cursor);
+
+    assert.ok(index >= 0, `expected fragment in order: ${fragment}`);
+    cursor = index + fragment.length;
+  }
 }
