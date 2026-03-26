@@ -12,7 +12,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildStrategyResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 7", async () => {
   const fixture = createReviewRepoFixture();
@@ -206,60 +206,6 @@ test("ReviewOrchestrator passes explicit empty Step 6 findings into Step 7 and s
       assert.doesNotMatch(noteContent, /無 findings\./u);
       assert.match(noteContent, /### 風險評估/u);
     }
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("ReviewOrchestrator still succeeds with zero planned files and does not create Step 1 through Step 7 sessions", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".reviewignore", "dist/**\nsrc/**\npackages/**\n");
-
-    let createSessionCalls = 0;
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider: new LocalGitProvider(),
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession() {
-            createSessionCalls += 1;
-
-            return new SessionExecutor({
-              async sendAndWait() {
-                return {
-                  data: {
-                    content: buildOverviewResponse("unexpected.ts")
-                  }
-                };
-              },
-              async disconnect() {}
-            });
-          }
-        }
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: []
-    });
-
-    assert.equal(result.plannedFileCount, 0);
-    assert.equal(createSessionCalls, 0);
   } finally {
     fixture.cleanup();
   }
@@ -725,40 +671,6 @@ async function assertStep7Failure(input: {
   }
 }
 
-function buildStep5JsonResponse(): string {
-  return JSON.stringify({
-    findings: [
-      {
-        type: "must",
-        title: "初版 findings",
-        traceability: lineRangeTraceability(14, 18),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 88
-      }
-    ]
-  });
-}
-
-function buildStep6JsonResponse(): string {
-  return JSON.stringify({
-    findings: [
-      {
-        type: "must",
-        title: "最終 findings",
-        traceability: lineRangeTraceability(20, 22),
-        context: "模擬後確認的具體情境",
-        deviation: "經 simulation 後確認最終落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 final guard",
-        confidence: 91
-      }
-    ]
-  });
-}
-
 function buildSummaryResponse(filePath: string, label = filePath): string {
   return [
     "## Summary",
@@ -802,30 +714,14 @@ function buildStepResponse(
   }
 
   if (stepId === "step5-validation-interrogation") {
-    return buildStep5JsonResponse();
+    return buildSimulationStep5JsonResponse();
   }
 
   if (stepId === "step6-cognitive-simulation") {
-    return buildStep6JsonResponse();
+    return buildSimulationStep6JsonResponse();
   }
 
   return buildSummaryResponse(filePath);
-}
-
-function extractDiffPath(prompt: string): string {
-  const diffMatch = prompt.match(/<diff path="([^"]+)"/u);
-
-  if (diffMatch) {
-    return diffMatch[1];
-  }
-
-  const sourceMatch = prompt.match(/- Source file: `([^`]+)`/u);
-
-  if (sourceMatch) {
-    return sourceMatch[1];
-  }
-
-  throw new Error(`Unable to find file path in prompt: ${prompt}`);
 }
 
 function createSevenStepRunner(input: {

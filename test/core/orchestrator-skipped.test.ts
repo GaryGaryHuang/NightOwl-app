@@ -12,7 +12,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildStrategyResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator skips a file after Step 1 exhaustion, publishes a bootstrap warning snapshot, records skipped.md, and continues later files", async () => {
   await assertSkipScenario({
@@ -330,40 +330,6 @@ function createSkipAwareRunner(input: {
   });
 }
 
-function buildStep5JsonResponse(): string {
-  return JSON.stringify({
-    findings: [
-      {
-        type: "must",
-        title: "初版 findings",
-        traceability: lineRangeTraceability(14, 18),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 88
-      }
-    ]
-  });
-}
-
-function buildStep6JsonResponse(): string {
-  return JSON.stringify({
-    findings: [
-      {
-        type: "must",
-        title: "最終 findings",
-        traceability: lineRangeTraceability(20, 22),
-        context: "模擬後確認的具體情境",
-        deviation: "經 simulation 後確認最終落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 final guard",
-        confidence: 91
-      }
-    ]
-  });
-}
-
 function buildSummaryResponse(filePath: string): string {
   return [
     "## Summary",
@@ -407,11 +373,11 @@ function buildStepResponse(
   }
 
   if (stepId === "step5-validation-interrogation") {
-    return buildStep5JsonResponse();
+    return buildSimulationStep5JsonResponse();
   }
 
   if (stepId === "step6-cognitive-simulation") {
-    return buildStep6JsonResponse();
+    return buildSimulationStep6JsonResponse();
   }
 
   return buildSummaryResponse(filePath);
@@ -432,4 +398,3 @@ function extractPromptFilePath(prompt: string): string {
 
   throw new Error(`Unable to determine file path from prompt: ${prompt}`);
 }
-

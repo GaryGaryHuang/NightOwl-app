@@ -87,6 +87,105 @@ export function detectStepId(
   throw new Error(`Unable to detect step from system message: ${systemMessage.slice(0, 200)}`);
 }
 
+export function extractDiffPath(prompt: string): string {
+  const match = prompt.match(/<diff path="([^"]+)"/u);
+
+  if (match) {
+    return match[1];
+  }
+
+  const sourceMatch = prompt.match(/- Source file: `([^`]+)`/u);
+
+  if (sourceMatch) {
+    return sourceMatch[1];
+  }
+
+  throw new Error(`Missing diff path in prompt: ${prompt}`);
+}
+
+export function buildStandardStep5JsonResponse(): string {
+  return JSON.stringify({
+    findings: [
+      {
+        type: "must",
+        title: "問題標題",
+        traceability: lineRangeTraceability(14, 18),
+        context: "具體情境",
+        deviation: "預期與實際有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 guard",
+        confidence: 88
+      }
+    ]
+  });
+}
+
+export function buildStandardStep6JsonResponse(): string {
+  return JSON.stringify({
+    findings: [
+      {
+        type: "must",
+        title: "問題標題",
+        traceability: lineRangeTraceability(20, 22),
+        context: "具體情境",
+        deviation: "預期與實際有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 guard",
+        confidence: 91
+      }
+    ]
+  });
+}
+
+export function buildStandardStep7SummaryResponse(filePath: string): string {
+  return [
+    "## Summary",
+    "### 審查基礎",
+    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
+    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
+    "- 審查假設：未擴張到外部知識查證。",
+    "### 行為變更提醒",
+    "- 無",
+    "### 風險評估",
+    "- 整體風險等級：Medium",
+    "- 風險理由：final findings 仍需留意。"
+  ].join("\n");
+}
+
+export function buildSimulationStep5JsonResponse(): string {
+  return JSON.stringify({
+    findings: [
+      {
+        type: "must",
+        title: "初版 findings",
+        traceability: lineRangeTraceability(14, 18),
+        context: "具體情境",
+        deviation: "預期與實際有落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 guard",
+        confidence: 88
+      }
+    ]
+  });
+}
+
+export function buildSimulationStep6JsonResponse(): string {
+  return JSON.stringify({
+    findings: [
+      {
+        type: "must",
+        title: "最終 findings",
+        traceability: lineRangeTraceability(20, 22),
+        context: "模擬後確認的具體情境",
+        deviation: "經 simulation 後確認最終落差",
+        impact: "會造成 correctness 問題",
+        suggestion: "補上 final guard",
+        confidence: 91
+      }
+    ]
+  });
+}
+
 export function buildStrategyResponse(
   filePath: string,
   options?: { label?: string; whatIfStyle?: "full" | "minimal" }

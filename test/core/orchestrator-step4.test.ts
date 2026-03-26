@@ -12,7 +12,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStandardStep5JsonResponse, buildStandardStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Findings afterwards", async () => {
   const fixture = createReviewRepoFixture();
@@ -288,55 +288,6 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
   }
 });
 
-function buildStep5JsonResponse(): string {
-  return JSON.stringify({
-    findings: [
-      {
-        type: "must",
-        title: "問題標題",
-        traceability: lineRangeTraceability(14, 18),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 88
-      }
-    ]
-  });
-}
-
-function buildStep6JsonResponse(): string {
-  return JSON.stringify({
-    findings: [
-      {
-        type: "must",
-        title: "問題標題",
-        traceability: lineRangeTraceability(20, 22),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 91
-      }
-    ]
-  });
-}
-
-function buildStep7SummaryResponse(filePath: string): string {
-  return [
-    "## Summary",
-    "### 審查基礎",
-    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
-    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
-    "- 審查假設：未擴張到外部知識查證。",
-    "### 行為變更提醒",
-    "- 無",
-    "### 風險評估",
-    "- 整體風險等級：Medium",
-    "- 風險理由：final findings 仍需留意。"
-  ].join("\n");
-}
-
 function buildStepResponse(
   stepId:
     | "step1-overview"
@@ -365,30 +316,14 @@ function buildStepResponse(
   }
 
   if (stepId === "step5-validation-interrogation") {
-    return buildStep5JsonResponse();
+    return buildStandardStep5JsonResponse();
   }
 
   if (stepId === "step6-cognitive-simulation") {
-    return buildStep6JsonResponse();
+    return buildStandardStep6JsonResponse();
   }
 
-  return buildStep7SummaryResponse(filePath);
-}
-
-function extractDiffPath(prompt: string): string {
-  const match = prompt.match(/<diff path="([^"]+)"/u);
-
-  if (match) {
-    return match[1];
-  }
-
-  const sourceMatch = prompt.match(/- Source file: `([^`]+)`/u);
-
-  if (sourceMatch) {
-    return sourceMatch[1];
-  }
-
-  throw new Error(`Missing diff path in prompt: ${prompt}`);
+  return buildStandardStep7SummaryResponse(filePath);
 }
 
 function createStep5AwareRunner(input: {

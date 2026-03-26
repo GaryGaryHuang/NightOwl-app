@@ -16,7 +16,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStandardStep5JsonResponse, buildStandardStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 
 type StepEvent = [string, string];
 type OutputCall = [string, string];
@@ -1934,14 +1934,29 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
     fixture.writeFile("README.md", "# ignored file\n");
     fixture.commitAll("add file that will be ignored");
 
+    let createSessionCalls = 0;
+
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       outputSink: new LocalWorkspaceProvider(),
-      stepRunner: {
-        async run(input) {
-          return { stepId: input.step.stepId, applyTo() {} };
+      stepRunner: new StepRunner({
+        reviewSessionFactory: {
+          async createSession() {
+            createSessionCalls += 1;
+
+            return new SessionExecutor({
+              async sendAndWait() {
+                return {
+                  data: {
+                    content: buildOverviewResponse("unexpected.ts")
+                  }
+                };
+              },
+              async disconnect() {}
+            });
+          }
         }
-      },
+      }),
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
@@ -1957,10 +1972,12 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
     const result = await orchestrator.run({
       baseRef: "main",
       headRef: "feature-branch",
+      repoPath: "./packages/app",
       userContext: []
     });
 
     assert.equal(result.plannedFileCount, 0, "zero planned files");
+    assert.equal(createSessionCalls, 0, "Step 1-7 sessions must not be created");
     assert.equal(
       existsSync(result.outputTarget.changesetOverviewPath),
       true,
@@ -1974,55 +1991,6 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
     fixture.cleanup();
   }
 });
-
-function buildStep5JsonResponse(): string {
-  return JSON.stringify({
-    findings: [
-      {
-        type: "must",
-        title: "問題標題",
-        traceability: lineRangeTraceability(14, 18),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 88
-      }
-    ]
-  });
-}
-
-function buildStep6JsonResponse(): string {
-  return JSON.stringify({
-    findings: [
-      {
-        type: "must",
-        title: "問題標題",
-        traceability: lineRangeTraceability(20, 22),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 91
-      }
-    ]
-  });
-}
-
-function buildStep7SummaryResponse(filePath: string): string {
-  return [
-    "## Summary",
-    "### 審查基礎",
-    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
-    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
-    "- 審查假設：未擴張到外部知識查證。",
-    "### 行為變更提醒",
-    "- 無",
-    "### 風險評估",
-    "- 整體風險等級：Medium",
-    "- 風險理由：final findings 仍需留意。"
-  ].join("\n");
-}
 
 function buildStepResponse(
   stepId:
@@ -2052,30 +2020,14 @@ function buildStepResponse(
   }
 
   if (stepId === "step5-validation-interrogation") {
-    return buildStep5JsonResponse();
+    return buildStandardStep5JsonResponse();
   }
 
   if (stepId === "step6-cognitive-simulation") {
-    return buildStep6JsonResponse();
+    return buildStandardStep6JsonResponse();
   }
 
-  return buildStep7SummaryResponse(filePath);
-}
-
-function extractDiffPath(prompt: string): string {
-  const match = prompt.match(/<diff path="([^"]+)"/u);
-
-  if (match) {
-    return match[1];
-  }
-
-  const sourceMatch = prompt.match(/- Source file: `([^`]+)`/u);
-
-  if (sourceMatch) {
-    return sourceMatch[1];
-  }
-
-  throw new Error(`Missing diff path in prompt: ${prompt}`);
+  return buildStandardStep7SummaryResponse(filePath);
 }
 
 function createAlwaysSuccessfulStepRunner(
@@ -2220,7 +2172,10 @@ function buildSuccessfulStepResult(
   return {
     stepId,
     applyTo(targetContext: FileReviewContext) {
-      targetContext.setSection("summary", buildStep7SummaryResponse(filePath));
+      targetContext.setSection(
+        "summary",
+        buildStandardStep7SummaryResponse(filePath)
+      );
     }
   };
 }
