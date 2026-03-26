@@ -16,6 +16,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
 type StepEvent = [string, string];
 type OutputCall = [string, string];
@@ -2173,10 +2174,6 @@ function extractDiffPath(prompt: string): string {
   }
 
   throw new Error(`Missing diff path in prompt: ${prompt}`);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function createAlwaysSuccessfulStepRunner(

@@ -15,6 +15,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
 type OutputCall = [string, string];
 type FileReviewPublishResult = Parameters<ReviewOutputSink["publishFileReview"]>[0];
@@ -1758,10 +1759,6 @@ class IndexRecordingOutputSink {
   publishChangesetOverview() {
     this.calls.push("publishChangesetOverview");
   }
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function createExpectedOutputTarget(outputBaseDir: string, sessionId: string) {

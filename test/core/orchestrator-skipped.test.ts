@@ -12,6 +12,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator skips a file after Step 1 exhaustion, publishes a bootstrap warning snapshot, records skipped.md, and continues later files", async () => {
   await assertSkipScenario({
@@ -524,6 +525,3 @@ function extractPromptFilePath(prompt: string): string {
   throw new Error(`Unable to determine file path from prompt: ${prompt}`);
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-}

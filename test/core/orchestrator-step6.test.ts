@@ -12,6 +12,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 6", async () => {
   const fixture = createReviewRepoFixture();
@@ -1206,10 +1207,6 @@ function extractDiffPath(prompt: string): string {
   }
 
   throw new Error(`Unable to find diff path in prompt: ${prompt}`);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function createSixStepStructuredStepRunner(input: {

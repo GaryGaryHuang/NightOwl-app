@@ -12,6 +12,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Findings afterwards", async () => {
   const fixture = createReviewRepoFixture();
@@ -436,10 +437,6 @@ function extractDiffPath(prompt: string): string {
   }
 
   throw new Error(`Missing diff path in prompt: ${prompt}`);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function lineRangeTraceability(lineStart: number, lineEnd: number) {

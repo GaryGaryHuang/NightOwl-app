@@ -11,6 +11,7 @@ import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan-out, and keeps summary/index in planned order despite out-of-order completion", async () => {
   const fixture = createReviewRepoFixture();
@@ -1158,10 +1159,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function assertSuccessfulFileOrder(
