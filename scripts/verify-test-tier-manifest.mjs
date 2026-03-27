@@ -1,6 +1,9 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const CANONICAL_TIERS = ["unit", "integration", "e2e"];
+const MANIFEST_VERIFICATION_ERROR_MESSAGE = "test-tier-manifest verification failed";
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFilePath), "..");
@@ -23,16 +26,144 @@ function discoverTestFiles(dir) {
   return results;
 }
 
-const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-const unit = manifest.unit ?? [];
-const integration = manifest.integration ?? [];
-const e2e = manifest.e2e ?? [];
-const allManifestEntries = [...unit, ...integration, ...e2e];
+function isCanonicalManifestPath(entry) {
+  if (typeof entry !== "string") {
+    return false;
+  }
 
-// Step 1: detect intra-manifest duplicates
-const manifestSet = new Set(allManifestEntries);
-const duplicates = [];
-if (allManifestEntries.length !== manifestSet.size) {
+  if (entry.length === 0 || entry.includes("\\")) {
+    return false;
+  }
+
+  if (
+    entry.startsWith("./") ||
+    entry.startsWith("../") ||
+    entry.startsWith("/")
+  ) {
+    return false;
+  }
+
+  if (!entry.startsWith("test/")) {
+    return false;
+  }
+
+  return path.posix.normalize(entry) === entry;
+}
+
+function loadManifestFromDisk() {
+  try {
+    return {
+      manifest: JSON.parse(readFileSync(manifestPath, "utf8")),
+      schemaViolations: []
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      manifest: null,
+      schemaViolations: [
+        `Manifest could not be parsed as JSON: ${message}`
+      ]
+    };
+  }
+}
+
+function validateManifest(manifest) {
+  const schemaViolations = [];
+  const sortOrderViolations = [];
+  const pathFormatViolations = [];
+
+  if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
+    return {
+      tierLists: Object.fromEntries(CANONICAL_TIERS.map((tier) => [tier, []])),
+      schemaViolations: ["Manifest root must be a JSON object."],
+      sortOrderViolations,
+      pathFormatViolations
+    };
+  }
+
+  const topLevelKeys = Object.keys(manifest);
+  const unexpectedKeys = topLevelKeys.filter((key) => !CANONICAL_TIERS.includes(key));
+  const missingKeys = CANONICAL_TIERS.filter((tier) => !topLevelKeys.includes(tier));
+
+  if (unexpectedKeys.length > 0) {
+    schemaViolations.push(
+      `Unexpected top-level keys: ${unexpectedKeys.join(", ")}. Only ${CANONICAL_TIERS.join(", ")} are allowed.`
+    );
+  }
+
+  if (missingKeys.length > 0) {
+    schemaViolations.push(
+      `Missing top-level keys: ${missingKeys.join(", ")}. Manifest must define all canonical tiers.`
+    );
+  }
+
+  const tierLists = {};
+
+  for (const tier of CANONICAL_TIERS) {
+    const value = manifest[tier];
+
+    if (!Array.isArray(value)) {
+      tierLists[tier] = [];
+      schemaViolations.push(`Tier \"${tier}\" must map to an array.`);
+      continue;
+    }
+
+    tierLists[tier] = value;
+
+    const sorted = [...value].sort((left, right) => left.localeCompare(right));
+    if (value.length !== sorted.length || value.some((entry, index) => entry !== sorted[index])) {
+      sortOrderViolations.push(
+        `Tier \"${tier}\" must be sorted lexicographically.`
+      );
+    }
+
+    for (const entry of value) {
+      if (!isCanonicalManifestPath(entry)) {
+        pathFormatViolations.push(
+          `${String(entry)} (expected repo-root-relative POSIX path under test/ with no leading ./)`
+        );
+      }
+    }
+  }
+
+  return {
+    tierLists,
+    schemaViolations,
+    sortOrderViolations,
+    pathFormatViolations
+  };
+}
+
+function printViolations(title, entries) {
+  if (entries.length === 0) {
+    return;
+  }
+
+  console.error(`\n  ${title}:`);
+  for (const entry of entries) {
+    console.error(`    ${entry}`);
+  }
+}
+
+export class ManifestVerificationError extends Error {
+  constructor(message = MANIFEST_VERIFICATION_ERROR_MESSAGE) {
+    super(message);
+    this.name = "ManifestVerificationError";
+  }
+}
+
+export function evaluateTestTierManifest({ manifest, parseViolations = [], diskFiles }) {
+  const {
+    tierLists,
+    schemaViolations,
+    sortOrderViolations,
+    pathFormatViolations
+  } = validateManifest(manifest);
+  const allSchemaViolations = [...parseViolations, ...schemaViolations];
+  const allManifestEntries = CANONICAL_TIERS.flatMap((tier) => tierLists[tier]);
+
+  const manifestSet = new Set(allManifestEntries);
+  const duplicates = [];
   const seen = new Set();
   for (const entry of allManifestEntries) {
     if (seen.has(entry)) {
@@ -40,41 +171,90 @@ if (allManifestEntries.length !== manifestSet.size) {
     }
     seen.add(entry);
   }
+
+  const diskFileSet = new Set(diskFiles);
+  const canCheckDiskParity =
+    allSchemaViolations.length === 0 &&
+    pathFormatViolations.length === 0;
+  const missingFromManifest = canCheckDiskParity
+    ? [...diskFileSet]
+      .filter((f) => !manifestSet.has(f))
+      .sort((left, right) => left.localeCompare(right))
+    : [];
+  const staleInManifest = canCheckDiskParity
+    ? [...manifestSet]
+      .filter((f) => !diskFileSet.has(f))
+      .sort((left, right) => left.localeCompare(right))
+    : [];
+  const hasErrors =
+    allSchemaViolations.length > 0 ||
+    sortOrderViolations.length > 0 ||
+    pathFormatViolations.length > 0 ||
+    duplicates.length > 0 ||
+    missingFromManifest.length > 0 ||
+    staleInManifest.length > 0;
+
+  return {
+    tierLists,
+    allSchemaViolations,
+    sortOrderViolations,
+    pathFormatViolations,
+    duplicates,
+    missingFromManifest,
+    staleInManifest,
+    hasErrors,
+    diskFileCount: diskFileSet.size
+  };
 }
 
-// Step 2: symmetric difference between disk and manifest
-const diskFiles = new Set(discoverTestFiles(testDir));
-const missingFromManifest = [...diskFiles].filter((f) => !manifestSet.has(f));
-const staleInManifest = [...manifestSet].filter((f) => !diskFiles.has(f));
-
-const hasErrors = duplicates.length > 0 || missingFromManifest.length > 0 || staleInManifest.length > 0;
-
-if (!hasErrors) {
-  console.log(`✔ test-tier-manifest verified: ${diskFiles.size} test files, all assigned to exactly one tier.`);
-  process.exit(0);
+function reportManifestVerification(result, logger = console) {
+  logger.error(`✗ ${MANIFEST_VERIFICATION_ERROR_MESSAGE}:`);
+  printViolations("Manifest schema violations", result.allSchemaViolations);
+  printViolations("Manifest sort-order violations", result.sortOrderViolations);
+  printViolations("Manifest path-format violations", result.pathFormatViolations);
+  printViolations("Files listed in more than one tier", result.duplicates);
+  printViolations(
+    "Test files on disk but not in manifest (assign to unit/integration/e2e)",
+    result.missingFromManifest
+  );
+  printViolations(
+    "Manifest entries with no corresponding file on disk",
+    result.staleInManifest
+  );
 }
 
-console.error("✗ test-tier-manifest verification failed:");
+export function loadVerifiedTestTierManifest({ logger = console } = {}) {
+  const { manifest, schemaViolations: parseViolations } = loadManifestFromDisk();
+  const result = evaluateTestTierManifest({
+    manifest,
+    parseViolations,
+    diskFiles: discoverTestFiles(testDir)
+  });
 
-if (duplicates.length > 0) {
-  console.error("\n  Files listed in more than one tier:");
-  for (const f of duplicates) {
-    console.error(`    ${f}`);
+  if (result.hasErrors) {
+    reportManifestVerification(result, logger);
+    throw new ManifestVerificationError();
+  }
+
+  logger.log(
+    `✔ test-tier-manifest verified: ${result.diskFileCount} test files, canonical schema, all assigned to exactly one tier.`
+  );
+
+  return result.tierLists;
+}
+
+const isDirectInvocation =
+  process.argv[1] !== undefined &&
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+
+if (isDirectInvocation) {
+  try {
+    loadVerifiedTestTierManifest();
+  } catch (error) {
+    if (error instanceof ManifestVerificationError) {
+      process.exit(1);
+    }
+
+    throw error;
   }
 }
-
-if (missingFromManifest.length > 0) {
-  console.error("\n  Test files on disk but not in manifest (assign to unit/integration/e2e):");
-  for (const f of missingFromManifest) {
-    console.error(`    ${f}`);
-  }
-}
-
-if (staleInManifest.length > 0) {
-  console.error("\n  Manifest entries with no corresponding file on disk:");
-  for (const f of staleInManifest) {
-    console.error(`    ${f}`);
-  }
-}
-
-process.exit(1);

@@ -24,6 +24,7 @@
     "test/providers/local-review-config-provider-mcp.test.ts",
     "test/providers/local-review-config-provider-web-fetch.test.ts",
     "test/providers/local-review-config-provider.test.ts",
+    "test/scripts/test-tier-tooling.test.ts",
     "test/services/judge-session-factory.test.ts",
     "test/services/knowledge.test.ts",
     "test/services/session-executor.test.ts",
@@ -34,6 +35,9 @@
     "test/services/web-fetch-redirect-resolver.test.ts"
   ],
   "integration": [
+    "test/app/review-app-lifecycle.test.ts",
+    "test/app/review-app-web-fetch.test.ts",
+    "test/app/review-app.test.ts",
     "test/core/orchestrator-abort.test.ts",
     "test/core/orchestrator-bounded-concurrency.test.ts",
     "test/core/orchestrator-run-summary.test.ts",
@@ -50,9 +54,6 @@
     "test/services/tool-policy-guard.test.ts"
   ],
   "e2e": [
-    "test/app/review-app-lifecycle.test.ts",
-    "test/app/review-app-web-fetch.test.ts",
-    "test/app/review-app.test.ts",
     "test/cli/package-bin.test.ts",
     "test/cli/run-cli.test.ts"
   ]
