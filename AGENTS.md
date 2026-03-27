@@ -114,7 +114,7 @@ npm run build && node --test test/core/orchestrator.test.ts
 - Tests inject stubs/mocks through interfaces; no external mocking frameworks
 - Orchestrator tests are split across multiple files (`orchestrator-*.test.ts`), each focusing on specific behavior
 
-See [TESTING.md](./TESTING.md) for the project test taxonomy (`unit / integration / e2e`), tier manifest, and intended usage.
+See [TESTING.md](./TESTING.md) for tier decision criteria, test patterns, fixture catalog, and manifest maintenance rules.
 
 ## Code Conventions
 

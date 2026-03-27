@@ -181,7 +181,7 @@ npm run build        # Produce dist/
 
 The primary test commands (`npm test`, `test:unit`, `test:integration`, `test:e2e`) run `npm run build` first and then execute source test files under `test/`.
 
-See [TESTING.md](./TESTING.md) for the project test taxonomy (`unit / integration / e2e`), tier mapping, and intended usage.
+See [TESTING.md](./TESTING.md) for tier decision criteria, test patterns, fixture catalog, and manifest maintenance rules.
 
 ### Run Locally Without Building
 
