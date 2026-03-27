@@ -1,3 +1,6 @@
+import type { FileReviewContext, Finding } from "../../src/core/file-review-context.ts";
+import type { StepResult } from "../../src/core/step-runner.ts";
+
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
@@ -208,4 +211,148 @@ export function buildStrategyResponse(
     "- What-if 假設情境：",
     ...whatIfs
   ].join("\n");
+}
+
+export type Step7NarrativeRiskLevel = "High" | "Medium" | "Low" | "None";
+
+export function buildSummaryResponse(
+  filePath: string,
+  options: { label?: string; riskLevel?: Step7NarrativeRiskLevel } = {}
+): string {
+  const label = options.label ?? filePath;
+  const riskLevel = options.riskLevel ?? "Medium";
+  return [
+    "## Summary",
+    "### 審查基礎",
+    `- 改動概要：${label} 這次改動主要調整執行流程。`,
+    `- 依據規範：依 ${label} 的 repo source-of-truth 與版本假設審查。`,
+    "- 審查假設：未擴張到外部知識查證。",
+    "### 行為變更提醒",
+    "- 無",
+    "### 風險評估",
+    `- 整體風險等級：${riskLevel}`,
+    "- 風險理由：final findings 仍需留意。"
+  ].join("\n");
+}
+
+export function createFinding(type: "must" | "nice", title: string, confidence = 90): Finding {
+  return {
+    type,
+    title,
+    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+    context: "具體情境",
+    deviation: "預期與實際有落差",
+    impact: "會造成 correctness 問題",
+    suggestion: "補上 guard",
+    confidence
+  };
+}
+
+export function buildFindingsForFile(filePath: string): Finding[] {
+  if (filePath === "src/app.ts") {
+    return [
+      createFinding("must", "must finding"),
+      createFinding("nice", "nice finding")
+    ];
+  }
+
+  if (filePath === "packages/app/index.ts") {
+    return [createFinding("must", "only must finding")];
+  }
+
+  return [];
+}
+
+export interface SuccessfulStepResultOptions {
+  onTerminalApply?: () => void;
+  findingsByFile?: ReadonlyMap<string, Finding[]>;
+  narrativeRiskByFile?: ReadonlyMap<string, Step7NarrativeRiskLevel>;
+}
+
+export function buildSuccessfulStepResult(
+  stepId: string,
+  filePath: string,
+  options: SuccessfulStepResultOptions = {}
+): StepResult {
+  if (stepId === "step1-overview") {
+    return {
+      stepId,
+      applyTo(targetContext: FileReviewContext) {
+        targetContext.setSection("overview", buildOverviewResponse(filePath));
+      }
+    };
+  }
+
+  if (stepId === "step2-dependencies-boundaries") {
+    return {
+      stepId,
+      applyTo(targetContext: FileReviewContext) {
+        targetContext.setSection(
+          "dependencies-boundaries",
+          buildDependenciesResponse(filePath)
+        );
+      }
+    };
+  }
+
+  if (stepId === "step3-knowledge-source-of-truth") {
+    return {
+      stepId,
+      applyTo(targetContext: FileReviewContext) {
+        targetContext.setSection(
+          "knowledge-source-of-truth",
+          buildKnowledgeResponse(filePath)
+        );
+      }
+    };
+  }
+
+  if (stepId === "step4-strategy-what-if-scenarios") {
+    return {
+      stepId,
+      applyTo(targetContext: FileReviewContext) {
+        targetContext.setSection(
+          "strategy-what-if-scenarios",
+          buildStrategyResponse(filePath)
+        );
+      }
+    };
+  }
+
+  if (stepId === "step5-validation-interrogation") {
+    return {
+      stepId,
+      applyTo(targetContext: FileReviewContext) {
+        targetContext.updateStructuredState({
+          findings: options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath)
+        });
+      }
+    };
+  }
+
+  if (stepId === "step6-cognitive-simulation") {
+    return {
+      stepId,
+      applyTo(targetContext: FileReviewContext) {
+        targetContext.updateStructuredState({
+          findings: options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath)
+        });
+      }
+    };
+  }
+
+  if (stepId === "step7-summary") {
+    return {
+      stepId,
+      applyTo(targetContext: FileReviewContext) {
+        targetContext.setSection(
+          "summary",
+          buildSummaryResponse(filePath, { riskLevel: options.narrativeRiskByFile?.get(filePath) })
+        );
+        options.onTerminalApply?.();
+      }
+    };
+  }
+
+  throw new Error(`Unexpected step: ${stepId}`);
 }
