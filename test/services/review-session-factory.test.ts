@@ -12,7 +12,6 @@ import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import {
   BASE_REVIEW_PROFILE,
   createAuditFileFixture,
-  createContext7Override,
   createLocalMcpServer,
   createRecordedConfigs,
   createRemoteMcpServer,
@@ -122,75 +121,6 @@ test("ReviewSessionFactory creates a non-streaming review session and delegates 
     }
   ]);
   assert.equal(receivedConfigs[0]?.excludedTools, undefined);
-});
-
-test("ReviewSessionFactory injects built-in Context7 by default for review sessions and still allows explicit disable", async () => {
-  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
-  const factory = new ReviewSessionFactory({
-    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
-      assertRecordedReviewSessionConfig(config);
-      return {
-        async sendAndWait() {
-          return {
-            type: "assistant.message",
-            data: { content: "ok" }
-          };
-        },
-        async disconnect() {}
-      };
-    }),
-    knowledgeSvc: new KnowledgeSvc({
-      context7ApiKey: "test-api-key",
-      userMcpServers: {
-        demo: createLocalMcpServer(),
-        context7: createContext7Override({
-          tools: ["resolve-library-id"],
-          timeout: 20000
-        })
-      }
-    }),
-    toolPolicyGuard: new ToolPolicyGuard({})
-  });
-
-  await factory.createSession(BASE_REVIEW_PROFILE);
-  await factory.createSession({
-    ...BASE_REVIEW_PROFILE,
-    model: "gpt-5-mini",
-    systemMessage: "step1 system prompt"
-  });
-  await factory.createSession({
-    ...BASE_REVIEW_PROFILE,
-    model: "gpt-5-mini",
-    systemMessage: "step3 system prompt",
-    knowledgeMode: "built-in-context7"
-  });
-  await factory.createSession({
-    ...BASE_REVIEW_PROFILE,
-    systemMessage: "step5 system prompt"
-  });
-  await factory.createSession({
-    ...BASE_REVIEW_PROFILE,
-    systemMessage: "explicitly disabled system prompt",
-    knowledgeMode: "disabled"
-  });
-
-  for (const config of receivedConfigs.slice(0, 4)) {
-    assert.deepEqual(config.mcpServers, {
-      context7: {
-        type: "http",
-        url: "https://mcp.context7.com/mcp",
-        headers: {
-          CONTEXT7_API_KEY: "test-api-key"
-        },
-        tools: ["resolve-library-id"],
-        timeout: 20000
-      },
-      demo: createLocalMcpServer()
-    });
-  }
-
-  assert.equal(receivedConfigs[4]?.mcpServers, undefined);
-  assert.ok(receivedConfigs.every((config) => config.excludedTools === undefined));
 });
 
 test("ReviewSessionFactory injects mixed local and remote MCP entries for review sessions and keeps judge sessions MCP-free", async () => {

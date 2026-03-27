@@ -345,6 +345,36 @@ test("tool policy guard keeps shell tool-name alias behavior through the hook su
       permissionDecisionReason: READONLY_BASH_DENY_REASON
     }
   );
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "sh",
+        toolArgs: undefined
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
+    }
+  );
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "shell",
+        toolArgs: undefined
+      },
+      { sessionId: "s1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
+    }
+  );
 });
 
 test("tool policy guard shell alias audit records keep the original toolName", async () => {

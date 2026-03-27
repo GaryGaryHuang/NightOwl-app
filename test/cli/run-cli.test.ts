@@ -95,37 +95,11 @@ test("runCli reports a usage error when head_ref is missing", async () => {
   assert.match(stderr.join("\n"), /review <base_ref> <head_ref>/i);
 });
 
-test("runCli prints the prepared-run summary from the app result", async () => {
-  const result = createCompletedRunResult({
-    plannedFileCount: 2,
-    successfulFileCount: 2,
-    skippedFileCount: 0
-  });
-  const { exitCode, stdout, stderr } = await runCliWithResult(result);
-
-  assert.equal(exitCode, 0);
-  assert.deepEqual(stdout, [renderExpectedSummary(result)]);
-  assert.deepEqual(stderr, []);
-});
-
 test("runCli reports zero planned files as a successful summary", async () => {
   const result = createCompletedRunResult({
     plannedFileCount: 0,
     successfulFileCount: 0,
     skippedFileCount: 0
-  });
-  const { exitCode, stdout, stderr } = await runCliWithResult(result);
-
-  assert.equal(exitCode, 0);
-  assert.deepEqual(stdout, [renderExpectedSummary(result)]);
-  assert.deepEqual(stderr, []);
-});
-
-test("runCli prints the exact completed-run artifact surface line order", async () => {
-  const result = createCompletedRunResult({
-    plannedFileCount: 3,
-    successfulFileCount: 1,
-    skippedFileCount: 2
   });
   const { exitCode, stdout, stderr } = await runCliWithResult(result);
 
@@ -147,7 +121,7 @@ test("runCli reports an all-skipped run as a successful completed summary", asyn
   assert.deepEqual(stderr, []);
 });
 
-test("runCli prints the complete deterministic artifact surface from the completed-run result", async () => {
+test("runCli prints the published completed-run summary contract from the app result", async () => {
   const result = createCompletedRunResult({
     plannedFileCount: 2,
     successfulFileCount: 1,

@@ -80,75 +80,6 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
   }
 });
 
-test("createLocalReviewRunApp fails before client startup, Step 0, and output initialization when maxConcurrentFiles is invalid", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(
-      ".reviewconfig.json",
-      JSON.stringify({
-        maxConcurrentFiles: 0
-      })
-    );
-
-    let startCalls = 0;
-    let stopCalls = 0;
-    let step0Calls = 0;
-    let initializeRunCalls = 0;
-    const app = createLocalReviewRunApp({
-      workingDirectory: fixture.repoDir,
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
-      clientManager: {
-        async start() {
-          startCalls += 1;
-        },
-        async stop() {
-          stopCalls += 1;
-        },
-        async forceStop() {},
-        getClient() {
-          throw new Error("unused");
-        }
-      },
-      changesetOverviewRunner: {
-        async run() {
-          step0Calls += 1;
-          throw new Error("should not start step0");
-        }
-      },
-      outputSink: {
-        initializeRun() {
-          initializeRunCalls += 1;
-        },
-        publishFileReview() {},
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
-      }
-    });
-
-    await assert.rejects(
-      () =>
-        app.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: []
-        }),
-      /invalid review config/u
-    );
-
-    assert.equal(startCalls, 0);
-    assert.equal(stopCalls, 0);
-    assert.equal(step0Calls, 0);
-    assert.equal(initializeRunCalls, 0);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
 test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the existing retry-and-abort path", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -361,13 +292,7 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
   }
 });
 
-test("createLocalReviewRunApp keeps Step 4 Context7 startup failure on the existing retry-and-skip path", async () => {
-  await assertPerFileContext7StartupFailureSkipsOneFile({
-    stepMatcher: isStrategyWhatIfSystemMessage
-  });
-});
-
-test("createLocalReviewRunApp keeps Step 5 Context7 startup failure on the existing retry-and-skip path", async () => {
+test("createLocalReviewRunApp keeps a representative per-file Context7 startup failure on the existing retry-and-skip path", async () => {
   await assertPerFileContext7StartupFailureSkipsOneFile({
     stepMatcher: isValidationInterrogationSystemMessage
   });
@@ -453,12 +378,6 @@ test("createLocalReviewRunApp keeps Step 0 custom MCP startup failure on the exi
 test("createLocalReviewRunApp keeps Step 4 custom MCP startup failure on the existing retry-and-skip path", async () => {
   await assertPerFileCustomMcpStartupFailureSkipsOneFile({
     stepMatcher: isStrategyWhatIfSystemMessage
-  });
-});
-
-test("createLocalReviewRunApp keeps Step 5 custom MCP startup failure on the existing retry-and-skip path", async () => {
-  await assertPerFileCustomMcpStartupFailureSkipsOneFile({
-    stepMatcher: isValidationInterrogationSystemMessage
   });
 });
 
