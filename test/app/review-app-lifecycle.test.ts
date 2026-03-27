@@ -10,8 +10,6 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { buildSessionResponse } from "../helpers/review-app-fixture.ts";
 
-// ─── Task 3.1: App lifecycle signal handling tests ────────────────────────────
-
 /**
  * Shared factory for signal and lifecycle tests.
  * Uses in-memory stubs for all dependencies; TEST_FILES replaces a real git
@@ -159,7 +157,7 @@ test("createLocalReviewRunApp SIGTERM during run propagates ReviewRunInterrupted
   assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after SIGTERM");
 });
 
-// ─── Task 3.1: App lifecycle signal identity propagation tests ────────────────
+// ─── Signal identity propagation ────────────────────────────────────────────
 
 test("createLocalReviewRunApp SIGINT during run produces ReviewRunInterruptedError with signal === 'SIGINT'", async () => {
   const stopCalls: string[] = [];
@@ -201,7 +199,7 @@ test("createLocalReviewRunApp SIGTERM during run produces ReviewRunInterruptedEr
   );
 });
 
-// ─── Task 3.3: First-signal-wins test ────────────────────────────────────────
+// ─── First-signal-wins ──────────────────────────────────────────────────────
 
 test("createLocalReviewRunApp first signal wins when SIGINT then SIGTERM arrive in quick succession", async () => {
   const stopCalls: string[] = [];
@@ -544,7 +542,7 @@ test("createLocalReviewRunApp skips stop() and forceStop() when client startup f
 });
 
 // ---------------------------------------------------------------------------
-// Task 5.3: composition root wiring — tool-audit.jsonl integration
+// Composition root wiring — tool-audit.jsonl integration
 // ---------------------------------------------------------------------------
 
 test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAuditPath after a successful run", async () => {
@@ -614,7 +612,7 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
   }
 });
 
-// ─── Task 6.3: formatLocalReviewRunSummary Tool Audit line ──────────────────
+// ─── formatLocalReviewRunSummary: Tool Audit line ───────────────────────────
 
 test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and before Skipped", () => {
   const basePath = "/workspace/review/feature-branch_03131430";
@@ -658,7 +656,7 @@ test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and be
   );
 });
 
-// ─── Task 6.2: formatLocalReviewRunSummary Changeset Overview line ────────────
+// ─── formatLocalReviewRunSummary: Changeset Overview line ──────────────────
 
 test("formatLocalReviewRunSummary includes Changeset Overview line after Output and before Files", () => {
   const basePath = "/workspace/review/feature-branch_03131430";

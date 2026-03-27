@@ -376,7 +376,7 @@ function renderExpectedSummary(result: ReviewRunSummary): string {
   ].join("\n");
 }
 
-// ─── Task 4.1: CLI interrupted exit tests ─────────────────────────────────────
+// ─── CLI interrupted exit tests ─────────────────────────────────────────────
 
 test("runCli exits with code 130 when app throws ReviewRunInterruptedError", async () => {
   const stdout: string[] = [];
@@ -519,7 +519,7 @@ test("runCli still exits with code 1 for CliUsageError", async () => {
   assert.equal(exitCode, 1);
 });
 
-// ─── Task 4.1: CLI per-signal exit code mapping tests ─────────────────────────
+// ─── CLI per-signal exit code mapping ───────────────────────────────────────
 // Exit code conventions: SIGINT → 130 (128 + 2), SIGTERM → 143 (128 + 15),
 // unknown/undefined signal → 130 (same as SIGINT, conservative fallback).
 

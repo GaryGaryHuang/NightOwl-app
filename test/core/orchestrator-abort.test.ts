@@ -135,7 +135,7 @@ function createBaseOrchestrator(overrides: {
   });
 }
 
-// ─── Task 1.1: ReviewRunInterruptedError basic tests ─────────────────────────
+// ─── ReviewRunInterruptedError basic tests ──────────────────────────────────
 
 test("ReviewRunInterruptedError is an instance of Error", () => {
   const err = new ReviewRunInterruptedError();
@@ -156,7 +156,7 @@ test("ReviewRunInterruptedError instanceof distinguishes it from a generic Error
   assert.ok(!(generic instanceof ReviewRunInterruptedError));
 });
 
-// ─── Task 2.1: Orchestrator AbortSignal tests ─────────────────────────────────
+// ─── Orchestrator AbortSignal tests ─────────────────────────────────────────
 
 // Signal is checked before the fan-out loop; no file should enter Step 1.
 test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already aborted before dispatch", async () => {
@@ -384,7 +384,7 @@ test("ReviewOrchestrator run without signal option proceeds normally", async () 
   assert.equal(result.skippedFileCount, 0);
 });
 
-// ─── Task 1.1: ReviewRunInterruptedError signal property tests ────────────────
+// ─── ReviewRunInterruptedError signal property tests ────────────────────────
 
 test("ReviewRunInterruptedError has signal === 'SIGINT' when constructed with 'SIGINT'", () => {
   const err = new ReviewRunInterruptedError("SIGINT");
@@ -409,7 +409,7 @@ test("ReviewRunInterruptedError is instanceof ReviewRunInterruptedError and not 
   assert.ok(!(generic instanceof ReviewRunInterruptedError));
 });
 
-// ─── Task 2.1: Orchestrator signal reason extraction tests ───────────────────
+// ─── Orchestrator signal reason extraction tests ────────────────────────────
 
 test("ReviewOrchestrator abort with reason 'SIGINT' produces ReviewRunInterruptedError with signal === 'SIGINT'", async () => {
   const controller = new AbortController();

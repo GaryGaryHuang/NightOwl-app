@@ -1692,7 +1692,7 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
 });
 
 // ---------------------------------------------------------------------------
-// Task 5.2: onOutputTargetReady callback (orchestrator wiring)
+// onOutputTargetReady callback (orchestrator wiring)
 // ---------------------------------------------------------------------------
 
 test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRun() and before per-file workers begin", async () => {
@@ -1797,7 +1797,7 @@ test("ReviewOrchestrator works normally when onOutputTargetReady callback is not
   }
 });
 
-// ─── Task 3.3: publishChangesetOverview timing ───────────────────────────────
+// ─── publishChangesetOverview timing ────────────────────────────────────────
 
 test("ReviewOrchestrator writes changeset overview after initializeRun and before per-file bootstrap notes", async () => {
   const fixture = createReviewRepoFixture();
@@ -1859,7 +1859,7 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
   }
 });
 
-// ─── Task 3.4: publishChangesetOverview failure aborts run ───────────────────
+// ─── publishChangesetOverview failure aborts run ────────────────────────────
 
 test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not proceed to per-file processing", async () => {
   const fixture = createReviewRepoFixture();
@@ -1924,7 +1924,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
   }
 });
 
-// ─── Task 3.5: zero-file run writes changeset overview ───────────────────────
+// ─── publishChangesetOverview: zero-file run ────────────────────────────────
 
 test("ReviewOrchestrator writes changeset overview even for a zero-file run", async () => {
   const fixture = createReviewRepoFixture();
