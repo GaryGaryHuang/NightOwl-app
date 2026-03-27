@@ -31,6 +31,9 @@ Boundary and collaboration tests between modules.
 
 Typical NightOwl examples:
 
+- app startup fail-fast boundaries
+- signal lifecycle and graceful shutdown
+- app-visible runtime web_fetch guardrails
 - orchestrator coordination
 - step runner behavior across retries and state application
 - git and workspace providers
@@ -45,9 +48,6 @@ Typical NightOwl examples:
 
 - installable `review` executable
 - CLI success / fatal / interrupted paths
-- app startup fail-fast boundaries
-- signal lifecycle and graceful shutdown
-- app-visible runtime web_fetch guardrails
 
 ## Tier Manifest
 
@@ -68,6 +68,8 @@ When adding a new test file:
 
 ## Run Commands
 
+Primary taxonomy entrypoints:
+
 ```bash
 npm test
 npm run test:unit
@@ -76,18 +78,27 @@ npm run test:e2e
 ```
 
 - use `test:unit` during tight edit loops on deterministic logic
-- use `test:integration` when changing module boundaries, providers, orchestrator flow, or session wiring
-- use `test:e2e` when changing published CLI/app/session boundaries
+- use `test:integration` when changing app, session, provider, or orchestrator boundaries
+- use `test:e2e` when changing the published CLI surface, installability, or end-user command behavior
 - use `npm test` before finalizing work
+
+Convenience commands outside the primary taxonomy contract:
+
+```bash
+npm run test:watch
+npm run test:coverage
+```
+
+- `test:watch` and `test:coverage` are convenience workflows, not the primary `unit / integration / e2e` entrypoints
 
 ## Baseline Snapshot
 
 This is a short-term baseline snapshot for the current repo state. It is a static reference, not a live dashboard.
 
-- Total `.test.ts` files: 51
-- `unit` suites: 32
-- `integration` suites: 14
-- `e2e` suites: 5
+- Total `.test.ts` files: 52
+- `unit` suites: 33
+- `integration` suites: 17
+- `e2e` suites: 2
 
 Current major groupings:
 
@@ -95,12 +106,14 @@ Current major groupings:
   - `package-bin.test.ts` and `run-cli.test.ts` are `e2e`
   - `parser.test.ts` is `unit`
 - App:
-  - all `test/app/*.test.ts` suites are `e2e`
+  - all `test/app/*.test.ts` suites are `integration`
 - Core:
   - finalizers, validators, steps, and deterministic helpers are `unit`
   - orchestrator and step-runner boundary suites are `integration`
 - Providers:
   - provider suites are `unit` except those that cross filesystem or Git boundaries (`local-git-provider`, `local-workspace-provider`), which are `integration`
+- Scripts:
+  - manifest verifier and targeted tier runner contract suites are `unit`
 - Services:
   - direct policy and classifier/resolver suites are `unit`
   - review-session factory and hook-level guard suites are `integration`

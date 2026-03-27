@@ -92,21 +92,22 @@ Strictly follow these layers. Do not merge or cross boundaries:
 ## Testing
 
 ```bash
-npm test                   # Full test suite (build first, then node --test)
+npm test                   # Full test suite (build first, then source test files)
 npm run test:unit          # Run unit tests only
 npm run test:integration   # Run integration tests only
 npm run test:e2e           # Run e2e tests only
-npm run test:watch         # Watch mode
-npm run test:coverage      # Test coverage
+npm run test:watch         # Convenience watch mode outside the primary taxonomy contract
+npm run test:coverage      # Convenience coverage run outside the primary taxonomy contract
 ```
 
 Run a single test file (requires build first):
 
 ```bash
-npm run build && node --test dist/test/core/orchestrator.test.js
+npm run build && node --test test/core/orchestrator.test.ts
 ```
 
-- Tests run against JS files under `dist/`; after modifying `src/`, always run `npm run build` first
+- Primary test commands run `npm run build` first and then execute source test files under `test/`
+- After modifying `src/`, always run `npm run build` first
 - Test structure mirrors `src/`: `test/core/orchestrator.test.ts` corresponds to `src/core/orchestrator.ts`
 - Follow TDD: write or update tests before implementing
 - Uses the Node.js built-in test runner (`node:test`); no external test frameworks
