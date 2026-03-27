@@ -40,6 +40,19 @@ test("StructuredOutputValidator accepts schema-valid findings JSON", () => {
   });
 });
 
+test("StructuredOutputValidator rejects unsupported validator ids at runtime", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "other-json" as "findings-json",
+        responseText: JSON.stringify({ findings: [] })
+      }),
+    /deterministic validation failed/u
+  );
+});
+
 test("StructuredOutputValidator rejects malformed JSON and extra non-JSON text", () => {
   const validator = new StructuredOutputValidator();
 
@@ -58,6 +71,37 @@ test("StructuredOutputValidator rejects malformed JSON and extra non-JSON text",
         validatorId: "findings-json",
         responseText:
           "{\"findings\": []}\nextra trailing text"
+      }),
+    /deterministic validation failed/u
+  );
+});
+
+test("StructuredOutputValidator rejects invalid top-level payload shapes", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify([])
+      }),
+    /deterministic validation failed/u
+  );
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({})
+      }),
+    /deterministic validation failed/u
+  );
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({ findings: {} })
       }),
     /deterministic validation failed/u
   );
@@ -102,6 +146,50 @@ test("StructuredOutputValidator rejects schema-invalid findings payloads", () =>
               deviation: "預期與實際有落差",
               impact: "會造成 correctness 問題",
               suggestion: "補上 guard"
+            }
+          ]
+        })
+      }),
+    /deterministic validation failed/u
+  );
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "問題標題",
+              traceability: lineRangeTraceability(14, 18),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 101
+            }
+          ]
+        })
+      }),
+    /deterministic validation failed/u
+  );
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "問題標題",
+              traceability: lineRangeTraceability(14, 18),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: "88"
             }
           ]
         })
@@ -367,6 +455,54 @@ test("StructuredOutputValidator rejects line-range traceability with inverted bo
   );
 });
 
+test("StructuredOutputValidator rejects line-range traceability with non-positive line numbers", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "lineStart 為 0",
+              traceability: lineRangeTraceability(0, 5),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        })
+      }),
+    /deterministic validation failed/u
+  );
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "lineEnd 為負數",
+              traceability: lineRangeTraceability(1, -1),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        })
+      }),
+    /deterministic validation failed/u
+  );
+});
+
 test("StructuredOutputValidator rejects diff-hunk traceability when the header is unknown", () => {
   const validator = new StructuredOutputValidator();
 
@@ -380,6 +516,35 @@ test("StructuredOutputValidator rejects diff-hunk traceability when the header i
               type: "must",
               title: "未知 hunk",
               traceability: diffHunkTraceability("@@ -40,2 +40,3 @@"),
+              context: "具體情境",
+              deviation: "預期與實際有落差",
+              impact: "會造成 correctness 問題",
+              suggestion: "補上 guard",
+              confidence: 88
+            }
+          ]
+        }),
+        diffContent: "@@ -1 +1 @@\n-old\n+new\n"
+      }),
+    /deterministic validation failed/u
+  );
+});
+
+test("StructuredOutputValidator rejects diff-hunk traceability without a hunk header", () => {
+  const validator = new StructuredOutputValidator();
+
+  assert.throws(
+    () =>
+      validator.validate({
+        validatorId: "findings-json",
+        responseText: JSON.stringify({
+          findings: [
+            {
+              type: "must",
+              title: "缺少 hunkHeader",
+              traceability: {
+                kind: "diff-hunk"
+              },
               context: "具體情境",
               deviation: "預期與實際有落差",
               impact: "會造成 correctness 問題",

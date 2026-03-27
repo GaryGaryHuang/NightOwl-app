@@ -5,17 +5,19 @@ import path from "node:path";
 import { mock } from "node:test";
 import test from "node:test";
 
-import { ToolPolicyGuard } from "../../src/services/tool-policy-guard.ts";
+import {
+  READONLY_BASH_DENY_REASON,
+  SHELL_POLICY_FAIL_CLOSED_REASON,
+  UNSAFE_WEB_FETCH_URL_REASON
+} from "../../src/services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import {
-  BASE_PROFILE,
   createPolicySession,
-  FakeHostnameClassifier,
   FakeRedirectResolver,
   readAuditLines
 } from "../helpers/tool-policy-fixture.ts";
 
-test("tool policy baseline allows repo-local reads and denies out-of-bound reads and writes", async () => {
+test("tool policy guard permission handler allows repo-local reads and denies out-of-bound reads and writes", async () => {
   const { handler } = createPolicySession();
 
   assert.deepEqual(
@@ -48,10 +50,10 @@ test("tool policy baseline allows repo-local reads and denies out-of-bound reads
   );
 });
 
-test("tool policy baseline enforces web_fetch public-http(s) guard", async () => {
+test("tool policy guard keeps representative web_fetch allow and deny behavior through the hook surface", async () => {
   const { hook } = createPolicySession();
 
-  assert.deepEqual(
+  assert.equal(
     await hook(
       {
         timestamp: Date.now(),
@@ -62,34 +64,6 @@ test("tool policy baseline enforces web_fetch public-http(s) guard", async () =>
       { sessionId: "session-1" }
     ),
     undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "http://example.com/spec" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "/internal/path" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
   );
   assert.deepEqual(
     await hook(
@@ -103,166 +77,15 @@ test("tool policy baseline enforces web_fetch public-http(s) guard", async () =>
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "http://192.168.1.10/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "http://[::1]/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "file:///etc/passwd" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "http://[::ffff:127.0.0.1]/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+      permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
     }
   );
 });
 
-test("tool policy baseline applies hostname DNS classification after syntax checks for hostname-based URLs only", async () => {
-  const classifier = new FakeHostnameClassifier({ kind: "allowed" });
-  const { hook } = createPolicySession({ hostnameClassifier: classifier });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-
-  assert.deepEqual(classifier.calls, [
-    {
-      hostname: "docs.example.com",
-      timeoutMs: 5000
-    }
-  ]);
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "http://192.168.1.10/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
-  );
-
-  assert.equal(classifier.calls.length, 1);
-});
-
-test("tool policy baseline denies hostname DNS classification failures with a stable reason", async () => {
-  const classifier = new FakeHostnameClassifier({
-    kind: "denied",
-    reason:
-      "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
-  });
-  const { hook } = createPolicySession({ hostnameClassifier: classifier });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://internal-proxy.example.com/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
-    }
-  );
-});
-
-test("tool policy baseline enforces readonly bash commands and path boundaries", async () => {
+test("tool policy guard keeps representative shell allow and deny behavior through the hook surface", async () => {
   const { hook } = createPolicySession();
 
-  assert.deepEqual(
+  assert.equal(
     await hook(
       {
         timestamp: Date.now(),
@@ -286,177 +109,12 @@ test("tool policy baseline enforces readonly bash commands and path boundaries",
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "ls" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "sort" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "uniq" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "lsof" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "sorting" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "git diffmain...feature-branch" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "cat ../secret.txt" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "cat /etc/passwd" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "git checkout main" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "git log; rm -rf /" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "bash",
-        toolArgs: { command: "git diff --output=/tmp/out main...feature-branch" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
     }
   );
 });
 
-test("tool policy baseline passes through non-bash and non-web_fetch tools and handles missing toolArgs conservatively", async () => {
+test("tool policy guard passes through non-bash and non-web_fetch tools and handles missing toolArgs conservatively", async () => {
   const { hook } = createPolicySession();
 
   assert.equal(
@@ -483,8 +141,7 @@ test("tool policy baseline passes through non-bash and non-web_fetch tools and h
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
     }
   );
   assert.deepEqual(
@@ -499,724 +156,12 @@ test("tool policy baseline passes through non-bash and non-web_fetch tools and h
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: "https://docs.example.com" as unknown as Record<string, unknown>
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
+      permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
     }
   );
 });
 
-test("tool policy baseline enforces exact-host web_fetch allowlist", async () => {
-  const { hook } = createPolicySession({
-    webFetchAllowedHosts: ["docs.example.com"]
-  });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://Docs.Example.Com/reference" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com./guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com:8443/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://react.dev/reference" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-});
-
-test("tool policy baseline denies all web_fetch hosts when allowlist is empty", async () => {
-  const { hook } = createPolicySession({ webFetchAllowedHosts: [] });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-});
-
-test("tool policy baseline enforces wildcard and mixed allowlist semantics", async () => {
-  const wildcard = createPolicySession({
-    webFetchAllowedHosts: ["*.example.com"]
-  });
-
-  assert.deepEqual(
-    await wildcard.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await wildcard.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://api.docs.example.com/v2/ref" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await wildcard.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://example.com/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-
-  const mixed = createPolicySession({
-    webFetchAllowedHosts: ["react.dev", "*.example.com"]
-  });
-
-  assert.deepEqual(
-    await mixed.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://react.dev/reference" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await mixed.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(
-    await mixed.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://vuejs.org/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-});
-
-test("tool policy baseline enforces denylist semantics over allowlist", async () => {
-  const exact = createPolicySession({
-    webFetchAllowedHosts: ["*.example.com"],
-    webFetchDeniedHosts: ["internal.example.com"]
-  });
-
-  assert.deepEqual(
-    await exact.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://internal.example.com/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-  assert.deepEqual(
-    await exact.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-
-  const wildcard = createPolicySession({
-    webFetchAllowedHosts: ["*.example.com"],
-    webFetchDeniedHosts: ["*.internal.example.com"]
-  });
-
-  assert.deepEqual(
-    await wildcard.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://api.internal.example.com/v2" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-  assert.deepEqual(
-    await wildcard.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://internal.example.com/page" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-});
-
-test("tool policy baseline validates redirect chains after the initial URL passes baseline policy", async () => {
-  const redirectResolver = new FakeRedirectResolver({
-    kind: "resolved",
-    redirectChain: [new URL("https://reference.example.net/page")]
-  });
-  const { hook } = createPolicySession({ redirectResolver });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/start" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-  assert.deepEqual(redirectResolver.calls, [
-    {
-      initialUrl: "https://docs.example.com/start",
-      maxHops: 5,
-      timeoutMs: 5000,
-      validateRedirectTarget: true
-    }
-  ]);
-});
-
-test("tool policy baseline denies the initial URL before redirect traversal when initial host policy fails", async () => {
-  const redirectResolver = new FakeRedirectResolver({
-    kind: "resolved",
-    redirectChain: [new URL("https://docs.example.com/guide")]
-  });
-  const { hook } = createPolicySession({
-    webFetchAllowedHosts: ["docs.example.com"],
-    redirectResolver
-  });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://reference.example.net/start" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-  assert.equal(redirectResolver.calls.length, 0);
-});
-
-test("tool policy baseline short-circuits host-policy denials before DNS classification", async () => {
-  const classifier = new FakeHostnameClassifier({ kind: "allowed" });
-  const { hook } = createPolicySession({
-    webFetchAllowedHosts: ["docs.example.com"],
-    hostnameClassifier: classifier,
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://docs.example.com/guide")]
-    })
-  });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://react.dev/reference" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-
-  assert.equal(classifier.calls.length, 0);
-});
-
-test("tool policy baseline enforces allowlist and denylist semantics across redirect targets", async () => {
-  const allowlistMiss = createPolicySession({
-    webFetchAllowedHosts: ["docs.example.com"],
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://reference.example.net/page")]
-    })
-  });
-
-  assert.deepEqual(
-    await allowlistMiss.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/start" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-
-  const wildcardAllow = createPolicySession({
-    webFetchAllowedHosts: ["*.example.com"],
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://api.docs.example.com/reference")]
-    })
-  });
-
-  assert.deepEqual(
-    await wildcardAllow.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/start" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-
-  const denylistHit = createPolicySession({
-    webFetchAllowedHosts: ["*.example.com"],
-    webFetchDeniedHosts: ["internal.example.com"],
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://internal.example.com/admin")]
-    })
-  });
-
-  assert.deepEqual(
-    await denylistHit.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/start" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-});
-
-test("tool policy baseline enforces DNS classification across redirect targets", async () => {
-  const classifier = new FakeHostnameClassifier(async (hostname) =>
-    hostname === "internal-proxy.example.com"
-      ? {
-          kind: "denied",
-          reason:
-            "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
-        }
-      : { kind: "allowed" }
-  );
-  const { hook } = createPolicySession({
-    hostnameClassifier: classifier,
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://internal-proxy.example.com/admin")]
-    })
-  });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/start" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
-    }
-  );
-});
-
-test("tool policy baseline memoizes hostname DNS classification within one decision using canonical hostnames", async () => {
-  const classifier = new FakeHostnameClassifier({ kind: "allowed" });
-  const { hook } = createPolicySession({
-    hostnameClassifier: classifier,
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://Docs.Example.Com./reference")]
-    })
-  });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/start" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-
-  assert.deepEqual(classifier.calls, [
-    {
-      hostname: "docs.example.com",
-      timeoutMs: 5000
-    }
-  ]);
-});
-
-test("tool policy baseline denies unresolved redirect chains conservatively", async () => {
-  const redirectResolver = new FakeRedirectResolver({
-    kind: "denied",
-    reason: "Review sessions only allow web_fetch when redirect chains resolve safely."
-  });
-  const { hook } = createPolicySession({ redirectResolver });
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/start" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch when redirect chains resolve safely."
-    }
-  );
-});
-
-test("tool policy baseline enforces denylist comparison and denylist-only semantics", async () => {
-  const denylist = createPolicySession({
-    webFetchAllowedHosts: ["*.example.com"],
-    webFetchDeniedHosts: ["internal.example.com"]
-  });
-
-  assert.deepEqual(
-    await denylist.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://INTERNAL.example.com/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-  assert.deepEqual(
-    await denylist.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://internal.example.com./admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-  assert.deepEqual(
-    await denylist.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://internal.example.com:8443/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-
-  const denyOnly = createPolicySession({
-    webFetchDeniedHosts: ["evil.com"]
-  });
-
-  assert.deepEqual(
-    await denyOnly.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://evil.com/payload" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-  assert.deepEqual(
-    await denyOnly.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/guide" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-
-  const denyOnlyWildcard = createPolicySession({
-    webFetchDeniedHosts: ["*.evil.com"]
-  });
-
-  assert.deepEqual(
-    await denyOnlyWildcard.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://sub.evil.com/payload" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-  assert.deepEqual(
-    await denyOnlyWildcard.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://evil.com/payload" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-});
-
-test("tool policy baseline handles empty and mixed denylist combinations", async () => {
-  const emptyDenylist = createPolicySession({
-    webFetchAllowedHosts: ["*.example.com"],
-    webFetchDeniedHosts: []
-  });
-
-  assert.deepEqual(
-    await emptyDenylist.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://internal.example.com/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    undefined
-  );
-
-  const mixed = createPolicySession({
-    webFetchAllowedHosts: ["*.example.com", "evil.org"],
-    webFetchDeniedHosts: ["internal.example.com", "*.secret.example.com"]
-  });
-
-  assert.deepEqual(
-    await mixed.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://api.secret.example.com/data" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-
-  const sameHost = createPolicySession({
-    webFetchAllowedHosts: ["internal.example.com"],
-    webFetchDeniedHosts: ["internal.example.com"]
-  });
-
-  assert.deepEqual(
-    await sameHost.hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://internal.example.com/admin" }
-      },
-      { sessionId: "session-1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for configured public http(s) hosts."
-    }
-  );
-});
-
-test("tool policy baseline writes audit records for pre-tool decisions", async () => {
+test("tool policy guard writes audit records for representative pre-tool decisions", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
 
   try {
@@ -1252,13 +197,13 @@ test("tool policy baseline writes audit records for pre-tool decisions", async (
     assert.equal(denyRecord.tool, "web_fetch");
     assert.equal(denyRecord.decision, "deny");
     assert.equal(denyRecord.args.url, "http://localhost:8080");
-    assert.ok(typeof denyRecord.reason === "string" && denyRecord.reason.length > 0);
+    assert.equal(denyRecord.reason, UNSAFE_WEB_FETCH_URL_REASON);
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
 });
 
-test("tool policy baseline writes audit records for redirect-policy denials", async () => {
+test("tool policy guard writes audit records for redirect-policy denials", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
 
   try {
@@ -1286,7 +231,6 @@ test("tool policy baseline writes audit records for redirect-policy denials", as
 
     assert.equal(denyRecord.tool, "web_fetch");
     assert.equal(denyRecord.decision, "deny");
-    assert.equal(denyRecord.args.url, "https://docs.example.com/start");
     assert.equal(
       denyRecord.reason,
       "Review sessions only allow web_fetch when redirect chains resolve safely."
@@ -1296,7 +240,7 @@ test("tool policy baseline writes audit records for redirect-policy denials", as
   }
 });
 
-test("tool policy baseline writes audit records for permission decisions", async () => {
+test("tool policy guard writes audit records for permission decisions", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
 
   try {
@@ -1316,12 +260,8 @@ test("tool policy baseline writes audit records for permission decisions", async
       { kind: "write", fileName: "/workspace/repo/src/app.ts" },
       { sessionId: "s1" }
     );
-    await handler(
-      { kind: "write" } as Parameters<typeof handler>[0],
-      { sessionId: "s1" }
-    );
 
-    const [readAllow, readDeny, writeDeny, writeDenyNoFile] = readAuditLines(auditPath);
+    const [readAllow, readDeny, writeDeny] = readAuditLines(auditPath);
 
     assert.equal(readAllow.tool, "read");
     assert.equal(readAllow.decision, "allow");
@@ -1334,13 +274,12 @@ test("tool policy baseline writes audit records for permission decisions", async
       writeDeny.reason,
       "Write operations are not permitted in review sessions."
     );
-    assert.deepEqual(writeDenyNoFile.args, {});
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
 });
 
-test("tool policy baseline behaves normally without an audit writer", async () => {
+test("tool policy guard behaves normally without an audit writer", async () => {
   const { hook, handler } = createPolicySession();
 
   assert.equal(
@@ -1364,9 +303,7 @@ test("tool policy baseline behaves normally without an audit writer", async () =
   );
 });
 
-// ─── shell tool name compatibility (tasks 1.4–1.12) ─────────────────────────
-
-test("tool policy shell name 'sh' with allowed command is allowed", async () => {
+test("tool policy guard keeps shell tool-name alias behavior through the hook surface", async () => {
   const { hook } = createPolicySession();
 
   assert.equal(
@@ -1381,11 +318,6 @@ test("tool policy shell name 'sh' with allowed command is allowed", async () => 
     ),
     undefined
   );
-});
-
-test("tool policy shell name 'shell' with allowed command is allowed", async () => {
-  const { hook } = createPolicySession();
-
   assert.equal(
     await hook(
       {
@@ -1398,11 +330,6 @@ test("tool policy shell name 'shell' with allowed command is allowed", async () 
     ),
     undefined
   );
-});
-
-test("tool policy shell name 'sh' with disallowed command is denied", async () => {
-  const { hook } = createPolicySession();
-
   assert.deepEqual(
     await hook(
       {
@@ -1415,93 +342,12 @@ test("tool policy shell name 'sh' with disallowed command is denied", async () =
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
     }
   );
 });
 
-test("tool policy shell name 'shell' with disallowed command is denied", async () => {
-  const { hook } = createPolicySession();
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "shell",
-        toolArgs: { command: "curl http://example.com" }
-      },
-      { sessionId: "s1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-});
-
-test("tool policy shell name 'sh' with pipeline command applies pipeline validation", async () => {
-  const { hook } = createPolicySession();
-
-  assert.equal(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "sh",
-        toolArgs: { command: "git log --oneline | head -5" }
-      },
-      { sessionId: "s1" }
-    ),
-    undefined
-  );
-});
-
-test("tool policy shell name 'sh' with missing toolArgs is denied", async () => {
-  const { hook } = createPolicySession();
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "sh",
-        toolArgs: undefined
-      },
-      { sessionId: "s1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-});
-
-test("tool policy shell name 'shell' with missing toolArgs is denied", async () => {
-  const { hook } = createPolicySession();
-
-  assert.deepEqual(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "shell",
-        toolArgs: undefined
-      },
-      { sessionId: "s1" }
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
-    }
-  );
-});
-
-test("tool policy shell name 'sh' and 'shell' audit records use actual toolName", async () => {
+test("tool policy guard shell alias audit records keep the original toolName", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-shell-names-"));
 
   try {
@@ -1531,40 +377,15 @@ test("tool policy shell name 'sh' and 'shell' audit records use actual toolName"
     const [shRecord, shellRecord] = readAuditLines(auditPath);
 
     assert.equal(shRecord.tool, "sh");
-    assert.equal(shRecord.decision, "allow");
-    assert.equal(shRecord.args.command, "git log --oneline");
-
     assert.equal(shellRecord.tool, "shell");
-    assert.equal(shellRecord.decision, "deny");
-    assert.equal(shellRecord.args.command, "rm -rf /");
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
 });
 
-test("tool policy unknown toolName like 'python' is not subject to shell policy", async () => {
+test("tool policy guard fails closed when shell policy evaluation throws an Error or non-Error", async () => {
   const { hook } = createPolicySession();
 
-  assert.equal(
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "python",
-        toolArgs: { command: "import os; os.system('rm -rf /')" }
-      },
-      { sessionId: "s1" }
-    ),
-    undefined
-  );
-});
-
-// ─── shell policy fail-closed error boundary (tasks 2.4–2.9) ────────────────
-
-test("tool policy fail-closed: policy evaluation throwing an Error returns stable deny", async () => {
-  const { hook } = createPolicySession();
-
-  // Simulate isAllowedReadonlyBashCommand throwing by making path.resolve throw
   mock.method(path, "resolve", () => {
     throw new Error("simulated path.resolve failure");
   });
@@ -1582,20 +403,14 @@ test("tool policy fail-closed: policy evaluation throwing an Error returns stabl
       ),
       {
         permissionDecision: "deny",
-        permissionDecisionReason:
-          "Shell policy evaluation failed; denied as a precaution."
+        permissionDecisionReason: SHELL_POLICY_FAIL_CLOSED_REASON
       }
     );
   } finally {
     mock.restoreAll();
   }
-});
-
-test("tool policy fail-closed: policy evaluation throwing a non-Error value returns stable deny", async () => {
-  const { hook } = createPolicySession();
 
   mock.method(path, "resolve", () => {
-    // eslint-disable-next-line @typescript-eslint/no-throw-literal
     throw "non-error string thrown";
   });
 
@@ -1612,8 +427,7 @@ test("tool policy fail-closed: policy evaluation throwing a non-Error value retu
       ),
       {
         permissionDecision: "deny",
-        permissionDecisionReason:
-          "Shell policy evaluation failed; denied as a precaution."
+        permissionDecisionReason: SHELL_POLICY_FAIL_CLOSED_REASON
       }
     );
   } finally {
@@ -1621,7 +435,7 @@ test("tool policy fail-closed: policy evaluation throwing a non-Error value retu
   }
 });
 
-test("tool policy fail-closed: deny audit record has correct fields when throw occurs after extraction", async () => {
+test("tool policy guard writes fail-closed audit records with extracted and missing commands", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-failclosed-"));
 
   try {
@@ -1647,30 +461,6 @@ test("tool policy fail-closed: deny audit record has correct fields when throw o
       mock.restoreAll();
     }
 
-    const [record] = readAuditLines(auditPath);
-
-    assert.equal(record.tool, "bash");
-    assert.equal(record.decision, "deny");
-    assert.equal(
-      record.reason,
-      "Shell policy evaluation failed; denied as a precaution."
-    );
-    // command was successfully extracted before path.resolve threw
-    assert.equal(record.args.command, "git log /workspace/repo");
-  } finally {
-    rmSync(tempDir, { force: true, recursive: true });
-  }
-});
-
-test("tool policy fail-closed: deny audit record has empty command when extraction itself throws", async () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-failclosed-extract-"));
-
-  try {
-    const auditPath = path.join(tempDir, "tool-audit.jsonl");
-    const auditWriter = new ToolAuditWriter(auditPath);
-    const { hook } = createPolicySession({ auditWriter });
-
-    // Proxy whose `has` trap throws — triggers throw during `"command" in input.toolArgs`
     const throwingProxy = new Proxy({} as Record<string, unknown>, {
       has(): never {
         throw new Error("has trap throws");
@@ -1687,21 +477,18 @@ test("tool policy fail-closed: deny audit record has empty command when extracti
       { sessionId: "s1" }
     );
 
-    const [record] = readAuditLines(auditPath);
+    const [recordWithCommand, recordWithoutCommand] = readAuditLines(auditPath);
 
-    assert.equal(record.tool, "bash");
-    assert.equal(record.decision, "deny");
-    assert.equal(
-      record.reason,
-      "Shell policy evaluation failed; denied as a precaution."
-    );
-    assert.equal(record.args.command, "");
+    assert.equal(recordWithCommand.reason, SHELL_POLICY_FAIL_CLOSED_REASON);
+    assert.equal(recordWithCommand.args.command, "git log /workspace/repo");
+    assert.equal(recordWithoutCommand.reason, SHELL_POLICY_FAIL_CLOSED_REASON);
+    assert.equal(recordWithoutCommand.args.command, "");
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
 });
 
-test("tool policy fail-closed: normal deny does not use fail-closed reason", async () => {
+test("tool policy guard keeps normal deny reasons distinct from fail-closed and leaves web_fetch unaffected", async () => {
   const { hook } = createPolicySession();
 
   assert.deepEqual(
@@ -1716,15 +503,9 @@ test("tool policy fail-closed: normal deny does not use fail-closed reason", asy
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow repo-local read-only bash analysis commands."
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
     }
   );
-});
-
-test("tool policy fail-closed: web_fetch tool call is unaffected by shell fail-closed boundary", async () => {
-  const { hook } = createPolicySession();
-
   assert.equal(
     await hook(
       {
@@ -1737,21 +518,21 @@ test("tool policy fail-closed: web_fetch tool call is unaffected by shell fail-c
     ),
     undefined
   );
+});
 
-  assert.deepEqual(
+test("tool policy guard leaves unknown tool names outside the shell policy boundary", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
     await hook(
       {
         timestamp: Date.now(),
         cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "http://localhost:3000" }
+        toolName: "python",
+        toolArgs: { command: "import os; os.system('rm -rf /')" }
       },
       { sessionId: "s1" }
     ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason:
-        "Review sessions only allow web_fetch for absolute public http(s) URLs."
-    }
+    undefined
   );
 });

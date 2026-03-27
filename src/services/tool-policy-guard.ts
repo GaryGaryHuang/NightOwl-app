@@ -2,25 +2,19 @@ import {
   type PermissionHandler,
   type SessionConfig
 } from "@github/copilot-sdk";
-import { isIP } from "node:net";
 import path from "node:path";
 
 import type { ReviewSessionProfile } from "./review-session-factory.ts";
+import {
+  evaluateReadonlyShellCommand,
+  READONLY_BASH_DENY_REASON
+} from "./tool-policy-shell-policy.ts";
 import type { ToolAuditWriter } from "./tool-audit-writer.ts";
 import {
-  DefaultWebFetchRedirectResolver,
-  DEFAULT_WEB_FETCH_REDIRECT_HOP_LIMIT,
-  DEFAULT_WEB_FETCH_REDIRECT_TIMEOUT_MS,
-  type WebFetchRedirectResolver
-} from "./web-fetch-redirect-resolver.ts";
-import {
-  canonicalizeHostnameForComparison,
-  DefaultWebFetchHostnameClassifier,
-  DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS,
-  normalizeHostnameForNetworkChecks,
-  UNSAFE_WEB_FETCH_HOSTNAME_REASON,
-  type WebFetchHostnameClassifier
-} from "./web-fetch-hostname-classifier.ts";
+  ToolPolicyWebFetchPolicy,
+  UNSAFE_WEB_FETCH_URL_REASON,
+  type ToolPolicyWebFetchPolicyOptions
+} from "./tool-policy-web-fetch-policy.ts";
 
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
@@ -28,115 +22,21 @@ type PreToolUseHook = NonNullable<
 type PreToolUseHookInput = Parameters<PreToolUseHook>[0];
 type PreToolUseHookResult = Awaited<ReturnType<PreToolUseHook>>;
 
-const ALLOWED_BASH_PREFIXES = [
-  "git diff",
-  "git show",
-  "git log",
-  "git status",
-  "git rev-parse",
-  "git merge-base",
-  "git rev-list",
-  "git ls-files",
-  "git blame",
-  "git grep",
-  "git cat-file",
-  "cat",
-  "ls",
-  "head",
-  "tail",
-  "find",
-  "rg",
-  "grep",
-  "sed -n",
-  "cut",
-  "sort",
-  "uniq",
-  "wc -l"
-];
-
-const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output"]);
 const SHELL_TOOL_NAMES = new Set(["bash", "sh", "shell"]);
-const UNSAFE_WEB_FETCH_URL_REASON =
-  "Review sessions only allow web_fetch for absolute public http(s) URLs.";
-const CONFIGURED_WEB_FETCH_HOST_REASON =
-  "Review sessions only allow web_fetch for configured public http(s) hosts.";
 const SHELL_POLICY_FAIL_CLOSED_REASON =
   "Shell policy evaluation failed; denied as a precaution.";
 
-export interface ToolPolicyGuardOptions {
-  hostnameClassifier?: WebFetchHostnameClassifier;
-  redirectResolver?: WebFetchRedirectResolver;
-  webFetchAllowedHosts?: string[];
-  webFetchDeniedHosts?: string[];
-  webFetchHostnameClassificationTimeoutMs?: number;
-  webFetchRedirectHopLimit?: number;
-  webFetchRedirectTimeoutMs?: number;
-}
+export interface ToolPolicyGuardOptions
+  extends ToolPolicyWebFetchPolicyOptions {}
 
 /**
  * Enforce the review session tool boundary for web_fetch, shell, and file access.
  */
 export class ToolPolicyGuard {
-  readonly #hostnameClassifier: WebFetchHostnameClassifier;
-  readonly #redirectResolver: WebFetchRedirectResolver;
-  readonly #webFetchAllowedHosts?: Set<string>;
-  readonly #webFetchWildcardSuffixes?: readonly string[];
-  readonly #webFetchDeniedHosts?: Set<string>;
-  readonly #webFetchDeniedWildcardSuffixes?: readonly string[];
-  readonly #webFetchHostnameClassificationTimeoutMs: number;
-  readonly #webFetchRedirectHopLimit: number;
-  readonly #webFetchRedirectTimeoutMs: number;
+  readonly #webFetchPolicy: ToolPolicyWebFetchPolicy;
 
   constructor(options: ToolPolicyGuardOptions) {
-    this.#hostnameClassifier =
-      options.hostnameClassifier ?? new DefaultWebFetchHostnameClassifier();
-    this.#redirectResolver =
-      options.redirectResolver ?? new DefaultWebFetchRedirectResolver();
-    this.#webFetchHostnameClassificationTimeoutMs =
-      options.webFetchHostnameClassificationTimeoutMs ??
-      DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS;
-    this.#webFetchRedirectHopLimit =
-      options.webFetchRedirectHopLimit ?? DEFAULT_WEB_FETCH_REDIRECT_HOP_LIMIT;
-    this.#webFetchRedirectTimeoutMs =
-      options.webFetchRedirectTimeoutMs ?? DEFAULT_WEB_FETCH_REDIRECT_TIMEOUT_MS;
-
-    if (options.webFetchAllowedHosts === undefined) {
-      this.#webFetchAllowedHosts = undefined;
-      this.#webFetchWildcardSuffixes = undefined;
-    } else {
-      const exactHosts = new Set<string>();
-      const wildcardSuffixes: string[] = [];
-
-      for (const host of options.webFetchAllowedHosts) {
-        if (host.startsWith("*.")) {
-          wildcardSuffixes.push(`.${host.slice(2)}`);
-        } else {
-          exactHosts.add(canonicalizeHostnameForComparison(host));
-        }
-      }
-
-      this.#webFetchAllowedHosts = exactHosts;
-      this.#webFetchWildcardSuffixes = wildcardSuffixes;
-    }
-
-    if (options.webFetchDeniedHosts === undefined) {
-      this.#webFetchDeniedHosts = undefined;
-      this.#webFetchDeniedWildcardSuffixes = undefined;
-    } else {
-      const exactDenied = new Set<string>();
-      const deniedWildcardSuffixes: string[] = [];
-
-      for (const host of options.webFetchDeniedHosts) {
-        if (host.startsWith("*.")) {
-          deniedWildcardSuffixes.push(`.${host.slice(2)}`);
-        } else {
-          exactDenied.add(canonicalizeHostnameForComparison(host));
-        }
-      }
-
-      this.#webFetchDeniedHosts = exactDenied;
-      this.#webFetchDeniedWildcardSuffixes = deniedWildcardSuffixes;
-    }
+    this.#webFetchPolicy = new ToolPolicyWebFetchPolicy(options);
   }
 
   buildPermissionHandler(
@@ -144,7 +44,6 @@ export class ToolPolicyGuard {
     auditWriter?: ToolAuditWriter
   ): PermissionHandler {
     return async (request) => {
-      // File permissions are fail-closed: only repo/output-boundary reads are allowed, and writes are always denied.
       if (
         request.kind === "read" &&
         typeof request.path === "string" &&
@@ -176,7 +75,6 @@ export class ToolPolicyGuard {
       }
 
       if (request.kind === "write") {
-        // Review sessions must remain observational, so tool-triggered writes are rejected categorically.
         const fileName =
           "fileName" in request && typeof request.fileName === "string"
             ? request.fileName
@@ -204,93 +102,14 @@ export class ToolPolicyGuard {
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
       if (input.toolName === "web_fetch") {
-        // web_fetch is evaluated conservatively: URL shape first, then host policy, then DNS/redirect checks.
         const url =
           input.toolArgs &&
           typeof input.toolArgs === "object" &&
           "url" in input.toolArgs &&
-            typeof input.toolArgs.url === "string"
+          typeof input.toolArgs.url === "string"
             ? input.toolArgs.url
             : "";
-
-        const parsedUrl = parseAllowedWebFetchUrl(url);
-        let decision: PreToolUseHookResult;
-        // Cache hostname classification within a single hook invocation so redirects do not repeat DNS lookups.
-        const hostnameDecisionCache = new Map<
-          string,
-          Promise<PreToolUseHookResult>
-        >();
-
-        const evaluateResolvedUrl = async (
-          resolvedUrl: URL
-        ): Promise<PreToolUseHookResult> => {
-          const hostPolicyDecision = this.evaluateWebFetchHostPolicy(resolvedUrl);
-
-          if (hostPolicyDecision) {
-            return hostPolicyDecision;
-          }
-
-          return this.evaluateWebFetchHostnameClassification(
-            resolvedUrl,
-            hostnameDecisionCache
-          );
-        };
-
-        if (!parsedUrl) {
-          decision = {
-            permissionDecision: "deny",
-            permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-          };
-        } else {
-          decision = await evaluateResolvedUrl(parsedUrl);
-
-          if (!decision) {
-            const redirectResolution = await this.#redirectResolver.resolveRedirectChain(
-              parsedUrl,
-              {
-                maxHops: this.#webFetchRedirectHopLimit,
-                timeoutMs: this.#webFetchRedirectTimeoutMs,
-                validateRedirectTarget: async (redirectTarget) => {
-                  const parsedRedirectUrl = parseAllowedWebFetchUrl(
-                    redirectTarget.toString()
-                  );
-
-                  if (!parsedRedirectUrl) {
-                    return UNSAFE_WEB_FETCH_URL_REASON;
-                  }
-
-                  return (await evaluateResolvedUrl(parsedRedirectUrl))
-                    ?.permissionDecisionReason;
-                }
-              }
-            );
-
-            if (redirectResolution.kind === "denied") {
-              decision = {
-                permissionDecision: "deny",
-                permissionDecisionReason: redirectResolution.reason
-              };
-            } else {
-              for (const redirectUrl of redirectResolution.redirectChain) {
-                const parsedRedirectUrl = parseAllowedWebFetchUrl(redirectUrl.toString());
-
-                if (!parsedRedirectUrl) {
-                  decision = {
-                    permissionDecision: "deny",
-                    permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-                  };
-                  break;
-                }
-
-                decision = await evaluateResolvedUrl(parsedRedirectUrl);
-
-                if (decision) {
-                  break;
-                }
-              }
-            }
-          }
-        }
+        const decision = await this.#webFetchPolicy.evaluate(url);
 
         auditWriter?.append({
           ts: new Date().toISOString(),
@@ -309,7 +128,6 @@ export class ToolPolicyGuard {
 
       let command = "";
       try {
-        // Shell access is limited to repo-local read-only analysis commands.
         command =
           input.toolArgs &&
           typeof input.toolArgs === "object" &&
@@ -317,15 +135,11 @@ export class ToolPolicyGuard {
           typeof input.toolArgs.command === "string"
             ? (input.toolArgs.command as string)
             : "";
-
-        const allowed = isAllowedReadonlyBashCommand(command, profile, input.cwd);
-        const decision: PreToolUseHookResult = allowed
-          ? undefined
-          : {
-              permissionDecision: "deny",
-              permissionDecisionReason:
-                "Review sessions only allow repo-local read-only bash analysis commands."
-            };
+        const decision = evaluateReadonlyShellCommand(
+          command,
+          profile,
+          input.cwd
+        );
 
         auditWriter?.append({
           ts: new Date().toISOString(),
@@ -352,200 +166,6 @@ export class ToolPolicyGuard {
       }
     };
   }
-
-  evaluateWebFetchHostPolicy(url: URL): PreToolUseHookResult {
-    const normalizedHostname = canonicalizeHostnameForComparison(url.hostname);
-
-    if (this.#webFetchAllowedHosts !== undefined) {
-      if (
-        !this.#webFetchAllowedHosts.has(normalizedHostname) &&
-        !(this.#webFetchWildcardSuffixes ?? []).some((suffix) =>
-          normalizedHostname.endsWith(suffix)
-        )
-      ) {
-        return {
-          permissionDecision: "deny",
-          permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-        };
-      }
-    }
-
-    if (this.#webFetchDeniedHosts !== undefined) {
-      return evaluateWebFetchDenyList(
-        normalizedHostname,
-        this.#webFetchDeniedHosts,
-        this.#webFetchDeniedWildcardSuffixes
-      );
-    }
-
-    return undefined;
-  }
-
-  async evaluateWebFetchHostnameClassification(
-    url: URL,
-    decisionCache: Map<string, Promise<PreToolUseHookResult>>
-  ): Promise<PreToolUseHookResult> {
-    const normalizedHostname = canonicalizeHostnameForComparison(url.hostname);
-
-    if (isIP(normalizedHostname) !== 0) {
-      return undefined;
-    }
-
-    const cachedDecision = decisionCache.get(normalizedHostname);
-
-    if (cachedDecision) {
-      return cachedDecision;
-    }
-
-    const decisionPromise = this.#hostnameClassifier
-      .classifyHostname(normalizedHostname, {
-        timeoutMs: this.#webFetchHostnameClassificationTimeoutMs
-      })
-      .then((classification): PreToolUseHookResult => {
-        if (classification.kind === "denied") {
-          return {
-            permissionDecision: "deny",
-            permissionDecisionReason: classification.reason
-          };
-        }
-
-        return undefined;
-      });
-
-    decisionCache.set(normalizedHostname, decisionPromise);
-
-    return decisionPromise;
-  }
-}
-
-function evaluateWebFetchDenyList(
-  normalizedHostname: string,
-  webFetchDeniedHosts: ReadonlySet<string>,
-  webFetchDeniedWildcardSuffixes?: readonly string[]
-): PreToolUseHookResult {
-  if (
-    webFetchDeniedHosts.has(normalizedHostname) ||
-    (webFetchDeniedWildcardSuffixes ?? []).some((suffix) =>
-      normalizedHostname.endsWith(suffix)
-    )
-  ) {
-    return {
-      permissionDecision: "deny",
-      permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-    };
-  }
-
-  return undefined;
-}
-
-function parseAllowedWebFetchUrl(urlString: string): URL | undefined {
-  let parsed: URL;
-
-  try {
-    parsed = new URL(urlString);
-  } catch {
-    return undefined;
-  }
-
-  if (
-    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
-    !parsed.hostname
-  ) {
-    return undefined;
-  }
-
-  const normalizedHostname = normalizeHostnameForNetworkChecks(parsed.hostname);
-
-  if (normalizedHostname === "localhost") {
-    return undefined;
-  }
-
-  const ipVersion = isIP(normalizedHostname);
-
-  if (ipVersion === 4) {
-    return isDisallowedIpv4(normalizedHostname) ? undefined : parsed;
-  }
-
-  if (ipVersion === 6) {
-    return isDisallowedIpv6(normalizedHostname) ? undefined : parsed;
-  }
-
-  return parsed;
-}
-function isDisallowedIpv4(hostname: string): boolean {
-  const octets = hostname.split(".").map((value) => Number.parseInt(value, 10));
-
-  if (octets.length !== 4 || octets.some((value) => Number.isNaN(value))) {
-    return true;
-  }
-
-  if (octets[0] === 10 || octets[0] === 127) {
-    return true;
-  }
-
-  if (octets[0] === 169 && octets[1] === 254) {
-    return true;
-  }
-
-  if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) {
-    return true;
-  }
-
-  if (octets[0] === 192 && octets[1] === 168) {
-    return true;
-  }
-
-  return false;
-}
-
-function isDisallowedIpv6(hostname: string): boolean {
-  const mappedIpv4 = extractMappedIpv4(hostname);
-
-  if (mappedIpv4) {
-    return isDisallowedIpv4(mappedIpv4);
-  }
-
-  return (
-    hostname === "::1" ||
-    hostname.startsWith("fc") ||
-    hostname.startsWith("fd") ||
-    /^fe[89ab]/u.test(hostname)
-  );
-}
-
-function extractMappedIpv4(hostname: string): string | undefined {
-  if (!hostname.startsWith("::ffff:")) {
-    return undefined;
-  }
-
-  const suffix = hostname.slice("::ffff:".length);
-
-  if (isIP(suffix) === 4) {
-    return suffix;
-  }
-
-  const segments = suffix.split(":");
-
-  if (segments.length !== 2) {
-    return undefined;
-  }
-
-  const values = segments.map((segment) => Number.parseInt(segment, 16));
-
-  if (
-    values.some(
-      (value) => Number.isNaN(value) || value < 0 || value > 0xffff
-    )
-  ) {
-    return undefined;
-  }
-
-  return [
-    values[0] >> 8,
-    values[0] & 0xff,
-    values[1] >> 8,
-    values[1] & 0xff
-  ].join(".");
 }
 
 function isAllowedReadPath(
@@ -564,193 +184,9 @@ function isAllowedReadPath(
   );
 }
 
-function isAllowedReadonlyBashCommand(
-  command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
-  commandCwd?: string
-): boolean {
-  const trimmedCommand = command.trim();
-
-  if (!trimmedCommand) {
-    return false;
-  }
-
-  // Deny all shell combining syntax except single pipe |
-  if (/[;&`><]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
-    return false;
-  }
-
-  // Deny logical OR || before splitting on single |
-  if (trimmedCommand.includes("||")) {
-    return false;
-  }
-
-  const segments = splitTopLevelPipelineSegments(trimmedCommand);
-
-  if (!segments) {
-    return false;
-  }
-
-  return segments.every((segment) => isAllowedSingleSegment(segment, profile, commandCwd));
-}
-
-function splitTopLevelPipelineSegments(command: string): string[] | undefined {
-  const segments: string[] = [];
-  let currentSegment = "";
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  let escaping = false;
-
-  for (const char of command) {
-    if (escaping) {
-      currentSegment += char;
-      escaping = false;
-      continue;
-    }
-
-    if (inSingleQuote) {
-      currentSegment += char;
-
-      if (char === "'") {
-        inSingleQuote = false;
-      }
-
-      continue;
-    }
-
-    if (char === "\\") {
-      currentSegment += char;
-      escaping = true;
-      continue;
-    }
-
-    if (inDoubleQuote) {
-      currentSegment += char;
-
-      if (char === '"') {
-        inDoubleQuote = false;
-      }
-
-      continue;
-    }
-
-    if (char === "'") {
-      currentSegment += char;
-      inSingleQuote = true;
-      continue;
-    }
-
-    if (char === '"') {
-      currentSegment += char;
-      inDoubleQuote = true;
-      continue;
-    }
-
-    if (char === "|") {
-      segments.push(currentSegment);
-      currentSegment = "";
-      continue;
-    }
-
-    currentSegment += char;
-  }
-
-  if (escaping || inSingleQuote || inDoubleQuote) {
-    return undefined;
-  }
-
-  segments.push(currentSegment);
-
-  return segments;
-}
-
-function isAllowedSingleSegment(
-  segment: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
-  commandCwd?: string
-): boolean {
-  const trimmed = segment.trim();
-
-  if (!trimmed) {
-    return false;
-  }
-
-  if (!ALLOWED_BASH_PREFIXES.some((prefix) => matchesAllowedBashPrefix(trimmed, prefix))) {
-    return false;
-  }
-
-  if (containsDangerousFlag(trimmed)) {
-    return false;
-  }
-
-  return hasOnlyAllowedPathArguments(trimmed, profile, commandCwd);
-}
-
-function matchesAllowedBashPrefix(command: string, prefix: string): boolean {
-  return command === prefix || command.startsWith(`${prefix} `);
-}
-
-function hasOnlyAllowedPathArguments(
-  command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
-  commandCwd?: string
-): boolean {
-  const tokens = command.split(/\s+/u).filter(Boolean);
-  const baseDirectory =
-    typeof commandCwd === "string" && commandCwd.trim()
-      ? commandCwd
-      : profile.repoRoot;
-
-  for (const token of tokens.slice(1)) {
-    if (token === "--") {
-      continue;
-    }
-
-    if (token.startsWith("-")) {
-      continue;
-    }
-
-    if (
-      looksLikePath(token) &&
-      !isAllowedReadPath(resolvePathToken(token, baseDirectory), profile)
-    ) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function looksLikePath(token: string): boolean {
-  return (
-    token.startsWith("/") ||
-    token.startsWith("~") ||
-    token.startsWith("./") ||
-    token.startsWith("../") ||
-    token.includes("/")
-  );
-}
-
-function resolvePathToken(token: string, baseDirectory: string): string {
-  if (token === "~") {
-    return process.env.HOME ?? token;
-  }
-
-  if (token.startsWith("~/")) {
-    return path.join(process.env.HOME ?? "", token.slice(2));
-  }
-
-  if (path.isAbsolute(token)) {
-    return token;
-  }
-
-  return path.resolve(baseDirectory, token);
-}
-
-function containsDangerousFlag(command: string): boolean {
-  const tokens = command.split(/\s+/u).filter(Boolean);
-
-  return tokens.some(
-    (token) => DANGEROUS_BASH_FLAGS.has(token) || token.startsWith("--output=")
-  );
-}
+export {
+  READONLY_BASH_DENY_REASON,
+  SHELL_POLICY_FAIL_CLOSED_REASON,
+  SHELL_TOOL_NAMES,
+  UNSAFE_WEB_FETCH_URL_REASON
+};

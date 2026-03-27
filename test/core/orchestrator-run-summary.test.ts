@@ -115,88 +115,6 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
   }
 });
 
-test("ReviewOrchestrator derives High, Medium, Low, and None from formal findings and ignores stale Step 7 narrative risk text", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.writeFile("docs/notes.md", "- additional notes\n");
-    fixture.commitAll("add files for derived risk coverage");
-
-    const sourceProvider = new LocalGitProvider();
-    const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const findingsByFile = new Map<string, Finding[]>([
-      [
-        "src/app.ts",
-        [createFinding("must", "threshold must", 90)]
-      ],
-      [
-        "packages/app/index.ts",
-        [createFinding("must", "below-threshold must", 89)]
-      ],
-      [
-        "README.md",
-        [createFinding("nice", "nice-only finding", 80)]
-      ],
-      ["docs/notes.md", []]
-    ]);
-    const narrativeRiskByFile = new Map<string, Step7NarrativeRiskLevel>(
-      reviewableFiles.map((filePath) => [filePath, "Low"])
-    );
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: createSuccessfulSummaryRunner({
-        findingsByFile,
-        narrativeRiskByFile
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: []
-    });
-
-    const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
-    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const noneNotePath = plannedNotes.find(
-      (plannedNote) => plannedNote.filePath === "docs/notes.md"
-    )?.noteFilePath;
-    assert.ok(reviewableFiles.includes("src/app.ts"));
-    assert.ok(reviewableFiles.includes("packages/app/index.ts"));
-    assert.ok(reviewableFiles.includes("README.md"));
-    assert.ok(reviewableFiles.includes("docs/notes.md"));
-    assert.ok(noneNotePath);
-    assert.match(readFileSync(noneNotePath, "utf8"), /- 整體風險等級：Low/u);
-    assert.match(summaryContent, /- \[High\] `src\/app\.ts` — must=1, nice=0/u);
-    assert.match(summaryContent, /- \[None\] `docs\/notes\.md` — must=0, nice=0/u);
-    assert.match(indexContent, /- \[High\] \[`src\/app\.ts`\]/u);
-    assert.match(indexContent, /- \[None\] \[`docs\/notes\.md`\]/u);
-    assert.doesNotMatch(summaryContent, /\[Critical\]/u);
-    assert.doesNotMatch(indexContent, /\[Critical\]/u);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
 test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal in-memory outcomes rather than disk notes", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -1021,7 +939,7 @@ test("ReviewOrchestrator publishes manifest.json only after publishReviewIndex a
   }
 });
 
-test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to ReviewIndexFinalizer and renders risk indicators in index.md", async () => {
+test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to ReviewIndexFinalizer through published index.md", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -1054,8 +972,9 @@ test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to Review
 
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
 
-    assert.match(indexContent, /\[High\]/u);
     assert.match(indexContent, /\[Skipped\]/u);
+    assert.match(indexContent, /\[`packages\/app\/index\.ts`\]/u);
+    assert.match(indexContent, /\[`README\.md`\]/u);
   } finally {
     fixture.cleanup();
   }

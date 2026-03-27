@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../../src/services/tool-policy-guard.ts";
+import { ToolPolicyWebFetchPolicy } from "../../src/services/tool-policy-web-fetch-policy.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import type {
   WebFetchHostnameClassification,
@@ -59,6 +60,43 @@ export function createPolicySession(options?: {
     hook: guard.buildPreToolUseHook(BASE_PROFILE, options?.auditWriter),
     handler: guard.buildPermissionHandler(BASE_PROFILE, options?.auditWriter)
   };
+}
+
+export function createWebFetchPolicy(options?: {
+  webFetchAllowedHosts?: string[];
+  webFetchDeniedHosts?: string[];
+  hostnameClassifier?: WebFetchHostnameClassifier;
+  redirectResolver?: WebFetchRedirectResolver;
+  webFetchHostnameClassificationTimeoutMs?: number;
+  webFetchRedirectHopLimit?: number;
+  webFetchRedirectTimeoutMs?: number;
+}) {
+  return new ToolPolicyWebFetchPolicy({
+    ...(options?.webFetchAllowedHosts === undefined
+      ? {}
+      : { webFetchAllowedHosts: options.webFetchAllowedHosts }),
+    ...(options?.webFetchDeniedHosts === undefined
+      ? {}
+      : { webFetchDeniedHosts: options.webFetchDeniedHosts }),
+    hostnameClassifier:
+      options?.hostnameClassifier ??
+      new FakeHostnameClassifier({ kind: "allowed" }),
+    redirectResolver:
+      options?.redirectResolver ??
+      new FakeRedirectResolver({ kind: "resolved", redirectChain: [] }),
+    ...(options?.webFetchHostnameClassificationTimeoutMs === undefined
+      ? {}
+      : {
+          webFetchHostnameClassificationTimeoutMs:
+            options.webFetchHostnameClassificationTimeoutMs
+        }),
+    ...(options?.webFetchRedirectHopLimit === undefined
+      ? {}
+      : { webFetchRedirectHopLimit: options.webFetchRedirectHopLimit }),
+    ...(options?.webFetchRedirectTimeoutMs === undefined
+      ? {}
+      : { webFetchRedirectTimeoutMs: options.webFetchRedirectTimeoutMs })
+  });
 }
 
 export class FakeRedirectResolver implements WebFetchRedirectResolver {
