@@ -32,13 +32,7 @@ export function applySection(sectionKey: string): StepExecutionPlan["applyTo"] {
   };
 }
 
-export function lineRangeTraceability(lineStart: number, lineEnd: number) {
-  return {
-    kind: "line-range" as const,
-    lineStart,
-    lineEnd
-  };
-}
+export { lineRangeTraceability } from "./orchestrator-fixture.ts";
 
 export function diffHunkTraceability(hunkHeader: string) {
   return {
