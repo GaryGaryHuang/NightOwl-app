@@ -187,3 +187,33 @@ test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct pa
     "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
   );
 });
+
+test("RunManifestFinalizer throws with an identifying message when a planned file is absent from both outcome sets", () => {
+  const finalizer = new RunManifestFinalizer();
+
+  assert.throws(
+    () =>
+      finalizer.render({
+        repoRoot: "/workspace/repo",
+        baseRef: "main",
+        headRef: "feature-branch",
+        outputTarget: createOutputTarget(),
+        plannedNotes: createPlannedNotes([
+          [
+            "src/missing.ts",
+            "/workspace/review/feature-branch_03131430/files/src__missing.ts.md"
+          ]
+        ]),
+        successfulFiles: [],
+        skippedFiles: []
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(
+        error.message,
+        "Missing finalized outcome for planned file: src/missing.ts"
+      );
+      return true;
+    }
+  );
+});

@@ -88,6 +88,40 @@ test("RunSummaryFinalizer renders explicit empty sections for zero-file runs", (
   assert.match(rendered, /## Skipped Files\n- 無/u);
 });
 
+test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate output", () => {
+  const finalizer = new RunSummaryFinalizer();
+
+  const rendered = finalizer.render({
+    repoRoot: "/workspace/repo",
+    baseRef: "main",
+    headRef: "feature-branch",
+    plannedFileCount: 2,
+    successfulFiles: [],
+    skippedFiles: [
+      createSkippedFile("src/a.ts", "step1-overview", "judge rejected"),
+      createSkippedFile(
+        "src/b.ts",
+        "step5-validation-interrogation",
+        "deterministic validation failed"
+      )
+    ]
+  });
+
+  assert.match(rendered, /- Successful files: 0/u);
+  assert.match(rendered, /- Skipped files: 2/u);
+  assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
+  assert.match(rendered, /- High: 0/u);
+  assert.match(rendered, /- Medium: 0/u);
+  assert.match(rendered, /- Low: 0/u);
+  assert.match(rendered, /- None: 0/u);
+  assert.match(rendered, /## Successful Files\n- 無/u);
+  assert.match(rendered, /- `src\/a\.ts` — step1-overview — judge rejected/u);
+  assert.match(
+    rendered,
+    /- `src\/b\.ts` — step5-validation-interrogation — deterministic validation failed/u
+  );
+});
+
 test("RunSummaryFinalizer excludes skipped files from final findings totals", () => {
   const finalizer = new RunSummaryFinalizer();
 
