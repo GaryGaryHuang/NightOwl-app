@@ -84,8 +84,8 @@ npm run test:e2e
 
 This is a short-term baseline snapshot for the current repo state. It is a static reference, not a live dashboard.
 
-- Total `.test.ts` files: 49
-- `unit` suites: 30
+- Total `.test.ts` files: 51
+- `unit` suites: 32
 - `integration` suites: 14
 - `e2e` suites: 5
 

@@ -2,9 +2,11 @@
   "unit": [
     "test/cli/parser.test.ts",
     "test/core/changeset-overview-runner.test.ts",
+    "test/core/confidence-thresholds.test.ts",
     "test/core/file-review-context.test.ts",
     "test/core/finalizer.test.ts",
     "test/core/judge.test.ts",
+    "test/core/max-concurrent-files.test.ts",
     "test/core/review-index-finalizer.test.ts",
     "test/core/review-path-resolver.test.ts",
     "test/core/review-section-contract.test.ts",
@@ -26,7 +28,7 @@
     "test/services/knowledge.test.ts",
     "test/services/session-executor.test.ts",
     "test/services/tool-audit-writer.test.ts",
-    "test/services/tool-policy-guard-pipeline.test.ts",
+    "test/services/tool-policy-shell-policy.test.ts",
     "test/services/tool-policy-web-fetch-policy.test.ts",
     "test/services/web-fetch-hostname-classifier.test.ts",
     "test/services/web-fetch-redirect-resolver.test.ts"
