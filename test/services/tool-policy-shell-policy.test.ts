@@ -197,3 +197,88 @@ test("tool policy shell policy keeps quoted double-pipe denied as an unchanged l
     }
   );
 });
+
+// ---------------------------------------------------------------------------
+// ALLOWED_BASH_PREFIXES — explicit allow test for each previously untested entry
+// ---------------------------------------------------------------------------
+
+test("tool policy shell policy allows all ALLOWED_BASH_PREFIXES entries", () => {
+  // git sub-commands not covered by existing tests
+  assert.equal(evaluateReadonlyShellCommand("git show HEAD:src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git status --short", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git rev-parse HEAD", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git merge-base main feature", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git rev-list --count main..HEAD", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git ls-files src/", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git blame src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git grep TODO", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git cat-file -p HEAD:src/app.ts", BASE_PROFILE), undefined);
+  // standalone tools not covered by existing tests
+  assert.equal(evaluateReadonlyShellCommand("ls src/", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("tail -20 src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("find src -name '*.ts'", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("rg TODO src/", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("sed -n '1,10p' src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("cut -d: -f1 src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("uniq", BASE_PROFILE), undefined);
+});
+
+// ---------------------------------------------------------------------------
+// FSM edge cases — splitTopLevelPipelineSegments boundary conditions
+// ---------------------------------------------------------------------------
+
+test("tool policy shell policy denies empty and whitespace-only commands", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("   ", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy treats pipe inside double quotes as literal, not a pipeline separator", () => {
+  assert.equal(evaluateReadonlyShellCommand('grep "a|b" src/app.ts', BASE_PROFILE), undefined);
+});
+
+test("tool policy shell policy treats pipe inside single quotes as literal, not a pipeline separator", () => {
+  assert.equal(evaluateReadonlyShellCommand("grep 'a|b' src/app.ts", BASE_PROFILE), undefined);
+});
+
+test("tool policy shell policy denies unmatched double quote (fail-closed FSM)", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand('grep "unclosed src/app.ts', BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies unmatched single quote (fail-closed FSM)", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("grep 'unclosed src/app.ts", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+// ---------------------------------------------------------------------------
+// resolvePathToken edge cases — ~, ~/path, relative path without ./
+// ---------------------------------------------------------------------------
+
+test("tool policy shell policy denies ~ (tilde resolves to HOME, outside repoRoot)", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("cat ~", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies ~/path (tilde-relative path outside repoRoot)", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("cat ~/secret.txt", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy allows relative path containing slash without ./ prefix when within repoRoot", () => {
+  assert.equal(evaluateReadonlyShellCommand("cat src/app.ts", BASE_PROFILE), undefined);
+});
+
