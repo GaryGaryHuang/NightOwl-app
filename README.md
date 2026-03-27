@@ -172,9 +172,14 @@ File filtering uses `repo_root/.reviewignore` (`.gitignore` syntax).
 npm install          # Install dependencies
 npm link             # Symlink the review command locally
 npm test             # Build then run all tests
+npm run test:unit    # Run fast deterministic logic-owner tests
+npm run test:integration  # Run boundary/collaboration tests
+npm run test:e2e     # Run thin published-surface guardrails
 npm run typecheck    # Type check (tsc --noEmit)
 npm run build        # Produce dist/
 ```
+
+See [TESTING.md](./TESTING.md) for the project test taxonomy (`unit / integration / e2e`), tier mapping, and intended usage.
 
 ### Run Locally Without Building
 

@@ -93,6 +93,9 @@ Strictly follow these layers. Do not merge or cross boundaries:
 
 ```bash
 npm test                   # Full test suite (build first, then node --test)
+npm run test:unit          # Run unit tests only
+npm run test:integration   # Run integration tests only
+npm run test:e2e           # Run e2e tests only
 npm run test:watch         # Watch mode
 npm run test:coverage      # Test coverage
 ```
@@ -109,6 +112,8 @@ npm run build && node --test dist/test/core/orchestrator.test.js
 - Uses the Node.js built-in test runner (`node:test`); no external test frameworks
 - Tests inject stubs/mocks through interfaces; no external mocking frameworks
 - Orchestrator tests are split across multiple files (`orchestrator-*.test.ts`), each focusing on specific behavior
+
+See [TESTING.md](./TESTING.md) for the project test taxonomy (`unit / integration / e2e`), tier manifest, and intended usage.
 
 ## Code Conventions
 
