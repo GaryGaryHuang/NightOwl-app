@@ -254,6 +254,8 @@ test("LocalReviewConfigProvider resolves local MCP entries with cwd and timeout 
       }
     });
     const config = configFixture.loadReviewConfig();
+    // Optional fields must be completely absent from the output object when
+    // not specified — not present as undefined — to avoid surprising consumers.
     assert.equal("cwd" in config.mcpServers.demo, false);
     assert.equal("timeout" in config.mcpServers.demo, false);
 
@@ -333,6 +335,9 @@ test("LocalReviewConfigProvider resolves local MCP entries with cwd and timeout 
   }
 });
 
+// `stdio` is not in the recognised built-in set, so the provider passes it
+// through as-is without applying type-specific validation. This allows
+// forward-compatibility with SDK transports added after the parser was written.
 test("LocalReviewConfigProvider passes through type stdio for non-built-in entries without normalization", () => {
   const configFixture = createReviewConfigProviderFixture();
 
@@ -358,6 +363,10 @@ test("LocalReviewConfigProvider passes through type stdio for non-built-in entri
   }
 });
 
+// `context7` is the only built-in MCP server name. The provider treats it as
+// an override config: type must be "http" or omitted (defaults to "http");
+// local and sse types are rejected because the built-in Context7 integration
+// only supports the HTTP transport.
 test("LocalReviewConfigProvider accepts same-name context7 override with type http or omitted and rejects unsupported types before Step 0", () => {
   const configFixture = createReviewConfigProviderFixture();
 

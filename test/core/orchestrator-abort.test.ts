@@ -158,6 +158,7 @@ test("ReviewRunInterruptedError instanceof distinguishes it from a generic Error
 
 // ─── Task 2.1: Orchestrator AbortSignal tests ─────────────────────────────────
 
+// Signal is checked before the fan-out loop; no file should enter Step 1.
 test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already aborted before dispatch", async () => {
   const controller = new AbortController();
   controller.abort();
@@ -181,6 +182,8 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already
   assert.deepEqual(step1Calls, [], "No file should enter Step 1 when signal is pre-aborted");
 });
 
+// The signal fires *inside* changesetOverviewRunner.run() before it returns,
+// so the orchestrator sees the abort before it dispatches any per-file work.
 test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is aborted during Step 0", async () => {
   const controller = new AbortController();
   const step1Calls: string[] = [];
@@ -213,6 +216,8 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is aborted
   assert.deepEqual(step1Calls, [], "No file should enter Step 1 when signal is aborted during Step 0");
 });
 
+// Signal fires after the first file's step 1 starts; the orchestrator must
+// not queue further files once the signal is set.
 test("ReviewOrchestrator stops new file dispatch when signal aborts during fan-out", async () => {
   const threeFiles = ["src/app.ts", "packages/app/index.ts", "extra/helper.ts"];
   const controller = new AbortController();

@@ -53,6 +53,8 @@ test("LocalReviewConfigProvider resolves maxConcurrentFiles and confidenceThresh
           tools: ["*"]
         }
       },
+      // Leading/trailing whitespace and mixed case must be normalised to
+      // lowercase trimmed hostnames before the config is returned.
       webFetchAllowedHosts: [" Docs.Example.Com. ", "react.dev"]
     });
     assert.deepEqual(
@@ -91,6 +93,7 @@ test("LocalReviewConfigProvider accepts boundary threshold values and a validate
           timeout: 20000
         }
       },
+      // 0 and 100 are the legal boundary values for confidence thresholds.
       confidenceThresholds: {
         must: 0,
         nice: 100
@@ -117,6 +120,9 @@ test("LocalReviewConfigProvider accepts boundary threshold values and a validate
   }
 });
 
+// All invalid-config cases are batched into one test to keep the fixture
+// lifecycle lean: each sub-case overwrites the same .reviewconfig.json file
+// and checks that the provider rejects it before Step 0 runs.
 test("LocalReviewConfigProvider rejects malformed or invalid review config", () => {
   const configFixture = createReviewConfigProviderFixture();
 

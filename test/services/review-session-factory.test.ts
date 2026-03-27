@@ -37,6 +37,9 @@ function assertRecordedReviewSessionConfig(
   assert.ok(config.onPermissionRequest);
 }
 
+// Subclassing ToolPolicyGuard lets the test record which auditWriter and profile
+// were passed to each build call without coupling to the internal hook/handler
+// implementation details.
 class SpyToolPolicyGuard extends ToolPolicyGuard {
   readonly preToolUseHook: PreToolUseHook = async () => undefined;
   readonly permissionHandler: PermissionHandler = async () => ({
@@ -153,7 +156,9 @@ test("ReviewSessionFactory injects mixed local and remote MCP entries for review
     toolPolicyGuard: new ToolPolicyGuard({})
   });
 
+  // review session (default knowledgeMode) → MCP servers are injected
   await factory.createSession(BASE_REVIEW_PROFILE);
+  // disabled knowledgeMode → no MCP servers; verifies knowledge mode controls injection
   await factory.createSession({
     ...BASE_REVIEW_PROFILE,
     systemMessage: "disabled prompt",
@@ -181,6 +186,8 @@ test("ReviewSessionFactory injects mixed local and remote MCP entries for review
   assert.equal(receivedConfigs[1]?.mcpServers, undefined);
 });
 
+// setAuditWriter is called mid-run (after the run output path is known);
+// only sessions created after the call should receive the writer.
 test("ReviewSessionFactory only passes audit writer to sessions created after setAuditWriter", async () => {
   const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const toolPolicyGuard = new SpyToolPolicyGuard();

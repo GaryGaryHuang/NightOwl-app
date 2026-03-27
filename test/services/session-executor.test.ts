@@ -49,6 +49,8 @@ test("CopilotClientManager forceStop() is a no-op before startup", async () => {
   assert.equal(createClientCalls, 0);
 });
 
+// SessionExecutor must call disconnect() after every sendAndWait call regardless
+// of success, empty response, or error — it owns the session lifecycle.
 test("SessionExecutor sendAndWait returns the assistant message content and disconnects afterwards", async () => {
   const calls: Array<[string, unknown?]> = [];
   const session = {
@@ -76,6 +78,8 @@ test("SessionExecutor sendAndWait returns the assistant message content and disc
   ]);
 });
 
+// Whitespace-only content is treated as an empty response (returns undefined)
+// rather than forwarding meaningless content to the caller.
 test("SessionExecutor returns undefined for empty assistant content and still disconnects", async () => {
   const calls: Array<[string, unknown?]> = [];
   const session = {

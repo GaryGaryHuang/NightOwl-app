@@ -58,6 +58,9 @@ export function createSessionRecordingClientManager(
   };
 }
 
+// Records the lifecycle events ("start" / "stop" / "forceStop") in an array
+// so tests can assert the exact call sequence, including no-call scenarios
+// when startup fails before the client is fully initialised.
 export function createLifecycleClientFactory(
   lifecycle: string[],
   input: {

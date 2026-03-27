@@ -49,6 +49,8 @@ export function lineRangeTraceability(lineStart: number, lineEnd: number) {
   };
 }
 
+// Identifies the current SOP step from the "## Current Step: <name>" header
+// injected into every review session's system message.
 export function detectStepId(
   systemMessage: string
 ):
@@ -90,6 +92,9 @@ export function detectStepId(
   throw new Error(`Unable to detect step from system message: ${systemMessage.slice(0, 200)}`);
 }
 
+// Extracts the reviewed file path from a step prompt. Two formats are tried:
+//   1. <diff path="..."> — used by Steps 1–6.
+//   2. - Source file: `...`  — used by Step 7 (summary).
 export function extractDiffPath(prompt: string): string {
   const match = prompt.match(/<diff path="([^"]+)"/u);
 
@@ -189,6 +194,9 @@ export function buildSimulationStep6JsonResponse(): string {
   });
 }
 
+// `whatIfStyle: "minimal"` emits a single W1 scenario; default "full" emits
+// three scenarios. Use "minimal" when the test only needs a parseable response
+// and does not assert on scenario count.
 export function buildStrategyResponse(
   filePath: string,
   options?: { label?: string; whatIfStyle?: "full" | "minimal" }
@@ -269,6 +277,14 @@ export interface SuccessfulStepResultOptions {
   narrativeRiskByFile?: ReadonlyMap<string, Step7NarrativeRiskLevel>;
 }
 
+/**
+ * Builds a StepResult whose `applyTo` writes to the correct FileReviewContext
+ * slot for each step. This mirrors the real step implementations so orchestrator
+ * tests can verify state propagation without running an actual Copilot session.
+ *
+ * The optional `narrativeRiskByFile` map lets tests override the risk level
+ * written in the Step 7 summary, enabling assertions on risk-level derivation.
+ */
 export function buildSuccessfulStepResult(
   stepId: string,
   filePath: string,

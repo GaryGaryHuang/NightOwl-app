@@ -13,6 +13,19 @@ export interface ReviewRepoFixture {
   commitAll(message: string): void;
 }
 
+/**
+ * Creates a real on-disk git repo with a deterministic two-commit history:
+ *
+ *   main  (base commit)  →  feature-branch (head commit)
+ *
+ * The base commit includes dist/ and obsolete.txt deliberately:
+ *   - dist/ lets tests verify that .reviewignore filtering works.
+ *   - obsolete.txt lets tests verify deleted-file handling (it is removed
+ *     in the feature-branch commit so `getChangedFiles` picks it up).
+ *
+ * Each test that owns a fixture must call `fixture.cleanup()` in a
+ * try/finally block to remove the temporary directory.
+ */
 export function createReviewRepoFixture(): ReviewRepoFixture {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-review-repo-"));
   const repoDir = path.join(tempDir, "repo");

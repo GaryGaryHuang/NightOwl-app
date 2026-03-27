@@ -7,6 +7,10 @@ import {
 } from "../../scripts/verify-test-tier-manifest.mjs";
 import { runTestTierCommand } from "../../scripts/test-tier-runner.mjs";
 
+// Parity checks (missingFromManifest / staleInManifest) are intentionally
+// suppressed when schema validation fails: the manifest paths are untrusted at
+// that point, so running disk comparison would produce misleading noise rather
+// than actionable drift information.
 test("evaluateTestTierManifest suppresses parity noise when manifest schema is invalid", () => {
   const result = evaluateTestTierManifest({
     manifest: {},
@@ -43,6 +47,9 @@ test("evaluateTestTierManifest still reports parity drift when manifest shape is
 test("runTestTierCommand exits cleanly when manifest verification fails", () => {
   let spawnCalled = false;
 
+  // ManifestVerificationError is already reported to stderr inside
+  // loadVerifiedTestTierManifest, so runTestTierCommand just exits with code 1
+  // without re-throwing or spawning the test runner.
   const exitCode = runTestTierCommand({
     args: ["unit"],
     loadManifest: () => {
@@ -74,6 +81,8 @@ test("runTestTierCommand spawns the manifest-defined source test files for the r
       integration: ["test/app/review-app.test.ts"],
       e2e: []
     }),
+    // All external dependencies are injected so the test can assert the exact
+    // spawn contract without executing a real node subprocess.
     spawn: (command, args, options) => {
       receivedCommand = command;
       receivedArgs = args;
@@ -90,7 +99,11 @@ test("runTestTierCommand spawns the manifest-defined source test files for the r
 
   assert.equal(exitCode, 0);
   assert.equal(receivedCommand, "node");
+  // Source test files are passed directly as positional arguments after --test;
+  // Node's built-in test runner resolves them from the cwd.
   assert.deepEqual(receivedArgs, ["--test", "test/app/review-app.test.ts"]);
+  // stdio: "inherit" forwards test runner output directly to the terminal
+  // without buffering so progress and failures are visible in real time.
   assert.deepEqual(receivedOptions, {
     cwd: "/tmp/nightowl-app",
     stdio: "inherit"

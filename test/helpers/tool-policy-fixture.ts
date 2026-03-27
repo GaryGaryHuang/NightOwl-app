@@ -18,6 +18,9 @@ export const BASE_PROFILE: Pick<ReviewSessionProfile, "outputBaseDir" | "repoRoo
   repoRoot: "/workspace/repo"
 };
 
+// Returns both the guard instance and its derived hook/handler so tests can
+// either invoke the hook directly (simulating the SDK onPreToolUse callback)
+// or call the handler (simulating the permission resolution path) as needed.
 export function createPolicySession(options?: {
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
@@ -99,6 +102,9 @@ export function createWebFetchPolicy(options?: {
   });
 }
 
+// spy-instrumented test double: records every call's arguments in `this.calls`
+// and returns a pre-configured resolution. Accepts either a static resolution
+// or a factory function to simulate per-call variation (e.g. timeouts).
 export class FakeRedirectResolver implements WebFetchRedirectResolver {
   readonly calls: Array<{
     initialUrl: string;
@@ -142,6 +148,8 @@ export class FakeRedirectResolver implements WebFetchRedirectResolver {
   }
 }
 
+// spy-instrumented test double: records each call and returns a pre-configured
+// classification. Accepts a factory function to vary the result per hostname.
 export class FakeHostnameClassifier implements WebFetchHostnameClassifier {
   readonly calls: Array<{
     hostname: string;

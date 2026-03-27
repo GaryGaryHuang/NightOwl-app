@@ -20,6 +20,8 @@ test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from 
 
   const plan = step.prepare(context);
 
+  // Steps 5-6 produce structured JSON (findings array) rather than a Markdown
+  // section; assertStructuredPlanShape verifies the structuredTarget contract.
   assertStructuredPlanShape(plan, {
     stepId: "step5-validation-interrogation",
     structuredTarget: "findings",
@@ -28,6 +30,8 @@ test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from 
       timeoutMs: 300_000
     }
   });
+
+  // completionCheck validates JSON structure rather than natural-language criteria.
   assertDeterministicFindingsCheck(plan.completionCheck);
 
   assertTextContainsAll(plan.prompt.systemMessage, [
@@ -53,6 +57,10 @@ test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from 
     "W2:",
     "W3:"
   ]);
+
+  // Step 5 starts fresh from W# scenarios — prior findings must not leak into
+  // the <current_review> block or the model may anchor to them rather than
+  // independently validating each scenario.
   assertTextExcludesAll(plan.prompt.userMessage, [
     "<changeset_context>",
     /^## Findings/mu

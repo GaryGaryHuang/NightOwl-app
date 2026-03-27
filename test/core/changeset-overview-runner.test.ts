@@ -43,6 +43,9 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
     "PR-123",
     "https://example.com/spec"
   ]);
+
+  // Step 0 uses Context7 by default so the LLM can retrieve library version info
+  // from the changeset entries without needing a per-file retrieval step.
   assert.equal(profiles[0]?.knowledgeMode, "built-in-context7");
   assert.equal(profiles[0]?.model, "gpt-5.4-mini");
   assert.equal(profiles[0]?.outputBaseDir, "/workspace/repo/packages/app");
@@ -75,6 +78,8 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
   ]);
 });
 
+// A blank/undefined first response triggers a retry with a fresh session
+// (a new `createSession` call), not a re-send on the same session.
 test("ChangesetOverviewRunner retries once with a fresh session when the first response is blank", async () => {
   const prompts: string[] = [];
   let createCalls = 0;
@@ -105,6 +110,8 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：retry");
   assert.equal(prompts.length, 2);
   assertTaggedBlockContains(prompts[0] ?? "", "changed_files", ["M\tsrc/app.ts"]);
+  // When userContext is empty the <user_context> tag must be fully absent,
+  // not present but empty, so the model does not encounter an empty XML block.
   assertTextExcludesAll(prompts[0] ?? "", [/<user_context>[\s\S]*<\/user_context>/u]);
 });
 

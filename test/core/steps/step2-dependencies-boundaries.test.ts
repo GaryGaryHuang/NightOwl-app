@@ -12,6 +12,8 @@ import {
   assertTextExcludesAll
 } from "../../helpers/step-prompt-contract-fixture.ts";
 
+// `ReviewNoteFinalizer` renders the accumulated <current_review> block from all
+// sections written so far; Steps 2-7 all receive it as prompt context.
 test("Step2DependenciesBoundariesStep prepares the Step 2 prompt contract from diff and current review", () => {
   const context = createContextWithOverview();
   const step = new Step2DependenciesBoundariesStep({
@@ -59,6 +61,9 @@ test("Step2DependenciesBoundariesStep prepares the Step 2 prompt contract from d
     "- 檔案職責：維護 app value",
     "- 測試覆蓋觀察：未見對應測試異動"
   ]);
+  // From Step 2 onward the changeset overview is subsumed into the Overview
+  // section of <current_review>, so the raw <changeset_context> tag is dropped.
+  // "Review not yet generated." would appear only if the prior section was absent.
   assertTextExcludesAll(plan.prompt.userMessage, [
     "<changeset_context>",
     "Review not yet generated."

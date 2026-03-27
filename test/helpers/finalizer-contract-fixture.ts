@@ -30,6 +30,10 @@ export function assertTextExcludesAll(
   }
 }
 
+// Asserts that each pattern appears in `text` after the position where the
+// previous one matched — enforcing relative ordering without requiring strict
+// adjacency. `searchStart` advances past each match so patterns cannot
+// satisfy each other out of order.
 export function assertTextContainsInOrder(
   text: string,
   patterns: TextPattern[]
@@ -101,6 +105,8 @@ export function assertWarningBlock(
   ]);
 }
 
+// Verifies the warning block appears as the last content in the rendered note.
+// A skipped file must not have any review sections rendered after the warning.
 export function assertWarningBlockAtEnd(
   text: string,
   input: { stepId: string; reason: string }

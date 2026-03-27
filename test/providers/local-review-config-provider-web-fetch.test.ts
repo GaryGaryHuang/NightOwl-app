@@ -37,6 +37,9 @@ test("LocalReviewConfigProvider accepts valid wildcard entries alongside exact-h
   const configFixture = createReviewConfigProviderFixture();
 
   try {
+    // Only the `*.` prefix pattern is valid: the wildcard must appear at the
+    // start followed immediately by a dot and at least one domain label.
+    // Mixed case and surrounding whitespace are normalised as with exact hosts.
     configFixture.writeReviewConfig({
       webFetchAllowedHosts: ["docs.example.com", "*.example.com"]
     });
@@ -71,6 +74,9 @@ test("LocalReviewConfigProvider accepts valid wildcard entries alongside exact-h
   }
 });
 
+// "before Step 0" in the test name signals that validation is eager: the
+// provider must reject these values when loadReviewConfig() is called, not
+// lazily when a web_fetch tool call is evaluated at runtime.
 test("LocalReviewConfigProvider rejects invalid wildcard patterns before Step 0", () => {
   const configFixture = createReviewConfigProviderFixture();
 

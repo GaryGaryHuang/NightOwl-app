@@ -12,6 +12,8 @@ import {
   isKnowledgeSourceOfTruthSystemMessage
 } from "../helpers/review-app-fixture.ts";
 
+// Returns "allowed" for every hostname so tests can focus on the policy
+// logic (URL shape, redirect chain) without coupling to the real classifier.
 function createAllowingHostnameClassifier(): WebFetchHostnameClassifier {
   return {
     async classifyHostname() {
@@ -97,6 +99,8 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
     assert.ok(result.plannedFileCount >= 2);
     assert.ok(result.successfulFileCount >= 1);
 
+    // Step 3 (Knowledge & Source of Truth) is the only step that enables
+    // web_fetch and installs the onPreToolUse enforcement hook.
     const reviewSessionConfig = sessionConfigs.find(
       (config) =>
         isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
@@ -336,6 +340,9 @@ test("createLocalReviewRunApp applies redirect-chain host policy without introdu
 
     assert.ok(preToolUse);
     const confirmedPreToolUse = preToolUse!;
+    // docs.example.com is in webFetchAllowedHosts, but the redirect resolver
+    // reports it chains to reference.example.net — which is not in the
+    // allowlist — so the entire request is denied regardless of the origin URL.
     assert.deepEqual(
       await confirmedPreToolUse(
         {

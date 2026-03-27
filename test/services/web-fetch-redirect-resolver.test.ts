@@ -8,6 +8,8 @@ import {
 
 type MockResponse = WebFetchResolverResponseLike;
 
+// `onCancel` lets each test assert that the resolver called `body.cancel()` on
+// every preflight response to release the ReadableStream and avoid resource leaks.
 function createResponse(
   status: number,
   headers: Record<string, string> = {},
@@ -80,6 +82,8 @@ test("DefaultWebFetchRedirectResolver follows standard redirect statuses and res
   }
 });
 
+// All four denial failure modes produce the same "denied" result and the same
+// error string, so they are batched into one test rather than repeated four times.
 test("DefaultWebFetchRedirectResolver denies redirect loops, missing or malformed Location, and hop-limit exhaustion", async () => {
   const loopResolver = new DefaultWebFetchRedirectResolver({
     fetchFn: async (input) => {
@@ -193,6 +197,8 @@ test("DefaultWebFetchRedirectResolver denies preflight timeout and transport fai
   );
 });
 
+// `validateRedirectTarget` is called synchronously before the next `fetchFn`
+// call, so an unsafe Location header is rejected without a network round-trip.
 test("DefaultWebFetchRedirectResolver denies unsafe redirect targets before following the next hop", async () => {
   const calls: string[] = [];
   const resolver = new DefaultWebFetchRedirectResolver({
@@ -219,6 +225,8 @@ test("DefaultWebFetchRedirectResolver denies unsafe redirect targets before foll
   assert.deepEqual(calls, ["https://docs.example.com/start"]);
 });
 
+// Every preflight response body must be cancelled (redirect and terminal alike),
+// so the Fetch ReadableStream is released regardless of response status.
 test("DefaultWebFetchRedirectResolver cancels each preflight response body after reading redirect metadata", async () => {
   const canceledResponses: string[] = [];
   let callCount = 0;

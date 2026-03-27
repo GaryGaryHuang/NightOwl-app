@@ -49,6 +49,8 @@ test("ToolAuditWriter.append() includes reason field for deny records", () => {
   }
 });
 
+// `reason` must be completely absent from allow records (not just undefined)
+// so downstream audit parsers can treat its presence as a reliable deny signal.
 test("ToolAuditWriter.append() omits reason field for allow records", () => {
   const auditFixture = createAuditFileFixture();
 
@@ -136,6 +138,8 @@ test("ToolAuditWriter.append() multiple calls produce multiple independently par
   }
 });
 
+// ToolAuditWriter must never throw on write failures — a broken audit log
+// must not interrupt a running review session.
 test("ToolAuditWriter.append() silently ignores write failures and does not throw", () => {
   const writer = new ToolAuditWriter("/nonexistent/deeply/nested/tool-audit.jsonl");
 

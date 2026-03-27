@@ -7,6 +7,9 @@ import {
 } from "../../src/services/tool-policy-shell-policy.ts";
 import { BASE_PROFILE } from "../helpers/tool-policy-fixture.ts";
 
+// The shell policy splits on unquoted `|` and validates each segment against
+// a whitelist of known-safe commands. This test confirms pipelines of allowed
+// commands pass, including normalised whitespace around `|`.
 test("tool policy shell policy allows whitelisted commands and pipeline shapes", () => {
   assert.equal(
     evaluateReadonlyShellCommand(
@@ -96,6 +99,9 @@ test("tool policy shell policy rejects dangerous flags and out-of-boundary path 
   );
 });
 
+// Lexical guards for `||`, `;`, and `&&` are pre-applied before pipe splitting
+// so that logical-or and command sequencing are caught even when the tokens
+// look like they could be part of a pipe chain.
 test("tool policy shell policy keeps lexical guards for logical-or and shell combining syntax", () => {
   assert.deepEqual(
     evaluateReadonlyShellCommand("git status || echo fail", BASE_PROFILE),
@@ -120,6 +126,9 @@ test("tool policy shell policy keeps lexical guards for logical-or and shell com
   );
 });
 
+// `|` inside quotes or preceded by a backslash is a literal character, not a
+// pipe operator. The policy must treat these as single-segment commands and
+// validate them as such, allowing grep regex patterns to work correctly.
 test("tool policy shell policy allows literal pipes inside quoted or escaped segments", () => {
   assert.equal(
     evaluateReadonlyShellCommand('grep -E "foo|bar"', BASE_PROFILE),
@@ -164,6 +173,8 @@ test("tool policy shell policy handles repo-relative path arguments against the 
   );
 });
 
+// Malformed quoting and dangling backslashes are rejected conservatively
+// rather than making best-effort interpretations that could allow bypass.
 test("tool policy shell policy denies malformed quoting and dangling escapes conservatively", () => {
   assert.deepEqual(
     evaluateReadonlyShellCommand('grep -E "foo|bar', BASE_PROFILE),
@@ -188,6 +199,8 @@ test("tool policy shell policy denies malformed quoting and dangling escapes con
   );
 });
 
+// `||` inside quotes is still denied because the lexical `||` guard is applied
+// before quote parsing — this is an intentional conservative trade-off.
 test("tool policy shell policy keeps quoted double-pipe denied as an unchanged lexical guardrail", () => {
   assert.deepEqual(
     evaluateReadonlyShellCommand('grep "foo||bar"', BASE_PROFILE),

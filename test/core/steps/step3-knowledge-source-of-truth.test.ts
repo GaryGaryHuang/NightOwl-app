@@ -20,6 +20,8 @@ test("Step3KnowledgeSourceOfTruthStep prepares the Step 3 prompt contract from d
 
   const plan = step.prepare(context);
 
+  // Step 3 is the only step that activates the built-in Context7 MCP server for
+  // external knowledge retrieval; all other steps have knowledgeMode unset.
   assertSectionPlanShape(plan, {
     stepId: "step3-knowledge-source-of-truth",
     sectionKey: "knowledge-source-of-truth",
@@ -65,6 +67,8 @@ test("Step3KnowledgeSourceOfTruthStep prepares the Step 3 prompt contract from d
   ]);
 });
 
+// The step must not pressure the model to fabricate knowledge: writing `無`
+// (nothing applicable) or stating uncertainty explicitly are both valid outputs.
 test("Step3KnowledgeSourceOfTruthStep prompt contract still allows explicit `無` and explicit uncertainty handling", () => {
   const context = createContextWithStep2();
   const step = new Step3KnowledgeSourceOfTruthStep({

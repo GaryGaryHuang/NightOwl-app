@@ -27,6 +27,8 @@ test("FileReviewContext preserves immutable execution metadata and starts with n
   assert.deepEqual(context.getSectionEntries(), []);
 });
 
+// Sections can be written in any order (e.g., summary without prior overview);
+// only undeclared section keys are rejected.
 test("FileReviewContext accepts declared post-findings sections while keeping absent declared sections valid", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
@@ -101,6 +103,8 @@ test("FileReviewContext stores mutable Overview state while keeping snapshot acc
 
   assert.match(context.getSection("overview") ?? "", /^## Overview/u);
 
+  // getSectionEntries() returns a defensive copy: pushing to the snapshot
+  // must not alter the context's internal state.
   const snapshot = context.getSectionEntries();
   snapshot.push(["summary", "should not mutate context"]);
 
@@ -120,6 +124,8 @@ test("FileReviewContext stores mutable Overview state while keeping snapshot acc
   ]);
 });
 
+// Section state and structured state are independent stores; writing findings
+// does not affect sections and vice versa.
 test("FileReviewContext stores structured findings state separately from section state", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
@@ -161,6 +167,9 @@ test("FileReviewContext stores structured findings state separately from section
   });
 });
 
+// getStructuredState() must return a defensive copy; mutating the snapshot
+// must not corrupt the stored findings, and updateStructuredState with [] must
+// fully replace any previous findings.
 test("FileReviewContext replaces structured findings state without leaking snapshot mutation", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
@@ -260,6 +269,8 @@ test("FileReviewContext throws a readable error when a formal finding is missing
     headRef: "feature-branch"
   });
 
+  // `as unknown as NonNullable<...>` bypasses TypeScript's compile-time check
+  // so we can test the runtime guard that rejects findings without traceability.
   assert.throws(
     () =>
       context.updateStructuredState({
@@ -299,6 +310,7 @@ test("FileReviewContext stores interruption state separately and returns defensi
   assert.equal(context.getSection("overview"), undefined);
   assert.deepEqual(context.getStructuredState(), {});
 
+  // getInterruption() also returns a defensive copy.
   const snapshot = context.getInterruption();
   if (!snapshot) {
     throw new Error("expected interruption snapshot");

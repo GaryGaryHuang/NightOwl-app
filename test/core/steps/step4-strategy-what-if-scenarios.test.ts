@@ -67,6 +67,10 @@ test("Step4StrategyWhatIfScenariosStep prepares the Step 4 prompt contract from 
   ]);
 });
 
+// Step 4 is a plain Markdown section step — `applyTo` only writes to the
+// strategy-what-if-scenarios section and must not populate findings or advance
+// into Steps 5-6 territory. This distinguishes section steps (1-4, 7) from the
+// structured JSON steps (5-6).
 test("Step4StrategyWhatIfScenariosStep remains a section-only state update under strategy-what-if-scenarios", () => {
   const context = createContextWithStep3();
   const step = new Step4StrategyWhatIfScenariosStep({

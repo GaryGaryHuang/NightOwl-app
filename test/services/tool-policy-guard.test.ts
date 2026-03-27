@@ -17,6 +17,10 @@ import {
   readAuditLines
 } from "../helpers/tool-policy-fixture.ts";
 
+// The guard exposes two surfaces: the `hook` (onPreToolUse) short-circuits
+// tool execution before the SDK calls the tool, while the `handler`
+// (onPermissionRequest) responds to the read/write permission model.
+// This test validates the handler's read/write boundary independently.
 test("tool policy guard permission handler allows repo-local reads and denies out-of-bound reads and writes", async () => {
   const { handler } = createPolicySession();
 
@@ -114,6 +118,8 @@ test("tool policy guard keeps representative shell allow and deny behavior throu
   );
 });
 
+// Missing toolArgs must deny conservatively rather than allowing by default;
+// a malformed or truncated call must not silently pass as allowed.
 test("tool policy guard passes through non-bash and non-web_fetch tools and handles missing toolArgs conservatively", async () => {
   const { hook } = createPolicySession();
 

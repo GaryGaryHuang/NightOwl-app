@@ -13,6 +13,7 @@ import {
   type StepExecutionPlan,
   StepRunner
 } from "../../src/core/step-runner.ts";
+import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
 import {
   applySection,
   createReviewSessionFactory,
@@ -22,9 +23,11 @@ import {
   seedStep4Context
 } from "../helpers/step-runner-contract-fixture.ts";
 
+// Minimal step-definition factory used by tests that focus on StepRunner
+// behavior (retry, judge, error wrapping) rather than prompt content.
 function createSectionTestStep(input: {
   stepId?: string;
-  sectionKey?: string;
+  sectionKey?: ReviewSectionKey;
   systemMessage?: string;
   userMessage?: string;
   completionCheck?: StepExecutionPlan["completionCheck"];
@@ -55,6 +58,9 @@ function createSectionTestStep(input: {
   };
 }
 
+// The step runner returns a result object; state is not written to the context
+// until the caller invokes result.applyTo(). This separation lets the
+// orchestrator inspect the result before committing it.
 test("StepRunner returns an apply-able result without mutating state or writing output directly", async () => {
   const lifecycle: unknown[] = [];
   const context = createStepRunnerContext();
@@ -403,6 +409,9 @@ test("StepRunner reports standardized review startup failure after retry exhaust
   assert.equal(createAttempts, 2);
 });
 
+// On retry the prompt is rebuilt from the context's *committed* state (the last
+// successful section), so provisional content from the first attempt never leaks
+// into the retry. prompts[0] === prompts[1] proves this.
 test("StepRunner rebuilds Step 2 current review from the last successful state on retry and does not leak provisional content", async () => {
   const prompts: string[] = [];
   const context = createStepRunnerContext();
@@ -626,6 +635,9 @@ test("StepRunner rebuilds Step 4 current review from the last successful Step 3 
   assert.doesNotMatch(context.getSection("strategy-what-if-scenarios") ?? "", /^## Findings/mu);
 });
 
+// Steps 5-6 use StructuredOutputValidator (deterministic JSON schema check)
+// instead of JudgeService; judgeCalls === 0 asserts judge is never invoked.
+// The validator also filters out findings below the confidence threshold.
 test("StepRunner validates Step 5 structured output and applies filtered findings without using judge", async () => {
   const context = createStepRunnerContext();
   seedStep4Context(context);
@@ -699,6 +711,8 @@ test("StepRunner validates Step 5 structured output and applies filtered finding
   });
 });
 
+// Malformed JSON from the model triggers a deterministic validation failure
+// which retries with the same prompt (both prompts must be identical).
 test("StepRunner retries the whole Step 5 structured step when deterministic validation fails first", async () => {
   const context = createStepRunnerContext();
   seedStep4Context(context);
@@ -766,6 +780,8 @@ test("StepRunner retries the whole Step 5 structured step when deterministic val
   });
 });
 
+// Step 6 replaces Step 5's findings entirely; the prior non-empty set is
+// discarded after applyTo() is called with the Step 6 result.
 test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with final findings", async () => {
   const context = createStepRunnerContext();
   seedStep4Context(context);

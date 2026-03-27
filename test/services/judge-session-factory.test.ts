@@ -8,6 +8,8 @@ import {
   createSessionRecordingClientManager
 } from "../helpers/review-session-runtime-contract-fixture.ts";
 
+// Judge sessions use availableTools:[] (no tools) and streaming:false because
+// the judge only needs to emit a single Y/N token — no tool calls, no streaming.
 test("JudgeSessionFactory creates a non-streaming isolated judge session with the expected timeout contract", async () => {
   const receivedConfigs = createRecordedConfigs<SessionConfig>();
   const factory = new JudgeSessionFactory({

@@ -1,5 +1,6 @@
 import { readFileSync, realpathSync } from "node:fs";
 
+import type { Finding } from "../../src/core/file-review-context.ts";
 import { planNoteFiles, type OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
@@ -22,6 +23,8 @@ export type StepId =
   | "step6-cognitive-simulation"
   | "step7-summary";
 
+// realpathSync resolves symlinks so the path matches what the git provider
+// returns internally, avoiding false-positive path mismatches in assertions.
 export function collectReviewableFiles(input: {
   sourceProvider: {
     filterIgnoredFiles(repoRoot: string, files: string[]): string[];
@@ -54,6 +57,10 @@ export function loadPlannedNoteContents(
   }));
 }
 
+// Validates that each observed session profile was routed to the expected
+// model tier. Steps 1, 3, and 7 use the cheaper mini model; Steps 2, 4, 5,
+// and 6 use the frontier model. Throws with a descriptive message on mismatch
+// so test failures pinpoint the offending step.
 export function assertObservedProfilesUseExpectedModels(
   observedProfiles: Array<Record<string, string>>,
   outputBaseDir: string,
@@ -120,6 +127,14 @@ export function createStepResponseRouter(input: {
   };
 }
 
+/**
+ * Builds a StepRunner instrumented with recording arrays for session profiles,
+ * prompts, step events, and disconnects. Tests inject custom step responses
+ * via `buildStepResponse` and assert against the recorded arrays afterwards.
+ *
+ * The judgeService defaults to always-pass so step-runner contract tests that
+ * do not exercise the judge path remain simple.
+ */
 export function createObservedStepRunner(input: {
   buildStepResponse: (stepId: StepId, filePath: string) => string;
   observedDisconnects: string[];
@@ -133,7 +148,7 @@ export function createObservedStepRunner(input: {
       validatorId: "findings-json";
       responseText: string;
       diffContent?: string;
-    }) => { findings: Array<Record<string, unknown>> };
+    }) => { findings: Finding[] };
   };
   judgeService?: {
     evaluate: (input: {

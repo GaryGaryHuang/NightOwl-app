@@ -114,6 +114,8 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
     assert.equal(metrics.firstStepBootstrapCount, reviewableFiles.length);
     assert.equal(outputSink.bootstrapPublishCount, reviewableFiles.length);
     assert.ok(metrics.maxActiveFiles > 1);
+    // Verify actual out-of-order completion occurred, not just that concurrent
+    // execution was theoretically possible.
     assert.notDeepEqual(metrics.completionOrder, reviewableFiles);
     assert.ok(
       metrics.completionOrder.indexOf(fastSuccessfulFile) <
@@ -219,6 +221,8 @@ test("ReviewOrchestrator keeps an all-skipped run as a completed run under bound
       );
     }
 
+    // Skipped.md must have one entry per file; the regex guards against the
+    // step-id or cause string appearing duplicated within a single entry.
     assert.doesNotMatch(skippedLog, /step1-overview.*step1-overview.*judge rejected.*judge rejected.*`/u);
   } finally {
     fixture.cleanup();
@@ -538,6 +542,10 @@ function createDeferred<T>(): {
   return { promise, resolve, reject };
 }
 
+// `firstStepBootstrapCount` captures the bootstrap publish count at the moment
+// Step 1 first fires for any file, proving all bootstraps were published before
+// any per-file step work began.
+// `completionDelayByFile` drives sleep() durations to force out-of-order completion.
 function createConcurrentRunner(input: {
   metrics: ReturnType<typeof createConcurrencyMetrics>;
   getBootstrapPublishCount: () => number;
@@ -557,7 +565,9 @@ function createConcurrentRunner(input: {
     async run({ context, step }: { context: FileReviewContext; step: { stepId: string } }) {
       input.stepEvents?.push([step.stepId, context.filePath]);
 
-      if (!startedFiles.has(context.filePath)) {
+    // Track peak concurrency and completion order to assert bounded concurrency
+    // and out-of-order completion at the test assertion level.
+    if (!startedFiles.has(context.filePath)) {
         startedFiles.add(context.filePath);
         activeFiles.add(context.filePath);
         input.metrics.maxActiveFiles = Math.max(

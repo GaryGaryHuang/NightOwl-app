@@ -28,6 +28,11 @@ export function createReviewConfigProviderFixture() {
   };
 }
 
+// Builds the ReviewConfig the parser is expected to produce given the
+// supplied overrides. webFetchAllowedHosts / webFetchDeniedHosts are only
+// included in the returned object when explicitly provided — the config
+// parser must omit these keys entirely when they are absent from the file
+// (i.e. `undefined` must not appear in the output).
 export function buildExpectedReviewConfig(input: {
   maxConcurrentFiles?: number;
   confidenceThresholds?: Partial<ConfidenceThresholds>;

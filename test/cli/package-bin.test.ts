@@ -16,6 +16,9 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
 const repoRoot = path.resolve(currentDir, "..", "..");
 
+// Validates the full npm pack → global install path, not just running from
+// source. This catches issues that only surface in a published package: wrong
+// bin entry, missing build output, incorrect file inclusions in the tarball.
 test("package exposes an installable review executable", () => {
   const packageJson = JSON.parse(
     readFileSync(path.join(repoRoot, "package.json"), "utf8")
@@ -28,6 +31,9 @@ test("package exposes an installable review executable", () => {
   const cacheDir = path.join(tempDir, "cache");
   const prefixDir = path.join(tempDir, "prefix");
 
+  // Copy source without node_modules / cache / dist so that `npm pack` builds
+  // a clean tarball; the rmSync below is a belt-and-suspenders guard in case
+  // the filter misses nested paths.
   cpSync(repoRoot, appCopyDir, {
     recursive: true,
     filter(sourcePath) {
@@ -90,6 +96,8 @@ test("package exposes an installable review executable", () => {
   assert.ok(existsSync(binaryPath), "installed review executable should exist");
 
   try {
+    // Pass only one positional arg to trigger the missing-head_ref usage error;
+    // verifies the installed binary runs and produces the correct error output.
     const execResult = spawnSync(binaryPath, ["main"], {
       encoding: "utf8"
     });

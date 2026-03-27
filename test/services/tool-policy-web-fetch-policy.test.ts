@@ -88,6 +88,8 @@ test("tool policy web-fetch policy enforces exact-host and wildcard allowlist se
   });
 });
 
+// Denylist takes precedence over the allowlist: a host that matches both
+// must still be denied. The denylist-only mode (no allowlist) also works.
 test("tool policy web-fetch policy enforces denylist precedence and denylist-only mode", async () => {
   const allowAndDeny = createWebFetchPolicy({
     webFetchAllowedHosts: ["*.example.com"],
@@ -122,6 +124,9 @@ test("tool policy web-fetch policy enforces denylist precedence and denylist-onl
   assert.equal(await denyOnly.evaluate("https://docs.example.com/guide"), undefined);
 });
 
+// When the initial URL itself fails the host policy, the redirect resolver
+// must not be called at all — avoid the network round-trip when the result
+// is already known.
 test("tool policy web-fetch policy denies the initial URL before redirect traversal when host policy already fails", async () => {
   const redirectResolver = new FakeRedirectResolver({
     kind: "resolved",
@@ -178,6 +183,9 @@ test("tool policy web-fetch policy validates allowlist and denylist semantics ac
   });
 });
 
+// The canonical hostname (lowercased, trailing dot stripped) is used as the
+// memoization key so duplicate classify calls for the same effective hostname
+// in a redirect chain are deduplicated.
 test("tool policy web-fetch policy enforces hostname DNS classification across redirect targets and memoizes canonical hosts", async () => {
   const classifier = new FakeHostnameClassifier(async (hostname) =>
     hostname === "internal-proxy.example.com"

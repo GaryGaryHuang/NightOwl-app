@@ -8,6 +8,9 @@ import type {
   SuccessfulFileOutcome
 } from "../../src/core/run-summary-finalizer.ts";
 
+// Stable fake path used as the default base for all output target fixtures;
+// does not need to exist on disk since finalizer tests operate on in-memory
+// structs rather than reading back written files.
 const DEFAULT_BASE_PATH = "/workspace/review/feature-branch_03131430";
 
 export function createFinding(
@@ -42,6 +45,9 @@ export function createSkippedFile(
   return { filePath, stepId, reason };
 }
 
+// Builds a complete OutputTarget from the given basePath (or DEFAULT_BASE_PATH
+// if omitted), applying per-field overrides where provided. This keeps test
+// setup concise: callers only specify the fields their assertion cares about.
 export function createOutputTarget(
   overrides: Partial<OutputTarget> = {}
 ): OutputTarget {

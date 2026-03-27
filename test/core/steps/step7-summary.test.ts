@@ -59,9 +59,14 @@ test("Step7SummaryStep prepares the Step 7 prompt contract from current review o
     "## Findings",
     "- [must] 最終問題"
   ]);
+
+  // confidence scores are stripped from <current_review> (same contract as Step 6).
   assertTaggedBlockExcludes(plan.prompt.userMessage, "current_review", [
     /confidence/u
   ]);
+
+  // Step 7 writes a reader-facing prose summary and does not re-examine the diff
+  // or changeset context; <required_risk_level> is never injected into the prompt.
   assertTextExcludesAll(plan.prompt.userMessage, [
     /<diff/u,
     "<changeset_context>",
@@ -69,6 +74,9 @@ test("Step7SummaryStep prepares the Step 7 prompt contract from current review o
   ]);
 });
 
+// Risk level is determined solely by the model's summary output — it is never
+// pre-specified in the prompt, so the prompt contract is identical regardless
+// of whether findings are `must` or `nice`.
 test("Step7SummaryStep uses consistent prompt and criteria regardless of findings risk level", () => {
   const context = createContextWithFindings([createFinding("nice", 95, "建議項")]);
   const step = new Step7SummaryStep({
@@ -87,6 +95,8 @@ test("Step7SummaryStep uses consistent prompt and criteria regardless of finding
   ]);
 });
 
+// Same empty-findings contract as Step 6: `- 無` must appear, not an absent
+// section or a stub, and <required_risk_level> must still be absent.
 test("Step7SummaryStep carries explicit empty findings state in current review", () => {
   const context = createContextWithFindings([]);
   const step = new Step7SummaryStep({

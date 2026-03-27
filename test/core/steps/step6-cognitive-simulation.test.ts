@@ -53,12 +53,17 @@ test("Step6CognitiveSimulationStep prepares the Step 6 prompt contract from diff
     "- [must] 既有問題",
     "Traceability: L14-L18"
   ]);
+
+  // confidence scores from Step 5 are stripped so Step 6 forms an independent
+  // assessment without being anchored to Step 5's scores.
   assertTaggedBlockExcludes(plan.prompt.userMessage, "current_review", [
     /confidence/u
   ]);
   assertTextExcludesAll(plan.prompt.userMessage, ["<changeset_context>"]);
 });
 
+// Empty findings from Step 5 must still render as `- 無` in the <current_review>
+// block; the section must never be absent or replaced with a stub message.
 test("Step6CognitiveSimulationStep carries explicit empty findings state in current review", () => {
   const context = createContextWithStep5EmptyFindings();
   const step = new Step6CognitiveSimulationStep({
@@ -72,6 +77,9 @@ test("Step6CognitiveSimulationStep carries explicit empty findings state in curr
   assert.doesNotMatch(plan.prompt.userMessage, /Review not yet generated/u);
 });
 
+// The <current_review> block content must exactly match what ReviewNoteFinalizer
+// produces — this prevents step-specific ad-hoc rendering from drifting out of sync
+// with the canonical projection used everywhere else.
 test("Step6CognitiveSimulationStep uses the canonical finalizer projection for <current_review>", () => {
   const reviewNoteFinalizer = new ReviewNoteFinalizer();
   const context = createContextWithStep5Findings();

@@ -24,6 +24,15 @@ export function createResolvedRedirectResolver(redirectChain: URL[] = []): WebFe
   };
 }
 
+/**
+ * Produces a minimal but structurally valid session response for each SOP
+ * step by matching against the system-message content.
+ *
+ * Judge sessions (no availableTools) receive a plain "Y" so the completion
+ * check passes without needing real AI output.
+ * Steps 5–6 return compact JSON findings; all other steps return Markdown
+ * sections in the format expected by the finalizer.
+ */
 export function buildSessionResponse(
   config: { systemMessage?: unknown; availableTools?: string[] },
   prompt: string
@@ -145,6 +154,9 @@ export function extractSystemMessageContent(systemMessage: unknown): string {
   return "";
 }
 
+// Each predicate matches the step-identifying header embedded in the session's
+// system message; used by tests to locate specific session configs in recorded
+// arrays without coupling to session index order.
 export function isKnowledgeSourceOfTruthSystemMessage(systemMessage: unknown): boolean {
   return /## Current Step: Knowledge & Source of Truth/u.test(
     extractSystemMessageContent(systemMessage)

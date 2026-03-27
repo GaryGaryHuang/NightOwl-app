@@ -92,6 +92,10 @@ test("LocalGitProvider filters changed files with .reviewignore rules", () => {
   }
 });
 
+// getChangesetEntries is used by Step 0 (Changeset Overview) and intentionally
+// includes deleted files (D entries) so the agent sees the full picture of what
+// changed. getChangedFiles (used by the per-file pipeline) excludes them because
+// there is no diff to review for a deleted file.
 test("LocalGitProvider returns complete name-status entries for Step 0, including deleted files", () => {
   const fixture = createReviewRepoFixture();
 

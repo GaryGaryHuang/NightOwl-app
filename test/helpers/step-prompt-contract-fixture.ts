@@ -39,6 +39,9 @@ export function assertStructuredPlanShape(
   assertReviewProfile(plan.reviewProfile, expected.reviewProfile);
 }
 
+// Asserts the completion check is a judge check and that its criteria text
+// contains every expected pattern. The explicit kind guard prevents tests from
+// silently passing when a step switched from judge to deterministic completion.
 export function assertJudgeCriteriaContains(
   completionCheck: StepExecutionPlan["completionCheck"],
   patterns: TextPattern[]
@@ -104,6 +107,8 @@ export function assertTaggedBlockExcludes(
   assertTextExcludesAll(getTaggedBlock(text, tagName), patterns);
 }
 
+// Extracts the inner content of an XML-style tagged block from a prompt string,
+// e.g. <diff path="...">\ncontent\n</diff>. Fails the test if the tag is absent.
 export function getTaggedBlock(text: string, tagName: string): string {
   const match = text.match(
     new RegExp(

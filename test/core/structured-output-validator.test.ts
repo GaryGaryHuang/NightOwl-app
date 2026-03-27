@@ -53,6 +53,8 @@ test("StructuredOutputValidator rejects unsupported validator ids at runtime", (
   );
 });
 
+// Any non-JSON suffix (e.g., a Markdown code fence the model mistakenly added)
+// must cause rejection; the validator expects the entire response to be JSON.
 test("StructuredOutputValidator rejects malformed JSON and extra non-JSON text", () => {
   const validator = new StructuredOutputValidator();
 
@@ -107,6 +109,9 @@ test("StructuredOutputValidator rejects invalid top-level payload shapes", () =>
   );
 });
 
+// Schema-level constraints: non-empty title, numeric confidence in 0-100, no
+// missing required fields. These are batched because they all test the same
+// rejection path and produce the same error message.
 test("StructuredOutputValidator rejects schema-invalid findings payloads", () => {
   const validator = new StructuredOutputValidator();
 

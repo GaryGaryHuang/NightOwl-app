@@ -12,6 +12,13 @@ import { buildSessionResponse } from "../helpers/review-app-fixture.ts";
 
 // ─── Task 3.1: App lifecycle signal handling tests ────────────────────────────
 
+/**
+ * Shared factory for signal and lifecycle tests.
+ * Uses in-memory stubs for all dependencies; TEST_FILES replaces a real git
+ * changeset so no on-disk repo is needed. Injection hooks (`onStep1`,
+ * `stopImpl`, `forceStopImpl`, etc.) let individual tests assert or trigger
+ * side-effects at specific lifecycle points.
+ */
 function createSignalTestApp(options: {
   stopCalls: string[];
   onStep1?: () => void;
@@ -358,7 +365,7 @@ test("createLocalReviewRunApp keeps the successful summary when stop() resolves 
   const stopCalls: string[] = [];
   const app = createSignalTestApp({
     stopCalls,
-    gracefulShutdownTimeoutMs: 1,
+    gracefulShutdownTimeoutMs: 1, // 1 ms deadline; sleep(0) resolves within it
     async stopImpl() {
       await sleep(0);
     }

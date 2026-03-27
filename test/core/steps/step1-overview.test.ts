@@ -12,6 +12,9 @@ import {
   assertTextExcludesAll
 } from "../../helpers/step-prompt-contract-fixture.ts";
 
+// Step 1 is the only step that draws from RunContext (Step 0 output) rather than
+// prior step sections; it seeds the per-file review with changeset context and
+// file-level diff.
 test("Step1OverviewStep prepares the Step 1 prompt contract from RunContext and file metadata", () => {
   const runContext = createRunContext({
     changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
@@ -71,5 +74,7 @@ test("Step1OverviewStep prepares the Step 1 prompt contract from RunContext and 
     "- 影響範圍：",
     "- 測試覆蓋觀察："
   ]);
+
+  // Step 1 is the first step, so no accumulated review exists yet.
   assertTextExcludesAll(plan.prompt.userMessage, ["<current_review>"]);
 });

@@ -38,6 +38,9 @@ test("KnowledgeSvc appends non-built-in custom MCP entries alongside built-in co
   });
 });
 
+// When a user provides a context7 key in mcpServers, it is treated as a
+// partial override: scalar fields merge onto the built-in base config, but
+// array-valued fields (like `tools`) replace the built-in default entirely.
 test("KnowledgeSvc merges supported partial context7 overrides and replaces array-valued fields", () => {
   const service = new KnowledgeSvc({
     context7ApiKey: "built-in-key",
@@ -123,6 +126,8 @@ test("KnowledgeSvc appends remote MCP entries as independent MCPRemoteServerConf
   assert.deepEqual(merged.demo, createLocalMcpServer());
 });
 
+// Remote MCP entries that omit `tools` must default to ["*"] so the session
+// receives a valid tool allowlist without requiring the user to specify it.
 test("KnowledgeSvc defaults tools to [\"*\"] for remote entries without tools", () => {
   const service = new KnowledgeSvc({
     userMcpServers: {

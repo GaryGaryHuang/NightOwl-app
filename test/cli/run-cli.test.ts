@@ -12,6 +12,8 @@ import {
 import type { RunRequest } from "../../src/core/run-request.ts";
 import { runCli } from "../../src/index.ts";
 
+// Allows per-test overrides of a completed run result while keeping
+// `outputTarget` partially overridable without having to specify every field.
 type ReviewRunSummaryOverrides = Partial<Omit<ReviewRunSummary, "outputTarget">> & {
   outputTarget?: Partial<ReviewRunSummary["outputTarget"]>;
 };
@@ -263,6 +265,9 @@ test("runCli keeps fatal runs on the error path even when artifacts already exis
     writeFileSync(path.join(basePath, "index.md"), "# Review Index\n");
     writeFileSync(path.join(basePath, "skipped.md"), "");
 
+    // The CLI must not infer success from on-disk artifacts; the authoritative
+    // signal is the app throwing an error or returning a summary object.
+
     const exitCode = await runCli(["main", "feature-branch"], {
       app: {
         async run() {
@@ -351,6 +356,8 @@ function createCompletedRunResult(
   };
 }
 
+// Mirrors the published summary contract produced by formatLocalReviewRunSummary;
+// any change to that function's output format must be reflected here.
 function renderExpectedSummary(result: ReviewRunSummary): string {
   return [
     "Initialized local review run.",
@@ -513,6 +520,8 @@ test("runCli still exits with code 1 for CliUsageError", async () => {
 });
 
 // ─── Task 4.1: CLI per-signal exit code mapping tests ─────────────────────────
+// Exit code conventions: SIGINT → 130 (128 + 2), SIGTERM → 143 (128 + 15),
+// unknown/undefined signal → 130 (same as SIGINT, conservative fallback).
 
 test("runCli exits with code 130 and SIGINT-specific message when ReviewRunInterruptedError has signal === 'SIGINT'", async () => {
   const stderr: string[] = [];

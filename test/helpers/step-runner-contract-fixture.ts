@@ -41,6 +41,10 @@ export function diffHunkTraceability(hunkHeader: string) {
   };
 }
 
+// Step 4 (Strategy & What-if Scenarios) reads the accumulated prior sections
+// from FileReviewContext when building its prompt. This helper pre-populates
+// the context so StepRunner tests for Step 4 receive a realistic prompt
+// without having to run Steps 1–3 first.
 export function seedStep4Context(context: FileReviewContext): void {
   context.setSection(
     "overview",
@@ -90,6 +94,12 @@ export function seedStep4Context(context: FileReviewContext): void {
   );
 }
 
+/**
+ * Creates a minimal StepReviewSessionFactoryLike that tracks each created
+ * session and each sendAndWait call with per-session and per-send counters.
+ * Tests use the hook callbacks to assert on call ordering, retry behaviour,
+ * and early disconnects without needing a real Copilot connection.
+ */
 export function createReviewSessionFactory(input: {
   onCreateSession?: (profile: Parameters<StepReviewSessionFactoryLike["createSession"]>[0], sessionIndex: number) => void;
   onSendAndWait: (call: {

@@ -7,6 +7,8 @@ import {
   type WebFetchHostnameLookupResult
 } from "../../src/services/web-fetch-hostname-classifier.ts";
 
+// `lookupFn` is injected so tests never touch real DNS; the classifier itself
+// determines public vs private/reserved based on the returned address.
 test("DefaultWebFetchHostnameClassifier allows hostname results when every resolved address is public", async () => {
   const classifier = new DefaultWebFetchHostnameClassifier({
     lookupFn: async () => [
@@ -82,6 +84,9 @@ test("DefaultWebFetchHostnameClassifier denies private, loopback, unique-local, 
   }
 });
 
+// The classifier uses a deny-all conservative strategy: if any resolved address
+// falls in a private/reserved range, or if the lookup returns nothing, or if the
+// lookup errors or times out, the hostname is denied.
 test("DefaultWebFetchHostnameClassifier denies mixed public and non-public results, empty results, and lookup failures", async () => {
   const mixedClassifier = new DefaultWebFetchHostnameClassifier({
     lookupFn: async () => [
@@ -125,6 +130,8 @@ test("DefaultWebFetchHostnameClassifier denies mixed public and non-public resul
   );
 });
 
+// Timeout is enforced with a short deadline so the classifier never blocks
+// a review session indefinitely waiting for a slow DNS lookup.
 test("DefaultWebFetchHostnameClassifier denies lookup timeout conservatively", async () => {
   const classifier = new DefaultWebFetchHostnameClassifier({
     lookupFn: async () =>

@@ -13,8 +13,12 @@ test("LocalWorkspaceProvider initializes the run directories and skipped.md", ()
 
     assert.equal(existsSync(fixture.outputTarget.basePath), true);
     assert.equal(existsSync(fixture.outputTarget.filesPath), true);
+    // skipped.md and tool-audit.jsonl are created as empty files eagerly so
+    // append operations during the run never need to create them first.
     assert.equal(existsSync(fixture.outputTarget.skippedPath), true);
     assert.equal(existsSync(fixture.outputTarget.toolAuditPath), true);
+    // summary, index, manifest, and changeset-overview are written lazily
+    // only when the corresponding publish method is called.
     assert.equal(existsSync(fixture.outputTarget.summaryPath), false);
     assert.equal(existsSync(fixture.outputTarget.indexPath), false);
     assert.equal(existsSync(fixture.outputTarget.manifestPath), false);
@@ -146,6 +150,13 @@ test("LocalWorkspaceProvider publishes run manifest content to manifest.json", (
   }
 });
 
+// assessSuccessfulSnapshotFailure classifies write failures so the orchestrator
+// can decide whether to skip only the affected file or abort the entire run:
+//   - single-file-output-fault: the error is scoped to one note file (e.g.
+//     ENAMETOOLONG with a note-file path); other files can still be written.
+//   - shared-output-target-fault: the error affects the shared output directory
+//     (e.g. ENOSPC, or EEXIST on the shared files path); the run should stop.
+//   Conservative fallback: any unrecognised error is treated as shared-fault.
 test("LocalWorkspaceProvider classifies path-specific successful snapshot write failures as single-file output faults when the shared files path remains healthy", () => {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
@@ -221,6 +232,9 @@ test("LocalWorkspaceProvider treats shared files-path corruption as a shared out
 
   try {
     fixture.provider.initializeRun(fixture.outputTarget);
+    // Replace the files directory with a regular file to simulate corruption
+    // of the shared output path; the error's `path` points to filesPath, not
+    // to an individual note file, so it must be classified as shared-fault.
     rmSync(fixture.outputTarget.filesPath, { recursive: true, force: true });
     writeFileSync(fixture.outputTarget.filesPath, "not-a-directory");
 

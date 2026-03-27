@@ -158,6 +158,8 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
     assert.equal(startCalls, 1);
     assert.equal(stopCalls, 1);
     assert.equal(initializeRunCalls, 0);
+    // Both the initial attempt and the retry must target the canonical Context7
+    // MCP URL; verifies no fallback or misconfigured URL was used on retry.
     assert.ok(
       sessionConfigs.every(
         (config) =>
@@ -203,6 +205,8 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
               ) {
                 context7Failures += 1;
 
+                // Fail the first two attempts (initial + 1 retry), exhausting
+                // one file's retry budget so it is skipped. The rest succeed.
                 if (context7Failures <= 2) {
                   throw new Error("context7 startup failed");
                 }
@@ -493,6 +497,8 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
               ) {
                 context7Failures += 1;
 
+                // Fail the first two attempts (initial + 1 retry), exhausting
+                // one file's retry budget so it is skipped. The rest succeed.
                 if (context7Failures <= 2) {
                   throw new Error("context7 startup failed");
                 }
@@ -598,6 +604,8 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
               if (config.mcpServers?.demo && input.stepMatcher(config.systemMessage)) {
                 customMcpFailures += 1;
 
+                // Fail the first two attempts (initial + 1 retry), exhausting
+                // one file's retry budget so it is skipped. The rest succeed.
                 if (customMcpFailures <= 2) {
                   throw new Error("custom mcp startup failed");
                 }
@@ -702,6 +710,8 @@ async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
               if (config.mcpServers?.["my-remote"] && input.stepMatcher(config.systemMessage)) {
                 remoteMcpFailures += 1;
 
+                // Fail the first two attempts (initial + 1 retry), exhausting
+                // one file's retry budget so it is skipped. The rest succeed.
                 if (remoteMcpFailures <= 2) {
                   throw new Error("remote mcp startup failed");
                 }
