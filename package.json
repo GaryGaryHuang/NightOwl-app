@@ -17,7 +17,10 @@
     "build": "node --disable-warning=ExperimentalWarning ./scripts/build.mjs",
     "prepack": "npm run build",
     "review": "node src/bin/review.ts",
-    "test": "npm run build && node --test",
+    "test": "npm run build && find test -name '*.test.ts' -print0 | xargs -0 node --test",
+    "test:unit": "npm run build && node ./scripts/test-tier-runner.mjs unit",
+    "test:integration": "npm run build && node ./scripts/test-tier-runner.mjs integration",
+    "test:e2e": "npm run build && node ./scripts/test-tier-runner.mjs e2e",
     "test:watch": "node --test --watch",
     "test:coverage": "node --test --experimental-test-coverage",
     "typecheck": "tsc --noEmit"
