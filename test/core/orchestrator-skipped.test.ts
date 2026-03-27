@@ -12,7 +12,8 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildStrategyResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildStrategyResponse, buildSummaryResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { createStepResponseRouter } from "../helpers/orchestrator-step-contract-fixture.ts";
 
 test("ReviewOrchestrator skips a file after Step 1 exhaustion, publishes a bootstrap warning snapshot, records skipped.md, and continues later files", async () => {
   await assertSkipScenario({
@@ -330,58 +331,11 @@ function createSkipAwareRunner(input: {
   });
 }
 
-function buildSummaryResponse(filePath: string): string {
-  return [
-    "## Summary",
-    "### 審查基礎",
-    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
-    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
-    "- 審查假設：未擴張到外部知識查證。",
-    "### 行為變更提醒",
-    "- 無",
-    "### 風險評估",
-    "- 整體風險等級：Medium",
-    "- 風險理由：final findings 仍需留意。"
-  ].join("\n");
-}
-
-function buildStepResponse(
-  stepId:
-    | "step1-overview"
-    | "step2-dependencies-boundaries"
-    | "step3-knowledge-source-of-truth"
-    | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation"
-    | "step6-cognitive-simulation"
-    | "step7-summary",
-  filePath: string
-): string {
-  if (stepId === "step1-overview") {
-    return buildOverviewResponse(filePath);
-  }
-
-  if (stepId === "step2-dependencies-boundaries") {
-    return buildDependenciesResponse(filePath);
-  }
-
-  if (stepId === "step3-knowledge-source-of-truth") {
-    return buildKnowledgeResponse(filePath);
-  }
-
-  if (stepId === "step4-strategy-what-if-scenarios") {
-    return buildStrategyResponse(filePath);
-  }
-
-  if (stepId === "step5-validation-interrogation") {
-    return buildSimulationStep5JsonResponse();
-  }
-
-  if (stepId === "step6-cognitive-simulation") {
-    return buildSimulationStep6JsonResponse();
-  }
-
-  return buildSummaryResponse(filePath);
-}
+const buildStepResponse = createStepResponseRouter({
+  step5Response: () => buildSimulationStep5JsonResponse(),
+  step6Response: () => buildSimulationStep6JsonResponse(),
+  step7Response: (fp) => buildSummaryResponse(fp)
+});
 
 function extractPromptFilePath(prompt: string): string {
   const diffMatch = prompt.match(/<diff path="([^"]+)"/u);

@@ -16,7 +16,8 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStandardStep5JsonResponse, buildStandardStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStandardStep5JsonResponse, buildStandardStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, buildSuccessfulStepResult, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { createStepResponseRouter } from "../helpers/orchestrator-step-contract-fixture.ts";
 
 type StepEvent = [string, string];
 type OutputCall = [string, string];
@@ -1992,43 +1993,11 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
   }
 });
 
-function buildStepResponse(
-  stepId:
-    | "step1-overview"
-    | "step2-dependencies-boundaries"
-    | "step3-knowledge-source-of-truth"
-    | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation"
-    | "step6-cognitive-simulation"
-    | "step7-summary",
-  filePath: string
-): string {
-  if (stepId === "step1-overview") {
-    return buildOverviewResponse(filePath);
-  }
-
-  if (stepId === "step2-dependencies-boundaries") {
-    return buildDependenciesResponse(filePath);
-  }
-
-  if (stepId === "step3-knowledge-source-of-truth") {
-    return buildKnowledgeResponse(filePath);
-  }
-
-  if (stepId === "step4-strategy-what-if-scenarios") {
-    return buildStrategyResponse(filePath);
-  }
-
-  if (stepId === "step5-validation-interrogation") {
-    return buildStandardStep5JsonResponse();
-  }
-
-  if (stepId === "step6-cognitive-simulation") {
-    return buildStandardStep6JsonResponse();
-  }
-
-  return buildStandardStep7SummaryResponse(filePath);
-}
+const buildStepResponse = createStepResponseRouter({
+  step5Response: () => buildStandardStep5JsonResponse(),
+  step6Response: () => buildStandardStep6JsonResponse(),
+  step7Response: (fp) => buildStandardStep7SummaryResponse(fp)
+});
 
 function createAlwaysSuccessfulStepRunner(
   stepEvents: StepEvent[]
@@ -2076,106 +2045,4 @@ function createStepFailureRunner(input: {
   };
 }
 
-function buildSuccessfulStepResult(
-  stepId: string,
-  filePath: string
-): StepResult {
-  if (stepId === "step1-overview") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection("overview", buildOverviewResponse(filePath));
-      }
-    };
-  }
 
-  if (stepId === "step2-dependencies-boundaries") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "dependencies-boundaries",
-          buildDependenciesResponse(filePath)
-        );
-      }
-    };
-  }
-
-  if (stepId === "step3-knowledge-source-of-truth") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "knowledge-source-of-truth",
-          buildKnowledgeResponse(filePath)
-        );
-      }
-    };
-  }
-
-  if (stepId === "step4-strategy-what-if-scenarios") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "strategy-what-if-scenarios",
-          buildStrategyResponse(filePath)
-        );
-      }
-    };
-  }
-
-  if (stepId === "step5-validation-interrogation") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.updateStructuredState({
-          findings: [
-            {
-              type: "must",
-              title: "問題標題",
-              traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-              context: "具體情境",
-              deviation: "預期與實際有落差",
-              impact: "會造成 correctness 問題",
-              suggestion: "補上 guard",
-              confidence: 88
-            }
-          ]
-        });
-      }
-    };
-  }
-
-  if (stepId === "step6-cognitive-simulation") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.updateStructuredState({
-          findings: [
-            {
-              type: "must",
-              title: "問題標題",
-              traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-              context: "具體情境",
-              deviation: "預期與實際有落差",
-              impact: "會造成 correctness 問題",
-              suggestion: "補上 guard",
-              confidence: 91
-            }
-          ]
-        });
-      }
-    };
-  }
-
-  return {
-    stepId,
-    applyTo(targetContext: FileReviewContext) {
-      targetContext.setSection(
-        "summary",
-        buildStandardStep7SummaryResponse(filePath)
-      );
-    }
-  };
-}

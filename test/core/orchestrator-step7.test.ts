@@ -19,7 +19,7 @@ import {
   createStepResponseRouter,
   loadPlannedNoteContents
 } from "../helpers/orchestrator-step-contract-fixture.ts";
-import { buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildSummaryResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 7", async () => {
   const fixture = createReviewRepoFixture();
@@ -346,7 +346,7 @@ test("ReviewOrchestrator retries Step 7 after judge rejection and publishes only
                   data: {
                     content:
                       stepId === "step7-summary"
-                        ? buildSummaryResponse(filePath, `${filePath} attempt ${attempt}`)
+                        ? buildSummaryResponse(filePath, { label: `${filePath} attempt ${attempt}` })
                         : buildStepResponse(stepId, filePath)
                   }
                 };
@@ -665,21 +665,6 @@ async function assertStep7Failure(input: {
   } finally {
     fixture.cleanup();
   }
-}
-
-function buildSummaryResponse(filePath: string, label = filePath): string {
-  return [
-    "## Summary",
-    "### 審查基礎",
-    `- 改動概要：${label} 這次改動主要調整執行流程與輸入處理。`,
-    `- 依據規範：依 repo 內版本檔、${label} 相關 source-of-truth 以及既有契約進行審查。`,
-    "- 審查假設：以 repo 內已建立的版本假設與排除範圍為準，未額外擴張到外部知識查證。",
-    "### 行為變更提醒",
-    "- 無",
-    "### 風險評估",
-    "- 整體風險等級：Medium",
-    `- 風險理由：${label} 仍存在需關注的 final findings，且其風險判斷受到目前審查假設與範圍邊界影響。`
-  ].join("\n");
 }
 
 const buildStepResponse = createStepResponseRouter({

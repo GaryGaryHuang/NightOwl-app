@@ -15,7 +15,8 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildFindingsForFile, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, buildSuccessfulStepResult, buildSummaryResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
+import type { Step7NarrativeRiskLevel, SuccessfulStepResultOptions } from "../helpers/orchestrator-fixture.ts";
 
 type OutputCall = [string, string];
 type FileReviewPublishResult = Parameters<ReviewOutputSink["publishFileReview"]>[0];
@@ -23,13 +24,6 @@ type SkipRecord = Parameters<ReviewOutputSink["publishSkippedFile"]>[0];
 type RunSummaryPublishResult = Parameters<ReviewOutputSink["publishRunSummary"]>[0];
 type ReviewIndexPublishResult = Parameters<ReviewOutputSink["publishReviewIndex"]>[0];
 type RunManifestPublishResult = Parameters<ReviewOutputSink["publishRunManifest"]>[0];
-type Step7NarrativeRiskLevel = "High" | "Medium" | "Low" | "None";
-
-interface SuccessfulStepOptions {
-  findingsByFile?: ReadonlyMap<string, Finding[]>;
-  narrativeRiskByFile?: ReadonlyMap<string, Step7NarrativeRiskLevel>;
-}
-
 test("ReviewOrchestrator publishes deterministic summary.md for an all-successful run", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -981,7 +975,7 @@ test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to Review
 });
 
 function createSuccessfulSummaryRunner(
-  options: SuccessfulStepOptions = {}
+  options: SuccessfulStepResultOptions = {}
 ): Pick<StepRunner, "run"> {
   return {
     async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -992,7 +986,7 @@ function createSuccessfulSummaryRunner(
 
 function createMixedResultRunner(
   skippedFile: string,
-  options: SuccessfulStepOptions = {}
+  options: SuccessfulStepResultOptions = {}
 ): Pick<StepRunner, "run"> {
   return {
     async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -1012,7 +1006,7 @@ function createMixedResultRunner(
 
 function createAllSkippedRunner(
   skippedFiles: Set<string>,
-  options: SuccessfulStepOptions = {}
+  options: SuccessfulStepResultOptions = {}
 ): Pick<StepRunner, "run"> {
   return {
     async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -1027,159 +1021,22 @@ function createAllSkippedRunner(
   };
 }
 
-function buildSuccessfulStepResult(
-  stepId: string,
-  filePath: string,
-  options: SuccessfulStepOptions = {}
-): StepResult {
-  if (stepId === "step1-overview") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection("overview", buildOverviewResponse(filePath));
-      }
-    };
-  }
-
-  if (stepId === "step2-dependencies-boundaries") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "dependencies-boundaries",
-          buildDependenciesResponse(filePath)
-        );
-      }
-    };
-  }
-
-  if (stepId === "step3-knowledge-source-of-truth") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "knowledge-source-of-truth",
-          buildKnowledgeResponse(filePath)
-        );
-      }
-    };
-  }
-
-  if (stepId === "step4-strategy-what-if-scenarios") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "strategy-what-if-scenarios",
-          buildStrategyResponse(filePath, { whatIfStyle: "minimal" })
-        );
-      }
-    };
-  }
-
-  if (stepId === "step5-validation-interrogation") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.updateStructuredState({
-          findings: getFindingsForFile(filePath, options)
-        });
-      }
-    };
-  }
-
-  if (stepId === "step6-cognitive-simulation") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.updateStructuredState({
-          findings: getFindingsForFile(filePath, options)
-        });
-      }
-    };
-  }
-
-  if (stepId === "step7-summary") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "summary",
-          buildSummaryResponse(filePath, getNarrativeRiskLevel(filePath, options))
-        );
-      }
-    };
-  }
-
-  throw new Error(`Unexpected step: ${stepId}`);
-}
-
-function buildFindingsForFile(filePath: string): Finding[] {
-  if (filePath === "src/app.ts") {
-    return [
-      createFinding("must", "must finding"),
-      createFinding("nice", "nice finding")
-    ];
-  }
-
-  if (filePath === "packages/app/index.ts") {
-    return [createFinding("must", "only must finding")];
-  }
-
-  return [];
-}
-
 function getFindingsForFile(
   filePath: string,
-  options: SuccessfulStepOptions
+  options: SuccessfulStepResultOptions
 ): Finding[] {
   return options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath);
 }
 
 function getNarrativeRiskLevel(
   filePath: string,
-  options: SuccessfulStepOptions
+  options: SuccessfulStepResultOptions
 ): Step7NarrativeRiskLevel {
   return options.narrativeRiskByFile?.get(filePath) ?? "Medium";
 }
 
-function createFinding(
-  type: "must" | "nice",
-  title: string,
-  confidence = 90
-): Finding {
-  return {
-    type,
-    title,
-    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-    context: "具體情境",
-    deviation: "預期與實際有落差",
-    impact: "會造成 correctness 問題",
-    suggestion: "補上 guard",
-    confidence
-  };
-}
-
 function countFindings(filePath: string, type: "must" | "nice"): number {
   return buildFindingsForFile(filePath).filter((finding) => finding.type === type).length;
-}
-
-function buildSummaryResponse(
-  filePath: string,
-  riskLevel: Step7NarrativeRiskLevel = "Medium"
-): string {
-  return [
-    "## Summary",
-    "### 審查基礎",
-    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
-    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
-    "- 審查假設：未擴張到外部知識查證。",
-    "### 行為變更提醒",
-    "- 無",
-    "### 風險評估",
-    `- 整體風險等級：${riskLevel}`,
-    "- 風險理由：final findings 仍需留意。"
-  ].join("\n");
 }
 
 class CorruptingSummaryOutputSink {

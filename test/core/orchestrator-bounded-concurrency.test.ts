@@ -11,7 +11,7 @@ import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
+import { buildDependenciesResponse, buildFindingsForFile, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, buildSuccessfulStepResult, buildSummaryResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan-out, and keeps summary/index in planned order despite out-of-order completion", async () => {
   const fixture = createReviewRepoFixture();
@@ -630,134 +630,6 @@ function createSharedAbortRunner(input: {
       });
     }
   };
-}
-
-function buildSuccessfulStepResult(
-  stepId: string,
-  filePath: string,
-  options: { onTerminalApply(): void }
-) {
-  if (stepId === "step1-overview") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection("overview", buildOverviewResponse(filePath));
-      }
-    };
-  }
-
-  if (stepId === "step2-dependencies-boundaries") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "dependencies-boundaries",
-          buildDependenciesResponse(filePath)
-        );
-      }
-    };
-  }
-
-  if (stepId === "step3-knowledge-source-of-truth") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "knowledge-source-of-truth",
-          buildKnowledgeResponse(filePath)
-        );
-      }
-    };
-  }
-
-  if (stepId === "step4-strategy-what-if-scenarios") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection(
-          "strategy-what-if-scenarios",
-          buildStrategyResponse(filePath, { whatIfStyle: "minimal" })
-        );
-      }
-    };
-  }
-
-  if (stepId === "step5-validation-interrogation") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.updateStructuredState({
-          findings: buildFindingsForFile(filePath)
-        });
-      }
-    };
-  }
-
-  if (stepId === "step6-cognitive-simulation") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.updateStructuredState({
-          findings: buildFindingsForFile(filePath)
-        });
-      }
-    };
-  }
-
-  if (stepId === "step7-summary") {
-    return {
-      stepId,
-      applyTo(targetContext: FileReviewContext) {
-        targetContext.setSection("summary", buildSummaryResponse(filePath));
-        options.onTerminalApply();
-      }
-    };
-  }
-
-  throw new Error(`Unexpected step: ${stepId}`);
-}
-
-function buildFindingsForFile(filePath: string): Finding[] {
-  if (filePath === "src/app.ts") {
-    return [
-      createFinding("must", "must finding"),
-      createFinding("nice", "nice finding")
-    ];
-  }
-
-  if (filePath === "packages/app/index.ts") {
-    return [createFinding("must", "only must finding")];
-  }
-
-  return [];
-}
-
-function createFinding(type: "must" | "nice", title: string): Finding {
-  return {
-    type,
-    title,
-    traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-    context: "具體情境",
-    deviation: "預期與實際有落差",
-    impact: "會造成 correctness 問題",
-    suggestion: "補上 guard",
-    confidence: 90
-  };
-}
-
-function buildSummaryResponse(filePath: string): string {
-  return [
-    "## Summary",
-    "### 審查基礎",
-    `- 改動概要：${filePath} 這次改動主要調整執行流程。`,
-    `- 依據規範：依 ${filePath} 的 repo source-of-truth 與版本假設審查。`,
-    "- 審查假設：未擴張到外部知識查證。",
-    "### 行為變更提醒",
-    "- 無",
-    "### 風險評估",
-    "- 整體風險等級：Medium",
-    "- 風險理由：final findings 仍需留意。"
-  ].join("\n");
 }
 
 class BootstrapTrackingOutputSink {
