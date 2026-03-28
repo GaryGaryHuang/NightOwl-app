@@ -52,6 +52,7 @@ export class ReviewSessionFactory {
         )
       },
       model: profile.model,
+      reasoningEffort: "high",
       streaming: false,
       systemMessage: {
         mode: "replace",

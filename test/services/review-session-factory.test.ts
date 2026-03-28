@@ -114,6 +114,7 @@ test("ReviewSessionFactory creates a non-streaming review session and delegates 
         onPreToolUse: toolPolicyGuard.preToolUseHook
       },
       model: "gpt-5.4-mini",
+      reasoningEffort: "high",
       streaming: false,
       onPermissionRequest: toolPolicyGuard.permissionHandler,
       systemMessage: {
