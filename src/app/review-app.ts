@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import type { RunRequest } from "../core/run-request.ts";
+import type { RunProgressEventHandler } from "../core/run-progress.ts";
 import {
   ChangesetOverviewRunner
 } from "../core/changeset-overview-runner.ts";
@@ -33,7 +34,7 @@ import {
   DryRunJudgeSessionFactory
 } from "../services/dry-run-session-factory.ts";
 
-export const LOCAL_REVIEW_RUN_HEADER = "Initialized local review run.";
+export const LOCAL_REVIEW_RUN_HEADER = "Review run completed.";
 const DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
 const STOP_TIMEOUT_EXCEEDED = Symbol("stop-timeout-exceeded");
 
@@ -58,6 +59,7 @@ export interface CreateLocalReviewRunAppOptions {
   webFetchRedirectResolver?: WebFetchRedirectResolver;
   webFetchRedirectHopLimit?: number;
   webFetchRedirectTimeoutMs?: number;
+  onProgressEvent?: RunProgressEventHandler;
 }
 
 type LocalReviewRunClientManager = NonNullable<
@@ -152,6 +154,7 @@ export function createLocalReviewRunApp(
         workingDirectory: options.workingDirectory,
         timestampProvider: options.timestampProvider,
         maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
+        onProgressEvent: options.onProgressEvent,
         onOutputTargetReady: (outputTarget) => {
           // Wire the audit writer only after the run output path exists; Step 0 sessions created earlier are not audited.
           // setAuditWriter is a no-op on DryRunReviewSessionFactory.
@@ -231,15 +234,6 @@ export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
     : LOCAL_REVIEW_RUN_HEADER;
   return [
     header,
-    `Repo root: ${result.repoRoot}`,
-    `Output: ${result.outputTarget.basePath}`,
-    `Changeset Overview: ${result.outputTarget.changesetOverviewPath}`,
-    `Files: ${result.outputTarget.filesPath}`,
-    `Summary: ${result.outputTarget.summaryPath}`,
-    `Index: ${result.outputTarget.indexPath}`,
-    `Manifest: ${result.outputTarget.manifestPath}`,
-    `Tool Audit: ${result.outputTarget.toolAuditPath}`,
-    `Skipped: ${result.outputTarget.skippedPath}`,
     `Planned files: ${result.plannedFileCount}`,
     `Successful files: ${result.successfulFileCount}`,
     `Skipped files: ${result.skippedFileCount}`

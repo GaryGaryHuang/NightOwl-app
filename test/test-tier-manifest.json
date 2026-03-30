@@ -1,6 +1,7 @@
 {
   "unit": [
     "test/cli/parser.test.ts",
+    "test/cli/progress-reporter.test.ts",
     "test/core/changeset-overview-runner.test.ts",
     "test/core/confidence-thresholds.test.ts",
     "test/core/file-review-context.test.ts",
@@ -38,6 +39,7 @@
   "integration": [
     "test/app/review-app-dry-run.test.ts",
     "test/app/review-app-lifecycle.test.ts",
+    "test/app/review-app-progress.test.ts",
     "test/app/review-app-web-fetch.test.ts",
     "test/app/review-app.test.ts",
     "test/core/orchestrator-abort.test.ts",
@@ -57,6 +59,7 @@
   ],
   "e2e": [
     "test/cli/package-bin.test.ts",
+    "test/cli/run-cli-progress.test.ts",
     "test/cli/run-cli.test.ts"
   ]
 }

@@ -614,9 +614,9 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
   }
 });
 
-// ─── formatLocalReviewRunSummary: Tool Audit line ───────────────────────────
+// ─── formatLocalReviewRunSummary: reduced CLI summary contract ──────────────
 
-test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and before Skipped", () => {
+test("formatLocalReviewRunSummary keeps only completion counts in the final CLI summary", () => {
   const basePath = "/workspace/.nightowl/review/feature-branch_03131430";
   const result = {
     repoRoot: "/workspace/repo",
@@ -640,65 +640,12 @@ test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and be
   const output = formatLocalReviewRunSummary(result);
   const lines = output.split("\n");
 
-  const manifestIdx = lines.findIndex((l) => l.startsWith("Manifest:"));
-  const toolAuditIdx = lines.findIndex((l) => l.startsWith("Tool Audit:"));
-  const skippedIdx = lines.findIndex((l) => l.startsWith("Skipped:"));
-
-  assert.ok(toolAuditIdx >= 0, "output must include a Tool Audit: line");
-  assert.ok(
-    manifestIdx < toolAuditIdx,
-    "Tool Audit: must appear after Manifest:"
-  );
-  assert.ok(
-    toolAuditIdx < skippedIdx,
-    "Tool Audit: must appear before Skipped:"
-  );
-  assert.equal(
-    lines[toolAuditIdx],
-    `Tool Audit: ${basePath}/tool-audit.jsonl`
-  );
-});
-
-// ─── formatLocalReviewRunSummary: Changeset Overview line ──────────────────
-
-test("formatLocalReviewRunSummary includes Changeset Overview line after Output and before Files", () => {
-  const basePath = "/workspace/.nightowl/review/feature-branch_03131430";
-  const result = {
-    repoRoot: "/workspace/repo",
-    runContext: { changesetOverview: "## Changeset Overview", userContext: [] },
-    outputTarget: {
-      basePath,
-      changesetOverviewPath: `${basePath}/changeset-overview.md`,
-      filesPath: `${basePath}/files`,
-      summaryPath: `${basePath}/summary.md`,
-      indexPath: `${basePath}/index.md`,
-      manifestPath: `${basePath}/manifest.json`,
-      skippedPath: `${basePath}/skipped.md`,
-      toolAuditPath: `${basePath}/tool-audit.jsonl`
-    },
-    plannedFileCount: 1,
-    successfulFileCount: 1,
-    skippedFileCount: 0,
-    dryRun: false
-  };
-
-  const output = formatLocalReviewRunSummary(result);
-  const lines = output.split("\n");
-
-  const outputIdx = lines.findIndex((l) => l.startsWith("Output:"));
-  const overviewIdx = lines.findIndex((l) => l.startsWith("Changeset Overview:"));
-  const filesIdx = lines.findIndex((l) => l.startsWith("Files:"));
-
-  assert.ok(overviewIdx >= 0, "output must include a Changeset Overview: line");
-  assert.ok(
-    outputIdx < overviewIdx,
-    "Changeset Overview: must appear after Output:"
-  );
-  assert.ok(
-    overviewIdx < filesIdx,
-    "Changeset Overview: must appear before Files:"
-  );
-  assert.equal(lines[overviewIdx], `Changeset Overview: ${basePath}/changeset-overview.md`);
+  assert.deepEqual(lines, [
+    "Review run completed.",
+    "Planned files: 1",
+    "Successful files: 1",
+    "Skipped files: 0"
+  ]);
 });
 
 function sleep(ms: number): Promise<void> {

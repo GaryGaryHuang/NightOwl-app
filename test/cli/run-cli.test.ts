@@ -10,7 +10,7 @@ import {
   type ReviewRunSummary
 } from "../../src/core/orchestrator.ts";
 import type { RunRequest } from "../../src/core/run-request.ts";
-import { runCli } from "../../src/index.ts";
+import { createDefaultCliRuntime, runCli } from "../../src/index.ts";
 
 // Allows per-test overrides of a completed run result while keeping
 // `outputTarget` partially overridable without having to specify every field.
@@ -67,11 +67,100 @@ test("runCli forwards parsed input to the app boundary once", async () => {
       dryRun: false
     }
   ]);
-  assert.deepEqual(stdout, [renderExpectedSummary(createCompletedRunResult({
+  assert.deepEqual(stdout, [
+    renderExpectedStartup(),
+    renderExpectedSummary(createCompletedRunResult({
+      plannedFileCount: 1,
+      successfulFileCount: 1,
+      skippedFileCount: 0
+    }))
+  ]);
+  assert.deepEqual(stderr, []);
+});
+
+test("runCli emits startup feedback after parsing and before the app completes", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let resolveRun: ((result: ReviewRunSummary) => void) | undefined;
+  const runResult = new Promise<ReviewRunSummary>((resolve) => {
+    resolveRun = resolve;
+  });
+
+  const exitCodePromise = runCli(["main", "feature-branch"], {
+    app: {
+      async run() {
+        return runResult;
+      }
+    },
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  await Promise.resolve();
+
+  assert.equal(stdout.length, 1, "startup feedback should be visible before app completion");
+  assert.match(stdout[0], /main/u);
+  assert.match(stdout[0], /feature-branch/u);
+  assert.notEqual(stdout[0], "Review run completed.");
+  assert.deepEqual(stderr, []);
+
+  resolveRun?.(
+    createCompletedRunResult({
+      plannedFileCount: 1,
+      successfulFileCount: 1,
+      skippedFileCount: 0
+    })
+  );
+
+  const exitCode = await exitCodePromise;
+
+  assert.equal(exitCode, 0);
+  assert.equal(stdout.length, 2);
+  assert.equal(stdout[1], renderExpectedSummary(createCompletedRunResult({
     plannedFileCount: 1,
     successfulFileCount: 1,
     skippedFileCount: 0
-  }))]);
+  })));
+});
+
+test("createDefaultCliRuntime uses a writable process-backed stdout when no stdout override is provided", () => {
+  const runtime = createDefaultCliRuntime({
+    app: {
+      async run() {
+        throw new Error("unused");
+      }
+    }
+  });
+
+  assert.equal(typeof runtime.stdout.log, "function");
+  assert.equal(typeof runtime.stdout.write, "function");
+  assert.equal(runtime.stdout.isTTY, process.stdout.isTTY);
+  assert.equal(runtime.progressReporter.stdout, runtime.stdout);
+});
+
+test("runCli startup feedback stays distinct from the completed-run success header", async () => {
+  const { exitCode, stdout, stderr } = await runCliWithResult(
+    createCompletedRunResult({
+      plannedFileCount: 1,
+      successfulFileCount: 1,
+      skippedFileCount: 0
+    })
+  );
+
+  assert.equal(exitCode, 0);
+  assert.equal(stdout.length, 2);
+  assert.notEqual(stdout[0], "Review run completed.");
+  assert.match(stdout[0], /main/u);
+  assert.match(stdout[0], /feature-branch/u);
+  assert.match(stdout[1], /^Review run completed\./u);
   assert.deepEqual(stderr, []);
 });
 
@@ -107,7 +196,7 @@ test("runCli reports zero planned files as a successful summary", async () => {
   const { exitCode, stdout, stderr } = await runCliWithResult(result);
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(stdout, [renderExpectedSummary(result)]);
+  assert.deepEqual(stdout, [renderExpectedStartup(), renderExpectedSummary(result)]);
   assert.deepEqual(stderr, []);
 });
 
@@ -120,7 +209,7 @@ test("runCli reports an all-skipped run as a successful completed summary", asyn
   const { exitCode, stdout, stderr } = await runCliWithResult(result);
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(stdout, [renderExpectedSummary(result)]);
+  assert.deepEqual(stdout, [renderExpectedStartup(), renderExpectedSummary(result)]);
   assert.deepEqual(stderr, []);
 });
 
@@ -133,12 +222,12 @@ test("runCli prints the published completed-run summary contract from the app re
   const { exitCode, stdout, stderr } = await runCliWithResult(result);
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(stdout, [renderExpectedSummary(result)]);
+  assert.deepEqual(stdout, [renderExpectedStartup(), renderExpectedSummary(result)]);
   assert.deepEqual(stderr, []);
-  assert.match(stdout[0], /Files: \/workspace\/repo\/.nightowl\/review\/feature-branch_03131430\/files/u);
-  assert.match(stdout[0], /Index: \/workspace\/repo\/.nightowl\/review\/feature-branch_03131430\/index\.md/u);
-  assert.match(stdout[0], /Manifest: \/workspace\/repo\/.nightowl\/review\/feature-branch_03131430\/manifest\.json/u);
-  assert.match(stdout[0], /Skipped: \/workspace\/repo\/.nightowl\/review\/feature-branch_03131430\/skipped\.md/u);
+  assert.match(stdout[1], /Planned files: 2/u);
+  assert.match(stdout[1], /Successful files: 1/u);
+  assert.match(stdout[1], /Skipped files: 1/u);
+  assert.doesNotMatch(stdout[1], /Output:|Repo root:|Files:|Summary:|Index:|Manifest:|Tool Audit:|Skipped:/u);
 });
 
 test("runCli prints artifact paths directly from the completed-run result without reading artifacts", async () => {
@@ -160,7 +249,7 @@ test("runCli prints artifact paths directly from the completed-run result withou
   const { exitCode, stdout, stderr } = await runCliWithResult(result);
 
   assert.equal(exitCode, 0);
-  assert.deepEqual(stdout, [renderExpectedSummary(result)]);
+  assert.deepEqual(stdout, [renderExpectedStartup(), renderExpectedSummary(result)]);
   assert.deepEqual(stderr, []);
 });
 
@@ -216,7 +305,10 @@ test("runCli surfaces a clear runtime error when Step 0 session startup fails", 
   });
 
   assert.equal(exitCode, 1);
-  assert.deepEqual(stdout, []);
+  assert.equal(stdout.length, 1);
+  assert.match(stdout[0], /main/u);
+  assert.match(stdout[0], /feature-branch/u);
+  assert.notEqual(stdout[0], "Initialized local review run.");
   assert.match(stderr.join("\n"), /Copilot CLI is unavailable\./u);
 });
 
@@ -243,12 +335,9 @@ test("runCli does not print partial completed-run counts or artifact lines on fa
   });
 
   assert.equal(exitCode, 1);
-  assert.deepEqual(stdout, []);
+  assert.deepEqual(stdout, [renderExpectedStartup()]);
   assert.match(stderr.join("\n"), /summary write failed/u);
-  assert.doesNotMatch(stderr.join("\n"), /Files:/u);
-  assert.doesNotMatch(stderr.join("\n"), /Index:/u);
-  assert.doesNotMatch(stderr.join("\n"), /Manifest:/u);
-  assert.doesNotMatch(stderr.join("\n"), /Skipped:/u);
+  assert.doesNotMatch(stderr.join("\n"), /Review run completed\.|Output:/u);
   assert.doesNotMatch(stderr.join("\n"), /Successful files:/u);
   assert.doesNotMatch(stderr.join("\n"), /Skipped files:/u);
 });
@@ -288,7 +377,7 @@ test("runCli keeps fatal runs on the error path even when artifacts already exis
     });
 
     assert.equal(exitCode, 1);
-    assert.deepEqual(stdout, []);
+  assert.deepEqual(stdout, [renderExpectedStartup()]);
     assert.match(stderr.join("\n"), /index write failed/u);
     assert.doesNotMatch(stderr.join("\n"), /Files:/u);
     assert.doesNotMatch(stderr.join("\n"), /Summary:/u);
@@ -362,23 +451,19 @@ function createCompletedRunResult(
 // any change to that function's output format must be reflected here.
 function renderExpectedSummary(result: ReviewRunSummary): string {
   const header = result.dryRun
-    ? `[DRY RUN] Initialized local review run.`
-    : "Initialized local review run.";
+    ? `[DRY RUN] Review run completed.`
+    : "Review run completed.";
   return [
     header,
-    `Repo root: ${result.repoRoot}`,
-    `Output: ${result.outputTarget.basePath}`,
-    `Changeset Overview: ${result.outputTarget.changesetOverviewPath}`,
-    `Files: ${result.outputTarget.filesPath}`,
-    `Summary: ${result.outputTarget.summaryPath}`,
-    `Index: ${result.outputTarget.indexPath}`,
-    `Manifest: ${result.outputTarget.manifestPath}`,
-    `Tool Audit: ${result.outputTarget.toolAuditPath}`,
-    `Skipped: ${result.outputTarget.skippedPath}`,
     `Planned files: ${result.plannedFileCount}`,
     `Successful files: ${result.successfulFileCount}`,
     `Skipped files: ${result.skippedFileCount}`
   ].join("\n");
+}
+
+function renderExpectedStartup(dryRun = false): string {
+  const prefix = dryRun ? "[DRY RUN] " : "";
+  return `${prefix}Starting review run for main...feature-branch.`;
 }
 
 // ─── CLI interrupted exit tests ─────────────────────────────────────────────
@@ -406,7 +491,7 @@ test("runCli exits with code 130 when app throws ReviewRunInterruptedError", asy
   });
 
   assert.equal(exitCode, 130);
-  assert.deepEqual(stdout, [], "success summary must not be printed after interrupt");
+  assert.deepEqual(stdout, [renderExpectedStartup()], "only startup feedback should be printed after interrupt");
   assert.equal(stderr.length, 1, "exactly one stderr line for interrupt");
 });
 
@@ -487,9 +572,9 @@ test("runCli does not print success summary on interrupted run", async () => {
     stderr: { error() {} }
   });
 
-  assert.deepEqual(stdout, [], "stdout must be empty: no success summary on interrupt");
+  assert.deepEqual(stdout, [renderExpectedStartup()], "interrupt keeps startup feedback but must not print success summary");
   assert.ok(
-    stdout.every((line) => !String(line).includes("Initialized local review run.")),
+    stdout.every((line) => !String(line).includes("Review run completed.")),
     "interrupt must not produce the success header"
   );
 });
@@ -549,7 +634,7 @@ test("runCli exits with code 130 and SIGINT-specific message when ReviewRunInter
   assert.equal(stderr[0], "Review run interrupted by SIGINT.");
 });
 
-test("runCli exits with code 143 and SIGTERM-specific message when ReviewRunInterruptedError has signal === 'SIGTERM'", async () => {
+test("runCli exits with code 130 and SIGTERM-specific message when ReviewRunInterruptedError has signal === 'SIGTERM'", async () => {
   const stderr: string[] = [];
 
   const exitCode = await runCli(["main", "feature-branch"], {
@@ -566,7 +651,7 @@ test("runCli exits with code 143 and SIGTERM-specific message when ReviewRunInte
     }
   });
 
-  assert.equal(exitCode, 143);
+  assert.equal(exitCode, 130);
   assert.equal(stderr[0], "Review run terminated by SIGTERM.");
 });
 

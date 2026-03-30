@@ -28,6 +28,7 @@ import {
 import { ReviewIndexFinalizer } from "./review-index-finalizer.ts";
 import { RunManifestFinalizer } from "./run-manifest-finalizer.ts";
 import type { RunContext } from "./run-context.ts";
+import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";
 import type { StepDefinition, StepResult, StepRunner } from "./step-runner.ts";
 import {
@@ -62,6 +63,7 @@ export interface ReviewRunSummary {
 export interface ReviewOrchestratorOptions {
   changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
   maxConcurrentFiles?: number;
+  onProgressEvent?: RunProgressEventHandler;
   onOutputTargetReady?: (outputTarget: OutputTarget) => void;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
@@ -85,6 +87,7 @@ export class ReviewOrchestrator {
   readonly #reviewIndexFinalizer: ReviewIndexFinalizer;
   readonly #runManifestFinalizer: RunManifestFinalizer;
   readonly #maxConcurrentFiles: number;
+  readonly #onProgressEvent?: RunProgressEventHandler;
   readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
 
   constructor(options: ReviewOrchestratorOptions) {
@@ -107,6 +110,7 @@ export class ReviewOrchestrator {
     this.#reviewIndexFinalizer = new ReviewIndexFinalizer();
     this.#runManifestFinalizer = new RunManifestFinalizer();
     this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
+    this.#onProgressEvent = options.onProgressEvent;
     this.#onOutputTargetReady = options.onOutputTargetReady;
   }
 
@@ -114,6 +118,11 @@ export class ReviewOrchestrator {
     request: RunRequest,
     options?: { signal?: AbortSignal }
   ): Promise<ReviewRunSummary> {
+    this.#emitProgressEvent({
+      type: "phase-changed",
+      phase: "step0"
+    });
+
     const startPath = path.resolve(this.#workingDirectory, request.repoPath ?? ".");
     const repoRoot = this.#sourceProvider.resolveRepoRoot(startPath);
     const changesetEntries = this.#sourceProvider.getChangesetEntries(
@@ -136,6 +145,11 @@ export class ReviewOrchestrator {
     if (options?.signal?.aborted) {
       throw new ReviewRunInterruptedError(extractSignalName(options.signal.reason));
     }
+
+    this.#emitProgressEvent({
+      type: "phase-changed",
+      phase: "planning"
+    });
 
     const branchName = this.#sourceProvider.getCurrentBranch(repoRoot);
     const changedFiles = this.#sourceProvider.getChangedFiles(
@@ -161,6 +175,13 @@ export class ReviewOrchestrator {
 
     this.#onOutputTargetReady?.(outputTarget);
 
+    this.#emitProgressEvent({
+      type: "run-initialized",
+      repoRoot,
+      outputTarget,
+      plannedFileCount: plannedNoteFiles.length
+    });
+
     // Publish bootstrap snapshots before any per-file step runs so every file starts from the same skeleton.
     for (const plannedNote of plannedNoteFiles) {
       this.#outputSink.publishFileReview({
@@ -176,6 +197,11 @@ export class ReviewOrchestrator {
         )
       });
     }
+
+    this.#emitProgressEvent({
+      type: "phase-changed",
+      phase: "reviewing"
+    });
 
     // Steps 2–7 each receive the progressively rendered note via <current_review> so each step builds on prior output.
     const steps = [
@@ -253,6 +279,13 @@ export class ReviewOrchestrator {
       slot?.skipped ? [slot.skipped] : []
     );
 
+    this.#emitProgressEvent({
+      type: "run-finalizing",
+      plannedFileCount: plannedNoteFiles.length,
+      successfulFileCount: successfulFiles.length,
+      skippedFileCount: skippedFiles.length
+    });
+
     this.#outputSink.publishRunSummary({
       content: this.#runSummaryFinalizer.render({
         repoRoot,
@@ -316,6 +349,7 @@ export class ReviewOrchestrator {
       input.plannedNoteFiles.length
     );
     let nextPlannedIndex = 0;
+    let claimOrder = 0;
 
     // Each worker pulls the next file atomically from the shared cursor until no work remains.
     const claimNextWorkItem = (): PlannedFileWorkItem | undefined => {
@@ -329,6 +363,13 @@ export class ReviewOrchestrator {
 
       const plannedIndex = nextPlannedIndex;
       nextPlannedIndex += 1;
+
+      claimOrder += 1;
+      this.#emitProgressEvent({
+        type: "file-claimed",
+        filePath: input.plannedNoteFiles[plannedIndex].filePath,
+        claimOrder
+      });
 
       return {
         plannedIndex,
@@ -480,6 +521,14 @@ export class ReviewOrchestrator {
           }
         };
 
+        this.#emitProgressEvent({
+          type: "file-skipped",
+          filePath: fileContext.filePath,
+          stepId: step.stepId,
+          reason,
+          ...countResolvedOutcomes(input.outcomeSlots)
+        });
+
         return;
       }
 
@@ -530,8 +579,22 @@ export class ReviewOrchestrator {
               outputError instanceof Error ? outputError.message : String(outputError)
           }
         };
+
+        this.#emitProgressEvent({
+          type: "file-skipped",
+          filePath: fileContext.filePath,
+          stepId: step.stepId,
+          reason: outputError instanceof Error ? outputError.message : String(outputError),
+          ...countResolvedOutcomes(input.outcomeSlots)
+        });
         return;
       }
+
+      this.#emitProgressEvent({
+        type: "file-progressed",
+        filePath: fileContext.filePath,
+        stepId: step.stepId
+      });
     }
 
     if (input.runAbortState.error) {
@@ -544,6 +607,12 @@ export class ReviewOrchestrator {
         findings: fileContext.getStructuredState().findings ?? []
       }
     };
+
+    this.#emitProgressEvent({
+      type: "file-completed",
+      filePath: fileContext.filePath,
+      ...countResolvedOutcomes(input.outcomeSlots)
+    });
   }
 
   async #downgradeSuccessfulSnapshotOutputFailure(input: {
@@ -594,6 +663,10 @@ export class ReviewOrchestrator {
       throw outputError;
     }
   }
+
+  #emitProgressEvent(event: RunProgressEvent): void {
+    this.#onProgressEvent?.(event);
+  }
 }
 
 interface PlannedFileWorkItem {
@@ -611,6 +684,29 @@ interface AbortState {
 }
 
 type SharedAbortState = AbortState;
+
+function countResolvedOutcomes(outcomeSlots: PlannedOutcomeSlot[]): {
+  successfulFileCount: number;
+  skippedFileCount: number;
+} {
+  let successfulFileCount = 0;
+  let skippedFileCount = 0;
+
+  for (const slot of outcomeSlots) {
+    if (slot?.successful) {
+      successfulFileCount += 1;
+    }
+
+    if (slot?.skipped) {
+      skippedFileCount += 1;
+    }
+  }
+
+  return {
+    successfulFileCount,
+    skippedFileCount
+  };
+}
 
 
 function extractStepFailureReason(input: {
