@@ -7,7 +7,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 
 export function createWorkspaceProviderFixture() {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
-  const basePath = path.join(tempDir, "review", "feature-branch_03131430");
+  const basePath = path.join(tempDir, ".nightowl", "review", "feature-branch_03131430");
   const outputTarget: OutputTarget = {
     basePath,
     changesetOverviewPath: path.join(basePath, "changeset-overview.md"),

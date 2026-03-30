@@ -19,7 +19,7 @@ export interface ReviewRepoFixture {
  *   main  (base commit)  →  feature-branch (head commit)
  *
  * The base commit includes dist/ and obsolete.txt deliberately:
- *   - dist/ lets tests verify that .reviewignore filtering works.
+ *   - dist/ lets tests verify that .nightowl/reviewignore filtering works.
  *   - obsolete.txt lets tests verify deleted-file handling (it is removed
  *     in the feature-branch commit so `getChangedFiles` picks it up).
  *

@@ -33,10 +33,17 @@ test("tool policy guard permission handler allows repo-local reads and denies ou
   );
   assert.deepEqual(
     await handler(
-      { kind: "read", path: "/workspace/repo/packages/app/review/run/files/a.md" },
+      { kind: "read", path: "/workspace/repo/.nightowl/review/run/files/a.md" },
       { sessionId: "session-1" }
     ),
     { kind: "approved" }
+  );
+  assert.deepEqual(
+    await handler(
+      { kind: "read", path: "/workspace/repo/.nightowl/reviewconfig.json" },
+      { sessionId: "session-1" }
+    ),
+    { kind: "denied-no-approval-rule-and-could-not-request-from-user" }
   );
   assert.deepEqual(
     await handler(

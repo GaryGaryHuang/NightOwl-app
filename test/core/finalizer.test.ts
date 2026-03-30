@@ -16,7 +16,7 @@ import {
 } from "../helpers/finalizer-contract-fixture.ts";
 
 const FILE_PATH = "src/app.ts";
-const NOTE_PATH = "/workspace/review/run/files/src__app.ts.md";
+const NOTE_PATH = "/workspace/.nightowl/review/run/files/src__app.ts.md";
 const DIFF_CONTENT = "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n";
 
 const OVERVIEW_SECTION = [

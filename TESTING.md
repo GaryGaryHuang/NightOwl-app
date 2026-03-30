@@ -166,7 +166,7 @@ Shared fixtures follow the `create*Fixture()` / `build*Response()` naming conven
 | `step-runner-contract-fixture.ts` | Default `FileReviewContext` builder; `applySection`; `seedStep4Context` for prerequisite state |
 | `finalizer-contract-fixture.ts` | Text assertions: `assertTextContainsAll`, `assertTextExcludesAll`, `assertTextContainsInOrder` |
 | `completed-run-finalizer-contract-fixture.ts` | Factory functions for `Finding`, `SuccessfulFileOutcome`, `SkippedFileOutcome`, `OutputTarget` |
-| `review-config-provider-contract-fixture.ts` | Wraps git fixture + `LocalReviewConfigProvider` for `.reviewconfig.json` testing |
+| `review-config-provider-contract-fixture.ts` | Wraps git fixture + `LocalReviewConfigProvider` for `repo_root/.nightowl/reviewconfig.json` testing |
 | `workspace-provider-contract-fixture.ts` | Temporary directory `OutputTarget` fixture with `LocalWorkspaceProvider` |
 | `tool-policy-fixture.ts` | Fake `HostnameClassifier` and `RedirectResolver` for `ToolPolicyGuard` tests |
 

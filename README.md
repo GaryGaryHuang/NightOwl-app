@@ -47,13 +47,13 @@ review main feature-branch --dry-run
 ```text
 Initialized local review run.
 Repo root: /path/to/repo
-Output: /path/to/repo/review/feature-branch_03131430
-Files: /path/to/repo/review/feature-branch_03131430/files
-Summary: /path/to/repo/review/feature-branch_03131430/summary.md
-Index: /path/to/repo/review/feature-branch_03131430/index.md
-Manifest: /path/to/repo/review/feature-branch_03131430/manifest.json
-Tool Audit: /path/to/repo/review/feature-branch_03131430/tool-audit.jsonl
-Skipped: /path/to/repo/review/feature-branch_03131430/skipped.md
+Output: /path/to/repo/.nightowl/review/feature-branch_03131430
+Files: /path/to/repo/.nightowl/review/feature-branch_03131430/files
+Summary: /path/to/repo/.nightowl/review/feature-branch_03131430/summary.md
+Index: /path/to/repo/.nightowl/review/feature-branch_03131430/index.md
+Manifest: /path/to/repo/.nightowl/review/feature-branch_03131430/manifest.json
+Tool Audit: /path/to/repo/.nightowl/review/feature-branch_03131430/tool-audit.jsonl
+Skipped: /path/to/repo/.nightowl/review/feature-branch_03131430/skipped.md
 Planned files: 3
 Successful files: 2
 Skipped files: 1
@@ -108,7 +108,7 @@ Each changed file goes through 7 steps in sequence (files are processed in paral
 
 ## Output Artifacts
 
-Each review run produces output under `<output_base_dir>/review/<session_id>/`:
+Each review run produces output under `repo_root/.nightowl/review/<session_id>/`:
 
 | File | Description |
 |------|-------------|
@@ -157,11 +157,11 @@ src/
 - **Separation of concerns**: CLI parsing → App dependency wiring → Orchestrator flow control → Provider I/O → Service SDK encapsulation
 - **`FileReviewContext` is the single source of truth**: on-disk notes are snapshot projections only; they must not be read back
 - **Completion check precedes state update**: Agent responses must pass judge/validation before being written to context
-- **Repo workspace is read-only**: bash tools are strictly limited to a read-only command allowlist
+- **Repo source tree is read-only to Agent tools**: NightOwl host writes review artifacts only under `repo_root/.nightowl/review/**`
 
 ## Configuration
 
-Place an optional configuration file at `repo_root/.reviewconfig.json`:
+Place an optional configuration file at `repo_root/.nightowl/reviewconfig.json`:
 
 ```json
 {
@@ -182,7 +182,7 @@ Place an optional configuration file at `repo_root/.reviewconfig.json`:
 | `webFetchAllowedHosts` | — | `web_fetch` host allowlist |
 | `webFetchDeniedHosts` | — | `web_fetch` host denylist (deny-over-allow) |
 
-File filtering uses `repo_root/.reviewignore` (`.gitignore` syntax).
+File filtering uses `repo_root/.nightowl/reviewignore` (`.gitignore` syntax).
 
 ## Development
 

@@ -19,9 +19,9 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["README.md", "/workspace/review/feature-branch_03131430/files/README.md.md"],
-      ["src/app.ts", "/workspace/review/feature-branch_03131430/files/src__app.ts.md"],
-      ["packages/app/index.ts", "/workspace/review/feature-branch_03131430/files/app__index.ts.md"]
+      ["README.md", "/workspace/.nightowl/review/feature-branch_03131430/files/README.md.md"],
+      ["src/app.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__app.ts.md"],
+      ["packages/app/index.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/app__index.ts.md"]
     ]),
     successfulFiles: [createSuccessfulFile("README.md", [])],
     skippedFiles: [
@@ -100,23 +100,23 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
     baseRef: "main",
     headRef: "feature-branch",
     outputTarget: createOutputTarget({
-      basePath: String.raw`C:\workspace\review\feature-branch_03131430`,
-      changesetOverviewPath: String.raw`C:\workspace\review\feature-branch_03131430\changeset-overview.md`,
-      filesPath: String.raw`C:\workspace\review\feature-branch_03131430\files`,
-      skippedPath: String.raw`C:\workspace\review\feature-branch_03131430\skipped.md`,
-      summaryPath: String.raw`C:\workspace\review\feature-branch_03131430\summary.md`,
-      indexPath: String.raw`C:\workspace\review\feature-branch_03131430\index.md`,
-      manifestPath: String.raw`C:\workspace\review\feature-branch_03131430\manifest.json`,
-      toolAuditPath: String.raw`C:\workspace\review\feature-branch_03131430\tool-audit.jsonl`
+      basePath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430`,
+      changesetOverviewPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\changeset-overview.md`,
+      filesPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\files`,
+      skippedPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\skipped.md`,
+      summaryPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\summary.md`,
+      indexPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\index.md`,
+      manifestPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\manifest.json`,
+      toolAuditPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\tool-audit.jsonl`
     }),
     plannedNotes: createPlannedNotes([
       [
         "src/api/index.ts",
-        String.raw`C:\workspace\review\feature-branch_03131430\files\src__api__index.ts.md`
+        String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\files\src__api__index.ts.md`
       ],
       [
         "tests/api/index.ts",
-        String.raw`C:\workspace\review\feature-branch_03131430\files\tests__api__index.ts.md`
+        String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\files\tests__api__index.ts.md`
       ]
     ]),
     successfulFiles: [
@@ -143,8 +143,8 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["foo bar.ts", "/workspace/review/feature-branch_03131430/files/foo bar.ts.md"],
-      ["foo#bar).ts", "/workspace/review/feature-branch_03131430/files/foo#bar).ts.md"]
+      ["foo bar.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/foo bar.ts.md"],
+      ["foo#bar).ts", "/workspace/.nightowl/review/feature-branch_03131430/files/foo#bar).ts.md"]
     ]),
     successfulFiles: [
       createSuccessfulFile("foo bar.ts", []),
@@ -168,11 +168,11 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["none.ts", "/workspace/review/feature-branch_03131430/files/none.ts.md"],
-      ["low.ts", "/workspace/review/feature-branch_03131430/files/low.ts.md"],
-      ["medium.ts", "/workspace/review/feature-branch_03131430/files/medium.ts.md"],
-      ["high.ts", "/workspace/review/feature-branch_03131430/files/high.ts.md"],
-      ["skipped.ts", "/workspace/review/feature-branch_03131430/files/skipped.ts.md"]
+      ["none.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/none.ts.md"],
+      ["low.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/low.ts.md"],
+      ["medium.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/medium.ts.md"],
+      ["high.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/high.ts.md"],
+      ["skipped.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/skipped.ts.md"]
     ]),
     successfulFiles: [
       createSuccessfulFile("none.ts", []),
@@ -215,9 +215,9 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["a.ts", "/workspace/review/feature-branch_03131430/files/a.ts.md"],
-      ["b.ts", "/workspace/review/feature-branch_03131430/files/b.ts.md"],
-      ["c.ts", "/workspace/review/feature-branch_03131430/files/c.ts.md"]
+      ["a.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/a.ts.md"],
+      ["b.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/b.ts.md"],
+      ["c.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/c.ts.md"]
     ]),
     successfulFiles: [
       createSuccessfulFile("a.ts", []),
@@ -247,7 +247,7 @@ test("ReviewIndexFinalizer throws with identifying message when a planned file i
         plannedNotes: createPlannedNotes([
           [
             "src/missing.ts",
-            "/workspace/review/feature-branch_03131430/files/src__missing.ts.md"
+            "/workspace/.nightowl/review/feature-branch_03131430/files/src__missing.ts.md"
           ]
         ]),
         successfulFiles: [],
@@ -273,7 +273,7 @@ test("ReviewIndexFinalizer labels a file present in both outcome sets as its ris
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["src/both.ts", "/workspace/review/feature-branch_03131430/files/src__both.ts.md"]
+      ["src/both.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__both.ts.md"]
     ]),
     successfulFiles: [createSuccessfulFile("src/both.ts", [])],
     skippedFiles: [createSkippedFile("src/both.ts", "step1-overview", "judge rejected")]

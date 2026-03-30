@@ -26,7 +26,7 @@ test("dry-run produces complete output folder structure without calling clientMa
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     let startCalls = 0;
     let stopCalls = 0;
@@ -116,7 +116,7 @@ test("dry-run per-file review notes contain stub step headings", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const { readFileSync: readFile, readdirSync } = await import("node:fs");
 

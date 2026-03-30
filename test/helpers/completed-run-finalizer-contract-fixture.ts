@@ -11,7 +11,7 @@ import type {
 // Stable fake path used as the default base for all output target fixtures;
 // does not need to exist on disk since finalizer tests operate on in-memory
 // structs rather than reading back written files.
-const DEFAULT_BASE_PATH = "/workspace/review/feature-branch_03131430";
+const DEFAULT_BASE_PATH = "/workspace/.nightowl/review/feature-branch_03131430";
 
 export function createFinding(
   type: "must" | "nice",

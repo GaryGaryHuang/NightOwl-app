@@ -109,7 +109,7 @@ test("ReviewOrchestrator can complete a run with both successful and skipped fil
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for mixed-result run");
 
@@ -121,7 +121,7 @@ test("ReviewOrchestrator can complete a run with both successful and skipped fil
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       outputSink: new LocalWorkspaceProvider(),
@@ -192,7 +192,7 @@ async function assertSkipScenario(input: {
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll(`add third changed file for ${input.title}`);
 

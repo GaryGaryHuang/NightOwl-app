@@ -26,7 +26,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const observedProfiles: Array<Record<string, string>> = [];
     const observedStepEvents: Array<[StepId, string]> = [];
@@ -64,7 +64,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
       dryRun: false
     });
 
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const { repoRoot, reviewableFiles } = collectReviewableFiles({
       sourceProvider,
       repoDir: fixture.repoDir
@@ -128,7 +128,7 @@ test("ReviewOrchestrator passes explicit empty Step 6 findings into Step 7 and s
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
@@ -214,7 +214,7 @@ test("ReviewOrchestrator does not start Step 7 for a failed Step 6 file and cont
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for step6 gating");
 
@@ -320,7 +320,7 @@ test("ReviewOrchestrator retries Step 7 after judge rejection and publishes only
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const reviewAttempts = new Map();
     const judgeAttempts = new Map();
@@ -460,7 +460,7 @@ test("ReviewOrchestrator skips Step 7 after review startup failure retry exhaust
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for step7 startup failure");
 
@@ -555,7 +555,7 @@ async function assertStep7Failure(input: {
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll(`add third changed file for ${input.title}`);
 
@@ -565,9 +565,9 @@ async function assertStep7Failure(input: {
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const plannedNotes = planNoteFiles(
-      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      path.join(outputBaseDir, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const successfulFile = reviewableFiles[0];

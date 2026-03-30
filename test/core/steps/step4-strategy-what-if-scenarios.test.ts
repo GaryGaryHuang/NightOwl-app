@@ -100,7 +100,7 @@ test("Step4StrategyWhatIfScenariosStep remains a section-only state update under
 function createContextWithStep3(): FileReviewContext {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"

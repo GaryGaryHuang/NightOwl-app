@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
@@ -17,9 +17,10 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for bounded concurrency ordering");
+    fixture.writeFile("lib/utils.ts", "export const helper = true;\n");
+    fixture.commitAll("add changed files for bounded concurrency ordering");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
@@ -162,7 +163,7 @@ test("ReviewOrchestrator keeps an all-skipped run as a completed run under bound
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for all-skipped bounded concurrency");
 
@@ -235,7 +236,7 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add enough changed files for concurrent single-file output fault");
 
@@ -245,9 +246,9 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const plannedNotes = planNoteFiles(
-      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      path.join(outputBaseDir, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedFile = reviewableFiles[0];
@@ -315,7 +316,7 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add files for shared-target successful snapshot abort coordination");
 
@@ -328,9 +329,9 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
     const failedFile = reviewableFiles[0];
     const siblingFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const plannedNotes = planNoteFiles(
-      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      path.join(outputBaseDir, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -396,7 +397,7 @@ test("ReviewOrchestrator suppresses later interrupted snapshots and skipped reco
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add files for skipped artifact abort coordination");
 
@@ -467,7 +468,7 @@ test("ReviewOrchestrator still fails the run without returning a completed resul
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for fatal bounded concurrency summary failure");
 

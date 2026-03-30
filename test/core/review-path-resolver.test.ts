@@ -49,14 +49,14 @@ test("buildOutputTarget returns review output paths", () => {
   });
 
   assert.deepEqual(target, {
-    basePath: "/workspace/review/feature_login_03131430",
-    changesetOverviewPath: "/workspace/review/feature_login_03131430/changeset-overview.md",
-    filesPath: "/workspace/review/feature_login_03131430/files",
-    skippedPath: "/workspace/review/feature_login_03131430/skipped.md",
-    summaryPath: "/workspace/review/feature_login_03131430/summary.md",
-    indexPath: "/workspace/review/feature_login_03131430/index.md",
-    manifestPath: "/workspace/review/feature_login_03131430/manifest.json",
-    toolAuditPath: "/workspace/review/feature_login_03131430/tool-audit.jsonl"
+    basePath: "/workspace/.nightowl/review/feature_login_03131430",
+    changesetOverviewPath: "/workspace/.nightowl/review/feature_login_03131430/changeset-overview.md",
+    filesPath: "/workspace/.nightowl/review/feature_login_03131430/files",
+    skippedPath: "/workspace/.nightowl/review/feature_login_03131430/skipped.md",
+    summaryPath: "/workspace/.nightowl/review/feature_login_03131430/summary.md",
+    indexPath: "/workspace/.nightowl/review/feature_login_03131430/index.md",
+    manifestPath: "/workspace/.nightowl/review/feature_login_03131430/manifest.json",
+    toolAuditPath: "/workspace/.nightowl/review/feature_login_03131430/tool-audit.jsonl"
   });
 });
 
@@ -87,7 +87,7 @@ test("buildOutputTarget includes changesetOverviewPath under the session basePat
 
   assert.equal(
     target.changesetOverviewPath,
-    "/workspace/review/feature_login_03131430/changeset-overview.md"
+    "/workspace/.nightowl/review/feature_login_03131430/changeset-overview.md"
   );
   assert.ok(
     target.changesetOverviewPath.startsWith(target.basePath),
@@ -96,18 +96,18 @@ test("buildOutputTarget includes changesetOverviewPath under the session basePat
 });
 
 test("planNoteFiles maps a root-level file to a markdown note", () => {
-  const planned = planNoteFiles("/workspace/review/run/files", ["README.md"]);
+  const planned = planNoteFiles("/workspace/.nightowl/review/run/files", ["README.md"]);
 
   assert.deepEqual(planned, [
     {
       filePath: "README.md",
-      noteFilePath: path.join("/workspace/review/run/files", "README.md.md")
+      noteFilePath: path.join("/workspace/.nightowl/review/run/files", "README.md.md")
     }
   ]);
 });
 
 test("planNoteFiles maps a nested file to a parent-prefixed markdown note", () => {
-  const planned = planNoteFiles("/workspace/review/run/files", [
+  const planned = planNoteFiles("/workspace/.nightowl/review/run/files", [
     "src/server/routes/foo.ts"
   ]);
 
@@ -115,7 +115,7 @@ test("planNoteFiles maps a nested file to a parent-prefixed markdown note", () =
     {
       filePath: "src/server/routes/foo.ts",
       noteFilePath: path.join(
-        "/workspace/review/run/files",
+        "/workspace/.nightowl/review/run/files",
         "routes__foo.ts.md"
       )
     }
@@ -123,7 +123,7 @@ test("planNoteFiles maps a nested file to a parent-prefixed markdown note", () =
 });
 
 test("planNoteFiles resolves naming conflicts with additional parent segments", () => {
-  const planned = planNoteFiles("/workspace/review/run/files", [
+  const planned = planNoteFiles("/workspace/.nightowl/review/run/files", [
     "src/api/index.ts",
     "tests/api/index.ts"
   ]);
@@ -132,14 +132,14 @@ test("planNoteFiles resolves naming conflicts with additional parent segments", 
     {
       filePath: "src/api/index.ts",
       noteFilePath: path.join(
-        "/workspace/review/run/files",
+        "/workspace/.nightowl/review/run/files",
         "src__api__index.ts.md"
       )
     },
     {
       filePath: "tests/api/index.ts",
       noteFilePath: path.join(
-        "/workspace/review/run/files",
+        "/workspace/.nightowl/review/run/files",
         "tests__api__index.ts.md"
       )
     }
@@ -147,7 +147,7 @@ test("planNoteFiles resolves naming conflicts with additional parent segments", 
 });
 
 test("planNoteFiles preserves changed-file order while resolving multi-level naming conflicts", () => {
-  const planned = planNoteFiles("/workspace/review/run/files", [
+  const planned = planNoteFiles("/workspace/.nightowl/review/run/files", [
     "z/src/api/index.ts",
     "a/src/api/index.ts",
     "src/api/index.ts"
@@ -157,21 +157,21 @@ test("planNoteFiles preserves changed-file order while resolving multi-level nam
     {
       filePath: "z/src/api/index.ts",
       noteFilePath: path.join(
-        "/workspace/review/run/files",
+        "/workspace/.nightowl/review/run/files",
         "z__src__api__index.ts.md"
       )
     },
     {
       filePath: "a/src/api/index.ts",
       noteFilePath: path.join(
-        "/workspace/review/run/files",
+        "/workspace/.nightowl/review/run/files",
         "a__src__api__index.ts.md"
       )
     },
     {
       filePath: "src/api/index.ts",
       noteFilePath: path.join(
-        "/workspace/review/run/files",
+        "/workspace/.nightowl/review/run/files",
         "src__api__index.ts.md"
       )
     }
@@ -180,7 +180,7 @@ test("planNoteFiles preserves changed-file order while resolving multi-level nam
 
 test("planNoteFiles throws for invalid changed-file paths that have no basename", () => {
   assert.throws(
-    () => planNoteFiles("/workspace/review/run/files", [""]),
+    () => planNoteFiles("/workspace/.nightowl/review/run/files", [""]),
     /Invalid changed file path/u
   );
 });

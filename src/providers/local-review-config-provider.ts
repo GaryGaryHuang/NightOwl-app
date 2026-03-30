@@ -22,7 +22,7 @@ import type {
  */
 export class LocalReviewConfigProvider implements ReviewConfigProvider {
   loadReviewConfig(repoRoot: string): ReviewConfig {
-    const configPath = path.join(repoRoot, ".reviewconfig.json");
+    const configPath = path.join(repoRoot, ".nightowl", "reviewconfig.json");
 
     if (!existsSync(configPath)) {
       return buildDefaultReviewConfig();

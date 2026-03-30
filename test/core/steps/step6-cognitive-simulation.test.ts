@@ -126,7 +126,7 @@ function createContextWithStep5EmptyFindings(): FileReviewContext {
 function createBaseContext(): FileReviewContext {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+    noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"

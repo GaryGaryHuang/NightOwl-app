@@ -65,8 +65,8 @@ src/
 |------|---------|
 | `tsconfig.json` | TypeScript compiler configuration |
 | `scripts/build.mjs` | ESBuild build script |
-| `.reviewconfig.json` | Review runtime settings (optional, placed at repo root) |
-| `.reviewignore` | File filtering (`.gitignore` syntax) |
+| `reviewconfig.json` | Review runtime settings (optional, placed at `repo_root/.nightowl/`) |
+| `reviewignore` | File filtering (`.gitignore` syntax, placed at `repo_root/.nightowl/`) |
 
 ### Layer Boundaries
 
@@ -132,9 +132,9 @@ See [TESTING.md](./TESTING.md) for tier decision criteria, test patterns, fixtur
 
 These are product safety boundaries that must not be circumvented or relaxed:
 
-- **Repo workspace is read-only**: the review process must not write to the repo workspace
+- **Repo source tree is read-only to Agent tools**: the review process must not write outside `repo_root/.nightowl/review/**`
 - **Bash allowlist**: only read-only analysis commands are permitted (git queries, cat, ls, grep, etc.); write or side-effect operations are forbidden
-- **Path boundaries**: bash path access is restricted to `repo_root` and `<output_base_dir>/review/**`
+- **Path boundaries**: bash path access is restricted to the repo source tree and `repo_root/.nightowl/review/**`; `repo_root/.nightowl/reviewconfig.json` and `repo_root/.nightowl/reviewignore` remain App-managed inputs
 - **Shell composition syntax**: `;`, `&&`, `||`, background execution, and command substitution are forbidden; the only exception is read-only pipelines `|`
 - **`web_fetch` security**: only public HTTP(S) URLs are allowed; hostname DNS classification, redirect verification, and host allowlist/denylist are all enabled
 - **Tool audit**: every tool decision (allow/deny) is logged to `tool-audit.jsonl`

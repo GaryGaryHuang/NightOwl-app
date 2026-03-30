@@ -69,11 +69,11 @@ test("LocalGitProvider excludes deleted files from the changed file list", () =>
   }
 });
 
-test("LocalGitProvider filters changed files with .reviewignore rules", () => {
+test("LocalGitProvider filters changed files with .nightowl/reviewignore rules", () => {
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const provider = new LocalGitProvider();
     const changedFiles = provider.getChangedFiles(
@@ -86,6 +86,62 @@ test("LocalGitProvider filters changed files with .reviewignore rules", () => {
       changedFiles
     );
 
+    assert.deepEqual(filteredFiles, ["packages/app/index.ts", "src/app.ts"]);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("LocalGitProvider ignores legacy reviewignore locations when canonical .nightowl/reviewignore is absent", () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/.reviewignore", "packages/**\n");
+
+    const provider = new LocalGitProvider();
+    const changedFiles = provider.getChangedFiles(
+      fixture.repoDir,
+      "main",
+      "feature-branch"
+    );
+    const filteredFiles = provider.filterIgnoredFiles(
+      fixture.repoDir,
+      changedFiles
+    );
+
+    assert.deepEqual(filteredFiles, changedFiles);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("LocalGitProvider excludes .nightowl namespace files from the reviewable file list", () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewconfig.json", "{}\n");
+    fixture.writeFile(".nightowl/notes.md", "user-owned note\n");
+    fixture.commitAll("add NightOwl managed files");
+
+    const provider = new LocalGitProvider();
+    const changedFiles = provider.getChangedFiles(
+      fixture.repoDir,
+      "main",
+      "feature-branch"
+    );
+    const filteredFiles = provider.filterIgnoredFiles(
+      fixture.repoDir,
+      changedFiles
+    );
+
+    assert.equal(changedFiles.includes(".nightowl/reviewignore"), true);
+    assert.equal(changedFiles.includes(".nightowl/reviewconfig.json"), true);
+    assert.equal(changedFiles.includes(".nightowl/notes.md"), true);
+    assert.equal(filteredFiles.includes(".nightowl/reviewignore"), false);
+    assert.equal(filteredFiles.includes(".nightowl/reviewconfig.json"), false);
+    assert.equal(filteredFiles.includes(".nightowl/notes.md"), false);
     assert.deepEqual(filteredFiles, ["packages/app/index.ts", "src/app.ts"]);
   } finally {
     fixture.cleanup();

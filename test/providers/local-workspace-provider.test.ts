@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
+import path from "node:path";
 
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
@@ -23,6 +24,14 @@ test("LocalWorkspaceProvider initializes the run directories and skipped.md", ()
     assert.equal(existsSync(fixture.outputTarget.indexPath), false);
     assert.equal(existsSync(fixture.outputTarget.manifestPath), false);
     assert.equal(existsSync(fixture.outputTarget.changesetOverviewPath), false);
+    assert.equal(
+      existsSync(path.join(fixture.tempDir, ".nightowl", "reviewconfig.json")),
+      false
+    );
+    assert.equal(
+      existsSync(path.join(fixture.tempDir, ".nightowl", "reviewignore")),
+      false
+    );
     assert.equal(fixture.readFile(fixture.outputTarget.skippedPath), "");
     assert.equal(fixture.readFile(fixture.outputTarget.toolAuditPath), "");
   } finally {

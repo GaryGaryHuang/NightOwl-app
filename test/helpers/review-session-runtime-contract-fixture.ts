@@ -17,7 +17,7 @@ import type { ToolAuditRecord } from "../../src/services/tool-audit-writer.ts";
 
 export const BASE_REVIEW_PROFILE: ReviewSessionProfile = {
   model: "gpt-5.4-mini",
-  outputBaseDir: "/workspace/repo/packages/app",
+  outputBaseDir: "/workspace/repo",
   repoRoot: "/workspace/repo",
   systemMessage: "system prompt",
   workingDirectory: "/workspace/repo"

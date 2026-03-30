@@ -617,7 +617,7 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
 // ─── formatLocalReviewRunSummary: Tool Audit line ───────────────────────────
 
 test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and before Skipped", () => {
-  const basePath = "/workspace/review/feature-branch_03131430";
+  const basePath = "/workspace/.nightowl/review/feature-branch_03131430";
   const result = {
     repoRoot: "/workspace/repo",
     runContext: { changesetOverview: "## Changeset Overview", userContext: [] },
@@ -662,7 +662,7 @@ test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and be
 // ─── formatLocalReviewRunSummary: Changeset Overview line ──────────────────
 
 test("formatLocalReviewRunSummary includes Changeset Overview line after Output and before Files", () => {
-  const basePath = "/workspace/review/feature-branch_03131430";
+  const basePath = "/workspace/.nightowl/review/feature-branch_03131430";
   const result = {
     repoRoot: "/workspace/repo",
     runContext: { changesetOverview: "## Changeset Overview", userContext: [] },

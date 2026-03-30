@@ -135,14 +135,14 @@ test("runCli prints the published completed-run summary contract from the app re
   assert.equal(exitCode, 0);
   assert.deepEqual(stdout, [renderExpectedSummary(result)]);
   assert.deepEqual(stderr, []);
-  assert.match(stdout[0], /Files: \/workspace\/repo\/review\/feature-branch_03131430\/files/u);
-  assert.match(stdout[0], /Index: \/workspace\/repo\/review\/feature-branch_03131430\/index\.md/u);
-  assert.match(stdout[0], /Manifest: \/workspace\/repo\/review\/feature-branch_03131430\/manifest\.json/u);
-  assert.match(stdout[0], /Skipped: \/workspace\/repo\/review\/feature-branch_03131430\/skipped\.md/u);
+  assert.match(stdout[0], /Files: \/workspace\/repo\/.nightowl\/review\/feature-branch_03131430\/files/u);
+  assert.match(stdout[0], /Index: \/workspace\/repo\/.nightowl\/review\/feature-branch_03131430\/index\.md/u);
+  assert.match(stdout[0], /Manifest: \/workspace\/repo\/.nightowl\/review\/feature-branch_03131430\/manifest\.json/u);
+  assert.match(stdout[0], /Skipped: \/workspace\/repo\/.nightowl\/review\/feature-branch_03131430\/skipped\.md/u);
 });
 
 test("runCli prints artifact paths directly from the completed-run result without reading artifacts", async () => {
-  const basePath = "/definitely/not/on/disk/review/feature-branch_03131430";
+  const basePath = "/definitely/not/on/disk/.nightowl/review/feature-branch_03131430";
   const result = createCompletedRunResult({
     plannedFileCount: 1,
     successfulFileCount: 1,
@@ -259,7 +259,7 @@ test("runCli keeps fatal runs on the error path even when artifacts already exis
   const stderr: string[] = [];
 
   try {
-    const basePath = path.join(tempDir, "review", "feature-branch_03131430");
+    const basePath = path.join(tempDir, ".nightowl", "review", "feature-branch_03131430");
     mkdirSync(path.join(basePath, "files"), { recursive: true });
     writeFileSync(path.join(basePath, "files", "src__app.ts.md"), "# note\n");
     writeFileSync(path.join(basePath, "summary.md"), "# Review Summary\n");
@@ -327,7 +327,7 @@ async function runCliWithResult(result: ReviewRunSummary) {
 function createCompletedRunResult(
   overrides: ReviewRunSummaryOverrides = {}
 ): ReviewRunSummary {
-  const basePath = "/workspace/repo/review/feature-branch_03131430";
+  const basePath = "/workspace/repo/.nightowl/review/feature-branch_03131430";
   const {
     outputTarget: outputTargetOverrides = {},
     ...restOverrides

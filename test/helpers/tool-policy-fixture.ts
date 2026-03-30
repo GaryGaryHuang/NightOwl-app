@@ -14,7 +14,7 @@ import type {
 } from "../../src/services/web-fetch-redirect-resolver.ts";
 
 export const BASE_PROFILE: Pick<ReviewSessionProfile, "outputBaseDir" | "repoRoot"> = {
-  outputBaseDir: "/workspace/repo/packages/app",
+  outputBaseDir: "/workspace/repo",
   repoRoot: "/workspace/repo"
 };
 

@@ -41,7 +41,7 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const observedDisconnects: string[] = [];
     const observedProfiles: Array<Record<string, string>> = [];
@@ -113,7 +113,7 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for step4 exhaustion");
 
@@ -222,7 +222,7 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const reviewAttempts = new Map();
     const judgeAttempts = new Map();

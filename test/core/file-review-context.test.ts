@@ -6,7 +6,7 @@ import { FileReviewContext } from "../../src/core/file-review-context.ts";
 test("FileReviewContext preserves immutable execution metadata and starts with no sections", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+      noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"
@@ -15,7 +15,7 @@ test("FileReviewContext preserves immutable execution metadata and starts with n
   assert.equal(context.filePath, "src/app.ts");
   assert.equal(
     context.noteFilePath,
-    "/workspace/review/run/files/src__app.ts.md"
+      "/workspace/.nightowl/review/run/files/src__app.ts.md"
   );
   assert.equal(
     context.diffContent,
@@ -32,7 +32,7 @@ test("FileReviewContext preserves immutable execution metadata and starts with n
 test("FileReviewContext accepts declared post-findings sections while keeping absent declared sections valid", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+      noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"
@@ -63,7 +63,7 @@ test("FileReviewContext accepts declared post-findings sections while keeping ab
 test("FileReviewContext rejects undeclared section identifiers on both write and read", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+      noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"
@@ -82,7 +82,7 @@ test("FileReviewContext rejects undeclared section identifiers on both write and
 test("FileReviewContext stores mutable Overview state while keeping snapshot access isolated", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+      noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"
@@ -129,7 +129,7 @@ test("FileReviewContext stores mutable Overview state while keeping snapshot acc
 test("FileReviewContext stores structured findings state separately from section state", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+      noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"
@@ -173,7 +173,7 @@ test("FileReviewContext stores structured findings state separately from section
 test("FileReviewContext replaces structured findings state without leaking snapshot mutation", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+      noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"
@@ -263,7 +263,7 @@ test("FileReviewContext replaces structured findings state without leaking snaps
 test("FileReviewContext throws a readable error when a formal finding is missing traceability", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+      noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"
@@ -293,7 +293,7 @@ test("FileReviewContext throws a readable error when a formal finding is missing
 test("FileReviewContext stores interruption state separately and returns defensive copies", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
-    noteFilePath: "/workspace/review/run/files/src__app.ts.md",
+      noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
     diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
     baseRef: "main",
     headRef: "feature-branch"

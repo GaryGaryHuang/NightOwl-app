@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
@@ -28,7 +28,7 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
@@ -82,7 +82,7 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
     assert.equal(result.skippedFileCount, 0);
     assert.deepEqual(
       result.outputTarget,
-      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+      createExpectedOutputTarget(realpathSync(fixture.repoDir), "feature-branch_03131430")
     );
     assert.equal(existsSync(result.outputTarget.summaryPath), true);
     assert.equal(existsSync(result.outputTarget.indexPath), true);
@@ -114,7 +114,7 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for mixed aggregate summary");
 
@@ -172,7 +172,7 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
     assert.equal(result.skippedFileCount, 1);
     assert.deepEqual(
       result.outputTarget,
-      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+      createExpectedOutputTarget(realpathSync(fixture.repoDir), "feature-branch_03131430")
     );
     assert.match(
       summaryContent,
@@ -196,7 +196,7 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "**\n");
+    fixture.writeFile(".nightowl/reviewignore", "**\n");
 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
@@ -231,7 +231,7 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
     assert.equal(result.skippedFileCount, 0);
     assert.deepEqual(
       result.outputTarget,
-      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+      createExpectedOutputTarget(realpathSync(fixture.repoDir), "feature-branch_03131430")
     );
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
     const manifest = JSON.parse(readFileSync(result.outputTarget.manifestPath, "utf8")) as {
@@ -265,7 +265,7 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
@@ -312,7 +312,7 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
     assert.equal(result.skippedFileCount, reviewableFiles.length);
     assert.deepEqual(
       result.outputTarget,
-      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+      createExpectedOutputTarget(realpathSync(fixture.repoDir), "feature-branch_03131430")
     );
     assert.match(summaryContent, new RegExp(`- Planned files: ${reviewableFiles.length}`, "u"));
     assert.match(summaryContent, /- Successful files: 0/u);
@@ -337,7 +337,7 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for review index");
 
@@ -386,7 +386,7 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
     assert.equal(result.skippedFileCount, 1);
     assert.deepEqual(
       result.outputTarget,
-      createExpectedOutputTarget(fixture.appDir, "feature-branch_03131430")
+      createExpectedOutputTarget(realpathSync(fixture.repoDir), "feature-branch_03131430")
     );
     assert.equal(existsSync(result.outputTarget.indexPath), true);
     assert.ok(successfulNote);
@@ -408,7 +408,7 @@ test("ReviewOrchestrator publishes index.md for zero planned files with explicit
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "**\n");
+    fixture.writeFile(".nightowl/reviewignore", "**\n");
 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
@@ -454,7 +454,7 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
@@ -595,7 +595,7 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for getDiff no-summary");
 
@@ -695,7 +695,7 @@ test("ReviewOrchestrator aborts when publishRunSummary fails and preserves per-f
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const outputSink = new SummaryFailingOutputSink();
     const orchestrator = new ReviewOrchestrator({
@@ -738,7 +738,7 @@ test("ReviewOrchestrator aborts when publishReviewIndex fails after summary.md i
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const outputSink = new IndexFailingOutputSink();
     const orchestrator = new ReviewOrchestrator({
@@ -783,7 +783,7 @@ test("ReviewOrchestrator aborts when publishRunManifest fails after summary.md a
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const outputSink = new ManifestFailingOutputSink();
     const orchestrator = new ReviewOrchestrator({
@@ -830,7 +830,7 @@ test("ReviewOrchestrator publishes summary.md, index.md, and manifest.json only 
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for summary publish ordering");
 
@@ -893,7 +893,7 @@ test("ReviewOrchestrator publishes manifest.json only after publishReviewIndex a
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for index ordering");
 
@@ -951,7 +951,7 @@ test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to Review
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for risk wiring verification");
 
@@ -1376,8 +1376,8 @@ class IndexRecordingOutputSink {
   }
 }
 
-function createExpectedOutputTarget(outputBaseDir: string, sessionId: string) {
-  const basePath = path.join(outputBaseDir, "review", sessionId);
+function createExpectedOutputTarget(repoRoot: string, sessionId: string) {
+  const basePath = path.join(repoRoot, ".nightowl", "review", sessionId);
 
   return {
     basePath,

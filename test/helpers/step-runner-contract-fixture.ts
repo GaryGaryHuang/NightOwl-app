@@ -7,7 +7,7 @@ import { SessionExecutor } from "../../src/services/session-executor.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
   filePath: "src/app.ts",
-  noteFilePath: "/workspace/output/review/run/files/src__app.ts.md",
+  noteFilePath: "/workspace/output/.nightowl/review/run/files/src__app.ts.md",
   diffContent: "@@ -1 +1 @@\n-export const value = 1;\n+export const value = 2;\n",
   baseRef: "main",
   headRef: "feature-branch"

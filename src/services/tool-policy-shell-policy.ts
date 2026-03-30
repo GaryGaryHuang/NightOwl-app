@@ -254,11 +254,17 @@ function isAllowedReadPath(
 ): boolean {
   const resolvedPath = path.resolve(requestedPath);
   const repoRoot = path.resolve(profile.repoRoot);
-  const reviewRoot = path.join(path.resolve(profile.outputBaseDir), "review");
+  const nightowlRoot = path.join(path.resolve(profile.repoRoot), ".nightowl");
+  const reviewRoot = path.join(nightowlRoot, "review");
+
+  const isWithinRepoSourceTree =
+    resolvedPath === repoRoot ||
+    (resolvedPath.startsWith(`${repoRoot}${path.sep}`) &&
+      resolvedPath !== nightowlRoot &&
+      !resolvedPath.startsWith(`${nightowlRoot}${path.sep}`));
 
   return (
-    resolvedPath === repoRoot ||
-    resolvedPath.startsWith(`${repoRoot}${path.sep}`) ||
+    isWithinRepoSourceTree ||
     resolvedPath === reviewRoot ||
     resolvedPath.startsWith(`${reviewRoot}${path.sep}`)
   );

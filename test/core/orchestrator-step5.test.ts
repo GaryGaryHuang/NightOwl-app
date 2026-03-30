@@ -50,7 +50,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const observedProfiles: Array<Record<string, string>> = [];
     const observedStepEvents: Array<[StepId, string]> = [];
@@ -108,7 +108,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
       dryRun: false
     });
 
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const { repoRoot, reviewableFiles } = collectReviewableFiles({
       sourceProvider,
       repoDir: fixture.repoDir
@@ -174,7 +174,7 @@ test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file and cont
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for step4 gating");
 
@@ -297,7 +297,7 @@ test("ReviewOrchestrator renders `## Findings` with `- 無` when Step 5 returns 
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = realpathSync(fixture.repoDir);
@@ -376,7 +376,7 @@ test("ReviewOrchestrator treats confidence-filtered empty findings as a successf
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = realpathSync(fixture.repoDir);
@@ -479,7 +479,7 @@ test("ReviewOrchestrator uses configured thresholds when Step 5 filters findings
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
@@ -604,7 +604,7 @@ test("ReviewOrchestrator retries Step 5 after deterministic validation failure a
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const reviewAttempts = new Map();
     const sourceProvider = new LocalGitProvider();
@@ -788,7 +788,7 @@ test("ReviewOrchestrator skips Step 5 after review startup failure retry exhaust
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for step5 startup failure");
 
@@ -877,7 +877,7 @@ async function assertStep5Failure(input: {
 }): Promise<void> {
   const fixture = createReviewRepoFixture();
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll(`add third changed file for ${input.title}`);
 
@@ -887,9 +887,9 @@ async function assertStep5Failure(input: {
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const plannedNotes = planNoteFiles(
-      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      path.join(outputBaseDir, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const successfulFile = reviewableFiles[0];

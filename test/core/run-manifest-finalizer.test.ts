@@ -19,8 +19,8 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["src/a.ts", "/workspace/review/feature-branch_03131430/files/src__a.ts.md"],
-      ["src/b.ts", "/workspace/review/feature-branch_03131430/files/src__b.ts.md"]
+      ["src/a.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__a.ts.md"],
+      ["src/b.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__b.ts.md"]
     ]),
     successfulFiles: [
       createSuccessfulFile("src/a.ts", [
@@ -79,20 +79,20 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
   ]);
   assert.equal(
     parsed.artifacts.manifestPath,
-    "/workspace/review/feature-branch_03131430/manifest.json"
+    "/workspace/.nightowl/review/feature-branch_03131430/manifest.json"
   );
   assert.equal(
     parsed.artifacts.changesetOverviewPath,
-    "/workspace/review/feature-branch_03131430/changeset-overview.md"
+    "/workspace/.nightowl/review/feature-branch_03131430/changeset-overview.md"
   );
   assert.equal(
     parsed.artifacts.toolAuditPath,
-    "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
+    "/workspace/.nightowl/review/feature-branch_03131430/tool-audit.jsonl"
   );
   assert.deepEqual(parsed.files, [
     {
       filePath: "src/a.ts",
-      notePath: "/workspace/review/feature-branch_03131430/files/src__a.ts.md",
+      notePath: "/workspace/.nightowl/review/feature-branch_03131430/files/src__a.ts.md",
       status: "successful",
       riskLevel: "High",
       mustCount: 1,
@@ -100,7 +100,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     },
     {
       filePath: "src/b.ts",
-      notePath: "/workspace/review/feature-branch_03131430/files/src__b.ts.md",
+      notePath: "/workspace/.nightowl/review/feature-branch_03131430/files/src__b.ts.md",
       status: "skipped",
       failedStepId: "step5-validation-interrogation",
       reason: "review timeout after retry"
@@ -117,9 +117,9 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["src/api/index.ts", "/workspace/review/feature-branch_03131430/files/src__api__index.ts.md"],
-      ["tests/api/index.ts", "/workspace/review/feature-branch_03131430/files/tests__api__index.ts.md"],
-      ["docs/notes.md", "/workspace/review/feature-branch_03131430/files/docs__notes.md.md"]
+      ["src/api/index.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__api__index.ts.md"],
+      ["tests/api/index.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/tests__api__index.ts.md"],
+      ["docs/notes.md", "/workspace/.nightowl/review/feature-branch_03131430/files/docs__notes.md.md"]
     ]),
     successfulFiles: [
       createSuccessfulFile("docs/notes.md", []),
@@ -140,11 +140,11 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
   );
   assert.equal(
     parsed.files[0].notePath,
-    "/workspace/review/feature-branch_03131430/files/src__api__index.ts.md"
+    "/workspace/.nightowl/review/feature-branch_03131430/files/src__api__index.ts.md"
   );
   assert.equal(
     parsed.files[1].notePath,
-    "/workspace/review/feature-branch_03131430/files/tests__api__index.ts.md"
+    "/workspace/.nightowl/review/feature-branch_03131430/files/tests__api__index.ts.md"
   );
   assert.equal(parsed.files[2].riskLevel, "None");
   assert.equal(parsed.files[2].mustCount, 0);
@@ -184,7 +184,7 @@ test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct pa
   const parsed = JSON.parse(rendered) as { artifacts: Record<string, string> };
   assert.equal(
     parsed.artifacts.toolAuditPath,
-    "/workspace/review/feature-branch_03131430/tool-audit.jsonl"
+    "/workspace/.nightowl/review/feature-branch_03131430/tool-audit.jsonl"
   );
 });
 
@@ -201,7 +201,7 @@ test("RunManifestFinalizer throws with an identifying message when a planned fil
         plannedNotes: createPlannedNotes([
           [
             "src/missing.ts",
-            "/workspace/review/feature-branch_03131430/files/src__missing.ts.md"
+            "/workspace/.nightowl/review/feature-branch_03131430/files/src__missing.ts.md"
           ]
         ]),
         successfulFiles: [],

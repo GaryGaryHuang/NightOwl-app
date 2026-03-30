@@ -60,21 +60,31 @@ export class LocalGitProvider implements ReviewSourceProvider {
   }
 
   filterIgnoredFiles(repoRoot: string, files: string[]): string[] {
-    const reviewIgnorePath = path.join(repoRoot, ".reviewignore");
+    const reviewIgnorePath = path.join(repoRoot, ".nightowl", "reviewignore");
+    const sourceFiles = files.filter((filePath) => !isNightOwlNamespacePath(filePath));
 
     if (!existsSync(reviewIgnorePath)) {
-      return [...files];
+      return [...sourceFiles];
     }
 
     const matcher = ignore().add(readFileSync(reviewIgnorePath, "utf8"));
 
-    // `.reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
-    return files.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
+    // `reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
+    return sourceFiles.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
   }
 }
 
 function normalizeFilePath(filePath: string): string {
   return filePath.replace(/\\/gu, "/");
+}
+
+function isNightOwlNamespacePath(filePath: string): boolean {
+  const normalizedPath = normalizeFilePath(filePath);
+
+  return (
+    normalizedPath === ".nightowl" ||
+    normalizedPath.startsWith(".nightowl/")
+  );
 }
 
 function runGit(cwd: string, args: string[]): string {

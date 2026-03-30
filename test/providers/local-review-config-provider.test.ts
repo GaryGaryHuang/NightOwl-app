@@ -6,10 +6,30 @@ import {
   createReviewConfigProviderFixture
 } from "../helpers/review-config-provider-contract-fixture.ts";
 
-test("LocalReviewConfigProvider falls back to the documented default review config when .reviewconfig.json is missing", () => {
+test("LocalReviewConfigProvider falls back to the documented default review config when .nightowl/reviewconfig.json is missing", () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
+    assert.deepEqual(configFixture.loadReviewConfig(), buildExpectedReviewConfig());
+  } finally {
+    configFixture.cleanup();
+  }
+});
+
+test("LocalReviewConfigProvider ignores legacy root-level and dot-prefixed namespace config files", () => {
+  const configFixture = createReviewConfigProviderFixture();
+
+  try {
+    configFixture.writeLegacyRootReviewConfig({
+      maxConcurrentFiles: 2
+    });
+    configFixture.writeLegacyNamespaceReviewConfig({
+      confidenceThresholds: {
+        must: 70,
+        nice: 85
+      }
+    });
+
     assert.deepEqual(configFixture.loadReviewConfig(), buildExpectedReviewConfig());
   } finally {
     configFixture.cleanup();
@@ -121,7 +141,7 @@ test("LocalReviewConfigProvider accepts boundary threshold values and a validate
 });
 
 // All invalid-config cases are batched into one test to keep the fixture
-// lifecycle lean: each sub-case overwrites the same .reviewconfig.json file
+// lifecycle lean: each sub-case overwrites the same .nightowl/reviewconfig.json file
 // and checks that the provider rejects it before Step 0 runs.
 test("LocalReviewConfigProvider rejects malformed or invalid review config", () => {
   const configFixture = createReviewConfigProviderFixture();

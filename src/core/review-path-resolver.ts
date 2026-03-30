@@ -34,7 +34,7 @@ export function buildOutputTarget(
   input: ResolveOutputTargetInput
 ): OutputTarget {
   const sessionId = buildSessionId(input);
-  const basePath = path.join(input.outputBaseDir, "review", sessionId);
+  const basePath = path.join(input.outputBaseDir, ".nightowl", "review", sessionId);
 
   return {
     basePath,

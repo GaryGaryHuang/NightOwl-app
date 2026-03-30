@@ -125,7 +125,7 @@ export class ReviewOrchestrator {
     const runContext = await this.#changesetOverviewRunner.run({
       model: "gpt-5.4-mini",
       changedFilesList: changesetEntries,
-      outputBaseDir: startPath,
+      outputBaseDir: repoRoot,
       repoRoot,
       userContext: request.userContext,
       workingDirectory: repoRoot
@@ -148,7 +148,7 @@ export class ReviewOrchestrator {
       changedFiles
     );
     const outputTarget = buildOutputTarget({
-      outputBaseDir: startPath,
+      outputBaseDir: repoRoot,
       branchName,
       headRef: request.headRef,
       timestamp: this.#timestampProvider()
@@ -240,7 +240,6 @@ export class ReviewOrchestrator {
       outcomeSlots,
       request,
       repoRoot,
-      startPath,
       steps,
       runAbortState,
       sharedAbortState,
@@ -303,7 +302,6 @@ export class ReviewOrchestrator {
     outcomeSlots: PlannedOutcomeSlot[];
     request: RunRequest;
     repoRoot: string;
-    startPath: string;
     runAbortState: AbortState;
     steps: StepDefinition[];
     sharedAbortState: SharedAbortState;
@@ -357,7 +355,6 @@ export class ReviewOrchestrator {
               outcomeSlots: input.outcomeSlots,
               request: input.request,
               repoRoot: input.repoRoot,
-              startPath: input.startPath,
               runAbortState: input.runAbortState,
               sharedAbortState: input.sharedAbortState,
               steps: input.steps,
@@ -381,7 +378,6 @@ export class ReviewOrchestrator {
     outcomeSlots: PlannedOutcomeSlot[];
     request: RunRequest;
     repoRoot: string;
-    startPath: string;
     runAbortState: AbortState;
     sharedAbortState: SharedAbortState;
     steps: StepDefinition[];
@@ -432,7 +428,7 @@ export class ReviewOrchestrator {
         result = await this.#stepRunner.run({
           step,
           context: fileContext,
-          outputBaseDir: input.startPath,
+          outputBaseDir: input.repoRoot,
           repoRoot: input.repoRoot,
           workingDirectory: input.repoRoot
         });

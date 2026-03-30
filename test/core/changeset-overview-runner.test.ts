@@ -32,7 +32,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
   const runContext = await runner.run({
     model: "gpt-5.4-mini",
     workingDirectory: "/workspace/repo",
-    outputBaseDir: "/workspace/repo/packages/app",
+    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     userContext: ["PR-123", "https://example.com/spec"],
     changedFilesList: ["M\tsrc/app.ts", "D\tobsolete.txt"]
@@ -48,7 +48,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
   // from the changeset entries without needing a per-file retrieval step.
   assert.equal(profiles[0]?.knowledgeMode, "built-in-context7");
   assert.equal(profiles[0]?.model, "gpt-5.4-mini");
-  assert.equal(profiles[0]?.outputBaseDir, "/workspace/repo/packages/app");
+  assert.equal(profiles[0]?.outputBaseDir, "/workspace/repo");
   assert.equal(profiles[0]?.repoRoot, "/workspace/repo");
   assert.equal(profiles[0]?.workingDirectory, "/workspace/repo");
 
@@ -100,7 +100,7 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
 
   const runContext = await runner.run({
     model: "gpt-5.4-mini",
-    outputBaseDir: "/workspace/repo/packages/app",
+    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changedFilesList: ["M\tsrc/app.ts"],
     userContext: []
@@ -135,7 +135,7 @@ test("ChangesetOverviewRunner fails after two empty responses", async () => {
     () =>
       runner.run({
         model: "gpt-5.4-mini",
-        outputBaseDir: "/workspace/repo/packages/app",
+        outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
         changedFilesList: ["M\tsrc/app.ts"],
         userContext: []

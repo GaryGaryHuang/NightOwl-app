@@ -26,7 +26,7 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for step2 gating");
 
@@ -155,7 +155,7 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for step1 gating");
 
@@ -254,7 +254,7 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for step1 snapshot preservation");
 
@@ -264,9 +264,9 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const plannedNotes = planNoteFiles(
-      path.join(outputBaseDir, "review", "feature-branch_03131430", "files"),
+      path.join(outputBaseDir, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const successfulFile = reviewableFiles[0];
@@ -348,7 +348,7 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for getDiff failure");
 
@@ -358,9 +358,10 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
-    const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
+    const outputBaseDir = realpathSync(fixture.repoDir);
     const outputTarget = path.join(
       outputBaseDir,
+      ".nightowl",
       "review",
       "feature-branch_03131430"
     );
@@ -531,7 +532,7 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for initializeRun failure");
 
@@ -586,9 +587,8 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
     );
 
     assert.deepEqual(outputCalls, [["initializeRun", path.join(
-      fixture.repoDir,
-      "packages",
-      "app",
+      realpathSync(fixture.repoDir),
+      ".nightowl",
       "review",
       "feature-branch_03131430"
     )]]);
@@ -602,7 +602,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for bootstrap publish failure");
 
@@ -613,14 +613,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const outputCalls: OutputCall[] = [];
@@ -710,7 +703,7 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for successful snapshot skip downgrade");
 
@@ -723,14 +716,7 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -820,7 +806,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for shared-target successful snapshot failure");
 
@@ -833,14 +819,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -927,7 +906,7 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for failed successful snapshot assessment");
 
@@ -940,14 +919,7 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -1027,7 +999,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for successful snapshot downgrade interrupted publish failure");
 
@@ -1040,14 +1012,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -1139,7 +1104,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for successful snapshot downgrade skipped publish failure");
 
@@ -1152,14 +1117,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -1249,7 +1207,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for later successful snapshot failure");
 
@@ -1262,14 +1220,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -1360,7 +1311,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
     const repoRoot = realpathSync(fixture.repoDir);
@@ -1441,7 +1392,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for interrupted snapshot publish failure");
 
@@ -1454,14 +1405,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -1551,7 +1495,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for skipped log publish failure");
 
@@ -1564,14 +1508,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(
-        fixture.repoDir,
-        "packages",
-        "app",
-        "review",
-        "feature-branch_03131430",
-        "files"
-      ),
+      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -1656,7 +1593,7 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
   const fixture = createReviewRepoFixture();
 
   try {
-    const outputTarget = path.join(fixture.repoDir, "packages", "app", "review");
+    const outputTarget = path.join(realpathSync(fixture.repoDir), ".nightowl", "review");
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       outputSink: {
@@ -1885,7 +1822,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for publishChangesetOverview failure");
 
@@ -1952,7 +1889,7 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
 
   try {
     // Ignore all changed files so planned file count is zero
-    fixture.writeFile(".reviewignore", "**\n");
+    fixture.writeFile(".nightowl/reviewignore", "**\n");
     fixture.writeFile("README.md", "# ignored file\n");
     fixture.commitAll("add file that will be ignored");
 

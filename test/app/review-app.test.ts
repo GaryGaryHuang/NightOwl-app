@@ -25,7 +25,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewconfig.json", "{");
+    fixture.writeFile(".nightowl/reviewconfig.json", "{");
 
     let startCalls = 0;
     let stopCalls = 0;
@@ -185,7 +185,7 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for Step 3 Context7 startup failure");
 
@@ -480,7 +480,7 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add changed file for broader Context7 startup failure coverage");
 
@@ -594,7 +594,7 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add changed file for custom MCP startup failure coverage");
 
@@ -701,7 +701,7 @@ async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add changed file for remote MCP startup failure coverage");
 
@@ -803,7 +803,7 @@ async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
 // ---------------------------------------------------------------------------
 
 function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): ReviewRunSummary {
-  const base = "/workspace/review/run";
+  const base = "/workspace/.nightowl/review/run";
   return {
     repoRoot: "/workspace/repo",
     runContext: createRunContext({ changesetOverview: "## Changeset Overview", userContext: [] }),

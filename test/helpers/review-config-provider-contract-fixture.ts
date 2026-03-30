@@ -9,15 +9,22 @@ import { createReviewRepoFixture } from "./git-fixture.ts";
 export function createReviewConfigProviderFixture() {
   const fixture = createReviewRepoFixture();
   const provider = new LocalReviewConfigProvider();
+  const nightowlDir = ".nightowl";
 
   return {
     fixture,
     provider,
     writeReviewConfig(config: unknown) {
-      fixture.writeFile(".reviewconfig.json", JSON.stringify(config));
+      fixture.writeFile(`${nightowlDir}/reviewconfig.json`, JSON.stringify(config));
     },
     writeRawReviewConfig(configText: string) {
-      fixture.writeFile(".reviewconfig.json", configText);
+      fixture.writeFile(`${nightowlDir}/reviewconfig.json`, configText);
+    },
+    writeLegacyRootReviewConfig(config: unknown) {
+      fixture.writeFile(".reviewconfig.json", JSON.stringify(config));
+    },
+    writeLegacyNamespaceReviewConfig(config: unknown) {
+      fixture.writeFile(`${nightowlDir}/.reviewconfig.json`, JSON.stringify(config));
     },
     loadReviewConfig() {
       return provider.loadReviewConfig(fixture.repoDir);

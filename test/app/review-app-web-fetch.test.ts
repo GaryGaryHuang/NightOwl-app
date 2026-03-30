@@ -26,7 +26,7 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
@@ -136,7 +136,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
@@ -257,7 +257,7 @@ test("createLocalReviewRunApp applies redirect-chain host policy without introdu
   const fixture = createReviewRepoFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
