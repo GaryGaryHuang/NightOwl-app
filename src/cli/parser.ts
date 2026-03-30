@@ -7,7 +7,7 @@ export class CliUsageError extends Error {
   }
 }
 
-const USAGE = "review <base_ref> <head_ref> [--repo <path>] [--context <value>]";
+const USAGE = "review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]";
 
 /**
  * Parse the review command into the RunRequest consumed by the app layer.
@@ -16,6 +16,7 @@ export function parseReviewCommand(argv: string[]): RunRequest {
   const positionals: string[] = [];
   const userContext: string[] = [];
   let repoPath: string | undefined;
+  let dryRun = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -29,6 +30,11 @@ export function parseReviewCommand(argv: string[]): RunRequest {
 
       repoPath = value;
       index += 1;
+      continue;
+    }
+
+    if (arg === "--dry-run") {
+      dryRun = true;
       continue;
     }
 
@@ -63,7 +69,8 @@ export function parseReviewCommand(argv: string[]): RunRequest {
   const request: RunRequest = {
     baseRef: positionals[0],
     headRef: positionals[1],
-    userContext
+    userContext,
+    dryRun
   };
 
   if (repoPath) {

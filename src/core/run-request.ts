@@ -3,4 +3,5 @@ export interface RunRequest {
   headRef: string;
   repoPath?: string;
   userContext: string[];
+  dryRun: boolean;
 }

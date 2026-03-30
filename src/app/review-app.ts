@@ -28,6 +28,10 @@ import { ToolPolicyGuard } from "../services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../services/tool-audit-writer.ts";
 import type { WebFetchHostnameClassifier } from "../services/web-fetch-hostname-classifier.ts";
 import type { WebFetchRedirectResolver } from "../services/web-fetch-redirect-resolver.ts";
+import {
+  DryRunReviewSessionFactory,
+  DryRunJudgeSessionFactory
+} from "../services/dry-run-session-factory.ts";
 
 export const LOCAL_REVIEW_RUN_HEADER = "Initialized local review run.";
 const DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
@@ -89,27 +93,43 @@ export function createLocalReviewRunApp(
       );
       const repoRoot = sourceProvider.resolveRepoRoot(startPath);
       const reviewConfig = reviewConfigProvider.loadReviewConfig(repoRoot);
-      const knowledgeSvc =
-        options.knowledgeSvc ??
-        new KnowledgeSvc({
-          context7ApiKey: process.env.CONTEXT7_API_KEY,
-          userMcpServers: reviewConfig.mcpServers
-        });
-      const toolPolicyGuard = new ToolPolicyGuard({
-        hostnameClassifier: options.webFetchHostnameClassifier,
-        redirectResolver: options.webFetchRedirectResolver,
-        webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
-        webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
-        webFetchHostnameClassificationTimeoutMs:
-          options.webFetchHostnameClassificationTimeoutMs,
-        webFetchRedirectHopLimit: options.webFetchRedirectHopLimit,
-        webFetchRedirectTimeoutMs: options.webFetchRedirectTimeoutMs
-      });
-      const reviewSessionFactory = new ReviewSessionFactory({
-        clientManager,
-        knowledgeSvc,
-        toolPolicyGuard
-      });
+
+      // In dry-run mode substitute stub factories so no Copilot CLI or AI calls are made.
+      const isDryRun = request.dryRun === true;
+
+      const reviewSessionFactory: Pick<
+        ReviewSessionFactory,
+        "createSession" | "setAuditWriter"
+      > = isDryRun
+        ? new DryRunReviewSessionFactory()
+        : (() => {
+            const knowledgeSvc =
+              options.knowledgeSvc ??
+              new KnowledgeSvc({
+                context7ApiKey: process.env.CONTEXT7_API_KEY,
+                userMcpServers: reviewConfig.mcpServers
+              });
+            const toolPolicyGuard = new ToolPolicyGuard({
+              hostnameClassifier: options.webFetchHostnameClassifier,
+              redirectResolver: options.webFetchRedirectResolver,
+              webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
+              webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
+              webFetchHostnameClassificationTimeoutMs:
+                options.webFetchHostnameClassificationTimeoutMs,
+              webFetchRedirectHopLimit: options.webFetchRedirectHopLimit,
+              webFetchRedirectTimeoutMs: options.webFetchRedirectTimeoutMs
+            });
+            return new ReviewSessionFactory({
+              clientManager,
+              knowledgeSvc,
+              toolPolicyGuard
+            });
+          })();
+
+      const effectiveJudgeService = isDryRun
+        ? new JudgeService({ judgeSessionFactory: new DryRunJudgeSessionFactory() })
+        : judgeService;
+
       const changesetOverviewRunner =
         options.changesetOverviewRunner ??
         new ChangesetOverviewRunner({
@@ -119,7 +139,7 @@ export function createLocalReviewRunApp(
         options.stepRunner ??
         new StepRunner({
           reviewSessionFactory,
-          judgeService,
+          judgeService: effectiveJudgeService,
           structuredOutputValidator: new StructuredOutputValidator({
             confidenceThresholds: reviewConfig.confidenceThresholds
           })
@@ -134,12 +154,15 @@ export function createLocalReviewRunApp(
         maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
         onOutputTargetReady: (outputTarget) => {
           // Wire the audit writer only after the run output path exists; Step 0 sessions created earlier are not audited.
+          // setAuditWriter is a no-op on DryRunReviewSessionFactory.
           const auditWriter = new ToolAuditWriter(outputTarget.toolAuditPath);
           reviewSessionFactory.setAuditWriter(auditWriter);
         }
       });
 
-      await clientManager.start();
+      if (!isDryRun) {
+        await clientManager.start();
+      }
 
       // Translate process signals into a shared AbortSignal so the orchestrator can stop cooperatively.
       const controller = new AbortController();
@@ -159,7 +182,9 @@ export function createLocalReviewRunApp(
         // Remove handlers before stop() to prevent double-fire from SIGTERM during SDK teardown.
         process.off("SIGINT", handleSigint);
         process.off("SIGTERM", handleSigterm);
-        await stopClientManagerWithTimeout(clientManager, gracefulShutdownTimeoutMs);
+        if (!isDryRun) {
+          await stopClientManagerWithTimeout(clientManager, gracefulShutdownTimeoutMs);
+        }
       }
     }
   };
@@ -201,8 +226,11 @@ async function stopClientManagerWithTimeout(
 }
 
 export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
+  const header = result.dryRun
+    ? `[DRY RUN] ${LOCAL_REVIEW_RUN_HEADER}`
+    : LOCAL_REVIEW_RUN_HEADER;
   return [
-    LOCAL_REVIEW_RUN_HEADER,
+    header,
     `Repo root: ${result.repoRoot}`,
     `Output: ${result.outputTarget.basePath}`,
     `Changeset Overview: ${result.outputTarget.changesetOverviewPath}`,

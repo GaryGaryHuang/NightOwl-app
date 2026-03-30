@@ -56,6 +56,7 @@ export interface ReviewRunSummary {
   plannedFileCount: number;
   successfulFileCount: number;
   skippedFileCount: number;
+  dryRun: boolean;
 }
 
 export interface ReviewOrchestratorOptions {
@@ -292,7 +293,8 @@ export class ReviewOrchestrator {
       outputTarget,
       plannedFileCount: plannedNoteFiles.length,
       successfulFileCount: successfulFiles.length,
-      skippedFileCount: skippedFiles.length
+      skippedFileCount: skippedFiles.length,
+      dryRun: request.dryRun ?? false
     };
   }
 
