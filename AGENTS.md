@@ -51,6 +51,7 @@ src/
     ├── session-executor.ts         Copilot Client lifecycle
     ├── review-session-factory.ts   Review session creation
     ├── judge-session-factory.ts    Judge session creation
+    ├── dry-run-session-factory.ts  Dry-run stub factories (no SDK calls)
     ├── knowledge.ts                KnowledgeSvc: MCP configuration
     ├── tool-policy-guard.ts        Tool permission hook
     ├── tool-audit-writer.ts        JSONL audit log
@@ -88,6 +89,7 @@ Strictly follow these layers. Do not merge or cross boundaries:
 - **Step 0 is run-level**, not a per-file step. It does not go through `StepRunner` and does not implement `ISopStep`.
 - **Bounded concurrency**: files are processed in parallel (default 5); within each file, Steps 1–7 run strictly in sequence.
 - **Retry once**: a failed step retries once; if it fails again, the file is demoted to skipped. A Step 0 failure aborts the entire run.
+- **Dry-run mode**: when `RunRequest.dryRun` is `true`, the Composition Root substitutes `DryRunReviewSessionFactory` and `DryRunJudgeSessionFactory` for all AI calls and skips `clientManager.start()` / `stop()`. All non-AI pipeline stages run identically.
 
 ## Testing
 

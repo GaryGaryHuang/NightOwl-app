@@ -30,7 +30,7 @@ npm install -g ./nightowl-0.1.0.tgz
 ### Usage
 
 ```bash
-review <base_ref> <head_ref> [--repo <path>] [--context <value>]
+review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
 ```
 
 **Examples:**
@@ -39,6 +39,7 @@ review <base_ref> <head_ref> [--repo <path>] [--context <value>]
 review main feature-branch
 review main HEAD --repo /path/to/repo
 review main HEAD --context "Performance optimization PR" --context "https://link-to-spec"
+review main feature-branch --dry-run
 ```
 
 **Output:**
@@ -57,6 +58,25 @@ Planned files: 3
 Successful files: 2
 Skipped files: 1
 ```
+
+In dry-run mode, the first line is prefixed with `[DRY RUN]`:
+
+```text
+[DRY RUN] Initialized local review run.
+...
+```
+
+### Dry-Run Mode
+
+Pass `--dry-run` to run the full pipeline without calling the Copilot API or requiring Copilot CLI to be installed and authenticated:
+
+- All Git operations, path planning, bounded concurrency, and output rendering run identically to a normal run.
+- Every AI session is replaced by a deterministic stub that returns pre-built placeholder responses for each SOP step.
+- The output folder structure and artifact names are identical to a real run; only the review note content is placeholder text.
+- The `[DRY RUN]` prefix appears in the console summary header.
+- `tool-audit.jsonl` is present but empty (no tools are called).
+
+Use it to validate the pipeline end-to-end in CI or offline environments where Copilot CLI is not available.
 
 ## Review Pipeline
 
