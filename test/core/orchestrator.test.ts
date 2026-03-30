@@ -92,7 +92,8 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -212,7 +213,8 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -315,7 +317,8 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -497,7 +500,8 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       new RegExp(
         `step1-overview.*${escapeRegExp(failedFile)}.*git diff failed|${escapeRegExp(failedFile)}.*step1-overview.*git diff failed`,
@@ -575,7 +579,8 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /initialize failed/u
     );
@@ -672,7 +677,8 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /note write failed/u
     );
@@ -783,7 +789,8 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.skippedFileCount, 1);
@@ -891,7 +898,8 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /disk full/u
     );
@@ -994,7 +1002,8 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /note write failed/u
     );
@@ -1103,7 +1112,8 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /interrupted snapshot write failed/u
     );
@@ -1210,7 +1220,8 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /skipped log write failed/u
     );
@@ -1315,7 +1326,8 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.skippedFileCount, 1);
@@ -1409,7 +1421,8 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /apply failed/u
     );
@@ -1507,7 +1520,8 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /note write failed/u
     );
@@ -1612,7 +1626,8 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /skipped log write failed/u
     );
@@ -1679,7 +1694,8 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /Step 0 failed/u
     );
@@ -1749,7 +1765,8 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
     await orchestrator.run({
       baseRef: "main",
       headRef: "feature-branch",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(callOrder.includes("onOutputTargetReady"), "callback should have been invoked");
@@ -1788,7 +1805,8 @@ test("ReviewOrchestrator works normally when onOutputTargetReady callback is not
     const result = await orchestrator.run({
       baseRef: "main",
       headRef: "feature-branch",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(result.outputTarget !== undefined);
@@ -1838,7 +1856,9 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
       timestampProvider: () => "03131430"
     });
 
-    await orchestrator.run({ baseRef: "main", headRef: "feature-branch", userContext: [] });
+    await orchestrator.run({ baseRef: "main", headRef: "feature-branch", userContext: [],
+    dryRun: false
+  });
 
     const initIdx = callOrder.indexOf("initializeRun");
     const overviewIdx = callOrder.indexOf("publishChangesetOverview");
@@ -1911,7 +1931,8 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /changeset overview write failed/u
     );
@@ -1974,7 +1995,8 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, 0, "zero planned files");

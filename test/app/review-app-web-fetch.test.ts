@@ -93,7 +93,8 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(result.plannedFileCount >= 2);
@@ -203,7 +204,8 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(result.plannedFileCount >= 2);
@@ -325,7 +327,8 @@ test("createLocalReviewRunApp applies redirect-chain host policy without introdu
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(result.plannedFileCount >= 2);

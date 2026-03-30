@@ -56,7 +56,8 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
@@ -145,7 +146,8 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
@@ -220,7 +222,8 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, 0);
@@ -291,7 +294,8 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
@@ -365,7 +369,8 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
@@ -429,7 +434,8 @@ test("ReviewOrchestrator publishes index.md for zero planned files with explicit
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
@@ -506,7 +512,8 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /apply failed/u
     );
@@ -572,7 +579,8 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /Step 0 failed/u
     );
@@ -664,7 +672,8 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /git diff failed/u
     );
@@ -711,7 +720,8 @@ test("ReviewOrchestrator aborts when publishRunSummary fails and preserves per-f
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /summary write failed/u
     );
@@ -753,7 +763,8 @@ test("ReviewOrchestrator aborts when publishReviewIndex fails after summary.md i
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /index write failed/u
     );
@@ -797,7 +808,8 @@ test("ReviewOrchestrator aborts when publishRunManifest fails after summary.md a
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /manifest write failed/u
     );
@@ -850,7 +862,8 @@ test("ReviewOrchestrator publishes summary.md, index.md, and manifest.json only 
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(outputSink.calls.at(-1), "publishRunManifest");
@@ -905,7 +918,8 @@ test("ReviewOrchestrator publishes manifest.json only after publishReviewIndex a
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(outputSink.calls.at(-1), "publishRunManifest");
@@ -961,7 +975,8 @@ test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to Review
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");

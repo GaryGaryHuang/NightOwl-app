@@ -146,7 +146,8 @@ test("ReviewOrchestrator can complete a run with both successful and skipped fil
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
@@ -227,7 +228,8 @@ async function assertSkipScenario(input: {
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);

@@ -17,7 +17,8 @@ import {
   collectReviewableFiles,
   createObservedStepRunner,
   createStepResponseRouter,
-  loadPlannedNoteContents
+  loadPlannedNoteContents,
+  type StepId
 } from "../helpers/orchestrator-step-contract-fixture.ts";
 import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStandardStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 
@@ -52,8 +53,8 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     fixture.writeFile(".reviewignore", "dist/**\n");
 
     const observedProfiles: Array<Record<string, string>> = [];
-    const observedStepEvents: Array<[string, string]> = [];
-    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
+    const observedStepEvents: Array<[StepId, string]> = [];
+    const observedPrompts: Array<{ stepId: StepId; prompt: string }> = [];
     const observedDisconnects: string[] = [];
     const sourceProvider = new LocalGitProvider();
     const stepRunner = createObservedStepRunner({
@@ -103,7 +104,8 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
@@ -255,7 +257,8 @@ test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file and cont
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -350,7 +353,8 @@ test("ReviewOrchestrator renders `## Findings` with `- 無` when Step 5 returns 
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
@@ -452,7 +456,8 @@ test("ReviewOrchestrator treats confidence-filtered empty findings as a successf
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
@@ -577,7 +582,8 @@ test("ReviewOrchestrator uses configured thresholds when Step 5 filters findings
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const step6Prompts = observedPrompts.filter(
@@ -704,7 +710,8 @@ test("ReviewOrchestrator retries Step 5 after deterministic validation failure a
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
@@ -842,7 +849,8 @@ test("ReviewOrchestrator skips Step 5 after review startup failure retry exhaust
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -917,7 +925,7 @@ async function assertStep5Failure(input: {
                   return input.step5ReviewFailure();
                 }
 
-                return { data: { content: buildStep5JsonResponse() } };
+                return { data: { content: buildStepResponse("step5-validation-interrogation", filePath) } };
               },
               async disconnect() {}
             });
@@ -950,7 +958,8 @@ async function assertStep5Failure(input: {
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);

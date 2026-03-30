@@ -74,7 +74,8 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const { reviewableFiles } = collectReviewableFiles({
@@ -177,7 +178,8 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -294,7 +296,8 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const plannedNotes = loadPlannedNoteContents(

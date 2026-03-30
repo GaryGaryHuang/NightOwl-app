@@ -112,7 +112,8 @@ const SIGNAL_TEST_REQUEST = {
   baseRef: "main",
   headRef: "feature-branch",
   repoPath: ".",
-  userContext: []
+  userContext: [],
+  dryRun: false
 };
 
 test("createLocalReviewRunApp SIGINT during run propagates ReviewRunInterruptedError to caller", async () => {
@@ -596,7 +597,8 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(
@@ -631,7 +633,8 @@ test("formatLocalReviewRunSummary includes Tool Audit line after Manifest and be
     },
     plannedFileCount: 1,
     successfulFileCount: 1,
-    skippedFileCount: 0
+    skippedFileCount: 0,
+    dryRun: false
   };
 
   const output = formatLocalReviewRunSummary(result);
@@ -675,7 +678,8 @@ test("formatLocalReviewRunSummary includes Changeset Overview line after Output 
     },
     plannedFileCount: 1,
     successfulFileCount: 1,
-    skippedFileCount: 0
+    skippedFileCount: 0,
+    dryRun: false
   };
 
   const output = formatLocalReviewRunSummary(result);

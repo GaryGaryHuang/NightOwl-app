@@ -63,7 +63,8 @@ test("runCli forwards parsed input to the app boundary once", async () => {
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./demo",
-      userContext: ["release-note"]
+      userContext: ["release-note"],
+      dryRun: false
     }
   ]);
   assert.deepEqual(stdout, [renderExpectedSummary(createCompletedRunResult({
@@ -352,6 +353,7 @@ function createCompletedRunResult(
     plannedFileCount: 2,
     successfulFileCount: 2,
     skippedFileCount: 0,
+    dryRun: false,
     ...restOverrides
   };
 }
@@ -359,8 +361,11 @@ function createCompletedRunResult(
 // Mirrors the published summary contract produced by formatLocalReviewRunSummary;
 // any change to that function's output format must be reflected here.
 function renderExpectedSummary(result: ReviewRunSummary): string {
+  const header = result.dryRun
+    ? `[DRY RUN] Initialized local review run.`
+    : "Initialized local review run.";
   return [
-    "Initialized local review run.",
+    header,
     `Repo root: ${result.repoRoot}`,
     `Output: ${result.outputTarget.basePath}`,
     `Changeset Overview: ${result.outputTarget.changesetOverviewPath}`,

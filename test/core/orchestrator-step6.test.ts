@@ -17,7 +17,8 @@ import {
   collectReviewableFiles,
   createObservedStepRunner,
   createStepResponseRouter,
-  loadPlannedNoteContents
+  loadPlannedNoteContents,
+  type StepId
 } from "../helpers/orchestrator-step-contract-fixture.ts";
 import { buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildStandardStep7SummaryResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 
@@ -40,8 +41,8 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     fixture.writeFile(".reviewignore", "dist/**\n");
 
     const observedProfiles: Array<Record<string, string>> = [];
-    const observedStepEvents: Array<[string, string]> = [];
-    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
+    const observedStepEvents: Array<[StepId, string]> = [];
+    const observedPrompts: Array<{ stepId: StepId; prompt: string }> = [];
     const observedDisconnects: string[] = [];
     const sourceProvider = new LocalGitProvider();
     const stepRunner = createObservedStepRunner({
@@ -71,7 +72,8 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const outputBaseDir = path.join(fixture.repoDir, "packages", "app");
@@ -211,7 +213,8 @@ test("ReviewOrchestrator passes explicit empty Step 5 findings into Step 6 and a
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const repoRoot = realpathSync(fixture.repoDir);
@@ -364,7 +367,8 @@ test("ReviewOrchestrator uses the same configured thresholds for Step 5 and Step
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const step6Prompts = observedPrompts.filter(
@@ -449,7 +453,8 @@ test("ReviewOrchestrator renders `## Findings` with `- 無` when Step 6 clears p
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
@@ -538,7 +543,8 @@ test("ReviewOrchestrator does not start Step 6 for a failed Step 5 file and cont
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -664,7 +670,8 @@ test("ReviewOrchestrator retries Step 6 after deterministic validation failure a
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
@@ -827,7 +834,8 @@ test("ReviewOrchestrator skips Step 6 after review startup failure retry exhaust
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(sessionCount, reviewableFiles.length * 7);
@@ -940,7 +948,8 @@ async function assertStep6Failure(input: {
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`), 2);

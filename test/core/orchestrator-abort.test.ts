@@ -104,7 +104,8 @@ const TEST_REQUEST = {
   baseRef: "main",
   headRef: "feature-branch",
   repoPath: ".",
-  userContext: []
+  userContext: [],
+  dryRun: false
 };
 
 const TEST_FILES = ["src/app.ts", "packages/app/index.ts"];

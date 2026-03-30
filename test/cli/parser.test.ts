@@ -12,7 +12,8 @@ test("parseReviewCommand parses base and head refs", () => {
   assert.deepEqual(request, {
     baseRef: "main",
     headRef: "feature-branch",
-    userContext: []
+    userContext: [],
+    dryRun: false
   });
 });
 
@@ -32,7 +33,8 @@ test("parseReviewCommand preserves repo path and repeated context flags", () => 
     baseRef: "main",
     headRef: "feature-branch",
     repoPath: "./demo",
-    userContext: ["PR-123", "https://example.com/spec"]
+    userContext: ["PR-123", "https://example.com/spec"],
+    dryRun: false
   });
 });
 
@@ -52,4 +54,52 @@ test("parseReviewCommand rejects --context when the next token is another flag",
       error instanceof CliUsageError &&
       /Missing value for --context/.test(error.message)
   );
+});
+
+test("parseReviewCommand sets dryRun true when --dry-run flag is present at end", () => {
+  const request = parseReviewCommand(["main", "feature-branch", "--dry-run"]);
+
+  assert.equal(request.dryRun, true);
+});
+
+test("parseReviewCommand sets dryRun false when --dry-run flag is absent", () => {
+  const request = parseReviewCommand(["main", "feature-branch"]);
+
+  assert.equal(request.dryRun, false);
+});
+
+test("parseReviewCommand accepts --dry-run at start position", () => {
+  const request = parseReviewCommand(["--dry-run", "main", "feature-branch"]);
+
+  assert.equal(request.dryRun, true);
+  assert.equal(request.baseRef, "main");
+  assert.equal(request.headRef, "feature-branch");
+});
+
+test("parseReviewCommand accepts --dry-run in middle position", () => {
+  const request = parseReviewCommand(["main", "--dry-run", "feature-branch"]);
+
+  assert.equal(request.dryRun, true);
+  assert.equal(request.baseRef, "main");
+  assert.equal(request.headRef, "feature-branch");
+});
+
+test("parseReviewCommand combines --dry-run with --repo and --context", () => {
+  const request = parseReviewCommand([
+    "main",
+    "feature-branch",
+    "--dry-run",
+    "--repo",
+    "./my-repo",
+    "--context",
+    "PR-42"
+  ]);
+
+  assert.equal(request.dryRun, true);
+  assert.equal(request.repoPath, "./my-repo");
+  assert.deepEqual(request.userContext, ["PR-42"]);
+});
+
+test("parseReviewCommand does not treat --dry-run as unknown option", () => {
+  assert.doesNotThrow(() => parseReviewCommand(["main", "head", "--dry-run"]));
 });

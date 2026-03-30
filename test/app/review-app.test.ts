@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
-import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
+import {
+  createLocalReviewRunApp,
+  formatLocalReviewRunSummary,
+  LOCAL_REVIEW_RUN_HEADER
+} from "../../src/app/review-app.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import {
@@ -66,7 +71,8 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /invalid review config/u
     );
@@ -149,7 +155,8 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /context7 startup failed/u
     );
@@ -263,7 +270,8 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(context7Failures >= 2);
@@ -368,7 +376,8 @@ test("createLocalReviewRunApp keeps Step 0 custom MCP startup failure on the exi
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /custom mcp startup failed/u
     );
@@ -447,7 +456,8 @@ test("createLocalReviewRunApp keeps Step 0 remote MCP startup failure on the exi
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /remote mcp startup failed/u
     );
@@ -555,7 +565,8 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(context7Failures >= 2);
@@ -669,7 +680,8 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(customMcpFailures >= 2);
@@ -771,7 +783,8 @@ async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.ok(remoteMcpFailures >= 2);
@@ -784,3 +797,147 @@ async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
     fixture.cleanup();
   }
 }
+
+// ---------------------------------------------------------------------------
+// formatLocalReviewRunSummary — dry-run header tests
+// ---------------------------------------------------------------------------
+
+function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): ReviewRunSummary {
+  const base = "/workspace/review/run";
+  return {
+    repoRoot: "/workspace/repo",
+    runContext: createRunContext({ changesetOverview: "## Changeset Overview", userContext: [] }),
+    outputTarget: {
+      basePath: base,
+      changesetOverviewPath: `${base}/changeset-overview.md`,
+      filesPath: `${base}/files`,
+      skippedPath: `${base}/skipped.md`,
+      summaryPath: `${base}/summary.md`,
+      indexPath: `${base}/index.md`,
+      manifestPath: `${base}/manifest.json`,
+      toolAuditPath: `${base}/tool-audit.jsonl`
+    },
+    plannedFileCount: 1,
+    successfulFileCount: 1,
+    skippedFileCount: 0,
+    dryRun: false,
+    ...overrides
+  };
+}
+
+test("formatLocalReviewRunSummary adds [DRY RUN] prefix to header when dryRun is true", () => {
+  const result = buildMinimalRunSummary({ dryRun: true });
+  const summary = formatLocalReviewRunSummary(result);
+
+  assert.ok(
+    summary.startsWith("[DRY RUN] " + LOCAL_REVIEW_RUN_HEADER),
+    `Expected [DRY RUN] prefix, got: ${summary.split("\n")[0]}`
+  );
+});
+
+test("formatLocalReviewRunSummary does not add [DRY RUN] prefix when dryRun is false", () => {
+  const result = buildMinimalRunSummary({ dryRun: false });
+  const summary = formatLocalReviewRunSummary(result);
+
+  assert.ok(
+    summary.startsWith(LOCAL_REVIEW_RUN_HEADER),
+    `Expected plain header, got: ${summary.split("\n")[0]}`
+  );
+  assert.ok(!summary.includes("[DRY RUN]"), "Must not contain [DRY RUN] when dryRun is false");
+});
+
+// ---------------------------------------------------------------------------
+// dry-run mode — clientManager lifecycle tests
+// ---------------------------------------------------------------------------
+
+test("createLocalReviewRunApp does not call clientManager.start() in dry-run mode", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    let startCalls = 0;
+    let stopCalls = 0;
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      webFetchRedirectResolver: createResolvedRedirectResolver(),
+      clientManager: {
+        async start() {
+          startCalls += 1;
+        },
+        async stop() {
+          stopCalls += 1;
+        },
+        async forceStop() {},
+        getClient() {
+          throw new Error("clientManager.getClient() must not be called in dry-run mode");
+        }
+      },
+      outputSink: {
+        initializeRun() {},
+        publishFileReview() {},
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {},
+        publishChangesetOverview() {}
+      }
+    });
+
+    await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      userContext: [],
+      dryRun: true
+    });
+
+    assert.equal(startCalls, 0, "clientManager.start() must not be called in dry-run mode");
+    assert.equal(stopCalls, 0, "clientManager.stop() must not be called in dry-run mode");
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("createLocalReviewRunApp completes dry-run flow and result has dryRun: true", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      webFetchRedirectResolver: createResolvedRedirectResolver(),
+      clientManager: {
+        async start() {
+          throw new Error("clientManager.start() must not be called in dry-run mode");
+        },
+        async stop() {
+          throw new Error("clientManager.stop() must not be called in dry-run mode");
+        },
+        async forceStop() {},
+        getClient() {
+          throw new Error("clientManager.getClient() must not be called in dry-run mode");
+        }
+      },
+      outputSink: {
+        initializeRun() {},
+        publishFileReview() {},
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {},
+        publishChangesetOverview() {}
+      }
+    });
+
+    const result = await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      userContext: [],
+      dryRun: true
+    });
+
+    assert.equal(result.dryRun, true);
+    assert.equal(result.skippedFileCount, 0, "dry-run should produce no skipped files");
+    assert.ok(result.successfulFileCount > 0, "dry-run should process at least one file");
+  } finally {
+    fixture.cleanup();
+  }
+});
+

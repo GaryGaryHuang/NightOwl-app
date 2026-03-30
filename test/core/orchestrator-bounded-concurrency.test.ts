@@ -84,7 +84,8 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
@@ -202,7 +203,8 @@ test("ReviewOrchestrator keeps an all-skipped run as a completed run under bound
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
@@ -285,7 +287,8 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
       baseRef: "main",
       headRef: "feature-branch",
       repoPath: "./packages/app",
-      userContext: []
+      userContext: [],
+      dryRun: false
     });
 
     assert.equal(result.skippedFileCount, 1);
@@ -368,7 +371,8 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /disk full/u
     );
@@ -442,7 +446,8 @@ test("ReviewOrchestrator suppresses later interrupted snapshots and skipped reco
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /skipped log write failed/u
     );
@@ -504,7 +509,8 @@ test("ReviewOrchestrator still fails the run without returning a completed resul
           baseRef: "main",
           headRef: "feature-branch",
           repoPath: "./packages/app",
-          userContext: []
+          userContext: [],
+          dryRun: false
         }),
       /summary write failed/u
     );
