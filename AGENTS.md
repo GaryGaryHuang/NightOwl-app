@@ -26,10 +26,12 @@ Node.js ≥ 22.7.0. The toolchain uses Node's native TypeScript execution with n
 src/
 ├── bin/review.ts          CLI entry point
 ├── cli/parser.ts          CLI parsing → RunRequest
+├── cli/progress-reporter.ts  Runtime progress rendering for TTY/non-TTY CLI output
 ├── index.ts               runCli(): error handling, exit code
 ├── app/review-app.ts      Composition root: wire all dependencies, lifecycle
 ├── core/
 │   ├── orchestrator.ts    Core flow control
+│   ├── run-progress.ts    Structured runtime progress events emitted during a run
 │   ├── step-runner.ts     Step execution: execute → completion check → retry
 │   ├── steps/             Step 1–7 strategy modules (one file per step)
 │   ├── file-review-context.ts   Single-file source of truth
@@ -90,6 +92,7 @@ Strictly follow these layers. Do not merge or cross boundaries:
 - **Bounded concurrency**: files are processed in parallel (default 5); within each file, Steps 1–7 run strictly in sequence.
 - **Retry once**: a failed step retries once; if it fails again, the file is demoted to skipped. A Step 0 failure aborts the entire run.
 - **Dry-run mode**: when `RunRequest.dryRun` is `true`, the Composition Root substitutes `DryRunReviewSessionFactory` and `DryRunJudgeSessionFactory` for all AI calls and skips `clientManager.start()` / `stop()`. All non-AI pipeline stages run identically.
+- **CLI runtime progress is event-driven**: `ReviewOrchestrator` emits structured progress events, and the CLI renders them as TTY live output or non-TTY append-only snapshots.
 
 ## Testing
 

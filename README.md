@@ -45,24 +45,21 @@ review main feature-branch --dry-run
 **Output:**
 
 ```text
-Initialized local review run.
-Repo root: /path/to/repo
+Starting review run for main...feature-branch.
 Output: /path/to/repo/.nightowl/review/feature-branch_03131430
-Files: /path/to/repo/.nightowl/review/feature-branch_03131430/files
-Summary: /path/to/repo/.nightowl/review/feature-branch_03131430/summary.md
-Index: /path/to/repo/.nightowl/review/feature-branch_03131430/index.md
-Manifest: /path/to/repo/.nightowl/review/feature-branch_03131430/manifest.json
-Tool Audit: /path/to/repo/.nightowl/review/feature-branch_03131430/tool-audit.jsonl
-Skipped: /path/to/repo/.nightowl/review/feature-branch_03131430/skipped.md
+Review run completed.
 Planned files: 3
 Successful files: 2
 Skipped files: 1
 ```
 
+In an interactive terminal, the `Progress ...` line is redrawn in place and cleared before the final summary prints.
+
 In dry-run mode, the first line is prefixed with `[DRY RUN]`:
 
 ```text
-[DRY RUN] Initialized local review run.
+[DRY RUN] Starting review run for main...feature-branch.
+[DRY RUN] Review run completed.
 ...
 ```
 
@@ -73,7 +70,7 @@ Pass `--dry-run` to run the full pipeline without calling the Copilot API or req
 - All Git operations, path planning, bounded concurrency, and output rendering run identically to a normal run.
 - Every AI session is replaced by a deterministic stub that returns pre-built placeholder responses for each SOP step.
 - The output folder structure and artifact names are identical to a real run; only the review note content is placeholder text.
-- The `[DRY RUN]` prefix appears in the console summary header.
+- The `[DRY RUN]` prefix appears in the startup feedback and final CLI summary.
 - `tool-audit.jsonl` is present but empty (no tools are called).
 
 Use it to validate the pipeline end-to-end in CI or offline environments where Copilot CLI is not available.
