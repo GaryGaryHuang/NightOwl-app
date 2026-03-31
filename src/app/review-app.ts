@@ -33,10 +33,12 @@ import {
   DryRunReviewSessionFactory,
   DryRunJudgeSessionFactory
 } from "../services/dry-run-session-factory.ts";
+import {
+  DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS,
+  stopClientManagerWithTimeout
+} from "../services/copilot-client-shutdown.ts";
 
 export const LOCAL_REVIEW_RUN_HEADER = "Review run completed.";
-const DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
-const STOP_TIMEOUT_EXCEEDED = Symbol("stop-timeout-exceeded");
 
 export interface CreateLocalReviewRunAppOptions {
   changesetOverviewRunner?: Pick<ChangesetOverviewRunner, "run">;
@@ -191,41 +193,6 @@ export function createLocalReviewRunApp(
       }
     }
   };
-}
-
-/**
- * Try a graceful client shutdown first, then forceStop() if stop() exceeds the timeout.
- */
-async function stopClientManagerWithTimeout(
-  clientManager: LocalReviewRunClientManager,
-  timeoutMs: number
-): Promise<void> {
-  const stopPromise = clientManager.stop();
-  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  let stopResult: void | typeof STOP_TIMEOUT_EXCEEDED = undefined;
-
-  try {
-    stopResult = await Promise.race([
-      stopPromise.then(() => undefined),
-      new Promise<typeof STOP_TIMEOUT_EXCEEDED>((resolve) => {
-        timeoutHandle = setTimeout(() => {
-          resolve(STOP_TIMEOUT_EXCEEDED);
-        }, timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-    }
-  }
-
-  if (stopResult !== STOP_TIMEOUT_EXCEEDED) {
-    return;
-  }
-
-  // stop() may still settle after timeout; handle that late rejection while forceStop() takes over.
-  void stopPromise.catch(() => {});
-  await clientManager.forceStop();
 }
 
 export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
