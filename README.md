@@ -19,6 +19,14 @@ The generated reports can serve as a starting point for engineer self-review or 
 - Node.js ≥ 22.7.0
 - [GitHub Copilot CLI](https://docs.github.com/en/copilot) installed and authenticated
 
+Recommended preflight:
+
+```bash
+review --check
+```
+
+Run the preflight command after installing or re-authenticating GitHub Copilot CLI, and before starting a full review run.
+
 ### Installation
 
 ```bash
@@ -30,19 +38,31 @@ npm install -g ./nightowl-0.1.0.tgz
 ### Usage
 
 ```bash
+review --check
 review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
 ```
 
 **Examples:**
 
 ```bash
+review --check
 review main feature-branch
 review main HEAD --repo /path/to/repo
 review main HEAD --context "Performance optimization PR" --context "https://link-to-spec"
 review main feature-branch --dry-run
 ```
 
-**Output:**
+### Copilot Availability Check
+
+Run `review --check` when you want to confirm that GitHub Copilot CLI is installed, authenticated, and responsive before executing a full review:
+
+```text
+GitHub Copilot is available.
+```
+
+If the check fails, NightOwl exits with a non-zero status and preserves the underlying error message so you can troubleshoot CLI installation, authentication, or service connectivity without entering the review pipeline.
+
+### Review Output
 
 ```text
 Starting review run for main...feature-branch.
@@ -74,6 +94,14 @@ Pass `--dry-run` to run the full pipeline without calling the Copilot API or req
 - `tool-audit.jsonl` is present but empty (no tools are called).
 
 Use it to validate the pipeline end-to-end in CI or offline environments where Copilot CLI is not available.
+
+### Troubleshooting Copilot Availability
+
+If `review --check` fails:
+
+- Confirm GitHub Copilot CLI is installed and available in `PATH`
+- Re-authenticate Copilot CLI if your login or subscription has expired
+- Retry `review --check` before running a full review so availability issues stay isolated from review-run failures
 
 ## Review Pipeline
 
@@ -188,7 +216,7 @@ File filtering uses `repo_root/.nightowl/reviewignore` (`.gitignore` syntax).
 ```bash
 npm install          # Install dependencies
 npm link             # Symlink the review command locally
-npm test             # Build then run all tests
+npm test             # Build + verify manifest + run all tests
 npm run test:unit    # Run fast deterministic logic-owner tests
 npm run test:integration  # Run boundary/collaboration tests
 npm run test:e2e     # Run thin published-surface guardrails

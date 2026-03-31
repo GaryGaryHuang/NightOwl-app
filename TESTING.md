@@ -51,7 +51,7 @@ Thin guardrails for the published CLI surface. These tests exercise the outermos
 - Tests the installed or runnable CLI entry point as a user would invoke it
 - Verifies exit codes, stdout/stderr output, and error messages for success, failure, and interrupt paths
 
-**Typical subjects:** installable `review` executable (`package-bin`), CLI success / fatal / interrupted paths (`run-cli`).
+**Typical subjects:** installable `review` executable (`package-bin`), CLI success / fatal / interrupted paths (`run-cli`), `--check` mode environment smoke test (`run-cli-check-smoke`).
 
 ---
 
@@ -74,6 +74,17 @@ npm run test:e2e           # Build + run e2e tests only
 | `test:integration` | Changing app, session, provider, or orchestrator boundaries |
 | `test:e2e` | Changing the published CLI surface, installability, or end-user command behavior |
 | `npm test` | Before finalizing any work (CI-equivalent gate) |
+
+### Optional CLI smoke test
+
+`review --check` has an environment-gated smoke test that talks to a real GitHub Copilot CLI environment. It is skipped by default so CI stays deterministic.
+
+```bash
+NIGHTOWL_RUN_CHECK_SMOKE=1 npm run build
+NIGHTOWL_RUN_CHECK_SMOKE=1 node --test test/cli/run-cli-check-smoke.test.ts
+```
+
+Use it only on a machine where GitHub Copilot CLI is installed, authenticated, and expected to respond successfully.
 
 ### Running a single test file
 

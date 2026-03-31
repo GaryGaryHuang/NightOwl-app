@@ -6,7 +6,7 @@ NightOwl is a local Code Review CLI that uses the GitHub Copilot SDK to automate
 
 ```bash
 npm install        # Install dependencies
-npm test           # Build + run all tests (primary verification command)
+npm test           # Build + verify manifest + run all tests (primary verification command)
 npm run build      # Produce dist/
 npm run typecheck  # Type check (tsc --noEmit)
 npm link           # Dev only: symlink the review command locally
@@ -91,13 +91,14 @@ Strictly follow these layers. Do not merge or cross boundaries:
 - **Step 0 is run-level**, not a per-file step. It does not go through `StepRunner` and does not implement `ISopStep`.
 - **Bounded concurrency**: files are processed in parallel (default 5); within each file, Steps 1–7 run strictly in sequence.
 - **Retry once**: a failed step retries once; if it fails again, the file is demoted to skipped. A Step 0 failure aborts the entire run.
+- **`--check` has highest CLI priority**: when `--check` is present (regardless of other arguments), the CLI runs a Copilot availability preflight and exits. No branch refs are required and the review pipeline is not entered. `--check` takes priority over `--dry-run`; when neither flag is present, the normal review flow runs.
 - **Dry-run mode**: when `RunRequest.dryRun` is `true`, the Composition Root substitutes `DryRunReviewSessionFactory` and `DryRunJudgeSessionFactory` for all AI calls and skips `clientManager.start()` / `stop()`. All non-AI pipeline stages run identically.
 - **CLI runtime progress is event-driven**: `ReviewOrchestrator` emits structured progress events, and the CLI renders them as TTY live output or non-TTY append-only snapshots.
 
 ## Testing
 
 ```bash
-npm test                   # Full test suite (build first, then source test files)
+npm test                   # Build + verify manifest + run all tests
 npm run test:unit          # Run unit tests only
 npm run test:integration   # Run integration tests only
 npm run test:e2e           # Run e2e tests only
@@ -116,7 +117,7 @@ npm run build && node --test test/core/orchestrator.test.ts
 - Test structure mirrors `src/`: `test/core/orchestrator.test.ts` corresponds to `src/core/orchestrator.ts`
 - Follow TDD: write or update tests before implementing
 - Uses the Node.js built-in test runner (`node:test`); no external test frameworks
-- Tests inject stubs/mocks through interfaces; no external mocking frameworks
+- Tests inject hand-written fakes and stubs via constructor parameters; no external mocking frameworks
 - Orchestrator tests are split across multiple files (`orchestrator-*.test.ts`), each focusing on specific behavior
 
 See [TESTING.md](./TESTING.md) for tier decision criteria, test patterns, fixture catalog, and manifest maintenance rules.
