@@ -44,8 +44,6 @@ export class ReviewSessionFactory {
   }
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
-    const systemContent = `${profile.systemMessage}\n\nThe repository root absolute path is: ${profile.repoRoot}\nUse only this absolute path when accessing files. Do not use /workspace, /root, or other guessed paths.`;
-
     const sessionConfig: SessionConfig = {
       hooks: {
         onPreToolUse: this.#toolPolicyGuard.buildPreToolUseHook(
@@ -57,8 +55,18 @@ export class ReviewSessionFactory {
       reasoningEffort: "high",
       streaming: false,
       systemMessage: {
-        mode: "replace",
-        content: systemContent
+        mode: "customize",
+        sections: {
+          identity: { action: "remove" },
+          tone: { action: "remove" },
+          tool_efficiency: { action: "remove" },
+          code_change_rules: { action: "remove" },
+          guidelines: { action: "remove" },
+          tool_instructions: { action: "remove" },
+          custom_instructions: { action: "remove" },
+          last_instructions: { action: "remove" }
+        },
+        content: profile.systemMessage
       },
       onPermissionRequest: this.#toolPolicyGuard.buildPermissionHandler(
         profile,
