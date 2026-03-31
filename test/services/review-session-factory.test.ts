@@ -119,7 +119,7 @@ test("ReviewSessionFactory creates a non-streaming review session and delegates 
       onPermissionRequest: toolPolicyGuard.permissionHandler,
       systemMessage: {
         mode: "replace",
-        content: "system prompt"
+        content: "system prompt\n\nThe repository root absolute path is: /workspace/repo\nUse only this absolute path when accessing files. Do not use /workspace, /root, or other guessed paths."
       },
       workingDirectory: "/workspace/repo"
     }
@@ -224,4 +224,35 @@ test("ReviewSessionFactory only passes audit writer to sessions created after se
   } finally {
     auditFixture.cleanup();
   }
+});
+
+test("ReviewSessionFactory system prompt includes repoRoot absolute path and warns against guessed paths", async () => {
+  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
+  const factory = new ReviewSessionFactory({
+    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
+      assertRecordedReviewSessionConfig(config);
+      return {
+        async sendAndWait() {
+          return {
+            type: "assistant.message",
+            data: { content: "ok" }
+          };
+        },
+        async disconnect() {}
+      };
+    }),
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  await factory.createSession({
+    ...BASE_REVIEW_PROFILE,
+    repoRoot: "/Users/dev/my-project",
+    systemMessage: "base prompt"
+  });
+
+  const content = (receivedConfigs[0]?.systemMessage as { content: string }).content;
+  assert.ok(content.includes("/Users/dev/my-project"));
+  assert.ok(content.includes("/workspace"));
+  assert.ok(content.includes("/root"));
+  assert.ok(content.startsWith("base prompt"));
 });
