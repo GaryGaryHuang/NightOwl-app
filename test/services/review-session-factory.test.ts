@@ -118,8 +118,18 @@ test("ReviewSessionFactory creates a non-streaming review session and delegates 
       streaming: false,
       onPermissionRequest: toolPolicyGuard.permissionHandler,
       systemMessage: {
-        mode: "replace",
-        content: "system prompt\n\nThe repository root absolute path is: /workspace/repo\nUse only this absolute path when accessing files. Do not use /workspace, /root, or other guessed paths."
+        mode: "customize",
+        sections: {
+          identity: { action: "remove" },
+          tone: { action: "remove" },
+          tool_efficiency: { action: "remove" },
+          code_change_rules: { action: "remove" },
+          guidelines: { action: "remove" },
+          tool_instructions: { action: "remove" },
+          custom_instructions: { action: "remove" },
+          last_instructions: { action: "remove" }
+        },
+        content: "system prompt"
       },
       workingDirectory: "/workspace/repo"
     }
@@ -226,7 +236,7 @@ test("ReviewSessionFactory only passes audit writer to sessions created after se
   }
 });
 
-test("ReviewSessionFactory system prompt includes repoRoot absolute path and warns against guessed paths", async () => {
+test("ReviewSessionFactory system prompt uses customize mode and does not inject repoRoot", async () => {
   const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const factory = new ReviewSessionFactory({
     clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
@@ -250,9 +260,16 @@ test("ReviewSessionFactory system prompt includes repoRoot absolute path and war
     systemMessage: "base prompt"
   });
 
-  const content = (receivedConfigs[0]?.systemMessage as { content: string }).content;
-  assert.ok(content.includes("/Users/dev/my-project"));
-  assert.ok(content.includes("/workspace"));
-  assert.ok(content.includes("/root"));
-  assert.ok(content.startsWith("base prompt"));
+  const systemMessage = receivedConfigs[0]?.systemMessage as {
+    mode: string;
+    content: string;
+    sections: Record<string, { action: string }>;
+  };
+  assert.equal(systemMessage.mode, "customize");
+  assert.equal(systemMessage.content, "base prompt");
+  assert.ok(!systemMessage.content.includes("/Users/dev/my-project"));
+  assert.deepEqual(
+    Object.keys(systemMessage.sections).sort(),
+    ["code_change_rules", "custom_instructions", "guidelines", "identity", "last_instructions", "tone", "tool_efficiency", "tool_instructions"]
+  );
 });
