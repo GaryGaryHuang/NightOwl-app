@@ -7,9 +7,17 @@ import { CliProgressReporter, type CliProgressStdout } from "./cli/progress-repo
 import { CliUsageError, parseReviewCommand } from "./cli/parser.ts";
 import type { RunRequest } from "./core/run-request.ts";
 import { ReviewRunInterruptedError } from "./core/orchestrator.ts";
+import {
+  CopilotAvailabilityChecker
+} from "./services/copilot-availability-checker.ts";
+
+interface AvailabilityChecker {
+  check(): Promise<void>;
+}
 
 export interface CliRuntime {
   app?: ReviewApp;
+  availabilityChecker?: AvailabilityChecker;
   progressReporter?: CliProgressReporter;
   stdout?: CliProgressStdout;
   stderr?: Pick<typeof console, "error">;
@@ -18,6 +26,7 @@ export interface CliRuntime {
 
 interface ResolvedCliRuntime {
   app: ReviewApp;
+  availabilityChecker: AvailabilityChecker;
   progressReporter: CliProgressReporter;
   stdout: CliProgressStdout;
   stderr: Pick<typeof console, "error">;
@@ -34,7 +43,16 @@ export async function runCli(
 
   try {
     resolvedRuntime = createDefaultCliRuntime(runtime);
-    const request = parseReviewCommand(argv);
+    const command = parseReviewCommand(argv);
+
+    if (command.kind === "check") {
+      await resolvedRuntime.availabilityChecker.check();
+      resolvedRuntime.progressReporter.finalize();
+      resolvedRuntime.stdout.log("GitHub Copilot is available.");
+      return 0;
+    }
+
+    const request = command.request;
     resolvedRuntime.stdout.log(formatStartupFeedback(request));
     const result = await resolvedRuntime.app.run(request);
     resolvedRuntime.progressReporter.finalize();
@@ -96,6 +114,8 @@ export function createDefaultCliRuntime(
           progressReporter.handleEvent(event);
         }
       }),
+    availabilityChecker:
+      runtime.availabilityChecker ?? new CopilotAvailabilityChecker(),
     progressReporter,
     stdout,
     stderr: runtime.stderr ?? console

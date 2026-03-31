@@ -60,6 +60,7 @@
   ],
   "e2e": [
     "test/cli/package-bin.test.ts",
+    "test/cli/run-cli-check-smoke.test.ts",
     "test/cli/run-cli-progress.test.ts",
     "test/cli/run-cli.test.ts"
   ]

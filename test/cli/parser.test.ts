@@ -7,18 +7,21 @@ import {
 } from "../../src/cli/parser.ts";
 
 test("parseReviewCommand parses base and head refs", () => {
-  const request = parseReviewCommand(["main", "feature-branch"]);
+  const parsed = parseReviewCommand(["main", "feature-branch"]);
 
-  assert.deepEqual(request, {
-    baseRef: "main",
-    headRef: "feature-branch",
-    userContext: [],
-    dryRun: false
+  assert.deepEqual(parsed, {
+    kind: "run",
+    request: {
+      baseRef: "main",
+      headRef: "feature-branch",
+      userContext: [],
+      dryRun: false
+    }
   });
 });
 
 test("parseReviewCommand preserves repo path and repeated context flags", () => {
-  const request = parseReviewCommand([
+  const parsed = parseReviewCommand([
     "main",
     "feature-branch",
     "--repo",
@@ -29,12 +32,15 @@ test("parseReviewCommand preserves repo path and repeated context flags", () => 
     "https://example.com/spec"
   ]);
 
-  assert.deepEqual(request, {
-    baseRef: "main",
-    headRef: "feature-branch",
-    repoPath: "./demo",
-    userContext: ["PR-123", "https://example.com/spec"],
-    dryRun: false
+  assert.deepEqual(parsed, {
+    kind: "run",
+    request: {
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./demo",
+      userContext: ["PR-123", "https://example.com/spec"],
+      dryRun: false
+    }
   });
 });
 
@@ -57,35 +63,39 @@ test("parseReviewCommand rejects --context when the next token is another flag",
 });
 
 test("parseReviewCommand sets dryRun true when --dry-run flag is present at end", () => {
-  const request = parseReviewCommand(["main", "feature-branch", "--dry-run"]);
+  const parsed = parseReviewCommand(["main", "feature-branch", "--dry-run"]);
 
-  assert.equal(request.dryRun, true);
+  assert.equal(parsed.kind, "run");
+  assert.equal(parsed.request.dryRun, true);
 });
 
 test("parseReviewCommand sets dryRun false when --dry-run flag is absent", () => {
-  const request = parseReviewCommand(["main", "feature-branch"]);
+  const parsed = parseReviewCommand(["main", "feature-branch"]);
 
-  assert.equal(request.dryRun, false);
+  assert.equal(parsed.kind, "run");
+  assert.equal(parsed.request.dryRun, false);
 });
 
 test("parseReviewCommand accepts --dry-run at start position", () => {
-  const request = parseReviewCommand(["--dry-run", "main", "feature-branch"]);
+  const parsed = parseReviewCommand(["--dry-run", "main", "feature-branch"]);
 
-  assert.equal(request.dryRun, true);
-  assert.equal(request.baseRef, "main");
-  assert.equal(request.headRef, "feature-branch");
+  assert.equal(parsed.kind, "run");
+  assert.equal(parsed.request.dryRun, true);
+  assert.equal(parsed.request.baseRef, "main");
+  assert.equal(parsed.request.headRef, "feature-branch");
 });
 
 test("parseReviewCommand accepts --dry-run in middle position", () => {
-  const request = parseReviewCommand(["main", "--dry-run", "feature-branch"]);
+  const parsed = parseReviewCommand(["main", "--dry-run", "feature-branch"]);
 
-  assert.equal(request.dryRun, true);
-  assert.equal(request.baseRef, "main");
-  assert.equal(request.headRef, "feature-branch");
+  assert.equal(parsed.kind, "run");
+  assert.equal(parsed.request.dryRun, true);
+  assert.equal(parsed.request.baseRef, "main");
+  assert.equal(parsed.request.headRef, "feature-branch");
 });
 
 test("parseReviewCommand combines --dry-run with --repo and --context", () => {
-  const request = parseReviewCommand([
+  const parsed = parseReviewCommand([
     "main",
     "feature-branch",
     "--dry-run",
@@ -95,11 +105,53 @@ test("parseReviewCommand combines --dry-run with --repo and --context", () => {
     "PR-42"
   ]);
 
-  assert.equal(request.dryRun, true);
-  assert.equal(request.repoPath, "./my-repo");
-  assert.deepEqual(request.userContext, ["PR-42"]);
+  assert.equal(parsed.kind, "run");
+  assert.equal(parsed.request.dryRun, true);
+  assert.equal(parsed.request.repoPath, "./my-repo");
+  assert.deepEqual(parsed.request.userContext, ["PR-42"]);
 });
 
 test("parseReviewCommand does not treat --dry-run as unknown option", () => {
   assert.doesNotThrow(() => parseReviewCommand(["main", "head", "--dry-run"]));
+});
+
+test("parseReviewCommand returns check mode when --check is the only input", () => {
+  const parsed = parseReviewCommand(["--check"]);
+
+  assert.deepEqual(parsed, { kind: "check" });
+});
+
+test("parseReviewCommand gives --check precedence over refs and --dry-run", () => {
+  const parsed = parseReviewCommand([
+    "main",
+    "feature-branch",
+    "--dry-run",
+    "--check"
+  ]);
+
+  assert.deepEqual(parsed, { kind: "check" });
+});
+
+test("parseReviewCommand gives --check precedence over malformed --repo", () => {
+  const parsed = parseReviewCommand(["--repo", "--check"]);
+
+  assert.deepEqual(parsed, { kind: "check" });
+});
+
+test("parseReviewCommand gives --check precedence over malformed --context", () => {
+  const parsed = parseReviewCommand(["--context", "--check"]);
+
+  assert.deepEqual(parsed, { kind: "check" });
+});
+
+test("parseReviewCommand gives --check precedence over unknown options", () => {
+  const parsed = parseReviewCommand(["--check", "--bogus"]);
+
+  assert.deepEqual(parsed, { kind: "check" });
+});
+
+test("parseReviewCommand tolerates repeated --check flags", () => {
+  const parsed = parseReviewCommand(["--check", "main", "--check"]);
+
+  assert.deepEqual(parsed, { kind: "check" });
 });

@@ -185,6 +185,98 @@ test("runCli reports a usage error when head_ref is missing", async () => {
   assert.deepEqual(stdout, []);
   assert.match(stderr.join("\n"), /head_ref/i);
   assert.match(stderr.join("\n"), /review <base_ref> <head_ref>/i);
+  assert.match(stderr.join("\n"), /review --check/i);
+});
+
+test("runCli dispatches --check to the availability checker and ignores the review app", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const calls: string[] = [];
+
+  const exitCode = await runCli(["--check", "main", "feature-branch", "--dry-run"], {
+    app: {
+      async run() {
+        calls.push("app.run");
+        throw new Error("review app must not run in check mode");
+      }
+    },
+    availabilityChecker: {
+      async check() {
+        calls.push("availabilityChecker.check");
+      }
+    },
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(calls, ["availabilityChecker.check"]);
+  assert.deepEqual(stdout, ["GitHub Copilot is available."]);
+  assert.deepEqual(stderr, []);
+});
+
+test("runCli uses check mode even when argv contains malformed review-run options", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  let checkerCalls = 0;
+
+  const exitCode = await runCli(["--repo", "--check", "--bogus"], {
+    availabilityChecker: {
+      async check() {
+        checkerCalls += 1;
+      }
+    },
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(checkerCalls, 1);
+  assert.deepEqual(stdout, ["GitHub Copilot is available."]);
+  assert.deepEqual(stderr, []);
+});
+
+test("runCli surfaces availability checker failures through the fatal error path", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+
+  const exitCode = await runCli(["--check"], {
+    availabilityChecker: {
+      async check() {
+        throw new Error("Copilot auth expired.");
+      }
+    },
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 1);
+  assert.deepEqual(stdout, []);
+  assert.match(stderr.join("\n"), /Copilot auth expired\./u);
 });
 
 test("runCli reports zero planned files as a successful summary", async () => {

@@ -7,12 +7,23 @@ export class CliUsageError extends Error {
   }
 }
 
-const USAGE = "review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]";
+const REVIEW_RUN_USAGE =
+  "review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]";
+const CHECK_USAGE = "review --check";
+const USAGE = `${REVIEW_RUN_USAGE}\n${CHECK_USAGE}`;
+
+export type ParsedReviewCommand =
+  | { kind: "check" }
+  | { kind: "run"; request: RunRequest };
 
 /**
  * Parse the review command into the RunRequest consumed by the app layer.
  */
-export function parseReviewCommand(argv: string[]): RunRequest {
+export function parseReviewCommand(argv: string[]): ParsedReviewCommand {
+  if (argv.includes("--check")) {
+    return { kind: "check" };
+  }
+
   const positionals: string[] = [];
   const userContext: string[] = [];
   let repoPath: string | undefined;
@@ -77,5 +88,8 @@ export function parseReviewCommand(argv: string[]): RunRequest {
     request.repoPath = repoPath;
   }
 
-  return request;
+  return {
+    kind: "run",
+    request
+  };
 }
