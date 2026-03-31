@@ -2,14 +2,10 @@ import { appendFileSync } from "node:fs";
 
 export interface ToolAuditRecord {
   ts: string;                 // ISO 8601 UTC
-  tool: string;               // "bash" | "web_fetch" | "read" | "write"
+  tool: string;               // "bash" | "web_fetch" | "read" | "write" | ...
   decision: "allow" | "deny";
-  reason?: string;            // present only when deny
-  args: {
-    command?: string;         // bash
-    url?: string;             // web_fetch
-    path?: string;            // read / write
-  };
+  reason?: string;            // present when deny; also used as diagnostic note for deferred-allow
+  args: Record<string, string | undefined>;
 }
 
 /**
