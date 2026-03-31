@@ -27,6 +27,8 @@ export interface ChangesetOverviewRunnerOptions {
   reviewSessionFactory: ReviewSessionFactoryLike;
 }
 
+const STEP0_TIMEOUT_MS = 300_000;
+
 /**
  * Run the run-level Step 0 review once, retrying only if the response is blank or the session fails.
  */
@@ -50,7 +52,9 @@ export class ChangesetOverviewRunner {
           systemMessage: STEP0_SYSTEM_MESSAGE,
           workingDirectory: input.workingDirectory
         });
-        const response = (await session.sendAndWait(buildStep0Prompt(input)))?.trim();
+        const response = (
+          await session.sendAndWait(buildStep0Prompt(input), STEP0_TIMEOUT_MS)
+        )?.trim();
 
         if (response) {
           return createRunContext({

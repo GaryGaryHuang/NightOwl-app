@@ -14,14 +14,16 @@ import {
 test("ChangesetOverviewRunner builds Step 0 input from changeset entries and user context", async () => {
   const profiles: ReviewSessionProfile[] = [];
   const prompts: string[] = [];
+  const timeouts: number[] = [];
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
       async createSession(profile) {
         profiles.push(profile);
 
         return {
-          async sendAndWait(prompt) {
+          async sendAndWait(prompt, timeoutMs) {
             prompts.push(prompt);
+            timeouts.push(timeoutMs ?? 0);
             return "## Changeset Overview\n- 調整範圍：feature";
           }
         };
@@ -76,6 +78,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
     "- 行為變更：",
     "- 測試覆蓋觀察："
   ]);
+  assert.equal(timeouts[0], 300_000);
 });
 
 // A blank/undefined first response triggers a retry with a fresh session
