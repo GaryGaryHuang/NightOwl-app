@@ -295,3 +295,182 @@ test("tool policy shell policy allows relative path containing slash without ./ 
   assert.equal(evaluateReadonlyShellCommand("cat src/app.ts", BASE_PROFILE), undefined);
 });
 
+// ---------------------------------------------------------------------------
+// && chain operator support
+// ---------------------------------------------------------------------------
+
+test("tool policy shell policy allows simple cd-then-git chain via &&", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand(
+      "cd /workspace/repo && git show HEAD:src/app.ts",
+      BASE_PROFILE
+    ),
+    undefined
+  );
+});
+
+test("tool policy shell policy allows chain of three whitelisted commands", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand(
+      "cd /workspace/repo && git rev-parse --abbrev-ref HEAD && git status --short",
+      BASE_PROFILE
+    ),
+    undefined
+  );
+});
+
+test("tool policy shell policy allows chain combined with pipeline", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand(
+      "cd /workspace/repo && git show HEAD:src/app.ts | head -20",
+      BASE_PROFILE
+    ),
+    undefined
+  );
+});
+
+test("tool policy shell policy denies chain with non-whitelisted command in any segment", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand(
+      'cd /workspace/repo && python -c "print(1)"',
+      BASE_PROFILE
+    ),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies background execution with single ampersand", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("git log &", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies triple ampersand", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("git log &&& git status", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy does not treat && inside double quotes as chain separator", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand('grep "foo && bar" src/app.ts', BASE_PROFILE),
+    undefined
+  );
+});
+
+test("tool policy shell policy does not treat && inside single quotes as chain separator", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand("grep 'foo && bar' src/app.ts", BASE_PROFILE),
+    undefined
+  );
+});
+
+test("tool policy shell policy does not treat escaped & as chain separator", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand(String.raw`grep foo\&\&bar src/app.ts`, BASE_PROFILE),
+    undefined
+  );
+});
+
+test("tool policy shell policy denies empty segment from trailing &&", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("git log &&", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies empty segment from leading &&", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("&& git log", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies whitespace-only chain segment", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("git log &&   && git status", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+// ---------------------------------------------------------------------------
+// cd cwd propagation
+// ---------------------------------------------------------------------------
+
+test("tool policy shell policy propagates cd cwd to subsequent chain segment", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand("cd /workspace/repo && cat src/app.ts", BASE_PROFILE),
+    undefined
+  );
+});
+
+test("tool policy shell policy denies cd without path argument", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("cd && git status", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies cd to path outside allowed boundary", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("cd /tmp && ls", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy updates cwd cumulatively with multiple cd segments", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand("cd /workspace/repo && cd src && cat app.ts", BASE_PROFILE),
+    undefined
+  );
+});
+
+test("tool policy shell policy resolves cd relative path against initial cwd", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand(
+      "cd src && cat app.ts",
+      BASE_PROFILE,
+      "/workspace/repo"
+    ),
+    undefined
+  );
+});
+
+test("tool policy shell policy ignores cd flags and extracts non-flag path token", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand("cd -P /workspace/repo && git status", BASE_PROFILE),
+    undefined
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Expanded whitelist entries
+// ---------------------------------------------------------------------------
+
+test("tool policy shell policy allows newly whitelisted commands", () => {
+  assert.equal(evaluateReadonlyShellCommand("nl -ba src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("wc src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("wc -l src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("file src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("stat src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("tree src/", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("realpath src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("basename /workspace/repo/src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("dirname /workspace/repo/src/app.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("diff src/old.ts src/new.ts", BASE_PROFILE), undefined);
+  assert.equal(evaluateReadonlyShellCommand("git log --oneline | awk '{print $1}'", BASE_PROFILE), undefined);
+});
+
+test("tool policy shell policy applies path-boundary checks to new whitelist entries", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("nl /etc/passwd", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("diff /etc/hosts src/app.ts", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+

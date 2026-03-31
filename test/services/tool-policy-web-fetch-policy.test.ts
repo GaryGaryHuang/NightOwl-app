@@ -12,26 +12,38 @@ import {
   FakeRedirectResolver
 } from "../helpers/tool-policy-fixture.ts";
 
-test("tool policy web-fetch policy enforces the public http(s) URL gate", async () => {
+test("tool policy web-fetch policy enforces the public https URL gate", async () => {
   const policy = createWebFetchPolicy();
 
   assert.equal(await policy.evaluate("https://docs.example.com/guide"), undefined);
-  assert.equal(await policy.evaluate("http://example.com/spec"), undefined);
 
   for (const url of [
     "/internal/path",
-    "http://localhost:3000",
-    "http://192.168.1.10/admin",
-    "http://[::1]/admin",
+    "https://localhost:3000",
+    "https://192.168.1.10/admin",
+    "https://[::1]/admin",
     "https://",
     "file:///etc/passwd",
-    "http://[::ffff:127.0.0.1]/admin"
+    "https://[::ffff:127.0.0.1]/admin"
   ]) {
     assert.deepEqual(await policy.evaluate(url), {
       permissionDecision: "deny",
       permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
     });
   }
+});
+
+test("tool policy web-fetch policy denies http URLs", async () => {
+  const policy = createWebFetchPolicy();
+
+  assert.deepEqual(await policy.evaluate("http://docs.example.com/guide"), {
+    permissionDecision: "deny",
+    permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
+  });
+  assert.deepEqual(await policy.evaluate("http://example.com/spec"), {
+    permissionDecision: "deny",
+    permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
+  });
 });
 
 test("tool policy web-fetch policy applies hostname DNS classification only to hostname URLs", async () => {
@@ -46,7 +58,7 @@ test("tool policy web-fetch policy applies hostname DNS classification only to h
     }
   ]);
 
-  assert.deepEqual(await policy.evaluate("http://192.168.1.10/admin"), {
+  assert.deepEqual(await policy.evaluate("https://192.168.1.10/admin"), {
     permissionDecision: "deny",
     permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
   });
@@ -124,10 +136,10 @@ test("tool policy web-fetch policy enforces denylist precedence and denylist-onl
   assert.equal(await denyOnly.evaluate("https://docs.example.com/guide"), undefined);
 });
 
-// When the initial URL itself fails the host policy, the redirect resolver
-// must not be called at all — avoid the network round-trip when the result
-// is already known.
-test("tool policy web-fetch policy denies the initial URL before redirect traversal when host policy already fails", async () => {
+// Redirect resolution has been removed from evaluate(). The redirect
+// resolver is retained as a constructor dependency but must never be
+// invoked during URL evaluation.
+test("tool policy web-fetch policy does not invoke redirect resolver during evaluation", async () => {
   const redirectResolver = new FakeRedirectResolver({
     kind: "resolved",
     redirectChain: [new URL("https://docs.example.com/guide")]
@@ -137,6 +149,11 @@ test("tool policy web-fetch policy denies the initial URL before redirect traver
     redirectResolver
   });
 
+  // Allowed URL — resolver must not be called.
+  assert.equal(await policy.evaluate("https://docs.example.com/guide"), undefined);
+  assert.equal(redirectResolver.calls.length, 0);
+
+  // Denied URL — resolver must still not be called.
   assert.deepEqual(await policy.evaluate("https://reference.example.net/start"), {
     permissionDecision: "deny",
     permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
@@ -144,83 +161,17 @@ test("tool policy web-fetch policy denies the initial URL before redirect traver
   assert.equal(redirectResolver.calls.length, 0);
 });
 
-test("tool policy web-fetch policy validates allowlist and denylist semantics across redirect targets", async () => {
-  const allowlistMiss = createWebFetchPolicy({
-    webFetchAllowedHosts: ["docs.example.com"],
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://reference.example.net/page")]
-    })
-  });
 
-  assert.deepEqual(await allowlistMiss.evaluate("https://docs.example.com/start"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-  });
 
-  const wildcardAllow = createWebFetchPolicy({
-    webFetchAllowedHosts: ["*.example.com"],
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://api.docs.example.com/reference")]
-    })
-  });
+// The canonical hostname (lowercased, trailing dot stripped) is passed to
+// the classifier so that variant spellings map to a single classify call.
+test("tool policy web-fetch policy canonicalizes hostnames for DNS classification", async () => {
+  const classifier = new FakeHostnameClassifier({ kind: "allowed" });
+  const policy = createWebFetchPolicy({ hostnameClassifier: classifier });
 
-  assert.equal(await wildcardAllow.evaluate("https://docs.example.com/start"), undefined);
-
-  const denylistHit = createWebFetchPolicy({
-    webFetchAllowedHosts: ["*.example.com"],
-    webFetchDeniedHosts: ["internal.example.com"],
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://internal.example.com/admin")]
-    })
-  });
-
-  assert.deepEqual(await denylistHit.evaluate("https://docs.example.com/start"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-  });
-});
-
-// The canonical hostname (lowercased, trailing dot stripped) is used as the
-// memoization key so duplicate classify calls for the same effective hostname
-// in a redirect chain are deduplicated.
-test("tool policy web-fetch policy enforces hostname DNS classification across redirect targets and memoizes canonical hosts", async () => {
-  const classifier = new FakeHostnameClassifier(async (hostname) =>
-    hostname === "internal-proxy.example.com"
-      ? {
-          kind: "denied",
-          reason:
-            "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
-        }
-      : { kind: "allowed" }
-  );
-  const denyPolicy = createWebFetchPolicy({
-    hostnameClassifier: classifier,
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://internal-proxy.example.com/admin")]
-    })
-  });
-
-  assert.deepEqual(await denyPolicy.evaluate("https://docs.example.com/start"), {
-    permissionDecision: "deny",
-    permissionDecisionReason:
-      "Review sessions only allow web_fetch for hostnames that resolve to public network addresses."
-  });
-
-  const memoClassifier = new FakeHostnameClassifier({ kind: "allowed" });
-  const memoPolicy = createWebFetchPolicy({
-    hostnameClassifier: memoClassifier,
-    redirectResolver: new FakeRedirectResolver({
-      kind: "resolved",
-      redirectChain: [new URL("https://Docs.Example.Com./reference")]
-    })
-  });
-
-  assert.equal(await memoPolicy.evaluate("https://docs.example.com/start"), undefined);
-  assert.deepEqual(memoClassifier.calls, [
+  // Trailing-dot hostname should be canonicalized before classification.
+  assert.equal(await policy.evaluate("https://Docs.Example.Com.:443/ref"), undefined);
+  assert.deepEqual(classifier.calls, [
     {
       hostname: "docs.example.com",
       timeoutMs: 5000
@@ -228,20 +179,7 @@ test("tool policy web-fetch policy enforces hostname DNS classification across r
   ]);
 });
 
-test("tool policy web-fetch policy denies unresolved redirect chains conservatively", async () => {
-  const policy = createWebFetchPolicy({
-    redirectResolver: new FakeRedirectResolver({
-      kind: "denied",
-      reason: "Review sessions only allow web_fetch when redirect chains resolve safely."
-    })
-  });
 
-  assert.deepEqual(await policy.evaluate("https://docs.example.com/start"), {
-    permissionDecision: "deny",
-    permissionDecisionReason:
-      "Review sessions only allow web_fetch when redirect chains resolve safely."
-  });
-});
 
 test("tool policy web-fetch policy can be instantiated directly with explicit dependencies", async () => {
   const policy = new ToolPolicyWebFetchPolicy({

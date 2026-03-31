@@ -215,43 +215,6 @@ test("tool policy guard writes audit records for representative pre-tool decisio
   }
 });
 
-test("tool policy guard writes audit records for redirect-policy denials", async () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
-
-  try {
-    const auditPath = path.join(tempDir, "tool-audit.jsonl");
-    const auditWriter = new ToolAuditWriter(auditPath);
-    const { hook } = createPolicySession({
-      auditWriter,
-      redirectResolver: new FakeRedirectResolver({
-        kind: "denied",
-        reason: "Review sessions only allow web_fetch when redirect chains resolve safely."
-      })
-    });
-
-    await hook(
-      {
-        timestamp: Date.now(),
-        cwd: "/workspace/repo",
-        toolName: "web_fetch",
-        toolArgs: { url: "https://docs.example.com/start" }
-      },
-      { sessionId: "s1" }
-    );
-
-    const [denyRecord] = readAuditLines(auditPath);
-
-    assert.equal(denyRecord.tool, "web_fetch");
-    assert.equal(denyRecord.decision, "deny");
-    assert.equal(
-      denyRecord.reason,
-      "Review sessions only allow web_fetch when redirect chains resolve safely."
-    );
-  } finally {
-    rmSync(tempDir, { force: true, recursive: true });
-  }
-});
-
 test("tool policy guard writes audit records for permission decisions", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
 

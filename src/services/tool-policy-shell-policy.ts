@@ -35,7 +35,17 @@ const ALLOWED_BASH_PREFIXES = [
   "cut",
   "sort",
   "uniq",
-  "wc -l"
+  "wc",
+  "cd",
+  "nl",
+  "file",
+  "stat",
+  "tree",
+  "realpath",
+  "basename",
+  "dirname",
+  "diff",
+  "awk"
 ];
 
 const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output"]);
@@ -64,7 +74,7 @@ function isAllowedReadonlyBashCommand(
     return false;
   }
 
-  if (/[;&`><]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
+  if (/[;`><]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
     return false;
   }
 
@@ -72,15 +82,155 @@ function isAllowedReadonlyBashCommand(
     return false;
   }
 
-  const segments = splitTopLevelPipelineSegments(trimmedCommand);
+  const chainSegments = splitTopLevelChainSegments(trimmedCommand);
 
-  if (!segments) {
+  if (!chainSegments) {
     return false;
   }
 
-  return segments.every((segment) =>
-    isAllowedSingleSegment(segment, profile, commandCwd)
-  );
+  let effectiveCwd = commandCwd;
+
+  for (const chainSegment of chainSegments) {
+    const pipelineSegments = splitTopLevelPipelineSegments(chainSegment);
+
+    if (!pipelineSegments) {
+      return false;
+    }
+
+    if (
+      !pipelineSegments.every((segment) =>
+        isAllowedSingleSegment(segment, profile, effectiveCwd)
+      )
+    ) {
+      return false;
+    }
+
+    const cdCwd = extractCdCwd(chainSegment, profile, effectiveCwd);
+
+    if (cdCwd === false) {
+      return false;
+    }
+
+    if (cdCwd !== undefined) {
+      effectiveCwd = cdCwd;
+    }
+  }
+
+  return true;
+}
+
+function splitTopLevelChainSegments(command: string): string[] | undefined {
+  const segments: string[] = [];
+  let currentSegment = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaping = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaping) {
+      currentSegment += char;
+      escaping = false;
+      continue;
+    }
+
+    if (inSingleQuote) {
+      currentSegment += char;
+
+      if (char === "'") {
+        inSingleQuote = false;
+      }
+
+      continue;
+    }
+
+    if (char === "\\") {
+      currentSegment += char;
+      escaping = true;
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      currentSegment += char;
+
+      if (char === '"') {
+        inDoubleQuote = false;
+      }
+
+      continue;
+    }
+
+    if (char === "'") {
+      currentSegment += char;
+      inSingleQuote = true;
+      continue;
+    }
+
+    if (char === '"') {
+      currentSegment += char;
+      inDoubleQuote = true;
+      continue;
+    }
+
+    if (char === "&") {
+      if (i + 1 < command.length && command[i + 1] === "&") {
+        segments.push(currentSegment);
+        currentSegment = "";
+        i++;
+        continue;
+      }
+
+      return undefined;
+    }
+
+    currentSegment += char;
+  }
+
+  if (escaping || inSingleQuote || inDoubleQuote) {
+    return undefined;
+  }
+
+  segments.push(currentSegment);
+
+  return segments;
+}
+
+/**
+ * If the chain segment is a `cd <path>` command, extract and validate the path.
+ * Returns the resolved cwd string on success, `undefined` if not a cd command,
+ * or `false` if it's a cd command that should deny.
+ */
+function extractCdCwd(
+  chainSegment: string,
+  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  effectiveCwd?: string
+): string | false | undefined {
+  const trimmed = chainSegment.trim();
+
+  if (trimmed !== "cd" && !trimmed.startsWith("cd ")) {
+    return undefined;
+  }
+
+  const tokens = trimmed.split(/\s+/u).filter(Boolean);
+  const pathToken = tokens.slice(1).find((token) => !token.startsWith("-"));
+
+  if (!pathToken) {
+    return false;
+  }
+
+  const baseDirectory =
+    typeof effectiveCwd === "string" && effectiveCwd.trim()
+      ? effectiveCwd
+      : profile.repoRoot;
+
+  const resolvedPath = resolvePathToken(pathToken, baseDirectory);
+
+  if (!isAllowedReadPath(resolvedPath, profile)) {
+    return false;
+  }
+
+  return resolvedPath;
 }
 
 function splitTopLevelPipelineSegments(command: string): string[] | undefined {

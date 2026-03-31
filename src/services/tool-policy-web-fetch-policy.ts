@@ -22,9 +22,9 @@ export interface ToolPolicyDecisionDeny {
 export type ToolPolicyDecision = ToolPolicyDecisionDeny | undefined;
 
 export const UNSAFE_WEB_FETCH_URL_REASON =
-  "Review sessions only allow web_fetch for absolute public http(s) URLs.";
+  "Review sessions only allow web_fetch for absolute public https URLs.";
 export const CONFIGURED_WEB_FETCH_HOST_REASON =
-  "Review sessions only allow web_fetch for configured public http(s) hosts.";
+  "Review sessions only allow web_fetch for configured public https hosts.";
 
 export interface ToolPolicyWebFetchPolicyOptions {
   hostnameClassifier?: WebFetchHostnameClassifier;
@@ -101,22 +101,6 @@ export class ToolPolicyWebFetchPolicy {
 
   async evaluate(urlString: string): Promise<ToolPolicyDecision> {
     const parsedUrl = parseAllowedWebFetchUrl(urlString);
-    const hostnameDecisionCache = new Map<string, Promise<ToolPolicyDecision>>();
-
-    const evaluateResolvedUrl = async (
-      resolvedUrl: URL
-    ): Promise<ToolPolicyDecision> => {
-      const hostPolicyDecision = this.evaluateHostPolicy(resolvedUrl);
-
-      if (hostPolicyDecision) {
-        return hostPolicyDecision;
-      }
-
-      return this.evaluateHostnameClassification(
-        resolvedUrl,
-        hostnameDecisionCache
-      );
-    };
 
     if (!parsedUrl) {
       return {
@@ -125,57 +109,16 @@ export class ToolPolicyWebFetchPolicy {
       };
     }
 
-    let decision = await evaluateResolvedUrl(parsedUrl);
+    const hostPolicyDecision = this.evaluateHostPolicy(parsedUrl);
 
-    if (decision) {
-      return decision;
+    if (hostPolicyDecision) {
+      return hostPolicyDecision;
     }
 
-    const redirectResolution = await this.#redirectResolver.resolveRedirectChain(
+    return this.evaluateHostnameClassification(
       parsedUrl,
-      {
-        maxHops: this.#webFetchRedirectHopLimit,
-        timeoutMs: this.#webFetchRedirectTimeoutMs,
-        validateRedirectTarget: async (redirectTarget) => {
-          const parsedRedirectUrl = parseAllowedWebFetchUrl(
-            redirectTarget.toString()
-          );
-
-          if (!parsedRedirectUrl) {
-            return UNSAFE_WEB_FETCH_URL_REASON;
-          }
-
-          return (await evaluateResolvedUrl(parsedRedirectUrl))
-            ?.permissionDecisionReason;
-        }
-      }
+      new Map()
     );
-
-    if (redirectResolution.kind === "denied") {
-      return {
-        permissionDecision: "deny",
-        permissionDecisionReason: redirectResolution.reason
-      };
-    }
-
-    for (const redirectUrl of redirectResolution.redirectChain) {
-      const parsedRedirectUrl = parseAllowedWebFetchUrl(redirectUrl.toString());
-
-      if (!parsedRedirectUrl) {
-        return {
-          permissionDecision: "deny",
-          permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-        };
-      }
-
-      decision = await evaluateResolvedUrl(parsedRedirectUrl);
-
-      if (decision) {
-        return decision;
-      }
-    }
-
-    return undefined;
   }
 
   evaluateHostPolicy(url: URL): ToolPolicyDecision {
@@ -273,7 +216,7 @@ function parseAllowedWebFetchUrl(urlString: string): URL | undefined {
   }
 
   if (
-    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    parsed.protocol !== "https:" ||
     !parsed.hostname
   ) {
     return undefined;

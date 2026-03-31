@@ -124,7 +124,7 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
       {
         permissionDecision: "deny",
         permissionDecisionReason:
-          "Review sessions only allow web_fetch for absolute public http(s) URLs."
+          "Review sessions only allow web_fetch for absolute public https URLs."
       }
     );
   } finally {
@@ -233,7 +233,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
       {
         permissionDecision: "deny",
         permissionDecisionReason:
-          "Review sessions only allow web_fetch for configured public http(s) hosts."
+          "Review sessions only allow web_fetch for configured public https hosts."
       }
     );
     assert.deepEqual(
@@ -253,7 +253,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
   }
 });
 
-test("createLocalReviewRunApp applies redirect-chain host policy without introducing a new step failure family", async () => {
+test("createLocalReviewRunApp applies host policy without redirect-chain resolution", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -343,10 +343,11 @@ test("createLocalReviewRunApp applies redirect-chain host policy without introdu
 
     assert.ok(preToolUse);
     const confirmedPreToolUse = preToolUse!;
-    // docs.example.com is in webFetchAllowedHosts, but the redirect resolver
-    // reports it chains to reference.example.net — which is not in the
-    // allowlist — so the entire request is denied regardless of the origin URL.
-    assert.deepEqual(
+    // Redirect resolution has been removed from evaluate(). The redirect
+    // resolver is injected but never called. docs.example.com is in the
+    // allowlist so the request is allowed despite the resolver being
+    // configured with a chain to an unlisted host.
+    assert.equal(
       await confirmedPreToolUse(
         {
           timestamp: Date.now(),
@@ -356,10 +357,24 @@ test("createLocalReviewRunApp applies redirect-chain host policy without introdu
         },
         { sessionId: "session-1" }
       ),
+      undefined
+    );
+
+    // A host NOT in the allowlist is still denied via host policy.
+    assert.deepEqual(
+      await confirmedPreToolUse(
+        {
+          timestamp: Date.now(),
+          cwd: fixture.repoDir,
+          toolName: "web_fetch",
+          toolArgs: { url: "https://reference.example.net/page" }
+        },
+        { sessionId: "session-1" }
+      ),
       {
         permissionDecision: "deny",
         permissionDecisionReason:
-          "Review sessions only allow web_fetch for configured public http(s) hosts."
+          "Review sessions only allow web_fetch for configured public https hosts."
       }
     );
   } finally {

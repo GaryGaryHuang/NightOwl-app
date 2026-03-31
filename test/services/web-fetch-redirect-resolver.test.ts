@@ -213,14 +213,14 @@ test("DefaultWebFetchRedirectResolver denies unsafe redirect targets before foll
     timeoutMs: 5000,
     validateRedirectTarget(redirectTarget) {
       return redirectTarget.hostname === "localhost"
-        ? "Review sessions only allow web_fetch for absolute public http(s) URLs."
+        ? "Review sessions only allow web_fetch for absolute public https URLs."
         : undefined;
     }
   });
 
   assert.deepEqual(result, {
     kind: "denied",
-    reason: "Review sessions only allow web_fetch for absolute public http(s) URLs."
+    reason: "Review sessions only allow web_fetch for absolute public https URLs."
   });
   assert.deepEqual(calls, ["https://docs.example.com/start"]);
 });
