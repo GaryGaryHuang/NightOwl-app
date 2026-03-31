@@ -27,8 +27,14 @@ const SHELL_POLICY_FAIL_CLOSED_REASON =
   "Shell policy evaluation failed; denied as a precaution.";
 const CUSTOM_TOOL_DENY_REASON =
   "Custom tools are not permitted in review sessions.";
+const HOOK_DENY_REASON =
+  "Hook-initiated tool calls are not permitted in review sessions.";
 const UNKNOWN_KIND_DENY_REASON =
   "Unknown permission kind is not permitted in review sessions.";
+const EMPTY_TOOL_ARGS_DEFERRED_REASON =
+  "Empty toolArgs; deferred to permissionHandler.";
+const WEB_FETCH_POLICY_FAIL_CLOSED_REASON =
+  "Web fetch policy evaluation failed; denied as a precaution.";
 
 export interface ToolPolicyGuardOptions
   extends ToolPolicyWebFetchPolicyOptions {}
@@ -97,45 +103,174 @@ export class ToolPolicyGuard {
       }
 
       if (request.kind === "shell") {
+        const fullCommandText =
+          typeof request.fullCommandText === "string"
+            ? request.fullCommandText
+            : "";
+        const args: Record<string, string | undefined> = fullCommandText
+          ? { fullCommandText }
+          : {};
+
+        if (fullCommandText) {
+          try {
+            const decision = evaluateReadonlyShellCommand(
+              fullCommandText,
+              profile
+            );
+            if (decision) {
+              auditWriter?.append({
+                ts: new Date().toISOString(),
+                tool: "shell",
+                decision: "deny",
+                reason: decision.permissionDecisionReason,
+                args
+              });
+
+              return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+            }
+          } catch {
+            auditWriter?.append({
+              ts: new Date().toISOString(),
+              tool: "shell",
+              decision: "deny",
+              reason: SHELL_POLICY_FAIL_CLOSED_REASON,
+              args
+            });
+
+            return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+          }
+        }
+
         auditWriter?.append({
           ts: new Date().toISOString(),
           tool: "shell",
           decision: "allow",
-          args: {}
+          args
         });
 
         return { kind: "approved" };
       }
 
       if (request.kind === "url") {
+        const url =
+          typeof request.url === "string" ? request.url : "";
+        const args: Record<string, string | undefined> = url ? { url } : {};
+
+        if (url) {
+          try {
+            const decision = await this.#webFetchPolicy.evaluate(url);
+            if (decision) {
+              auditWriter?.append({
+                ts: new Date().toISOString(),
+                tool: "url",
+                decision: "deny",
+                reason: decision.permissionDecisionReason,
+                args
+              });
+
+              return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+            }
+          } catch {
+            auditWriter?.append({
+              ts: new Date().toISOString(),
+              tool: "url",
+              decision: "deny",
+              reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
+              args
+            });
+
+            return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+          }
+        }
+
         auditWriter?.append({
           ts: new Date().toISOString(),
           tool: "url",
           decision: "allow",
-          args: {}
+          args
         });
 
         return { kind: "approved" };
       }
 
       if (request.kind === "mcp") {
+        const serverName =
+          typeof request.serverName === "string"
+            ? request.serverName
+            : undefined;
+        const toolName =
+          typeof request.toolName === "string"
+            ? request.toolName
+            : undefined;
+        const args: Record<string, string | undefined> = {};
+        if (serverName !== undefined) args.serverName = serverName;
+        if (toolName !== undefined) args.toolName = toolName;
+
         auditWriter?.append({
           ts: new Date().toISOString(),
           tool: "mcp",
           decision: "allow",
-          args: {}
+          args
         });
 
         return { kind: "approved" };
       }
 
       if (request.kind === "custom-tool") {
+        const toolName =
+          typeof request.toolName === "string"
+            ? request.toolName
+            : undefined;
+        const args: Record<string, string | undefined> = {};
+        if (toolName !== undefined) args.toolName = toolName;
+
         auditWriter?.append({
           ts: new Date().toISOString(),
           tool: "custom-tool",
           decision: "deny",
           reason: CUSTOM_TOOL_DENY_REASON,
-          args: {}
+          args
+        });
+
+        return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+      }
+
+      // Defensive: memory kind (not in SDK PermissionRequest.kind union,
+      // but exists in session-events.d.ts). Low-risk; approve.
+      if (request.kind === "memory") {
+        const subject =
+          typeof request.subject === "string"
+            ? request.subject
+            : undefined;
+        const args: Record<string, string | undefined> = {};
+        if (subject !== undefined) args.subject = subject;
+
+        auditWriter?.append({
+          ts: new Date().toISOString(),
+          tool: "memory",
+          decision: "allow",
+          args
+        });
+
+        return { kind: "approved" };
+      }
+
+      // Defensive: hook kind (not in SDK PermissionRequest.kind union).
+      // Unknown security implications; fail-closed deny.
+      if (request.kind === "hook") {
+        const toolName =
+          typeof request.toolName === "string"
+            ? request.toolName
+            : undefined;
+        const args: Record<string, string | undefined> = {};
+        if (toolName !== undefined) args.toolName = toolName;
+
+        auditWriter?.append({
+          ts: new Date().toISOString(),
+          tool: "hook",
+          decision: "deny",
+          reason: HOOK_DENY_REASON,
+          args
         });
 
         return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
@@ -167,6 +302,19 @@ export class ToolPolicyGuard {
           typeof input.toolArgs.url === "string"
             ? input.toolArgs.url
             : "";
+
+        if (!url) {
+          auditWriter?.append({
+            ts: new Date().toISOString(),
+            tool: "web_fetch",
+            decision: "allow",
+            reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
+            args: { url: "" }
+          });
+
+          return;
+        }
+
         const decision = await this.#webFetchPolicy.evaluate(url);
 
         auditWriter?.append({
@@ -193,6 +341,19 @@ export class ToolPolicyGuard {
           typeof input.toolArgs.command === "string"
             ? (input.toolArgs.command as string)
             : "";
+
+        if (!command) {
+          auditWriter?.append({
+            ts: new Date().toISOString(),
+            tool: input.toolName,
+            decision: "allow",
+            reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
+            args: { command: "" }
+          });
+
+          return;
+        }
+
         const decision = evaluateReadonlyShellCommand(
           command,
           profile,
@@ -250,9 +411,12 @@ function isAllowedReadPath(
 
 export {
   CUSTOM_TOOL_DENY_REASON,
+  EMPTY_TOOL_ARGS_DEFERRED_REASON,
+  HOOK_DENY_REASON,
   READONLY_BASH_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
   SHELL_TOOL_NAMES,
   UNKNOWN_KIND_DENY_REASON,
-  UNSAFE_WEB_FETCH_URL_REASON
+  UNSAFE_WEB_FETCH_URL_REASON,
+  WEB_FETCH_POLICY_FAIL_CLOSED_REASON
 };
