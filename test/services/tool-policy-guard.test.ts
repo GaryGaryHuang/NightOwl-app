@@ -8,7 +8,9 @@ import test from "node:test";
 import {
   READONLY_BASH_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
-  UNSAFE_WEB_FETCH_URL_REASON
+  UNSAFE_WEB_FETCH_URL_REASON,
+  CUSTOM_TOOL_DENY_REASON,
+  UNKNOWN_KIND_DENY_REASON
 } from "../../src/services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import {
@@ -290,6 +292,170 @@ test("tool policy guard writes audit records for permission decisions", async ()
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+});
+
+test("tool policy guard permission handler approves shell kind and writes audit record", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { handler } = createPolicySession({ auditWriter });
+
+    assert.deepEqual(
+      await handler({ kind: "shell" }, { sessionId: "s1" }),
+      { kind: "approved" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+    assert.equal(record.tool, "shell");
+    assert.equal(record.decision, "allow");
+    assert.deepEqual(record.args, {});
+    assert.equal(typeof record.ts, "string");
+    assert.equal("reason" in record, false);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy guard permission handler approves url kind and writes audit record", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { handler } = createPolicySession({ auditWriter });
+
+    assert.deepEqual(
+      await handler({ kind: "url" }, { sessionId: "s1" }),
+      { kind: "approved" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+    assert.equal(record.tool, "url");
+    assert.equal(record.decision, "allow");
+    assert.deepEqual(record.args, {});
+    assert.equal(typeof record.ts, "string");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy guard permission handler approves mcp kind and writes audit record", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { handler } = createPolicySession({ auditWriter });
+
+    assert.deepEqual(
+      await handler({ kind: "mcp" }, { sessionId: "s1" }),
+      { kind: "approved" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+    assert.equal(record.tool, "mcp");
+    assert.equal(record.decision, "allow");
+    assert.deepEqual(record.args, {});
+    assert.equal(typeof record.ts, "string");
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy guard permission handler denies custom-tool kind and writes audit record", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { handler } = createPolicySession({ auditWriter });
+
+    assert.deepEqual(
+      await handler({ kind: "custom-tool" }, { sessionId: "s1" }),
+      { kind: "denied-no-approval-rule-and-could-not-request-from-user" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+    assert.equal(record.tool, "custom-tool");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.reason, CUSTOM_TOOL_DENY_REASON);
+    assert.deepEqual(record.args, {});
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy guard permission handler denies unknown kind 'memory' and writes audit record with actual kind", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { handler } = createPolicySession({ auditWriter });
+
+    assert.deepEqual(
+      await handler(
+        { kind: "memory" as "shell" },
+        { sessionId: "s1" }
+      ),
+      { kind: "denied-no-approval-rule-and-could-not-request-from-user" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+    assert.equal(record.tool, "memory");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.reason, UNKNOWN_KIND_DENY_REASON);
+    assert.deepEqual(record.args, {});
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy guard permission handler denies unknown kind 'something-new' with dynamic tool field", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { handler } = createPolicySession({ auditWriter });
+
+    assert.deepEqual(
+      await handler(
+        { kind: "something-new" as "shell" },
+        { sessionId: "s1" }
+      ),
+      { kind: "denied-no-approval-rule-and-could-not-request-from-user" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+    assert.equal(record.tool, "something-new");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.reason, UNKNOWN_KIND_DENY_REASON);
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+test("tool policy guard permission handler works correctly for new kinds without auditWriter", async () => {
+  const { handler } = createPolicySession();
+
+  assert.deepEqual(
+    await handler({ kind: "shell" }, { sessionId: "s1" }),
+    { kind: "approved" }
+  );
+  assert.deepEqual(
+    await handler({ kind: "custom-tool" }, { sessionId: "s1" }),
+    { kind: "denied-no-approval-rule-and-could-not-request-from-user" }
+  );
+  assert.deepEqual(
+    await handler(
+      { kind: "memory" as "shell" },
+      { sessionId: "s1" }
+    ),
+    { kind: "denied-no-approval-rule-and-could-not-request-from-user" }
+  );
 });
 
 test("tool policy guard behaves normally without an audit writer", async () => {

@@ -25,6 +25,10 @@ type PreToolUseHookResult = Awaited<ReturnType<PreToolUseHook>>;
 const SHELL_TOOL_NAMES = new Set(["bash", "sh", "shell"]);
 const SHELL_POLICY_FAIL_CLOSED_REASON =
   "Shell policy evaluation failed; denied as a precaution.";
+const CUSTOM_TOOL_DENY_REASON =
+  "Custom tools are not permitted in review sessions.";
+const UNKNOWN_KIND_DENY_REASON =
+  "Unknown permission kind is not permitted in review sessions.";
 
 export interface ToolPolicyGuardOptions
   extends ToolPolicyWebFetchPolicyOptions {}
@@ -91,6 +95,60 @@ export class ToolPolicyGuard {
 
         return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
       }
+
+      if (request.kind === "shell") {
+        auditWriter?.append({
+          ts: new Date().toISOString(),
+          tool: "shell",
+          decision: "allow",
+          args: {}
+        });
+
+        return { kind: "approved" };
+      }
+
+      if (request.kind === "url") {
+        auditWriter?.append({
+          ts: new Date().toISOString(),
+          tool: "url",
+          decision: "allow",
+          args: {}
+        });
+
+        return { kind: "approved" };
+      }
+
+      if (request.kind === "mcp") {
+        auditWriter?.append({
+          ts: new Date().toISOString(),
+          tool: "mcp",
+          decision: "allow",
+          args: {}
+        });
+
+        return { kind: "approved" };
+      }
+
+      if (request.kind === "custom-tool") {
+        auditWriter?.append({
+          ts: new Date().toISOString(),
+          tool: "custom-tool",
+          decision: "deny",
+          reason: CUSTOM_TOOL_DENY_REASON,
+          args: {}
+        });
+
+        return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+      }
+
+      // Unknown kind — fail-closed
+      auditWriter?.append({
+        ts: new Date().toISOString(),
+        tool: request.kind,
+        decision: "deny",
+        reason: UNKNOWN_KIND_DENY_REASON,
+        args: {}
+      });
 
       return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
     };
@@ -191,8 +249,10 @@ function isAllowedReadPath(
 }
 
 export {
+  CUSTOM_TOOL_DENY_REASON,
   READONLY_BASH_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
   SHELL_TOOL_NAMES,
+  UNKNOWN_KIND_DENY_REASON,
   UNSAFE_WEB_FETCH_URL_REASON
 };
