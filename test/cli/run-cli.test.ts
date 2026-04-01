@@ -726,7 +726,7 @@ test("runCli exits with code 130 and SIGINT-specific message when ReviewRunInter
   assert.equal(stderr[0], "Review run interrupted by SIGINT.");
 });
 
-test("runCli exits with code 130 and SIGTERM-specific message when ReviewRunInterruptedError has signal === 'SIGTERM'", async () => {
+test("runCli exits with code 143 and SIGTERM-specific message when ReviewRunInterruptedError has signal === 'SIGTERM'", async () => {
   const stderr: string[] = [];
 
   const exitCode = await runCli(["main", "feature-branch"], {
@@ -743,7 +743,7 @@ test("runCli exits with code 130 and SIGTERM-specific message when ReviewRunInte
     }
   });
 
-  assert.equal(exitCode, 130);
+  assert.equal(exitCode, 143);
   assert.equal(stderr[0], "Review run terminated by SIGTERM.");
 });
 
