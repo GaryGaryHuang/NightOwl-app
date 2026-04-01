@@ -2,7 +2,7 @@ import { appendFileSync } from "node:fs";
 
 export interface ToolAuditRecord {
   ts: string;                 // ISO 8601 UTC
-  tool: string;               // "bash" | "web_fetch" | "read" | "write" | ...
+  tool: string;               // Observed tool name/kind, e.g. "bash", "shell", "web_fetch", "url", "read", "write", ...
   decision: "allow" | "deny";
   reason?: string;            // present when deny; also used as diagnostic note for deferred-allow
   args: Record<string, string | undefined>;

@@ -23,6 +23,7 @@ type PreToolUseHookInput = Parameters<PreToolUseHook>[0];
 type PreToolUseHookResult = Awaited<ReturnType<PreToolUseHook>>;
 
 const SHELL_TOOL_NAMES = new Set(["bash", "sh", "shell"]);
+const URL_TOOL_NAMES = new Set(["web_fetch", "url"]);
 const SHELL_POLICY_FAIL_CLOSED_REASON =
   "Shell policy evaluation failed; denied as a precaution.";
 const CUSTOM_TOOL_DENY_REASON =
@@ -34,13 +35,13 @@ const UNKNOWN_KIND_DENY_REASON =
 const EMPTY_TOOL_ARGS_DEFERRED_REASON =
   "Empty toolArgs; deferred to permissionHandler.";
 const WEB_FETCH_POLICY_FAIL_CLOSED_REASON =
-  "Web fetch policy evaluation failed; denied as a precaution.";
+  "URL policy evaluation failed; denied as a precaution.";
 
 export interface ToolPolicyGuardOptions
   extends ToolPolicyWebFetchPolicyOptions {}
 
 /**
- * Enforce the review session tool boundary for web_fetch, shell, and file access.
+ * Enforce the review session tool boundary for url retrieval, shell, and file access.
  */
 export class ToolPolicyGuard {
   readonly #webFetchPolicy: ToolPolicyWebFetchPolicy;
@@ -120,7 +121,7 @@ export class ToolPolicyGuard {
             if (decision) {
               auditWriter?.append({
                 ts: new Date().toISOString(),
-                tool: "shell",
+                tool: request.kind,
                 decision: "deny",
                 reason: decision.permissionDecisionReason,
                 args
@@ -131,7 +132,7 @@ export class ToolPolicyGuard {
           } catch {
             auditWriter?.append({
               ts: new Date().toISOString(),
-              tool: "shell",
+              tool: request.kind,
               decision: "deny",
               reason: SHELL_POLICY_FAIL_CLOSED_REASON,
               args
@@ -143,7 +144,7 @@ export class ToolPolicyGuard {
 
         auditWriter?.append({
           ts: new Date().toISOString(),
-          tool: "shell",
+          tool: request.kind,
           decision: "allow",
           args
         });
@@ -162,7 +163,7 @@ export class ToolPolicyGuard {
             if (decision) {
               auditWriter?.append({
                 ts: new Date().toISOString(),
-                tool: "url",
+                tool: request.kind,
                 decision: "deny",
                 reason: decision.permissionDecisionReason,
                 args
@@ -173,7 +174,7 @@ export class ToolPolicyGuard {
           } catch {
             auditWriter?.append({
               ts: new Date().toISOString(),
-              tool: "url",
+              tool: request.kind,
               decision: "deny",
               reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
               args
@@ -185,7 +186,7 @@ export class ToolPolicyGuard {
 
         auditWriter?.append({
           ts: new Date().toISOString(),
-          tool: "url",
+          tool: request.kind,
           decision: "allow",
           args
         });
@@ -294,38 +295,54 @@ export class ToolPolicyGuard {
     auditWriter?: ToolAuditWriter
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
-      if (input.toolName === "web_fetch") {
-        const url =
-          input.toolArgs &&
-          typeof input.toolArgs === "object" &&
-          "url" in input.toolArgs &&
-          typeof input.toolArgs.url === "string"
-            ? input.toolArgs.url
-            : "";
+      if (URL_TOOL_NAMES.has(input.toolName)) {
+        let url = "";
+        try {
+          url =
+            input.toolArgs &&
+            typeof input.toolArgs === "object" &&
+            "url" in input.toolArgs &&
+            typeof input.toolArgs.url === "string"
+              ? input.toolArgs.url
+              : "";
 
-        if (!url) {
+          if (!url) {
+            auditWriter?.append({
+              ts: new Date().toISOString(),
+              tool: input.toolName,
+              decision: "allow",
+              reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
+              args: { url: "" }
+            });
+
+            return;
+          }
+
+          const decision = await this.#webFetchPolicy.evaluate(url);
+
           auditWriter?.append({
             ts: new Date().toISOString(),
-            tool: "web_fetch",
-            decision: "allow",
-            reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
-            args: { url: "" }
+            tool: input.toolName,
+            decision: decision ? "deny" : "allow",
+            ...(decision ? { reason: decision.permissionDecisionReason } : {}),
+            args: { url }
           });
 
-          return;
+          return decision;
+        } catch {
+          auditWriter?.append({
+            ts: new Date().toISOString(),
+            tool: input.toolName,
+            decision: "deny",
+            reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
+            args: { url }
+          });
+
+          return {
+            permissionDecision: "deny",
+            permissionDecisionReason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON
+          };
         }
-
-        const decision = await this.#webFetchPolicy.evaluate(url);
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
-          tool: "web_fetch",
-          decision: decision ? "deny" : "allow",
-          ...(decision ? { reason: decision.permissionDecisionReason } : {}),
-          args: { url }
-        });
-
-        return decision;
       }
 
       if (!SHELL_TOOL_NAMES.has(input.toolName)) {
@@ -418,5 +435,6 @@ export {
   SHELL_TOOL_NAMES,
   UNKNOWN_KIND_DENY_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
+  URL_TOOL_NAMES,
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
 };

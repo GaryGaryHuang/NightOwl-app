@@ -91,6 +91,13 @@ export function assertTextExcludesAll(
   }
 }
 
+export function assertNightOwlSharedToolGuidance(text: string): void {
+  assertTextContainsAll(text, [
+    "use `bash` for git operations",
+    "Use `web_fetch` and MCP tools only when the current step requires external knowledge verification"
+  ]);
+}
+
 export function assertTaggedBlockContains(
   text: string,
   tagName: string,

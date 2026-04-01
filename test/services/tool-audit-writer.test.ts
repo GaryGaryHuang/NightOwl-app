@@ -19,7 +19,7 @@ test("ToolAuditWriter.append() writes a valid JSONL line containing ts, tool, de
     const parsed = JSON.parse(auditFixture.read().trim());
 
     assert.equal(parsed.ts, record.ts);
-    assert.equal(parsed.tool, "bash");
+    assert.equal(parsed.tool, "shell");
     assert.equal(parsed.decision, "allow");
     assert.deepEqual(parsed.args, { command: "git log --oneline -5" });
   } finally {
@@ -57,7 +57,7 @@ test("ToolAuditWriter.append() omits reason field for allow records", () => {
   try {
     const writer = new ToolAuditWriter(auditFixture.auditPath);
     const record = createToolAuditRecord({
-      tool: "web_fetch",
+      tool: "url",
       args: { url: "https://docs.example.com" }
     });
 
@@ -107,7 +107,7 @@ test("ToolAuditWriter.append() multiple calls produce multiple independently par
       createToolAuditRecord({ args: { command: "git log" } }),
       createToolAuditRecord({
         ts: "2026-03-24T10:00:01.000Z",
-        tool: "web_fetch",
+        tool: "url",
         decision: "deny",
         reason: "private IP",
         args: { url: "http://localhost" }

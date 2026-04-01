@@ -5,6 +5,7 @@ import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step2DependenciesBoundariesStep } from "../../../src/core/steps/step2-dependencies-boundaries.ts";
 import {
+  assertNightOwlSharedToolGuidance,
   assertJudgeCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
@@ -46,6 +47,7 @@ test("Step2DependenciesBoundariesStep prepares the Step 2 prompt contract from d
     "Do NOT look for bugs",
     "Begin the response with `## Dependencies & Boundaries`."
   ]);
+  assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);
 
   assertTextContainsAll(plan.prompt.userMessage, [
     '<diff path="src/app.ts" base="main" head="feature-branch">',

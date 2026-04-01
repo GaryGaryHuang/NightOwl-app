@@ -6,6 +6,7 @@ import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step7SummaryStep } from "../../../src/core/steps/step7-summary.ts";
 import {
+  assertNightOwlSharedToolGuidance,
   assertJudgeCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
@@ -47,6 +48,7 @@ test("Step7SummaryStep prepares the Step 7 prompt contract from current review o
     "Keep the summary reader-facing",
     "Begin the response with `## Summary`."
   ]);
+  assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);
 
   assertTextContainsAll(plan.prompt.userMessage, [
     "Read <current_review> and write a structured summary",

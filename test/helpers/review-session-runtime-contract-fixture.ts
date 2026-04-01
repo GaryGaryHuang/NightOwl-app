@@ -141,7 +141,7 @@ export function createToolAuditRecord(
 ): ToolAuditRecord {
   return {
     ts: "2026-03-24T10:00:00.000Z",
-    tool: "bash",
+    tool: "shell",
     decision: "allow",
     args: { command: "git log --oneline -5" },
     ...overrides

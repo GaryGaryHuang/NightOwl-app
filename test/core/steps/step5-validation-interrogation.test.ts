@@ -5,6 +5,7 @@ import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
 import {
+  assertNightOwlSharedToolGuidance,
   assertDeterministicFindingsCheck,
   assertStructuredPlanShape,
   assertTaggedBlockContains,
@@ -40,6 +41,7 @@ test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from 
     "Do not force a finding for every scenario",
     "Output valid JSON only."
   ]);
+  assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);
 
   assertTextContainsAll(plan.prompt.userMessage, [
     '<diff path="src/app.ts" base="main" head="feature-branch">',

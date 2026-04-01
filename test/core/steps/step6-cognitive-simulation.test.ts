@@ -5,6 +5,7 @@ import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
 import {
+  assertNightOwlSharedToolGuidance,
   assertDeterministicFindingsCheck,
   assertStructuredPlanShape,
   assertTaggedBlockContains,
@@ -37,6 +38,7 @@ test("Step6CognitiveSimulationStep prepares the Step 6 prompt contract from diff
     "The Findings section in <current_review> is a Markdown rendering",
     "Output valid JSON only."
   ]);
+  assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);
 
   assertTextContainsAll(plan.prompt.userMessage, [
     '<diff path="src/app.ts" base="main" head="feature-branch">',

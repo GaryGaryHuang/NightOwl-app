@@ -18,7 +18,7 @@ import {
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import {
   createPolicySession,
-  FakeRedirectResolver,
+  FakeHostnameClassifier,
   readAuditLines
 } from "../helpers/tool-policy-fixture.ts";
 
@@ -98,6 +98,89 @@ test("tool policy guard keeps representative web_fetch allow and deny behavior t
   );
 });
 
+test("tool policy guard keeps canonical url tool-name alias behavior through the hook surface", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "url",
+        toolArgs: { url: "https://docs.example.com/guide" }
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "url",
+        toolArgs: { url: "http://localhost:3000" }
+      },
+      { sessionId: "session-1" }
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
+    }
+  );
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "url",
+        toolArgs: undefined
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+});
+
+test("tool policy guard pre-tool hook url fail-closed on evaluate exception", async () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-url-hook-exc-"));
+
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { hook } = createPolicySession({
+      auditWriter,
+      hostnameClassifier: new FakeHostnameClassifier(async () => {
+        throw new Error("simulated DNS failure");
+      })
+    });
+
+    assert.deepEqual(
+      await hook(
+        {
+          timestamp: Date.now(),
+          cwd: "/workspace/repo",
+          toolName: "url",
+          toolArgs: { url: "https://docs.example.com/guide" }
+        },
+        { sessionId: "session-1" }
+      ),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON
+      }
+    );
+
+    const [record] = readAuditLines(auditPath);
+    assert.equal(record.tool, "url");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.reason, WEB_FETCH_POLICY_FAIL_CLOSED_REASON);
+    assert.deepEqual(record.args, { url: "https://docs.example.com/guide" });
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
 test("tool policy guard keeps representative shell allow and deny behavior through the hook surface", async () => {
   const { hook } = createPolicySession();
 
@@ -132,7 +215,7 @@ test("tool policy guard keeps representative shell allow and deny behavior throu
 
 // Missing toolArgs must short-circuit to allow, deferring validation to
 // the PermissionHandler layer which has access to structured SDK fields.
-test("tool policy guard passes through non-bash and non-web_fetch tools and defers empty-args shell/web_fetch to permissionHandler", async () => {
+test("tool policy guard passes through unrelated tools and defers empty-args shell/url aliases to permissionHandler", async () => {
   const { hook } = createPolicySession();
 
   assert.equal(
@@ -165,6 +248,18 @@ test("tool policy guard passes through non-bash and non-web_fetch tools and defe
         timestamp: Date.now(),
         cwd: "/workspace/repo",
         toolName: "web_fetch",
+        toolArgs: undefined
+      },
+      { sessionId: "session-1" }
+    ),
+    undefined
+  );
+  assert.equal(
+    await hook(
+      {
+        timestamp: Date.now(),
+        cwd: "/workspace/repo",
+        toolName: "url",
         toolArgs: undefined
       },
       { sessionId: "session-1" }
@@ -509,7 +604,7 @@ test("tool policy guard keeps shell tool-name alias behavior through the hook su
   );
 });
 
-test("tool policy guard shell alias audit records keep the original toolName", async () => {
+test("tool policy guard shell alias audit records preserve the incoming tool name", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-shell-names-"));
 
   try {
@@ -739,7 +834,7 @@ test("tool policy guard pre-tool-use hook short-circuits on empty command for ba
   }
 });
 
-test("tool policy guard pre-tool-use hook short-circuits on empty url for web_fetch", async () => {
+test("tool policy guard pre-tool-use hook short-circuits on empty url for web_fetch/url aliases", async () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-empty-url-"));
 
   try {
@@ -747,24 +842,30 @@ test("tool policy guard pre-tool-use hook short-circuits on empty url for web_fe
     const auditWriter = new ToolAuditWriter(auditPath);
     const { hook } = createPolicySession({ auditWriter });
 
-    assert.equal(
-      await hook(
-        {
-          timestamp: Date.now(),
-          cwd: "/workspace/repo",
-          toolName: "web_fetch",
-          toolArgs: { url: "" }
-        },
-        { sessionId: "s1" }
-      ),
-      undefined
-    );
+    for (const toolName of ["web_fetch", "url"]) {
+      assert.equal(
+        await hook(
+          {
+            timestamp: Date.now(),
+            cwd: "/workspace/repo",
+            toolName,
+            toolArgs: { url: "" }
+          },
+          { sessionId: "s1" }
+        ),
+        undefined
+      );
+    }
 
-    const [record] = readAuditLines(auditPath);
-    assert.equal(record.tool, "web_fetch");
-    assert.equal(record.decision, "allow");
-    assert.equal(record.reason, EMPTY_TOOL_ARGS_DEFERRED_REASON);
-    assert.deepEqual(record.args, { url: "" });
+    const records = readAuditLines(auditPath);
+    assert.equal(records.length, 2);
+    assert.equal(records[0].tool, "web_fetch");
+    assert.equal(records[1].tool, "url");
+    for (const record of records) {
+      assert.equal(record.decision, "allow");
+      assert.equal(record.reason, EMPTY_TOOL_ARGS_DEFERRED_REASON);
+      assert.deepEqual(record.args, { url: "" });
+    }
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
@@ -1005,25 +1106,34 @@ test("tool policy guard permission handler validates url and denies unsafe urls"
 });
 
 test("tool policy guard permission handler url fail-closed on evaluate exception", async () => {
-  const { handler } = createPolicySession({
-    redirectResolver: new FakeRedirectResolver((() => {
-      throw new Error("simulated DNS failure");
-    }) as never)
-  });
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-audit-url-exc-"));
 
-  // The FakeRedirectResolver constructor stores the result; the actual
-  // exception needs to come from evaluate(). Use a simpler approach: pass
-  // a URL that triggers an exception in the real policy. Since we can't
-  // easily force the web-fetch policy to throw, we test via mock on the
-  // guard class. Instead, verify the handler still returns approved for an
-  // empty url (no evaluation triggered) as a baseline.
-  assert.deepEqual(
-    await handler(
-      { kind: "url", url: "" },
-      { sessionId: "s1" }
-    ),
-    { kind: "approved" }
-  );
+  try {
+    const auditPath = path.join(tempDir, "tool-audit.jsonl");
+    const auditWriter = new ToolAuditWriter(auditPath);
+    const { handler } = createPolicySession({
+      auditWriter,
+      hostnameClassifier: new FakeHostnameClassifier(async () => {
+        throw new Error("simulated DNS failure");
+      })
+    });
+
+    assert.deepEqual(
+      await handler(
+        { kind: "url", url: "https://docs.example.com/guide" },
+        { sessionId: "s1" }
+      ),
+      { kind: "denied-no-approval-rule-and-could-not-request-from-user" }
+    );
+
+    const [record] = readAuditLines(auditPath);
+    assert.equal(record.tool, "url");
+    assert.equal(record.decision, "deny");
+    assert.equal(record.reason, WEB_FETCH_POLICY_FAIL_CLOSED_REASON);
+    assert.deepEqual(record.args, { url: "https://docs.example.com/guide" });
+  } finally {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
 });
 
 // --- PermissionHandler memory kind tests ---

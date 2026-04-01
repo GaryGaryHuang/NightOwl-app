@@ -5,6 +5,7 @@ import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step4StrategyWhatIfScenariosStep } from "../../../src/core/steps/step4-strategy-what-if-scenarios.ts";
 import {
+  assertNightOwlSharedToolGuidance,
   assertJudgeCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
@@ -45,6 +46,7 @@ test("Step4StrategyWhatIfScenariosStep prepares the Step 4 prompt contract from 
     "Each What-if scenario must be a neutral, testable hypothesis",
     "Begin the response with `## Strategy & What-if Scenarios`."
   ]);
+  assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);
 
   assertTextContainsAll(plan.prompt.userMessage, [
     '<diff path="src/app.ts" base="main" head="feature-branch">',

@@ -5,6 +5,7 @@ import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import { createRunContext } from "../../../src/core/run-context.ts";
 import { Step1OverviewStep } from "../../../src/core/steps/step1-overview.ts";
 import {
+  assertNightOwlSharedToolGuidance,
   assertJudgeCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
@@ -55,6 +56,7 @@ test("Step1OverviewStep prepares the Step 1 prompt contract from RunContext and 
     "Do NOT look for bugs",
     "Begin the response with `## Overview`."
   ]);
+  assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);
 
   assertTaggedBlockContains(plan.prompt.userMessage, "changeset_context", [
     "## Changeset Overview",

@@ -10,6 +10,7 @@ import {
   SessionTurnAbortedError
 } from "../../src/services/session-executor.ts";
 import {
+  assertNightOwlSharedToolGuidance,
   assertTaggedBlockContains,
   assertTextContainsAll,
   assertTextExcludesAll
@@ -65,6 +66,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
     "Behavioral changes are business decisions",
     "Begin the response with `## Changeset Overview`."
   ]);
+  assertNightOwlSharedToolGuidance(profiles[0]?.systemMessage ?? "");
 
   assertTaggedBlockContains(prompts[0] ?? "", "changed_files", [
     "M\tsrc/app.ts",

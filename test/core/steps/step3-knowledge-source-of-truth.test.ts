@@ -5,6 +5,7 @@ import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step3KnowledgeSourceOfTruthStep } from "../../../src/core/steps/step3-knowledge-source-of-truth.ts";
 import {
+  assertNightOwlSharedToolGuidance,
   assertJudgeCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
@@ -46,6 +47,7 @@ test("Step3KnowledgeSourceOfTruthStep prepares the Step 3 prompt contract from d
     "prioritize source-of-truth material",
     "This step is for knowledge convergence"
   ]);
+  assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);
 
   assertTextContainsAll(plan.prompt.userMessage, [
     '<diff path="src/app.ts" base="main" head="feature-branch">',

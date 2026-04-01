@@ -10,7 +10,7 @@ export interface ToolPolicyDecisionDeny {
 export type ToolPolicyDecision = ToolPolicyDecisionDeny | undefined;
 
 export const READONLY_BASH_DENY_REASON =
-  "Review sessions only allow repo-local read-only bash analysis commands.";
+  "Review sessions only allow repo-local read-only shell analysis commands.";
 
 const ALLOWED_BASH_PREFIXES = [
   "git diff",

@@ -3,7 +3,7 @@ import { isIP } from "node:net";
 
 export const DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS = 5000;
 export const UNSAFE_WEB_FETCH_HOSTNAME_REASON =
-  "Review sessions only allow web_fetch for hostnames that resolve to public network addresses.";
+  "Review sessions only allow url for hostnames that resolve to public network addresses.";
 
 const HOSTNAME_LOOKUP_TIMEOUT_EXCEEDED = Symbol(
   "hostname-lookup-timeout-exceeded"

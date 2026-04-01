@@ -22,7 +22,7 @@ function createAllowingHostnameClassifier(): WebFetchHostnameClassifier {
   };
 }
 
-test("createLocalReviewRunApp exposes runtime web_fetch guardrails without introducing a new step failure family", async () => {
+test("createLocalReviewRunApp exposes runtime url guardrails and legacy web_fetch alias compatibility without introducing a new step failure family", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -101,7 +101,7 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
     assert.ok(result.successfulFileCount >= 1);
 
     // Step 3 (Knowledge & Source of Truth) is the only step that enables
-    // web_fetch and installs the onPreToolUse enforcement hook.
+    // external URL retrieval and installs the onPreToolUse enforcement hook.
     const reviewSessionConfig = sessionConfigs.find(
       (config) =>
         isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
@@ -111,21 +111,36 @@ test("createLocalReviewRunApp exposes runtime web_fetch guardrails without intro
 
     assert.ok(preToolUse);
     const confirmedPreToolUse = preToolUse!;
-    assert.deepEqual(
+    for (const toolName of ["web_fetch", "url"]) {
+      assert.deepEqual(
+        await confirmedPreToolUse(
+          {
+            timestamp: Date.now(),
+            cwd: fixture.repoDir,
+            toolName,
+            toolArgs: { url: "http://localhost:3000" }
+          },
+          { sessionId: "session-1" }
+        ),
+        {
+          permissionDecision: "deny",
+          permissionDecisionReason:
+            "Review sessions only allow url for absolute public https URLs."
+        }
+      );
+    }
+
+    assert.equal(
       await confirmedPreToolUse(
         {
           timestamp: Date.now(),
           cwd: fixture.repoDir,
-          toolName: "web_fetch",
-          toolArgs: { url: "http://localhost:3000" }
+          toolName: "url",
+          toolArgs: { url: "https://docs.example.com/guide" }
         },
         { sessionId: "session-1" }
       ),
-      {
-        permissionDecision: "deny",
-        permissionDecisionReason:
-          "Review sessions only allow web_fetch for absolute public https URLs."
-      }
+      undefined
     );
   } finally {
     fixture.cleanup();
@@ -233,7 +248,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
       {
         permissionDecision: "deny",
         permissionDecisionReason:
-          "Review sessions only allow web_fetch for configured public https hosts."
+          "Review sessions only allow url for configured public https hosts."
       }
     );
     assert.deepEqual(
@@ -374,7 +389,7 @@ test("createLocalReviewRunApp applies host policy without redirect-chain resolut
       {
         permissionDecision: "deny",
         permissionDecisionReason:
-          "Review sessions only allow web_fetch for configured public https hosts."
+          "Review sessions only allow url for configured public https hosts."
       }
     );
   } finally {
