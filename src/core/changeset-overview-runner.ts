@@ -1,11 +1,13 @@
 import { createRunContext, type RunContext } from "./run-context.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
+import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
 export interface ChangesetOverviewRunnerInput {
   model: string;
   changedFilesList: string[];
   outputBaseDir: string;
   repoRoot: string;
+  signal?: AbortSignal;
   userContext: string[];
   workingDirectory?: string;
 }
@@ -19,7 +21,11 @@ export interface ReviewSessionFactoryLike {
     systemMessage: string;
     workingDirectory?: string;
   }): Promise<{
-    sendAndWait(prompt: string, timeoutMs?: number): Promise<string | undefined>;
+    sendAndWait(
+      prompt: string,
+      timeoutMs?: number,
+      signal?: AbortSignal
+    ): Promise<string | undefined>;
   }>;
 }
 
@@ -53,7 +59,11 @@ export class ChangesetOverviewRunner {
           workingDirectory: input.workingDirectory
         });
         const response = (
-          await session.sendAndWait(buildStep0Prompt(input), STEP0_TIMEOUT_MS)
+          await session.sendAndWait(
+            buildStep0Prompt(input),
+            STEP0_TIMEOUT_MS,
+            input.signal
+          )
         )?.trim();
 
         if (response) {
@@ -68,6 +78,9 @@ export class ChangesetOverviewRunner {
           "Step 0 changeset overview did not produce a non-empty response."
         );
       } catch (error) {
+        if (error instanceof SessionTurnAbortedError) {
+          throw error;
+        }
         lastError =
           error instanceof Error ? error : new Error(String(error));
       }

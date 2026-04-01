@@ -3,6 +3,7 @@ import type { ReviewSectionKey } from "./review-section-contract.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload } from "./structured-output-validator.ts";
+import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
 export interface StepExecutionPlan {
   stepId: string;
@@ -50,7 +51,11 @@ export interface StepReviewSessionFactoryLike {
     systemMessage: string;
     workingDirectory?: string;
   }): Promise<{
-    sendAndWait(prompt: string, timeoutMs?: number): Promise<string | undefined>;
+    sendAndWait(
+      prompt: string,
+      timeoutMs?: number,
+      signal?: AbortSignal
+    ): Promise<string | undefined>;
   }>;
 }
 
@@ -59,6 +64,7 @@ export interface RunStepInput {
   context: FileReviewContext;
   outputBaseDir: string;
   repoRoot: string;
+  signal?: AbortSignal;
   workingDirectory?: string;
 }
 
@@ -110,7 +116,8 @@ export class StepRunner {
         });
         const response = await session.sendAndWait(
           plan.prompt.userMessage,
-          plan.reviewProfile.timeoutMs
+          plan.reviewProfile.timeoutMs,
+          input.signal
         );
 
         if (!response) {
@@ -155,6 +162,9 @@ export class StepRunner {
           }
         };
       } catch (error) {
+        if (error instanceof SessionTurnAbortedError) {
+          throw error;
+        }
         const message =
           error instanceof Error ? error.message : String(error);
         const stepId = input.step.stepId;

@@ -15,6 +15,10 @@ import {
 } from "../../src/core/step-runner.ts";
 import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
 import {
+  SessionExecutor,
+  SessionTurnAbortedError
+} from "../../src/services/session-executor.ts";
+import {
   applySection,
   createReviewSessionFactory,
   createStepRunnerContext,
@@ -53,6 +57,44 @@ function createSectionTestStep(input: {
           ? {}
           : { completionCheck: input.completionCheck }),
         applyTo: input.applyTo ?? applySection(input.sectionKey ?? "overview")
+      };
+    }
+  };
+}
+
+function createStructuredTestStep(input: {
+  stepId?: string;
+  userMessage?: string;
+  reviewProfile?: StepExecutionPlan["reviewProfile"];
+  applyTo?: StepExecutionPlan["applyTo"];
+}) {
+  return {
+    stepId: input.stepId ?? "step5-validation-interrogation",
+    prepare() {
+      return {
+        stepId: input.stepId ?? "step5-validation-interrogation",
+        kind: "structured" as const,
+        structuredTarget: "findings" as const,
+        prompt: {
+          systemMessage: "system prompt",
+          userMessage: input.userMessage ?? "user prompt"
+        },
+        reviewProfile: input.reviewProfile ?? {
+          model: "gpt-5-mini",
+          timeoutMs: 300_000
+        },
+        completionCheck: {
+          kind: "deterministic" as const,
+          validatorId: "findings-json" as const
+        },
+        applyTo:
+          input.applyTo ??
+          ((context, response) => {
+            if (typeof response === "string") {
+              throw new Error("expected structured response");
+            }
+            context.updateStructuredState({ findings: response.findings });
+          })
       };
     }
   };
@@ -131,6 +173,117 @@ test("StepRunner fails on blank responses and does not apply any state", async (
     /step1-overview/u
   );
   assert.equal(context.getSection("overview"), undefined);
+});
+
+test("StepRunner does not consume retry budget or start judge when a section-step review turn is aborted", async () => {
+  const controller = new AbortController();
+  const context = createStepRunnerContext();
+  let reviewAttempts = 0;
+  let abortCalls = 0;
+  let judgeCalls = 0;
+  let resolveSend:
+    | ((value: { data?: { content?: string } } | undefined) => void)
+    | undefined;
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        reviewAttempts += 1;
+
+        return new SessionExecutor({
+          async sendAndWait() {
+            queueMicrotask(() => controller.abort("SIGINT"));
+            return await new Promise<{ data?: { content?: string } } | undefined>((resolve) => {
+              resolveSend = resolve;
+            });
+          },
+          async abort() {
+            abortCalls += 1;
+            resolveSend?.(undefined);
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    judgeService: {
+      async evaluate() {
+        judgeCalls += 1;
+        return { passed: true };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      runner.run({
+        step: createSectionTestStep({
+          completionCheck: {
+            kind: "judge",
+            criteria: "must contain overview fields"
+          }
+        }),
+        context,
+        outputBaseDir: "/workspace/output",
+        repoRoot: "/workspace/repo",
+        signal: controller.signal
+      }),
+    (error: unknown) => error instanceof SessionTurnAbortedError
+  );
+  assert.equal(reviewAttempts, 1);
+  assert.equal(abortCalls, 1);
+  assert.equal(judgeCalls, 0);
+});
+
+test("StepRunner does not consume retry budget or run deterministic validation when a structured-step review turn is aborted", async () => {
+  const controller = new AbortController();
+  const context = createStepRunnerContext();
+  let reviewAttempts = 0;
+  let abortCalls = 0;
+  let validateCalls = 0;
+  let resolveSend:
+    | ((value: { data?: { content?: string } } | undefined) => void)
+    | undefined;
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        reviewAttempts += 1;
+
+        return new SessionExecutor({
+          async sendAndWait() {
+            queueMicrotask(() => controller.abort("SIGINT"));
+            return await new Promise<{ data?: { content?: string } } | undefined>((resolve) => {
+              resolveSend = resolve;
+            });
+          },
+          async abort() {
+            abortCalls += 1;
+            resolveSend?.(undefined);
+          },
+          async disconnect() {}
+        });
+      }
+    },
+    structuredOutputValidator: {
+      validate() {
+        validateCalls += 1;
+        return { findings: [] };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      runner.run({
+        step: createStructuredTestStep({}),
+        context,
+        outputBaseDir: "/workspace/output",
+        repoRoot: "/workspace/repo",
+        signal: controller.signal
+      }),
+    (error: unknown) => error instanceof SessionTurnAbortedError
+  );
+  assert.equal(reviewAttempts, 1);
+  assert.equal(abortCalls, 1);
+  assert.equal(validateCalls, 0);
 });
 
 test("StepRunner wraps prepare failures with step and file context", async () => {

@@ -6,6 +6,7 @@ import {
   ReviewRunInterruptedError
 } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import type { FileReviewContext } from "../../src/core/file-review-context.ts";
@@ -215,6 +216,34 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is aborted
     (err: unknown) => err instanceof ReviewRunInterruptedError
   );
   assert.deepEqual(step1Calls, [], "No file should enter Step 1 when signal is aborted during Step 0");
+});
+
+test("ReviewOrchestrator maps an aborted Step 0 review turn to ReviewRunInterruptedError", async () => {
+  const controller = new AbortController();
+  const step1Calls: string[] = [];
+
+  const orchestrator = createBaseOrchestrator({
+    changesetOverviewRunner: {
+      async run() {
+        controller.abort("SIGINT");
+        throw new SessionTurnAbortedError();
+      }
+    },
+    stepRunner: {
+      async run({ step, context }: { step: { stepId: string }; context: { filePath: string } }) {
+        if (step.stepId === "step1-overview") {
+          step1Calls.push(context.filePath);
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGINT"
+  );
+  assert.deepEqual(step1Calls, [], "No file should enter Step 1 after an aborted Step 0 turn");
 });
 
 test("ReviewOrchestrator throws ReviewRunInterruptedError when signal aborts during post-Step0 planning", async () => {

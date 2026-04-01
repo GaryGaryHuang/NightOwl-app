@@ -114,6 +114,11 @@ export function createReviewSessionFactory(input: {
     sessionIndex: number;
     sendCount: number;
   }) => void;
+  onAbort?: (call: {
+    profile: Parameters<StepReviewSessionFactoryLike["createSession"]>[0];
+    sessionIndex: number;
+    sendCount: number;
+  }) => void;
 }): StepReviewSessionFactoryLike {
   let sessionIndex = 0;
 
@@ -143,6 +148,13 @@ export function createReviewSessionFactory(input: {
         },
         async disconnect() {
           input.onDisconnect?.({
+            profile,
+            sessionIndex: currentSessionIndex,
+            sendCount: sendIndex
+          });
+        },
+        async abort() {
+          input.onAbort?.({
             profile,
             sessionIndex: currentSessionIndex,
             sendCount: sendIndex

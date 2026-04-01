@@ -49,6 +49,7 @@ import {
   type ReviewOutputSink
 } from "../providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
+import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
 export interface ReviewRunSummary {
   repoRoot: string;
@@ -131,14 +132,25 @@ export class ReviewOrchestrator {
       request.headRef
     );
     // Step 0 must complete first because its RunContext feeds the per-file Overview step.
-    const runContext = await this.#changesetOverviewRunner.run({
-      model: "gpt-5.4-mini",
-      changedFilesList: changesetEntries,
-      outputBaseDir: repoRoot,
-      repoRoot,
-      userContext: request.userContext,
-      workingDirectory: repoRoot
-    });
+    let runContext: RunContext;
+
+    try {
+      runContext = await this.#changesetOverviewRunner.run({
+        model: "gpt-5.4-mini",
+        changedFilesList: changesetEntries,
+        outputBaseDir: repoRoot,
+        repoRoot,
+        signal: options?.signal,
+        userContext: request.userContext,
+        workingDirectory: repoRoot
+      });
+    } catch (error) {
+      if (error instanceof SessionTurnAbortedError && options?.signal?.aborted) {
+        throw new ReviewRunInterruptedError(extractSignalName(options.signal.reason));
+      }
+
+      throw error;
+    }
 
     // Check if the signal was aborted during Step 0 (or before run() was called).
     // This is the only explicit poll — all later boundaries rely on the event listener below.
@@ -277,6 +289,7 @@ export class ReviewOrchestrator {
       outcomeSlots,
       request,
       repoRoot,
+      signal: options?.signal,
       steps,
       runAbortState,
       sharedAbortState,
@@ -346,6 +359,7 @@ export class ReviewOrchestrator {
     outcomeSlots: PlannedOutcomeSlot[];
     request: RunRequest;
     repoRoot: string;
+    signal?: AbortSignal;
     runAbortState: AbortState;
     steps: StepDefinition[];
     sharedAbortState: SharedAbortState;
@@ -407,6 +421,7 @@ export class ReviewOrchestrator {
               outcomeSlots: input.outcomeSlots,
               request: input.request,
               repoRoot: input.repoRoot,
+              signal: input.signal,
               runAbortState: input.runAbortState,
               sharedAbortState: input.sharedAbortState,
               steps: input.steps,
@@ -430,6 +445,7 @@ export class ReviewOrchestrator {
     outcomeSlots: PlannedOutcomeSlot[];
     request: RunRequest;
     repoRoot: string;
+    signal?: AbortSignal;
     runAbortState: AbortState;
     sharedAbortState: SharedAbortState;
     steps: StepDefinition[];
@@ -482,6 +498,7 @@ export class ReviewOrchestrator {
           context: fileContext,
           outputBaseDir: input.repoRoot,
           repoRoot: input.repoRoot,
+          signal: input.signal,
           workingDirectory: input.repoRoot
         });
       } catch (error) {

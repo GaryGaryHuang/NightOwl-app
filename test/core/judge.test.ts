@@ -154,3 +154,31 @@ test("JudgeService wraps judge timeout failure with step and file context", asyn
     /judge timeout/u
   );
 });
+
+test("JudgeService phase 1 path does not require session.abort support", async () => {
+  const service = new JudgeService({
+    judgeSessionFactory: {
+      async createSession() {
+        return new SessionExecutor({
+          async sendAndWait() {
+            return {
+              data: {
+                content: "Y"
+              }
+            };
+          },
+          async disconnect() {}
+        });
+      }
+    }
+  });
+
+  const result = await service.evaluate({
+    stepId: "step1-overview",
+    filePath: "src/app.ts",
+    criteria: "criteria",
+    sectionContent: "section"
+  });
+
+  assert.equal(result.passed, true);
+});

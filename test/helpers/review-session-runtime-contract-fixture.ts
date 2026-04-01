@@ -37,6 +37,7 @@ export function createAssistantSession(
         data: { content }
       };
     },
+    async abort() {},
     async disconnect() {}
   };
 }

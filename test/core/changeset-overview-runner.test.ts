@@ -6,6 +6,10 @@ import {
 } from "../../src/core/changeset-overview-runner.ts";
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import {
+  SessionExecutor,
+  SessionTurnAbortedError
+} from "../../src/services/session-executor.ts";
+import {
   assertTaggedBlockContains,
   assertTextContainsAll,
   assertTextExcludesAll
@@ -146,4 +150,49 @@ test("ChangesetOverviewRunner fails after two empty responses", async () => {
     /changeset overview/i
   );
   assert.equal(createCalls, 2);
+});
+
+test("ChangesetOverviewRunner aborts an in-flight Step 0 turn without consuming the retry budget", async () => {
+  const controller = new AbortController();
+  let createCalls = 0;
+  let abortCalls = 0;
+  let resolveSend:
+    | ((value: { data?: { content?: string } } | undefined) => void)
+    | undefined;
+  const runner = new ChangesetOverviewRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        createCalls += 1;
+
+        return new SessionExecutor({
+          async sendAndWait() {
+            queueMicrotask(() => controller.abort("SIGINT"));
+            return await new Promise<{ data?: { content?: string } } | undefined>((resolve) => {
+              resolveSend = resolve;
+            });
+          },
+          async abort() {
+            abortCalls += 1;
+            resolveSend?.(undefined);
+          },
+          async disconnect() {}
+        });
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      runner.run({
+        model: "gpt-5.4-mini",
+        outputBaseDir: "/workspace/repo",
+        repoRoot: "/workspace/repo",
+        signal: controller.signal,
+        changedFilesList: ["M\tsrc/app.ts"],
+        userContext: []
+      }),
+    (error: unknown) => error instanceof SessionTurnAbortedError
+  );
+  assert.equal(createCalls, 1);
+  assert.equal(abortCalls, 1);
 });
