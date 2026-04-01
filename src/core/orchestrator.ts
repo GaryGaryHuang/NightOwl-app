@@ -146,10 +146,29 @@ export class ReviewOrchestrator {
       throw new ReviewRunInterruptedError(extractSignalName(options.signal.reason));
     }
 
+    const runAbortState: AbortState = {};
+    const throwIfRunAborted = (): void => {
+      if (runAbortState.error) {
+        throw runAbortState.error;
+      }
+    };
+
+    // Establish continuous abort observation before any post-Step0 side effect begins.
+    options?.signal?.addEventListener(
+      "abort",
+      () => {
+        runAbortState.error ??= new ReviewRunInterruptedError(
+          extractSignalName(options?.signal?.reason)
+        );
+      },
+      { once: true }
+    );
+
     this.#emitProgressEvent({
       type: "phase-changed",
       phase: "planning"
     });
+    throwIfRunAborted();
 
     const branchName = this.#sourceProvider.getCurrentBranch(repoRoot);
     const changedFiles = this.#sourceProvider.getChangedFiles(
@@ -170,10 +189,13 @@ export class ReviewOrchestrator {
     const plannedNoteFiles = planNoteFiles(outputTarget.filesPath, reviewableFiles);
 
     this.#outputSink.initializeRun(outputTarget);
+    throwIfRunAborted();
 
     this.#outputSink.publishChangesetOverview({ content: runContext.changesetOverview });
+    throwIfRunAborted();
 
     this.#onOutputTargetReady?.(outputTarget);
+    throwIfRunAborted();
 
     this.#emitProgressEvent({
       type: "run-initialized",
@@ -181,9 +203,11 @@ export class ReviewOrchestrator {
       outputTarget,
       plannedFileCount: plannedNoteFiles.length
     });
+    throwIfRunAborted();
 
     // Publish bootstrap snapshots before any per-file step runs so every file starts from the same skeleton.
     for (const plannedNote of plannedNoteFiles) {
+      throwIfRunAborted();
       this.#outputSink.publishFileReview({
         noteFilePath: plannedNote.noteFilePath,
         content: this.#finalizer.render(
@@ -196,12 +220,14 @@ export class ReviewOrchestrator {
           })
         )
       });
+      throwIfRunAborted();
     }
 
     this.#emitProgressEvent({
       type: "phase-changed",
       phase: "reviewing"
     });
+    throwIfRunAborted();
 
     // Steps 2–7 each receive the progressively rendered note via <current_review> so each step builds on prior output.
     const steps = [
@@ -225,21 +251,6 @@ export class ReviewOrchestrator {
         reviewNoteFinalizer: this.#finalizer
       })
     ];
-    const runAbortState: AbortState = {};
-
-    // Register abort listener — fires synchronously when signal aborts, immediately
-    // setting runAbortState.error so all existing safe-boundary guards detect it.
-    // { once: true } auto-removes the listener after first fire (no leak).
-    options?.signal?.addEventListener(
-      "abort",
-      () => {
-        runAbortState.error ??= new ReviewRunInterruptedError(
-          extractSignalName(options?.signal?.reason)
-        );
-      },
-      { once: true }
-    );
-
     const sharedAbortState: AbortState = {};
     const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
     let skippedAppendQueue = Promise.resolve();

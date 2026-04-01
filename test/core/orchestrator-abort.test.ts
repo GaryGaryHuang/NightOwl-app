@@ -217,6 +217,90 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is aborted
   assert.deepEqual(step1Calls, [], "No file should enter Step 1 when signal is aborted during Step 0");
 });
 
+test("ReviewOrchestrator throws ReviewRunInterruptedError when signal aborts during post-Step0 planning", async () => {
+  const controller = new AbortController();
+  const sink = createTrackingOutputSink();
+  const step1Calls: string[] = [];
+
+  const orchestrator = createBaseOrchestrator({
+    outputSink: {
+      ...sink,
+      initializeRun(outputTarget) {
+        sink.initializeRun(outputTarget);
+        controller.abort("SIGINT");
+      }
+    },
+    stepRunner: {
+      async run({ step, context }: { step: { stepId: string }; context: { filePath: string } }) {
+        if (step.stepId === "step1-overview") {
+          step1Calls.push(context.filePath);
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGINT"
+  );
+  assert.deepEqual(step1Calls, [], "No file should enter Step 1 when signal aborts during planning");
+  assert.ok(
+    !sink.calls.includes("publishRunSummary"),
+    "publishRunSummary should not be called after a planning-phase abort"
+  );
+  assert.ok(
+    !sink.calls.includes("publishReviewIndex"),
+    "publishReviewIndex should not be called after a planning-phase abort"
+  );
+});
+
+test("ReviewOrchestrator throws ReviewRunInterruptedError when signal aborts during bootstrap snapshot publication", async () => {
+  const controller = new AbortController();
+  const sink = createTrackingOutputSink();
+  const step1Calls: string[] = [];
+  let bootstrapAbortFired = false;
+
+  const orchestrator = createBaseOrchestrator({
+    outputSink: {
+      ...sink,
+      publishFileReview(result) {
+        sink.publishFileReview(result);
+        if (!bootstrapAbortFired) {
+          bootstrapAbortFired = true;
+          controller.abort("SIGINT");
+        }
+      }
+    },
+    stepRunner: {
+      async run({ step, context }: { step: { stepId: string }; context: { filePath: string } }) {
+        if (step.stepId === "step1-overview") {
+          step1Calls.push(context.filePath);
+        }
+        return { stepId: step.stepId, applyTo(_ctx: FileReviewContext) {} };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
+    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGINT"
+  );
+  assert.deepEqual(
+    step1Calls,
+    [],
+    "No file should enter Step 1 when signal aborts during bootstrap publication"
+  );
+  assert.ok(
+    !sink.calls.includes("publishRunSummary"),
+    "publishRunSummary should not be called after a bootstrap-phase abort"
+  );
+  assert.ok(
+    !sink.calls.includes("publishReviewIndex"),
+    "publishReviewIndex should not be called after a bootstrap-phase abort"
+  );
+});
+
 // Signal fires after the first file's step 1 starts; the orchestrator must
 // not queue further files once the signal is set.
 test("ReviewOrchestrator stops new file dispatch when signal aborts during fan-out", async () => {
