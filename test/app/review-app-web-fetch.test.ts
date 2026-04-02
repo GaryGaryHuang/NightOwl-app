@@ -125,7 +125,7 @@ test("createLocalReviewRunApp exposes runtime url guardrails and legacy web_fetc
         {
           permissionDecision: "deny",
           permissionDecisionReason:
-            "Review sessions only allow url for absolute public https URLs."
+            "Review sessions only allow fetching absolute public https URLs."
         }
       );
     }
@@ -248,7 +248,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
       {
         permissionDecision: "deny",
         permissionDecisionReason:
-          "Review sessions only allow url for configured public https hosts."
+          "Review sessions only allow fetching configured public https hosts."
       }
     );
     assert.deepEqual(
@@ -389,7 +389,7 @@ test("createLocalReviewRunApp applies host policy without redirect-chain resolut
       {
         permissionDecision: "deny",
         permissionDecisionReason:
-          "Review sessions only allow url for configured public https hosts."
+          "Review sessions only allow fetching configured public https hosts."
       }
     );
   } finally {

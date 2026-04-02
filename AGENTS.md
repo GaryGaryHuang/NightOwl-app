@@ -140,7 +140,7 @@ These are product safety boundaries that must not be circumvented or relaxed:
 - **Shell allowlist**: only read-only analysis commands are permitted (git queries, cat, ls, grep, etc.); write or side-effect operations are forbidden
 - **Path boundaries**: shell path access is restricted to the repo source tree and `repo_root/.nightowl/review/**`; `repo_root/.nightowl/reviewconfig.json` and `repo_root/.nightowl/reviewignore` remain App-managed inputs
 - **Shell composition syntax**: `;`, `||`, background execution, and command substitution are forbidden. `|` and `&&` are allowed only if each command independently complies with the shell allowlist and path boundaries.
-- **`url` security**: only public HTTPS URLs are allowed; hostname DNS classification and host allowlist/denylist are enabled
+- **URL retrieval security** (`web_fetch` LLM tool / `url` SDK permission kind): only public HTTPS URLs are allowed; hostname DNS classification and host allowlist/denylist are enabled
 - **Tool audit**: every tool decision (allow/deny) is logged to `tool-audit.jsonl`
 - **Tool policy fail-closed**: if shell policy evaluation itself errors, conservatively deny and log
 - **No silent privilege escalation**: do not smuggle new tool permissions into unrelated implementations

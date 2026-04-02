@@ -102,7 +102,7 @@ test("DefaultWebFetchRedirectResolver denies redirect loops, missing or malforme
     }),
     {
       kind: "denied",
-      reason: "Review sessions only allow url when redirect chains resolve safely."
+      reason: "Review sessions only allow fetching URLs when redirect chains resolve safely."
     }
   );
 
@@ -117,7 +117,7 @@ test("DefaultWebFetchRedirectResolver denies redirect loops, missing or malforme
     }),
     {
       kind: "denied",
-      reason: "Review sessions only allow url when redirect chains resolve safely."
+      reason: "Review sessions only allow fetching URLs when redirect chains resolve safely."
     }
   );
 
@@ -132,7 +132,7 @@ test("DefaultWebFetchRedirectResolver denies redirect loops, missing or malforme
     }),
     {
       kind: "denied",
-      reason: "Review sessions only allow url when redirect chains resolve safely."
+      reason: "Review sessions only allow fetching URLs when redirect chains resolve safely."
     }
   );
 
@@ -151,7 +151,7 @@ test("DefaultWebFetchRedirectResolver denies redirect loops, missing or malforme
     }),
     {
       kind: "denied",
-      reason: "Review sessions only allow url when redirect chains resolve safely."
+      reason: "Review sessions only allow fetching URLs when redirect chains resolve safely."
     }
   );
 });
@@ -175,7 +175,7 @@ test("DefaultWebFetchRedirectResolver denies preflight timeout and transport fai
     }),
     {
       kind: "denied",
-      reason: "Review sessions only allow url when redirect chains resolve safely."
+      reason: "Review sessions only allow fetching URLs when redirect chains resolve safely."
     }
   );
 
@@ -192,7 +192,7 @@ test("DefaultWebFetchRedirectResolver denies preflight timeout and transport fai
     }),
     {
       kind: "denied",
-      reason: "Review sessions only allow url when redirect chains resolve safely."
+      reason: "Review sessions only allow fetching URLs when redirect chains resolve safely."
     }
   );
 });
@@ -213,14 +213,14 @@ test("DefaultWebFetchRedirectResolver denies unsafe redirect targets before foll
     timeoutMs: 5000,
     validateRedirectTarget(redirectTarget) {
       return redirectTarget.hostname === "localhost"
-        ? "Review sessions only allow url for absolute public https URLs."
+        ? "Review sessions only allow fetching absolute public https URLs."
         : undefined;
     }
   });
 
   assert.deepEqual(result, {
     kind: "denied",
-    reason: "Review sessions only allow url for absolute public https URLs."
+    reason: "Review sessions only allow fetching absolute public https URLs."
   });
   assert.deepEqual(calls, ["https://docs.example.com/start"]);
 });

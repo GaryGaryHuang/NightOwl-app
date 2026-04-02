@@ -1,7 +1,7 @@
 export const DEFAULT_WEB_FETCH_REDIRECT_HOP_LIMIT = 5;
 export const DEFAULT_WEB_FETCH_REDIRECT_TIMEOUT_MS = 5000;
 export const UNSAFE_WEB_FETCH_REDIRECT_CHAIN_REASON =
-  "Review sessions only allow url when redirect chains resolve safely.";
+  "Review sessions only allow fetching URLs when redirect chains resolve safely.";
 
 export interface WebFetchRedirectResolveOptions {
   maxHops: number;

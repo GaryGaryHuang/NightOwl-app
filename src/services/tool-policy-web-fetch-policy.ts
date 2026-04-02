@@ -22,9 +22,9 @@ export interface ToolPolicyDecisionDeny {
 export type ToolPolicyDecision = ToolPolicyDecisionDeny | undefined;
 
 export const UNSAFE_WEB_FETCH_URL_REASON =
-  "Review sessions only allow url for absolute public https URLs.";
+  "Review sessions only allow fetching absolute public https URLs.";
 export const CONFIGURED_WEB_FETCH_HOST_REASON =
-  "Review sessions only allow url for configured public https hosts.";
+  "Review sessions only allow fetching configured public https hosts.";
 
 export interface ToolPolicyWebFetchPolicyOptions {
   hostnameClassifier?: WebFetchHostnameClassifier;
