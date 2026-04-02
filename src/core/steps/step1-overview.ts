@@ -11,16 +11,19 @@ const COMMON_SYSTEM_MESSAGE = [
   "Do not exceed the current step's scope, and do not perform or anticipate later steps.",
   "",
   "## Evidence & Traceability",
+  "- State what the code observably does, not what you believe the author intended.",
   "- Ground every conclusion in observable evidence from the diff, source files, or tool results.",
   "- Separate facts from assumptions: annotate inferences with `[假設]`; mark any claim lacking sufficient evidence with `[待確認]`.",
   "- If a tool call fails, returns no relevant result, or the available context is insufficient, mark the affected claim as `[待確認]` rather than fabricating content.",
   "- Do not treat speculation, likely intent, or common practice as established fact unless supported by evidence.",
-  "- State what the code observably does, not what you believe the author intended.",
+  "- When describing what changed, use the specific before\u2192after transformation visible in the evidence rather than substituting a generic category label. Specificity in earlier steps directly improves the precision of later steps.",
+  "- Reserve `[\u5047\u8a2d]` for inferences that genuinely cannot be confirmed from the combined evidence of the diff, changeset context, source files, and tool results. When these sources together make a conclusion clear, state it as fact.",
   "",
   "## Context Retrieval",
   "- Retrieve only the minimal context needed to complete the current step reliably.",
   "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for git operations (`git diff`, `git blame`, `git log`) or when built-in tools cannot fulfill the task.",
   "- Use `web_fetch` and MCP tools only when the current step requires external knowledge verification that local context cannot provide.",
+  "- When multiple independent retrievals are needed, batch them in a single turn rather than retrieving sequentially.",
   "- Stop retrieving additional context once it no longer changes the current step's output.",
   "",
   "## Scope Discipline",
@@ -33,21 +36,24 @@ const COMMON_SYSTEM_MESSAGE = [
   "- Markdown steps: begin with the designated `##` heading. No preamble or extra sections.",
   "- JSON steps: output one valid JSON object only. No Markdown code fences or explanatory text.",
   "- Make each field specific enough to support the next step's reasoning, but omit unrequested background content.",
+  "- Prefer concise, information-dense writing. Do not pad sentences with hedging tails (e.g. \"\u4f46\u4ecd\u4fdd\u7559\u2026\u4e0d\u78ba\u5b9a\u6027\"), filler prefixes (e.g. \"\u53ef\u89c0\u5bdf\u5230\u7684\"), or restatements of what the reader already knows.",
   "- Language: 正體中文, except JSON keys explicitly specified in the step contract."
 ].join("\n");
 
 const STEP1_SYSTEM_ADDITION = [
   "## Current Step: Overview",
-  "- Combine `<changeset_context>` with the file-level `<diff>` to build a high-level working overview of this file for subsequent steps.",
+  "- Combine `<changeset_context>` with the file-level `<diff>` to build a file-specific working overview for subsequent steps. The overview must add information value beyond what `<changeset_context>` already provides.",
+  "- Describe this file's specific contribution to the changeset, not a restatement of the changeset's scope. Later steps depend on the specificity of this overview to target their analysis precisely.",
   "- Focus on this file's role in the broader changeset, its primary responsibility, the direction of the change, directly observable behavioral changes, and the directly affected area.",
   "- Keep the scope centered on this file. Only retrieve additional repo context when local evidence is insufficient to determine the file's role, change direction, affected area, or test coverage observation.",
+  "- \u5f71\u97ff\u7bc4\u570d must stay at the level of this file's directly changed code paths. Do not expand into downstream consumers or dependency contracts \u2014 that is Step 2's job.",
   "- If this file has corresponding test file changes, gather the behavioral expectations and boundary conditions those tests reveal as additional context.",
-  "- IMPORTANT: This step gathers information only. Do NOT look for bugs, assess correctness, evaluate risk, map dependency contracts, or anticipate conclusions from later steps.",
+  "- This step gathers information only. Do not look for bugs, assess correctness, evaluate risk, map dependency contracts, or anticipate conclusions from later steps.",
   "- Begin the response with `## Overview`."
 ].join("\n");
 
 const STEP1_INSTRUCTION = [
-  "IMPORTANT: This step gathers information only. Do NOT look for bugs, assess correctness, evaluate risk, or anticipate conclusions from later steps.",
+  "This step gathers information only. Do not look for bugs, assess correctness, evaluate risk, or anticipate conclusions from later steps.",
   "",
   "Read `<changeset_context>` and `<diff>`, then produce an Overview for this file.",
   "",
@@ -65,17 +71,19 @@ const STEP1_INSTRUCTION = [
   "Respond in the following format:",
   "",
   "## Overview",
-  "- 整體理解：[how this file fits into the overall changeset; its role in the broader change]",
-  "- 行為變更：[observable behavioral changes in this file, or 無行為變更]",
+  "- 整體理解：[this file's specific contribution to the changeset — not a restatement of the changeset category or scope]",
+  "- 行為變更：[concrete before→after behavioral change in this file, or 無行為變更]",
   "- 檔案職責：[the file's primary role and responsibility]",
-  "- 改動目的：[the observable reason and direction behind this change, with uncertainty made explicit when needed]",
-  "- 影響範圍：[directly affected components, functions, or behaviors visible from this file's changes]",
+  "- 改動目的：[the before→after transformation: what the code did before and what it does now, with uncertainty explicit only when the diff and changeset context genuinely cannot resolve it]",
+  "- 影響範圍：[directly affected code paths, functions, or behaviors in this file only — not downstream dependencies]",
   "- 測試覆蓋觀察：[whether this file's changes have corresponding test changes and what behavioral context those tests reveal, or 未見對應測試異動]",
   "",
   "Before submitting your response, verify:",
   "- Begins with `## Overview`",
   "- All six fields are present: 整體理解、行為變更、檔案職責、改動目的、影響範圍、測試覆蓋觀察",
-  "- Each field contains a meaningful answer, not a placeholder or blank line"
+  "- Each field contains a meaningful answer, not a placeholder or blank line",
+  "- 整體理解 adds file-specific detail beyond what <changeset_context> already states",
+  "- 改動目的 describes a concrete before→after transformation, not a generic category label"
 ].join("\n");
 
 const STEP1_JUDGE_CRITERIA = [

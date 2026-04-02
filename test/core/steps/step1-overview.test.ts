@@ -53,7 +53,7 @@ test("Step1OverviewStep prepares the Step 1 prompt contract from RunContext and 
   assertTextContainsAll(plan.prompt.systemMessage, [
     "## Current Step: Overview",
     "Combine `<changeset_context>` with the file-level `<diff>`",
-    "Do NOT look for bugs",
+    "Do not look for bugs",
     "Begin the response with `## Overview`."
   ]);
   assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);

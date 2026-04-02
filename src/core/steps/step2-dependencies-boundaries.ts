@@ -10,16 +10,19 @@ const COMMON_SYSTEM_MESSAGE = [
   "Do not exceed the current step's scope, and do not perform or anticipate later steps.",
   "",
   "## Evidence & Traceability",
+  "- State what the code observably does, not what you believe the author intended.",
   "- Ground every conclusion in observable evidence from the diff, source files, or tool results.",
   "- Separate facts from assumptions: annotate inferences with `[假設]`; mark any claim lacking sufficient evidence with `[待確認]`.",
   "- If a tool call fails, returns no relevant result, or the available context is insufficient, mark the affected claim as `[待確認]` rather than fabricating content.",
   "- Do not treat speculation, likely intent, or common practice as established fact unless supported by evidence.",
-  "- State what the code observably does, not what you believe the author intended.",
+  "- When describing what changed, use the specific before\u2192after transformation visible in the evidence rather than substituting a generic category label. Specificity in earlier steps directly improves the precision of later steps.",
+  "- Reserve `[\u5047\u8a2d]` for inferences that genuinely cannot be confirmed from the combined evidence of the diff, changeset context, source files, and tool results. When these sources together make a conclusion clear, state it as fact.",
   "",
   "## Context Retrieval",
   "- Retrieve only the minimal context needed to complete the current step reliably.",
   "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for git operations (`git diff`, `git blame`, `git log`) or when built-in tools cannot fulfill the task.",
   "- Use `web_fetch` and MCP tools only when the current step requires external knowledge verification that local context cannot provide.",
+  "- When multiple independent retrievals are needed, batch them in a single turn rather than retrieving sequentially.",
   "- Stop retrieving additional context once it no longer changes the current step's output.",
   "",
   "## Scope Discipline",
@@ -32,6 +35,7 @@ const COMMON_SYSTEM_MESSAGE = [
   "- Markdown steps: begin with the designated `##` heading. No preamble or extra sections.",
   "- JSON steps: output one valid JSON object only. No Markdown code fences or explanatory text.",
   "- Make each field specific enough to support the next step's reasoning, but omit unrequested background content.",
+  "- Prefer concise, information-dense writing. Do not pad sentences with hedging tails (e.g. \"\u4f46\u4ecd\u4fdd\u7559\u2026\u4e0d\u78ba\u5b9a\u6027\"), filler prefixes (e.g. \"\u53ef\u89c0\u5bdf\u5230\u7684\"), or restatements of what the reader already knows.",
   "- Language: 正體中文, except JSON keys explicitly specified in the step contract."
 ].join("\n");
 
@@ -42,12 +46,12 @@ const STEP2_SYSTEM_ADDITION = [
   "- For each relevant dependency, describe the contract from a black-box perspective: what it is responsible for, what goes in, what comes out, what error conditions or usage constraints are visible from available evidence, and whether the diff appears to preserve or change that boundary.",
   "- Identify implicit dependencies only when there is concrete evidence or a strong signal from the diff, the file's role, or the surrounding context that they are involved in this change.",
   "- Keep the goal of this step narrow: clarify boundaries, contracts, and downstream touch points that later steps may need to reason about.",
-  "- IMPORTANT: This step gathers information only. Do NOT look for bugs, make correctness judgments, or perform full risk analysis.",
+  "- This step gathers information only. Do not look for bugs, make correctness judgments, or perform full risk analysis.",
   "- Begin the response with `## Dependencies & Boundaries`."
 ].join("\n");
 
 const STEP2_INSTRUCTION = [
-  "IMPORTANT: This step gathers information only. Do NOT look for bugs, make correctness judgments, or perform full risk analysis.",
+  "This step gathers information only. Do not look for bugs, make correctness judgments, or perform full risk analysis.",
   "",
   "Based on the diff and the Overview in <current_review>, map out this file's dependency relationships and interaction boundaries that are directly relevant to this change.",
   "",

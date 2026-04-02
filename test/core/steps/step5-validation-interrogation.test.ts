@@ -47,7 +47,7 @@ test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from 
     '<diff path="src/app.ts" base="main" head="feature-branch">',
     "Based on the W# scenarios in the Strategy & What-if Scenarios section of <current_review>",
     "The `type` field must be either `\"must\"` or `\"nice\"`.",
-    "Do not wrap the JSON in Markdown code fences",
+    "Output exactly one JSON object",
     "{\"findings\": []}"
   ]);
   assertTaggedBlockContains(plan.prompt.userMessage, "current_review", [

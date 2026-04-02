@@ -44,7 +44,7 @@ test("Step2DependenciesBoundariesStep prepares the Step 2 prompt contract from d
   assertTextContainsAll(plan.prompt.systemMessage, [
     "## Current Step: Dependencies & Boundaries",
     "Map the dependency and interaction boundaries",
-    "Do NOT look for bugs",
+    "Do not look for bugs",
     "Begin the response with `## Dependencies & Boundaries`."
   ]);
   assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);

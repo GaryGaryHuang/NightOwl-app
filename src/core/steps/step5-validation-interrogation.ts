@@ -10,16 +10,19 @@ const COMMON_SYSTEM_MESSAGE = [
   "Do not exceed the current step's scope, and do not perform or anticipate later steps.",
   "",
   "## Evidence & Traceability",
+  "- State what the code observably does, not what you believe the author intended.",
   "- Ground every conclusion in observable evidence from the diff, source files, or tool results.",
   "- Separate facts from assumptions: annotate inferences with `[假設]`; mark any claim lacking sufficient evidence with `[待確認]`.",
   "- If a tool call fails, returns no relevant result, or the available context is insufficient, mark the affected claim as `[待確認]` rather than fabricating content.",
   "- Do not treat speculation, likely intent, or common practice as established fact unless supported by evidence.",
-  "- State what the code observably does, not what you believe the author intended.",
+  "- When describing what changed, use the specific before\u2192after transformation visible in the evidence rather than substituting a generic category label. Specificity in earlier steps directly improves the precision of later steps.",
+  "- Reserve `[\u5047\u8a2d]` for inferences that genuinely cannot be confirmed from the combined evidence of the diff, changeset context, source files, and tool results. When these sources together make a conclusion clear, state it as fact.",
   "",
   "## Context Retrieval",
   "- Retrieve only the minimal context needed to complete the current step reliably.",
   "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for git operations (`git diff`, `git blame`, `git log`) or when built-in tools cannot fulfill the task.",
   "- Use `web_fetch` and MCP tools only when the current step requires external knowledge verification that local context cannot provide.",
+  "- When multiple independent retrievals are needed, batch them in a single turn rather than retrieving sequentially.",
   "- Stop retrieving additional context once it no longer changes the current step's output.",
   "",
   "## Scope Discipline",
@@ -32,6 +35,7 @@ const COMMON_SYSTEM_MESSAGE = [
   "- Markdown steps: begin with the designated `##` heading. No preamble or extra sections.",
   "- JSON steps: output one valid JSON object only. No Markdown code fences or explanatory text.",
   "- Make each field specific enough to support the next step's reasoning, but omit unrequested background content.",
+  "- Prefer concise, information-dense writing. Do not pad sentences with hedging tails (e.g. \"\u4f46\u4ecd\u4fdd\u7559\u2026\u4e0d\u78ba\u5b9a\u6027\"), filler prefixes (e.g. \"\u53ef\u89c0\u5bdf\u5230\u7684\"), or restatements of what the reader already knows.",
   "- Language: 正體中文, except JSON keys explicitly specified in the step contract."
 ].join("\n");
 
@@ -43,6 +47,7 @@ const STEP5_SYSTEM_ADDITION = [
   "- This step produces the first-pass findings for later review. Convert a validated deviation into a finding only when the available evidence supports a concrete, actionable problem on a credibly reachable real-world path.",
   "- Every emitted finding must include a `traceability` object that anchors the finding to the reviewed file.",
   "- Keep the scope centered on scenario-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
+  "- When determining whether a deviation exists, explicitly check against the rules, assumptions, and scope boundaries established in the Knowledge & Source of Truth section of <current_review>. Do not report deviations that fall within the declared out-of-scope boundaries.",
   "- IMPORTANT: Do not report findings based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a finding for every scenario.",
   "- Output valid JSON only."
 ].join("\n");
@@ -91,8 +96,7 @@ const STEP5_INSTRUCTION = [
   "",
   "If no findings remain, return: {\"findings\": []}",
   "The `type` field must be either `\"must\"` or `\"nice\"`.",
-  "Do not wrap the JSON in Markdown code fences or add any text outside the JSON object.",
-  "Stop immediately after the closing `}`. Do not add any text, explanation, or newline after the JSON object."
+  "Output exactly one JSON object. Begin with `{` and end with `}` \u2014 no Markdown code fences, no surrounding text, no trailing content after the closing brace."
 ].join("\n");
 
 export interface Step5ValidationInterrogationStepOptions {

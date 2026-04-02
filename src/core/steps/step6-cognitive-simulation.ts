@@ -10,16 +10,19 @@ const COMMON_SYSTEM_MESSAGE = [
   "Do not exceed the current step's scope, and do not perform or anticipate later steps.",
   "",
   "## Evidence & Traceability",
+  "- State what the code observably does, not what you believe the author intended.",
   "- Ground every conclusion in observable evidence from the diff, source files, or tool results.",
   "- Separate facts from assumptions: annotate inferences with `[假設]`; mark any claim lacking sufficient evidence with `[待確認]`.",
   "- If a tool call fails, returns no relevant result, or the available context is insufficient, mark the affected claim as `[待確認]` rather than fabricating content.",
   "- Do not treat speculation, likely intent, or common practice as established fact unless supported by evidence.",
-  "- State what the code observably does, not what you believe the author intended.",
+  "- When describing what changed, use the specific before\u2192after transformation visible in the evidence rather than substituting a generic category label. Specificity in earlier steps directly improves the precision of later steps.",
+  "- Reserve `[\u5047\u8a2d]` for inferences that genuinely cannot be confirmed from the combined evidence of the diff, changeset context, source files, and tool results. When these sources together make a conclusion clear, state it as fact.",
   "",
   "## Context Retrieval",
   "- Retrieve only the minimal context needed to complete the current step reliably.",
   "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for git operations (`git diff`, `git blame`, `git log`) or when built-in tools cannot fulfill the task.",
   "- Use `web_fetch` and MCP tools only when the current step requires external knowledge verification that local context cannot provide.",
+  "- When multiple independent retrievals are needed, batch them in a single turn rather than retrieving sequentially.",
   "- Stop retrieving additional context once it no longer changes the current step's output.",
   "",
   "## Scope Discipline",
@@ -32,12 +35,13 @@ const COMMON_SYSTEM_MESSAGE = [
   "- Markdown steps: begin with the designated `##` heading. No preamble or extra sections.",
   "- JSON steps: output one valid JSON object only. No Markdown code fences or explanatory text.",
   "- Make each field specific enough to support the next step's reasoning, but omit unrequested background content.",
+  "- Prefer concise, information-dense writing. Do not pad sentences with hedging tails (e.g. \"\u4f46\u4ecd\u4fdd\u7559\u2026\u4e0d\u78ba\u5b9a\u6027\"), filler prefixes (e.g. \"\u53ef\u89c0\u5bdf\u5230\u7684\"), or restatements of what the reader already knows.",
   "- Language: 正體中文, except JSON keys explicitly specified in the step contract."
 ].join("\n");
 
 const STEP6_SYSTEM_ADDITION = [
   "## Current Step: Cognitive Simulation",
-  "- This step produces the complete final findings. Output the full final JSON object, not a partial diff.",
+  "- Verify and finalize this file's findings through end-to-end execution simulation. This step produces the complete final findings as a single JSON object — output all retained, modified, and new findings, not just the changes from the previous step.",
   "- Use the first-pass findings in <current_review> as the starting point for this step. Your primary job is to verify, refine, reconcile, or remove them through end-to-end simulation.",
   "- Perform an end-to-end simulation of the main execution path and the state transitions relevant to the existing findings.",
   "- Check edge and abnormal paths only when they are needed to confirm, falsify, or materially refine an existing finding, or when the simulation directly exposes a new concrete deviation on the path under review.",
@@ -45,10 +49,9 @@ const STEP6_SYSTEM_ADDITION = [
   "- You may add a new finding only when it is directly exposed by the simulation or by re-checking a path made necessary by a conflict, inconsistency, or uncertainty in the existing findings.",
   "- IMPORTANT: Apply the same evidence, reachability, and actionability standard used for first-pass findings. Do not retain, add, or modify findings based on theoretical speculation, weak inference, or implausible paths. This step is a verification and reconciliation pass, not a general bug hunt.",
   "- Every emitted finding must include a `traceability` object that anchors the finding to the reviewed file.",
-  "- For every finding retained, modified, or added, assign a `confidence` score (0–100) reflecting how strongly the final evidence supports it.",
+  "- For every finding retained, modified, or added, assign a fresh `confidence` score (0–100) based on your own simulation evidence — do not carry over scores from the previous step.",
   "- The Findings section in <current_review> is a Markdown rendering of the first-pass results, not the original JSON payload, and it does not include confidence scores.",
   "- Treat those findings as provisional results to verify through simulation, not as final conclusions to preserve by default.",
-  "- For every finding you retain, modify, or add in your output, assign a new confidence score based on your own simulation evidence.",
   "- Output valid JSON only."
 ].join("\n");
 
@@ -98,8 +101,7 @@ const STEP6_INSTRUCTION = [
   "",
   "If no findings remain, return: {\"findings\": []}",
   "The `type` field must be either `\"must\"` or `\"nice\"`.",
-  "Do not wrap the JSON in Markdown code fences or add any text outside the JSON object.",
-  "Stop immediately after the closing `}`. Do not add any text, explanation, or newline after the JSON object."
+  "Output exactly one JSON object. Begin with `{` and end with `}` \u2014 no Markdown code fences, no surrounding text, no trailing content after the closing brace."
 ].join("\n");
 
 export interface Step6CognitiveSimulationStepOptions {

@@ -44,8 +44,8 @@ test("Step7SummaryStep prepares the Step 7 prompt contract from current review o
 
   assertTextContainsAll(plan.prompt.systemMessage, [
     "## Current Step: Summary",
-    "Do NOT list specific findings",
-    "Keep the summary reader-facing",
+    "Do not list specific findings",
+    "every sentence must earn its place",
     "Begin the response with `## Summary`."
   ]);
   assertNightOwlSharedToolGuidance(plan.prompt.systemMessage);

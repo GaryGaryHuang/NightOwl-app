@@ -42,7 +42,7 @@ test("Step4StrategyWhatIfScenariosStep prepares the Step 4 prompt contract from 
 
   assertTextContainsAll(plan.prompt.systemMessage, [
     "## Current Step: Strategy & What-if Scenarios",
-    "Do NOT perform the validation itself",
+    "Do not perform the validation itself",
     "Each What-if scenario must be a neutral, testable hypothesis",
     "Begin the response with `## Strategy & What-if Scenarios`."
   ]);

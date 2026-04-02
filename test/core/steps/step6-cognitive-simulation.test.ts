@@ -34,7 +34,7 @@ test("Step6CognitiveSimulationStep prepares the Step 6 prompt contract from diff
 
   assertTextContainsAll(plan.prompt.systemMessage, [
     "## Current Step: Cognitive Simulation",
-    "This step produces the complete final findings.",
+    "Verify and finalize this file's findings through end-to-end execution simulation",
     "The Findings section in <current_review> is a Markdown rendering",
     "Output valid JSON only."
   ]);
@@ -44,7 +44,7 @@ test("Step6CognitiveSimulationStep prepares the Step 6 prompt contract from diff
     '<diff path="src/app.ts" base="main" head="feature-branch">',
     "Perform a cognitive simulation of this file's changes",
     "If no valid findings remain, return an empty `findings` array.",
-    "Do not wrap the JSON in Markdown code fences"
+    "Output exactly one JSON object"
   ]);
   assertTaggedBlockContains(plan.prompt.userMessage, "current_review", [
     "## Overview",
