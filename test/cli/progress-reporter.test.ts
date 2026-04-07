@@ -237,6 +237,37 @@ test("CliProgressReporter falls back to append-only snapshots when stdout is not
   assert.equal(stdout.logs.at(-1), "Progress 1/2 | active 0");
 });
 
+test("CliProgressReporter emits a non-TTY snapshot when a file completes successfully", () => {
+  const stdout = createFakeStdout({ isTTY: false });
+  const reporter = new CliProgressReporter({ stdout });
+
+  reporter.handleEvent({
+    type: "run-initialized",
+    repoRoot: "/workspace/repo",
+    outputTarget: {
+      basePath: "/workspace/repo/.nightowl/review/feature-branch_03131430",
+      changesetOverviewPath: "/workspace/repo/.nightowl/review/feature-branch_03131430/changeset-overview.md",
+      filesPath: "/workspace/repo/.nightowl/review/feature-branch_03131430/files",
+      skippedPath: "/workspace/repo/.nightowl/review/feature-branch_03131430/skipped.md",
+      summaryPath: "/workspace/repo/.nightowl/review/feature-branch_03131430/summary.md",
+      indexPath: "/workspace/repo/.nightowl/review/feature-branch_03131430/index.md",
+      manifestPath: "/workspace/repo/.nightowl/review/feature-branch_03131430/manifest.json",
+      toolAuditPath: "/workspace/repo/.nightowl/review/feature-branch_03131430/tool-audit.jsonl"
+    },
+    plannedFileCount: 2
+  });
+  reporter.handleEvent({ type: "file-claimed", filePath: "src/app.ts", claimOrder: 1 });
+  reporter.handleEvent({
+    type: "file-completed",
+    filePath: "src/app.ts",
+    successfulFileCount: 1,
+    skippedFileCount: 0
+  });
+
+  assert.deepEqual(stdout.writes, []);
+  assert.equal(stdout.logs.at(-1), "Progress 1/2 | active 0");
+});
+
 test("CliProgressReporter clears the TTY live line during finalize so the final summary does not leave a stale progress row", () => {
   const stdout = createFakeStdout({ isTTY: true });
   const reporter = new CliProgressReporter({ stdout });

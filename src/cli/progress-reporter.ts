@@ -14,129 +14,133 @@ interface ActiveFileState {
   lastProgressSeq: number;
 }
 
-export class CliProgressReporter {
+interface CliProgressState {
+  activeFiles: Map<string, ActiveFileState>;
+  eventSeq: number;
+  plannedFileCount?: number;
+  skippedFileCount: number;
+  successfulFileCount: number;
+}
+
+interface CliSurfaceState {
+  hasLiveLine: boolean;
+}
+
+interface ProgressRenderInstruction {
+  appendMessage?: string;
+  renderProgress?: { significant: boolean };
+}
+
+interface ProgressSnapshot {
+  activeFileSummary: string;
+  activeFileCount: number;
+  plannedFileCount?: number;
+  resolvedFileCount: number;
+}
+
+class CliProgressRenderer {
   readonly #stdout: CliProgressStdout;
   readonly #isTTY: boolean;
-  readonly #activeFiles = new Map<string, ActiveFileState>();
-  #plannedFileCount?: number;
-  #successfulFileCount = 0;
-  #skippedFileCount = 0;
-  #eventSeq = 0;
-  #hasLiveLine = false;
 
-  constructor(options: { stdout: CliProgressStdout }) {
-    this.#stdout = options.stdout;
-    this.#isTTY = options.stdout.isTTY === true && typeof options.stdout.write === "function";
+  constructor(stdout: CliProgressStdout) {
+    this.#stdout = stdout;
+    this.#isTTY = stdout.isTTY === true && typeof stdout.write === "function";
   }
 
   get stdout(): CliProgressStdout {
     return this.#stdout;
   }
 
-  handleEvent(event: RunProgressEvent): void {
-    switch (event.type) {
-      case "phase-changed":
-        return;
-      case "run-initialized":
-        this.#plannedFileCount = event.plannedFileCount;
-        this.#appendBlock(`Output: ${event.outputTarget.basePath}`);
-        this.#renderProgress({ significant: true });
-        return;
-      case "file-claimed":
-        this.#activeFiles.set(event.filePath, {
-          claimOrder: event.claimOrder,
-          lastProgressSeq: ++this.#eventSeq
-        });
-        this.#renderProgress({ significant: false });
-        return;
-      case "file-progressed": {
-        const current = this.#activeFiles.get(event.filePath);
-        this.#activeFiles.set(event.filePath, {
-          claimOrder: current?.claimOrder ?? Number.MAX_SAFE_INTEGER,
-          lastProgressSeq: ++this.#eventSeq
-        });
-        this.#renderProgress({ significant: false });
-        return;
-      }
-      case "file-completed":
-        this.#activeFiles.delete(event.filePath);
-        this.#successfulFileCount = event.successfulFileCount;
-        this.#skippedFileCount = event.skippedFileCount;
-        this.#renderProgress({ significant: true });
-        return;
-      case "file-skipped":
-        this.#activeFiles.delete(event.filePath);
-        this.#successfulFileCount = event.successfulFileCount;
-        this.#skippedFileCount = event.skippedFileCount;
-        this.#appendBlock(
-          `Skipped: ${event.filePath} | ${event.stepId} | ${event.reason}`
-        );
-        this.#renderProgress({ significant: true });
-        return;
-      case "run-finalizing":
-        this.#successfulFileCount = event.successfulFileCount;
-        this.#skippedFileCount = event.skippedFileCount;
-        this.#plannedFileCount = event.plannedFileCount;
-        this.#renderProgress({ significant: true });
-        return;
-      default:
-        return;
-    }
-  }
-
-  finalize(): void {
-    if (!this.#isTTY || !this.#hasLiveLine) {
-      return;
+  finalize(surface: CliSurfaceState): CliSurfaceState {
+    if (!this.#isTTY || !surface.hasLiveLine) {
+      return surface;
     }
 
     this.#stdout.write?.(CLEAR_LINE);
-    this.#hasLiveLine = false;
+    return { hasLiveLine: false };
   }
 
-  #appendBlock(message: string): void {
-    if (this.#isTTY && this.#hasLiveLine) {
+  applyInstruction(
+    snapshot: ProgressSnapshot,
+    instruction: ProgressRenderInstruction,
+    surface: CliSurfaceState
+  ): CliSurfaceState {
+    let nextSurface = surface;
+
+    if (instruction.appendMessage) {
+      nextSurface = this.#appendBlock(snapshot, instruction.appendMessage, nextSurface);
+    }
+
+    if (instruction.renderProgress) {
+      nextSurface = this.#renderProgress(
+        snapshot,
+        instruction.renderProgress,
+        nextSurface
+      );
+    }
+
+    return nextSurface;
+  }
+
+  #appendBlock(
+    snapshot: ProgressSnapshot,
+    message: string,
+    surface: CliSurfaceState
+  ): CliSurfaceState {
+    let nextSurface = surface;
+
+    if (this.#isTTY && nextSurface.hasLiveLine) {
       this.#stdout.write?.(CLEAR_LINE);
-      this.#hasLiveLine = false;
+      nextSurface = { hasLiveLine: false };
     }
 
     this.#stdout.log(message);
 
-    if (this.#isTTY) {
-      this.#renderLiveLine();
+    if (!this.#isTTY) {
+      return nextSurface;
     }
+
+    return this.#renderLiveLine(snapshot, nextSurface);
   }
 
-  #renderProgress(options: { significant: boolean }): void {
-    if (this.#plannedFileCount === undefined) {
-      return;
+  #renderProgress(
+    snapshot: ProgressSnapshot,
+    options: { significant: boolean },
+    surface: CliSurfaceState
+  ): CliSurfaceState {
+    if (snapshot.plannedFileCount === undefined) {
+      return surface;
     }
 
     if (this.#isTTY) {
-      this.#renderLiveLine();
-      return;
+      return this.#renderLiveLine(snapshot, surface);
     }
 
     if (!options.significant) {
-      return;
+      return surface;
     }
 
-    this.#stdout.log(this.#buildLiveLine());
+    this.#stdout.log(this.#buildLiveLine(snapshot));
+    return surface;
   }
 
-  #renderLiveLine(): void {
-    if (!this.#isTTY || this.#plannedFileCount === undefined) {
-      return;
+  #renderLiveLine(
+    snapshot: ProgressSnapshot,
+    surface: CliSurfaceState
+  ): CliSurfaceState {
+    if (!this.#isTTY || snapshot.plannedFileCount === undefined) {
+      return surface;
     }
 
-    this.#stdout.write?.(`${CLEAR_LINE}${this.#buildLiveLine()}`);
-    this.#hasLiveLine = true;
+    this.#stdout.write?.(`${CLEAR_LINE}${this.#buildLiveLine(snapshot)}`);
+    return { hasLiveLine: true };
   }
 
-  #buildLiveLine(): string {
-    const resolvedCount = this.#successfulFileCount + this.#skippedFileCount;
-    const activeSummary = this.#buildActiveFileSummary();
-    const base = `Progress ${resolvedCount}/${this.#plannedFileCount} | active ${this.#activeFiles.size}`;
-    const fullLine = activeSummary ? `${base} | ${activeSummary}` : base;
+  #buildLiveLine(snapshot: ProgressSnapshot): string {
+    const base = `Progress ${snapshot.resolvedFileCount}/${snapshot.plannedFileCount} | active ${snapshot.activeFileCount}`;
+    const fullLine = snapshot.activeFileSummary
+      ? `${base} | ${snapshot.activeFileSummary}`
+      : base;
 
     return this.#truncateLiveLine(fullLine);
   }
@@ -160,30 +164,205 @@ export class CliProgressReporter {
 
     return `${line.slice(0, maxWidth - 3)}...`;
   }
+}
 
-  #buildActiveFileSummary(): string {
-    const activeFiles = [...this.#activeFiles.entries()]
-      .sort((left, right) => {
-        if (left[1].lastProgressSeq !== right[1].lastProgressSeq) {
-          return right[1].lastProgressSeq - left[1].lastProgressSeq;
+export class CliProgressReporter {
+  readonly #renderer: CliProgressRenderer;
+  #state: CliProgressState = createInitialProgressState();
+  #surface: CliSurfaceState = { hasLiveLine: false };
+
+  constructor(options: { stdout: CliProgressStdout }) {
+    this.#renderer = new CliProgressRenderer(options.stdout);
+  }
+
+  get stdout(): CliProgressStdout {
+    return this.#renderer.stdout;
+  }
+
+  handleEvent(event: RunProgressEvent): void {
+    const { state, instruction } = reduceProgressEvent(this.#state, event);
+
+    this.#state = state;
+    this.#surface = this.#renderer.applyInstruction(
+      createProgressSnapshot(state),
+      instruction,
+      this.#surface
+    );
+  }
+
+  finalize(): void {
+    this.#surface = this.#renderer.finalize(this.#surface);
+  }
+}
+
+function createInitialProgressState(): CliProgressState {
+  return {
+    activeFiles: new Map<string, ActiveFileState>(),
+    eventSeq: 0,
+    skippedFileCount: 0,
+    successfulFileCount: 0
+  };
+}
+
+function reduceProgressEvent(
+  current: CliProgressState,
+  event: RunProgressEvent
+): { state: CliProgressState; instruction: ProgressRenderInstruction } {
+  switch (event.type) {
+    case "phase-changed":
+      return { state: current, instruction: {} };
+
+    case "run-initialized":
+      return {
+        state: {
+          ...current,
+          plannedFileCount: event.plannedFileCount
+        },
+        instruction: {
+          appendMessage: `Output: ${event.outputTarget.basePath}`,
+          renderProgress: { significant: true }
         }
+      };
 
-        if (left[1].claimOrder !== right[1].claimOrder) {
-          return left[1].claimOrder - right[1].claimOrder;
+    case "file-claimed":
+      return {
+        state: withActiveFileProgress(current, event.filePath, event.claimOrder),
+        instruction: {
+          renderProgress: { significant: false }
         }
+      };
 
-        return left[0].localeCompare(right[0]);
-      })
-      .map(([filePath]) => filePath);
-
-    const visibleFiles = activeFiles.slice(0, 3);
-    const hiddenCount = Math.max(0, activeFiles.length - visibleFiles.length);
-    const visibleSummary = visibleFiles.join(", ");
-
-    if (!visibleSummary) {
-      return "";
+    case "file-progressed": {
+      const existing = current.activeFiles.get(event.filePath);
+      return {
+        state: withActiveFileProgress(
+          current,
+          event.filePath,
+          existing?.claimOrder ?? Number.MAX_SAFE_INTEGER
+        ),
+        instruction: {
+          renderProgress: { significant: false }
+        }
+      };
     }
 
-    return hiddenCount > 0 ? `${visibleSummary} | +${hiddenCount} more` : visibleSummary;
+    case "file-completed":
+      return {
+        state: withResolvedOutcome(
+          current,
+          event.filePath,
+          event.successfulFileCount,
+          event.skippedFileCount
+        ),
+        instruction: {
+          renderProgress: { significant: true }
+        }
+      };
+
+    case "file-skipped":
+      return {
+        state: withResolvedOutcome(
+          current,
+          event.filePath,
+          event.successfulFileCount,
+          event.skippedFileCount
+        ),
+        instruction: {
+          appendMessage: `Skipped: ${event.filePath} | ${event.stepId} | ${event.reason}`,
+          renderProgress: { significant: true }
+        }
+      };
+
+    case "run-finalizing":
+      return {
+        state: {
+          ...current,
+          plannedFileCount: event.plannedFileCount,
+          skippedFileCount: event.skippedFileCount,
+          successfulFileCount: event.successfulFileCount
+        },
+        instruction: {
+          renderProgress: { significant: true }
+        }
+      };
+
+    default:
+      return { state: current, instruction: {} };
   }
+}
+
+function withActiveFileProgress(
+  current: CliProgressState,
+  filePath: string,
+  claimOrder: number
+): CliProgressState {
+  const activeFiles = new Map(current.activeFiles);
+  const nextEventSeq = current.eventSeq + 1;
+
+  activeFiles.set(filePath, {
+    claimOrder,
+    lastProgressSeq: nextEventSeq
+  });
+
+  return {
+    ...current,
+    activeFiles,
+    eventSeq: nextEventSeq
+  };
+}
+
+function withResolvedOutcome(
+  current: CliProgressState,
+  filePath: string,
+  successfulFileCount: number,
+  skippedFileCount: number
+): CliProgressState {
+  const activeFiles = new Map(current.activeFiles);
+  activeFiles.delete(filePath);
+
+  return {
+    ...current,
+    activeFiles,
+    skippedFileCount,
+    successfulFileCount
+  };
+}
+
+function createProgressSnapshot(state: CliProgressState): ProgressSnapshot {
+  return {
+    activeFileSummary: buildActiveFileSummary(state.activeFiles),
+    activeFileCount: state.activeFiles.size,
+    plannedFileCount: state.plannedFileCount,
+    resolvedFileCount: state.successfulFileCount + state.skippedFileCount
+  };
+}
+
+function buildActiveFileSummary(
+  activeFiles: Map<string, ActiveFileState>
+): string {
+  const orderedFiles = [...activeFiles.entries()]
+    .sort((left, right) => {
+      if (left[1].lastProgressSeq !== right[1].lastProgressSeq) {
+        return right[1].lastProgressSeq - left[1].lastProgressSeq;
+      }
+
+      if (left[1].claimOrder !== right[1].claimOrder) {
+        return left[1].claimOrder - right[1].claimOrder;
+      }
+
+      return left[0].localeCompare(right[0]);
+    })
+    .map(([filePath]) => filePath);
+
+  const visibleFiles = orderedFiles.slice(0, 3);
+  const hiddenCount = Math.max(0, orderedFiles.length - visibleFiles.length);
+  const visibleSummary = visibleFiles.join(", ");
+
+  if (!visibleSummary) {
+    return "";
+  }
+
+  return hiddenCount > 0
+    ? `${visibleSummary} | +${hiddenCount} more`
+    : visibleSummary;
 }
