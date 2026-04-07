@@ -14,7 +14,6 @@ import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
   buildSessionResponse,
-  createResolvedRedirectResolver,
   isChangesetOverviewSystemMessage,
   isJudgeSystemMessage,
   isKnowledgeSourceOfTruthSystemMessage,
@@ -34,7 +33,6 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
     let initializeRunCalls = 0;
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {
           startCalls += 1;
@@ -99,7 +97,6 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {
           startCalls += 1;
@@ -869,7 +866,6 @@ test("createLocalReviewRunApp does not call clientManager.start() in dry-run mod
     let stopCalls = 0;
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {
           startCalls += 1;
@@ -915,7 +911,6 @@ test("createLocalReviewRunApp completes dry-run flow and result has dryRun: true
   try {
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {
           throw new Error("clientManager.start() must not be called in dry-run mode");

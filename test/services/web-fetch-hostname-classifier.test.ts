@@ -148,3 +148,28 @@ test("DefaultWebFetchHostnameClassifier denies lookup timeout conservatively", a
     }
   );
 });
+
+test("DefaultWebFetchHostnameClassifier delegates resolved-address classification through the shared address policy", async () => {
+  const seenAddresses: string[] = [];
+  const classifier = new DefaultWebFetchHostnameClassifier({
+    lookupFn: async () => [
+      { address: "93.184.216.34", family: 4 },
+      { address: "198.51.100.10", family: 4 }
+    ],
+    addressPolicy: {
+      isAllowed(address) {
+        seenAddresses.push(address);
+        return address === "93.184.216.34";
+      }
+    }
+  });
+
+  assert.deepEqual(
+    await classifier.classifyHostname("docs.example.com", { timeoutMs: 5000 }),
+    {
+      kind: "denied",
+      reason: UNSAFE_WEB_FETCH_HOSTNAME_REASON
+    }
+  );
+  assert.deepEqual(seenAddresses, ["93.184.216.34", "198.51.100.10"]);
+});

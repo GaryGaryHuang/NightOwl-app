@@ -184,6 +184,13 @@ src/
 - **Completion check precedes state update**: Agent responses must pass judge/validation before being written to context
 - **Repo source tree is read-only to Agent tools**: NightOwl host writes review artifacts only under `repo_root/.nightowl/review/**`
 
+## Web Fetch Guardrails
+
+NightOwl applies conservative web-fetch guardrails during review runs:
+
+- Only safe public `https` targets are eligible.
+- Repo-local host policies can further restrict which hosts are allowed.
+
 ## Configuration
 
 Place an optional configuration file at `repo_root/.nightowl/reviewconfig.json`:

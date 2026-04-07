@@ -8,10 +8,6 @@ import type {
   WebFetchHostnameClassification,
   WebFetchHostnameClassifier
 } from "../../src/services/web-fetch-hostname-classifier.ts";
-import type {
-  WebFetchRedirectResolution,
-  WebFetchRedirectResolver
-} from "../../src/services/web-fetch-redirect-resolver.ts";
 
 export const BASE_PROFILE: Pick<ReviewSessionProfile, "outputBaseDir" | "repoRoot"> = {
   outputBaseDir: "/workspace/repo",
@@ -25,10 +21,7 @@ export function createPolicySession(options?: {
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
   hostnameClassifier?: WebFetchHostnameClassifier;
-  redirectResolver?: WebFetchRedirectResolver;
   webFetchHostnameClassificationTimeoutMs?: number;
-  webFetchRedirectHopLimit?: number;
-  webFetchRedirectTimeoutMs?: number;
   auditWriter?: ToolAuditWriter;
 }) {
   const guard = new ToolPolicyGuard({
@@ -41,21 +34,12 @@ export function createPolicySession(options?: {
     hostnameClassifier:
       options?.hostnameClassifier ??
       new FakeHostnameClassifier({ kind: "allowed" }),
-    redirectResolver:
-      options?.redirectResolver ??
-      new FakeRedirectResolver({ kind: "resolved", redirectChain: [] }),
     ...(options?.webFetchHostnameClassificationTimeoutMs === undefined
       ? {}
       : {
           webFetchHostnameClassificationTimeoutMs:
             options.webFetchHostnameClassificationTimeoutMs
         }),
-    ...(options?.webFetchRedirectHopLimit === undefined
-      ? {}
-      : { webFetchRedirectHopLimit: options.webFetchRedirectHopLimit }),
-    ...(options?.webFetchRedirectTimeoutMs === undefined
-      ? {}
-      : { webFetchRedirectTimeoutMs: options.webFetchRedirectTimeoutMs })
   });
 
   return {
@@ -69,10 +53,7 @@ export function createWebFetchPolicy(options?: {
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
   hostnameClassifier?: WebFetchHostnameClassifier;
-  redirectResolver?: WebFetchRedirectResolver;
   webFetchHostnameClassificationTimeoutMs?: number;
-  webFetchRedirectHopLimit?: number;
-  webFetchRedirectTimeoutMs?: number;
 }) {
   return new ToolPolicyWebFetchPolicy({
     ...(options?.webFetchAllowedHosts === undefined
@@ -84,68 +65,13 @@ export function createWebFetchPolicy(options?: {
     hostnameClassifier:
       options?.hostnameClassifier ??
       new FakeHostnameClassifier({ kind: "allowed" }),
-    redirectResolver:
-      options?.redirectResolver ??
-      new FakeRedirectResolver({ kind: "resolved", redirectChain: [] }),
     ...(options?.webFetchHostnameClassificationTimeoutMs === undefined
       ? {}
       : {
           webFetchHostnameClassificationTimeoutMs:
             options.webFetchHostnameClassificationTimeoutMs
         }),
-    ...(options?.webFetchRedirectHopLimit === undefined
-      ? {}
-      : { webFetchRedirectHopLimit: options.webFetchRedirectHopLimit }),
-    ...(options?.webFetchRedirectTimeoutMs === undefined
-      ? {}
-      : { webFetchRedirectTimeoutMs: options.webFetchRedirectTimeoutMs })
   });
-}
-
-// spy-instrumented test double: records every call's arguments in `this.calls`
-// and returns a pre-configured resolution. Accepts either a static resolution
-// or a factory function to simulate per-call variation (e.g. timeouts).
-export class FakeRedirectResolver implements WebFetchRedirectResolver {
-  readonly calls: Array<{
-    initialUrl: string;
-    maxHops: number;
-    timeoutMs: number;
-    validateRedirectTarget: boolean;
-  }> = [];
-
-  #nextResolution:
-    | WebFetchRedirectResolution
-    | (() => Promise<WebFetchRedirectResolution>);
-
-  constructor(
-    resolution:
-      | WebFetchRedirectResolution
-      | (() => Promise<WebFetchRedirectResolution>)
-  ) {
-    this.#nextResolution = resolution;
-  }
-
-  async resolveRedirectChain(
-    initialUrl: URL,
-    options: {
-      maxHops: number;
-      timeoutMs: number;
-      validateRedirectTarget?: (redirectTarget: URL) => string | Promise<string | undefined> | undefined;
-    }
-  ): Promise<WebFetchRedirectResolution> {
-    this.calls.push({
-      initialUrl: initialUrl.toString(),
-      maxHops: options.maxHops,
-      timeoutMs: options.timeoutMs,
-      validateRedirectTarget: options.validateRedirectTarget !== undefined
-    });
-
-    if (typeof this.#nextResolution === "function") {
-      return this.#nextResolution();
-    }
-
-    return this.#nextResolution;
-  }
 }
 
 // spy-instrumented test double: records each call and returns a pre-configured

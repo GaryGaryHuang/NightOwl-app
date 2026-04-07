@@ -9,7 +9,6 @@ import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
   buildSessionResponse,
-  createResolvedRedirectResolver,
   isKnowledgeSourceOfTruthSystemMessage
 } from "../helpers/review-app-fixture.ts";
 
@@ -32,7 +31,6 @@ test("createLocalReviewRunApp exposes runtime url guardrails and legacy web_fetc
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       webFetchHostnameClassifier: createAllowingHostnameClassifier(),
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {},
         async stop() {},
@@ -159,7 +157,6 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       webFetchHostnameClassifier: createAllowingHostnameClassifier(),
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
       clientManager: {
         async start() {},
         async stop() {},
@@ -282,9 +279,6 @@ test("createLocalReviewRunApp applies host policy without redirect-chain resolut
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       webFetchHostnameClassifier: createAllowingHostnameClassifier(),
-      webFetchRedirectResolver: createResolvedRedirectResolver([
-        new URL("https://reference.example.net/page")
-      ]),
       clientManager: {
         async start() {},
         async stop() {},
@@ -365,10 +359,8 @@ test("createLocalReviewRunApp applies host policy without redirect-chain resolut
 
     assert.ok(preToolUse);
     const confirmedPreToolUse = preToolUse!;
-    // Redirect resolution has been removed from evaluate(). The redirect
-    // resolver is injected but never called. docs.example.com is in the
-    // allowlist so the request is allowed despite the resolver being
-    // configured with a chain to an unlisted host.
+    // Redirect resolution is outside the active contract, so docs.example.com
+    // is allowed purely by the initial URL boundary plus host policy.
     assert.equal(
       await confirmedPreToolUse(
         {

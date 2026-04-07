@@ -1,28 +1,4 @@
-import type { WebFetchRedirectResolver } from "../../src/services/web-fetch-redirect-resolver.ts";
-
 import { lineRangeTraceability } from "./orchestrator-fixture.ts";
-
-export function createResolvedRedirectResolver(redirectChain: URL[] = []): WebFetchRedirectResolver {
-  return {
-    async resolveRedirectChain(_initialUrl, options) {
-      for (const redirectTarget of redirectChain) {
-        const denialReason = await options.validateRedirectTarget?.(redirectTarget);
-
-        if (denialReason) {
-          return {
-            kind: "denied",
-            reason: denialReason
-          };
-        }
-      }
-
-      return {
-        kind: "resolved",
-        redirectChain
-      };
-    }
-  };
-}
 
 /**
  * Produces a minimal but structurally valid session response for each SOP

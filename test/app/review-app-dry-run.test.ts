@@ -4,7 +4,6 @@ import test from "node:test";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { createResolvedRedirectResolver } from "../helpers/review-app-fixture.ts";
 
 /**
  * End-to-end dry-run integration tests.
@@ -33,7 +32,6 @@ test("dry-run produces complete output folder structure without calling clientMa
 
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
       timestampProvider: () => "03300940",
       clientManager: {
         async start() {
@@ -122,7 +120,6 @@ test("dry-run per-file review notes contain stub step headings", async () => {
 
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
-      webFetchRedirectResolver: createResolvedRedirectResolver(),
       timestampProvider: () => "03300940",
       clientManager: {
         async start() {

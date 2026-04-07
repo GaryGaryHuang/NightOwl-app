@@ -34,7 +34,6 @@ import { ReviewSessionFactory } from "../services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../services/tool-audit-writer.ts";
 import type { WebFetchHostnameClassifier } from "../services/web-fetch-hostname-classifier.ts";
-import type { WebFetchRedirectResolver } from "../services/web-fetch-redirect-resolver.ts";
 import {
   DryRunReviewSessionFactory,
   DryRunJudgeSessionFactory
@@ -66,9 +65,6 @@ export interface CreateLocalReviewRunAppOptions {
   gracefulShutdownTimeoutMs?: number;
   webFetchHostnameClassifier?: WebFetchHostnameClassifier;
   webFetchHostnameClassificationTimeoutMs?: number;
-  webFetchRedirectResolver?: WebFetchRedirectResolver;
-  webFetchRedirectHopLimit?: number;
-  webFetchRedirectTimeoutMs?: number;
   onProgressEvent?: RunProgressEventHandler;
 }
 
@@ -128,13 +124,10 @@ export function createLocalReviewRunApp(
               });
             const toolPolicyGuard = new ToolPolicyGuard({
               hostnameClassifier: options.webFetchHostnameClassifier,
-              redirectResolver: options.webFetchRedirectResolver,
               webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
               webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
               webFetchHostnameClassificationTimeoutMs:
-                options.webFetchHostnameClassificationTimeoutMs,
-              webFetchRedirectHopLimit: options.webFetchRedirectHopLimit,
-              webFetchRedirectTimeoutMs: options.webFetchRedirectTimeoutMs
+                options.webFetchHostnameClassificationTimeoutMs
             });
             return new ReviewSessionFactory({
               clientManager,
