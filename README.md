@@ -237,7 +237,9 @@ npm run review -- main feature-branch
 ### Implementation Notes
 
 - Source code is in `src/` (TypeScript); published artifacts are in `dist/` (JavaScript)
-- The toolchain uses Node.js native TypeScript support with no external build dependencies
+- `npm run build` uses the repo-local TypeScript compiler with [`tsconfig.build.json`](./tsconfig.build.json) to emit `dist/`
+- [`scripts/build.mjs`](./scripts/build.mjs) is a thin build wrapper: it clears stale `dist/`, invokes the compiler, and verifies the published CLI artifact
+- `npm run typecheck` remains a separate `tsc --noEmit` path for source and test validation
 - The `prepack` lifecycle script ensures `dist/` is rebuilt before `npm pack`
 - Production install uses `npm pack` + `npm install -g`; for development use `npm link`
 

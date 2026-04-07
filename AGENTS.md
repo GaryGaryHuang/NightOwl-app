@@ -18,7 +18,7 @@ Run locally without building:
 npm run review -- main feature-branch
 ```
 
-Node.js ≥ 22.7.0. The toolchain uses Node's native TypeScript execution with no external build dependencies.
+Node.js ≥ 22.7.0. Published artifacts are built with the repo-local TypeScript compiler via `tsconfig.build.json`; `tsconfig.json` remains the typecheck/editor config.
 
 ## Architecture
 
@@ -65,8 +65,9 @@ src/
 
 | File | Purpose |
 |------|---------|
-| `tsconfig.json` | TypeScript compiler configuration |
-| `scripts/build.mjs` | ESBuild build script |
+| `tsconfig.json` | TypeScript typecheck / editor configuration (`noEmit`) |
+| `tsconfig.build.json` | Publish build configuration for `src/** -> dist/**` |
+| `scripts/build.mjs` | Thin build wrapper: clean `dist/`, invoke `tsc`, normalize bin permissions, verify artifact |
 | `reviewconfig.json` | Review runtime settings (optional, placed at `repo_root/.nightowl/`) |
 | `reviewignore` | File filtering (`.gitignore` syntax, placed at `repo_root/.nightowl/`) |
 
