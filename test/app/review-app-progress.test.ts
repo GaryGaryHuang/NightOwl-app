@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";
 
 test("createLocalReviewRunApp emits deterministic progress events for planning, per-file progress, skip, and finalizing", async () => {
@@ -62,7 +63,7 @@ test("createLocalReviewRunApp emits deterministic progress events for planning, 
         });
       }
     },
-    outputSink: {
+    outputSink: defineOutputSinkDouble({
       initializeRun() {
         return this;
       },
@@ -72,7 +73,7 @@ test("createLocalReviewRunApp emits deterministic progress events for planning, 
       publishReviewIndex() {},
       publishRunManifest() {},
       publishChangesetOverview() {}
-    },
+    }),
     stepRunner: {
       async run({ step, context }) {
         if (

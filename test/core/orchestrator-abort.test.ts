@@ -9,12 +9,14 @@ import { createRunContext } from "../../src/core/run-context.ts";
 import type { ReviewFileFilter } from "../../src/providers/review-file-filter.ts";
 import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
 import type {
+  ReviewOutputBootstrapAndPublisher,
   ReviewOutputSink,
   RunOutputPublisher
 } from "../../src/providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import type { StepDefinition } from "../../src/core/step-runner.ts";
+import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -59,9 +61,9 @@ function createPassthroughReviewFileFilter(): ReviewFileFilter {
   };
 }
 
-interface TrackingOutputSink extends ReviewOutputSink, RunOutputPublisher {
+type TrackingOutputSink = ReviewOutputBootstrapAndPublisher & {
   calls: string[];
-}
+};
 
 function createTrackingOutputSink(): TrackingOutputSink {
   const calls: string[] = [];
@@ -263,13 +265,14 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal aborts dur
   const step1Calls: string[] = [];
 
   const orchestrator = createBaseOrchestrator({
-    outputSink: {
+    outputSink: defineOutputSinkDouble({
       ...sink,
       initializeRun(outputTarget) {
-        sink.initializeRun(outputTarget);
+        const publisher = sink.initializeRun(outputTarget);
         controller.abort("SIGINT");
+        return publisher;
       }
-    },
+    }),
     stepRunner: {
       async run({ step, context }: { step: { stepId: string }; context: { filePath: string } }) {
         if (step.stepId === "step1-overview") {
@@ -302,16 +305,16 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal aborts dur
   let bootstrapAbortFired = false;
 
   const orchestrator = createBaseOrchestrator({
-    outputSink: {
+    outputSink: defineOutputSinkDouble({
       ...sink,
       publishFileReview(result) {
-        sink.publishFileReview(result);
+        sink.publishFileReview!(result);
         if (!bootstrapAbortFired) {
           bootstrapAbortFired = true;
           controller.abort("SIGINT");
         }
       }
-    },
+    }),
     stepRunner: {
       async run({ step, context }: { step: { stepId: string }; context: { filePath: string } }) {
         if (step.stepId === "step1-overview") {
@@ -419,15 +422,15 @@ test("ReviewOrchestrator worker does not publish a new per-file snapshot after a
   let abortFired = false;
 
   const orchestrator = createBaseOrchestrator({
-    outputSink: {
+    outputSink: defineOutputSinkDouble({
       ...sink,
       publishFileReview(result) {
         if (abortFired) {
           fileReviewCallsAfterAbort.push(result.noteFilePath);
         }
-        sink.publishFileReview(result);
+        sink.publishFileReview!(result);
       }
-    },
+    }),
     stepRunner: {
       async run({ step }: { step: { stepId: string } }) {
         if (step.stepId === "step1-overview" && !abortFired) {

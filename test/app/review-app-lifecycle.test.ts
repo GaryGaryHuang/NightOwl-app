@@ -8,6 +8,7 @@ import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSessionResponse } from "../helpers/review-app-fixture.ts";
 
 /**
@@ -72,7 +73,7 @@ function createSignalTestApp(options: {
         return files;
       }
     },
-    outputSink: {
+    outputSink: defineOutputSinkDouble({
       initializeRun() {
         return this;
       },
@@ -82,7 +83,7 @@ function createSignalTestApp(options: {
       publishReviewIndex() {},
       publishRunManifest() {},
       publishChangesetOverview() {}
-    },
+    }),
     changesetOverviewRunner: {
       async run() {
         if (options.step0Error) {

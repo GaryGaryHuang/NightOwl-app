@@ -19,6 +19,7 @@ import type {
   RunOutputPublisher
 } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildDependenciesResponse, buildFindingsForFile, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, buildSuccessfulStepResult, buildSummaryResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 import type { Step7NarrativeRiskLevel, SuccessfulStepResultOptions } from "../helpers/orchestrator-fixture.ts";
 
@@ -474,7 +475,7 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -495,7 +496,7 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
           outputCalls.push(["publishRunManifest", manifestResult.content]);
         },
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: {
         async run({ step }) {
           if (step.stepId !== "step1-overview") {
@@ -555,7 +556,7 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -576,7 +577,7 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
           outputCalls.push(["publishRunManifest", manifestResult.content]);
         },
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: {
         async run() {
           throw new Error("should not start steps");
@@ -649,7 +650,7 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
         }
       },
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -670,7 +671,7 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
           outputCalls.push(["publishRunManifest", manifestResult.content]);
         },
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: createSuccessfulSummaryRunner(),
       changesetOverviewRunner: {
         async run() {

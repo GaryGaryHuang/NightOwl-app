@@ -2,13 +2,13 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
+import type { ReviewOutputTarget } from "../../src/providers/review-output-sink.ts";
 
 export function createWorkspaceProviderFixture() {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
   const basePath = path.join(tempDir, ".nightowl", "review", "feature-branch_03131430");
-  const outputTarget: OutputTarget = {
+  const outputTarget: ReviewOutputTarget = {
     basePath,
     changesetOverviewPath: path.join(basePath, "changeset-overview.md"),
     filesPath: path.join(basePath, "files"),

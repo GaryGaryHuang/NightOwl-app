@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
+import { ReviewOutputBoundaryError } from "../../src/providers/review-output-sink.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
 test("run-scoped output publisher publishes file review content to the target note path", () => {
@@ -208,5 +211,34 @@ test("run-scoped output publishers do not share output state across runs", () =>
   } finally {
     fixtureA.cleanup();
     fixtureB.cleanup();
+  }
+});
+
+test("run-scoped output publisher reports typed file-review write failures with stable operation metadata", () => {
+  const fixture = createWorkspaceProviderFixture();
+  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
+
+  try {
+    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
+    mkdirSync(path.dirname(noteFilePath), { recursive: true });
+    mkdirSync(noteFilePath, { recursive: true });
+
+    assert.throws(
+      () =>
+        publisher.publishFileReview({
+          noteFilePath,
+          content: "# src/app.ts\n"
+        }),
+      (error) => {
+        assert.ok(error instanceof ReviewOutputBoundaryError);
+        assert.equal(error.operation, "publishFileReview");
+        assert.equal(error.outputPath, noteFilePath);
+        assert.ok(error.cause instanceof Error);
+        assert.equal(error.message, (error.cause as Error).message);
+        return true;
+      }
+    );
+  } finally {
+    fixture.cleanup();
   }
 });

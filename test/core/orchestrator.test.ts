@@ -18,6 +18,7 @@ import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-prov
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStandardStep5JsonResponse, buildStandardStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, buildSuccessfulStepResult, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
 import { createStepResponseRouter } from "../helpers/orchestrator-step-contract-fixture.ts";
 
@@ -548,7 +549,7 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           throw new Error("initialize failed");
@@ -563,7 +564,7 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
           stepEvents.push([step.stepId, context.filePath]);
@@ -627,9 +628,10 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
           );
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -641,7 +643,7 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
           stepEvents.push([step.stepId, context.filePath]);
@@ -714,7 +716,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -735,7 +737,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -828,7 +830,7 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -853,7 +855,7 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -934,7 +936,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -959,7 +961,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1039,7 +1041,7 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -1062,7 +1064,7 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1139,7 +1141,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -1171,7 +1173,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1250,7 +1252,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -1278,7 +1280,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1360,7 +1362,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -1385,7 +1387,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
@@ -1452,7 +1454,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -1467,7 +1469,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
           stepEvents.push([step.stepId, context.filePath]);
@@ -1548,7 +1550,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -1572,7 +1574,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: createStepFailureRunner({
         stepEvents,
         failedFile,
@@ -1654,7 +1656,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
@@ -1674,7 +1676,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: createStepFailureRunner({
         stepEvents,
         failedFile,
@@ -1733,9 +1735,10 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           calls.push("initializeRun");
+          return this;
         },
         publishFileReview() {
           calls.push("publishFileReview");
@@ -1747,7 +1750,7 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: {
         async run() {
           throw new Error("should not reach step 1");
@@ -1795,7 +1798,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun(outputTarget) {
           callOrder.push("initializeRun");
           callbackOutputTarget = outputTarget;
@@ -1809,7 +1812,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      },
+      }),
       stepRunner: {
         async run(input) {
           callOrder.push("stepRunner.run");
@@ -1832,7 +1835,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
           0,
           "onOutputTargetReady must be called before any per-file step"
         );
-        assert.equal(outputTarget, callbackOutputTarget);
+        assert.deepEqual(outputTarget, callbackOutputTarget);
       },
       workingDirectory: fixture.repoDir,
       timestampProvider: () => "03131430"
@@ -1902,7 +1905,7 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           callOrder.push("initializeRun");
           return this;
@@ -1917,7 +1920,7 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
         publishChangesetOverview() {
           callOrder.push("publishChangesetOverview");
         }
-      },
+      }),
       stepRunner: {
         async run(input) {
           return { stepId: input.step.stepId, applyTo() {} };
@@ -1972,7 +1975,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           calls.push("initializeRun");
           return this;
@@ -1988,7 +1991,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
           calls.push("publishChangesetOverview");
           throw new Error("changeset overview write failed");
         }
-      },
+      }),
       stepRunner: {
         async run(): Promise<StepResult> {
           throw new Error("should not start per-file steps");

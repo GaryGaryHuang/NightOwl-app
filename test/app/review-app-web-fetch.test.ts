@@ -6,6 +6,7 @@ import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { WebFetchHostnameClassifier } from "../../src/services/web-fetch-hostname-classifier.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
   buildSessionResponse,
   createResolvedRedirectResolver,
@@ -78,7 +79,7 @@ test("createLocalReviewRunApp exposes runtime url guardrails and legacy web_fetc
           };
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -88,7 +89,7 @@ test("createLocalReviewRunApp exposes runtime url guardrails and legacy web_fetc
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     const result = await app.run({
@@ -206,7 +207,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
           };
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -216,7 +217,7 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     const result = await app.run({
@@ -331,7 +332,7 @@ test("createLocalReviewRunApp applies host policy without redirect-chain resolut
           };
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -341,7 +342,7 @@ test("createLocalReviewRunApp applies host policy without redirect-chain resolut
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     const result = await app.run({

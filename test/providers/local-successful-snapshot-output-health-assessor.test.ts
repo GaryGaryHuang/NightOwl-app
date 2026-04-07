@@ -3,6 +3,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
 
 import { LocalSuccessfulSnapshotOutputHealthAssessor } from "../../src/providers/local-successful-snapshot-output-health-assessor.ts";
+import { ReviewOutputBoundaryError } from "../../src/providers/review-output-sink.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
 test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note write failures as single-file output faults when the shared files path remains healthy", () => {
@@ -95,6 +96,29 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor treats shared files-path corru
         outputTarget: fixture.outputTarget,
         noteFilePath,
         error
+      }),
+      { faultScope: "shared-output-target-fault" }
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output target fault when ReviewOutputBoundaryError has no preserved cause", () => {
+  const fixture = createWorkspaceProviderFixture();
+  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
+
+  try {
+    fixture.provider.initializeRun(fixture.outputTarget);
+    const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
+
+    assert.deepEqual(
+      assessor.assess({
+        outputTarget: fixture.outputTarget,
+        noteFilePath,
+        error: new ReviewOutputBoundaryError("publishFileReview", "note write failed", {
+          outputPath: noteFilePath
+        })
       }),
       { faultScope: "shared-output-target-fault" }
     );

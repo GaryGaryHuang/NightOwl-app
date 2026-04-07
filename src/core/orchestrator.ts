@@ -46,6 +46,7 @@ import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boun
 import { Step1OverviewStep } from "./steps/step1-overview.ts";
 import {
   resolveSuccessfulSnapshotFailureAssessment,
+  type ReviewOutputTarget,
   type ReviewOutputSink,
   type RunOutputPublisher,
   type SuccessfulSnapshotOutputHealthAssessor
@@ -72,7 +73,7 @@ export interface ReviewOrchestratorOptions {
   reviewFileFilter: ReviewFileFilter;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
-  successfulSnapshotOutputHealthAssessor: SuccessfulSnapshotOutputHealthAssessor;
+  successfulSnapshotOutputHealthAssessor?: SuccessfulSnapshotOutputHealthAssessor;
   stepRunner: Pick<StepRunner, "run">;
   workingDirectory: string;
   timestampProvider?: () => string;
@@ -112,7 +113,11 @@ export class ReviewOrchestrator {
     this.#sourceProvider = options.sourceProvider;
     this.#outputSink = options.outputSink;
     this.#successfulSnapshotOutputHealthAssessor =
-      options.successfulSnapshotOutputHealthAssessor;
+      options.successfulSnapshotOutputHealthAssessor ?? {
+        assess() {
+          return { faultScope: "shared-output-target-fault" as const };
+        }
+      };
     this.#stepRunner = options.stepRunner;
     this.#workingDirectory = options.workingDirectory;
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
@@ -209,8 +214,8 @@ export class ReviewOrchestrator {
       timestamp: this.#timestampProvider()
     });
     const plannedNoteFiles = planNoteFiles(outputTarget.filesPath, reviewableFiles);
-
-    const outputPublisher = this.#outputSink.initializeRun(outputTarget);
+    const providerOutputTarget = toReviewOutputTarget(outputTarget);
+    const outputPublisher = this.#outputSink.initializeRun(providerOutputTarget);
     throwIfRunAborted();
 
     outputPublisher.publishChangesetOverview({ content: runContext.changesetOverview });
@@ -568,7 +573,7 @@ export class ReviewOrchestrator {
         const assessment = resolveSuccessfulSnapshotFailureAssessment(
           this.#successfulSnapshotOutputHealthAssessor,
           {
-            outputTarget: input.outputTarget,
+            outputTarget: toReviewOutputTarget(input.outputTarget),
             noteFilePath: fileContext.noteFilePath,
             error: outputError
           }
@@ -742,4 +747,17 @@ function defaultTimestampProvider(): string {
   const minute = String(now.getMinutes()).padStart(2, "0");
 
   return `${month}${day}${hour}${minute}`;
+}
+
+function toReviewOutputTarget(outputTarget: OutputTarget): ReviewOutputTarget {
+  return {
+    basePath: outputTarget.basePath,
+    changesetOverviewPath: outputTarget.changesetOverviewPath,
+    filesPath: outputTarget.filesPath,
+    skippedPath: outputTarget.skippedPath,
+    summaryPath: outputTarget.summaryPath,
+    indexPath: outputTarget.indexPath,
+    manifestPath: outputTarget.manifestPath,
+    toolAuditPath: outputTarget.toolAuditPath
+  };
 }

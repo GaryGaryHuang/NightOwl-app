@@ -2,6 +2,7 @@ import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 
 import type {
+  ReviewOutputBoundaryError,
   SuccessfulSnapshotFailureAssessment,
   SuccessfulSnapshotFailureInput,
   SuccessfulSnapshotOutputHealthAssessor
@@ -16,9 +17,10 @@ export class LocalSuccessfulSnapshotOutputHealthAssessor
   assess(
     input: SuccessfulSnapshotFailureInput
   ): SuccessfulSnapshotFailureAssessment {
+    const underlyingError = unwrapOutputCause(input.error);
     const code =
-      isErrnoException(input.error) && typeof input.error.code === "string"
-        ? input.error.code
+      isErrnoException(underlyingError) && typeof underlyingError.code === "string"
+        ? underlyingError.code
         : undefined;
 
     if (!code) {
@@ -29,7 +31,7 @@ export class LocalSuccessfulSnapshotOutputHealthAssessor
       return { faultScope: "shared-output-target-fault" };
     }
 
-    const errorPath = resolveErrnoPath(input.error);
+    const errorPath = resolveErrnoPath(underlyingError);
     const expectedNotePath = path.resolve(input.noteFilePath);
 
     if (
@@ -66,6 +68,20 @@ const SINGLE_FILE_ERROR_CODES = new Set(["EISDIR", "ENAMETOOLONG"]);
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error;
+}
+
+function unwrapOutputCause(error: unknown): unknown {
+  if (isReviewOutputBoundaryError(error) && error.cause !== undefined) {
+    return error.cause;
+  }
+
+  return error;
+}
+
+function isReviewOutputBoundaryError(
+  error: unknown
+): error is ReviewOutputBoundaryError {
+  return error instanceof Error && error.name === "ReviewOutputBoundaryError";
 }
 
 function resolveErrnoPath(error: unknown): string | undefined {

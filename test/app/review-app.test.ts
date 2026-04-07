@@ -11,6 +11,7 @@ import { createRunContext } from "../../src/core/run-context.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
   buildSessionResponse,
   createResolvedRedirectResolver,
@@ -52,7 +53,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
           throw new Error("should not start step0");
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           initializeRunCalls += 1;
           return this;
@@ -63,7 +64,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     await assert.rejects(
@@ -137,7 +138,7 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
           };
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           initializeRunCalls += 1;
           return this;
@@ -148,7 +149,7 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     await assert.rejects(
@@ -255,7 +256,7 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
           };
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -267,7 +268,7 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     const result = await app.run({
@@ -552,7 +553,7 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
           };
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -564,7 +565,7 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     const result = await app.run({
@@ -669,7 +670,7 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
           };
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -681,7 +682,7 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     const result = await app.run({
@@ -774,7 +775,7 @@ async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
           };
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -786,7 +787,7 @@ async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     const result = await app.run({
@@ -881,7 +882,7 @@ test("createLocalReviewRunApp does not call clientManager.start() in dry-run mod
           throw new Error("clientManager.getClient() must not be called in dry-run mode");
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -891,7 +892,7 @@ test("createLocalReviewRunApp does not call clientManager.start() in dry-run mod
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     await app.run({
@@ -927,7 +928,7 @@ test("createLocalReviewRunApp completes dry-run flow and result has dryRun: true
           throw new Error("clientManager.getClient() must not be called in dry-run mode");
         }
       },
-      outputSink: {
+      outputSink: defineOutputSinkDouble({
         initializeRun() {
           return this;
         },
@@ -937,7 +938,7 @@ test("createLocalReviewRunApp completes dry-run flow and result has dryRun: true
         publishReviewIndex() {},
         publishRunManifest() {},
         publishChangesetOverview() {}
-      }
+      })
     });
 
     const result = await app.run({
@@ -954,4 +955,3 @@ test("createLocalReviewRunApp completes dry-run flow and result has dryRun: true
     fixture.cleanup();
   }
 });
-

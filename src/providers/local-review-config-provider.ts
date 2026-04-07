@@ -5,6 +5,7 @@ import type {
   ReviewConfig,
   ReviewConfigProvider
 } from "./review-config-provider.ts";
+import { ReviewConfigProviderError } from "./review-config-provider.ts";
 import {
   buildDefaultReviewConfig,
   parseReviewConfig
@@ -28,7 +29,14 @@ export class LocalReviewConfigProvider implements ReviewConfigProvider {
         error instanceof Error ? error.message : "invalid review config";
 
       // Re-throw with the file path so invalid config errors point back to the source file.
-      throw new Error(`${message} at ${configPath}`);
+      throw new ReviewConfigProviderError(
+        "loadReviewConfig",
+        `${message} at ${configPath}`,
+        {
+          cause: error,
+          configPath
+        }
+      );
     }
   }
 }

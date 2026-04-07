@@ -1,5 +1,23 @@
 import type { ConfidenceThresholds } from "../core/confidence-thresholds.ts";
 
+export type ReviewConfigProviderOperation = "loadReviewConfig";
+
+export class ReviewConfigProviderError extends Error {
+  readonly operation: ReviewConfigProviderOperation;
+  readonly configPath?: string;
+
+  constructor(
+    operation: ReviewConfigProviderOperation,
+    message: string,
+    options?: { cause?: unknown; configPath?: string }
+  ) {
+    super(message, options);
+    this.name = "ReviewConfigProviderError";
+    this.operation = operation;
+    this.configPath = options?.configPath;
+  }
+}
+
 export interface ReviewLocalMcpServerConfig {
   type: "local" | "stdio";
   command?: string;

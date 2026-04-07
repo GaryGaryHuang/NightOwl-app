@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { ReviewConfigProviderError } from "../../src/providers/review-config-provider.ts";
 import {
   buildExpectedReviewConfig,
   createReviewConfigProviderFixture
@@ -329,6 +330,31 @@ test("LocalReviewConfigProvider preserves the stable path-aware invalid review c
       () => configFixture.loadReviewConfig(),
       /invalid review config at .*\.nightowl\/reviewconfig\.json/u
     );
+  } finally {
+    configFixture.cleanup();
+  }
+});
+
+test("LocalReviewConfigProvider throws ReviewConfigProviderError with operation, config path, and preserved cause", () => {
+  const configFixture = createReviewConfigProviderFixture();
+
+  try {
+    configFixture.writeRawReviewConfig("{");
+
+    assert.throws(() => configFixture.loadReviewConfig(), (error) => {
+      assert.ok(error instanceof ReviewConfigProviderError);
+      assert.equal(error.operation, "loadReviewConfig");
+      assert.match(
+        error.configPath ?? "",
+        /\.nightowl\/reviewconfig\.json$/u
+      );
+      assert.match(
+        error.message,
+        /invalid review config at .*\.nightowl\/reviewconfig\.json/u
+      );
+      assert.ok(error.cause instanceof Error);
+      return true;
+    });
   } finally {
     configFixture.cleanup();
   }
