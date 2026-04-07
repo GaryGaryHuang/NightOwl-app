@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 
+import type { DryRunReviewStepContract } from "../../src/services/dry-run-review-step-contract.ts";
 import type { ReviewKnowledgeMode } from "../../src/core/review-knowledge-mode.ts";
 import type { StepExecutionPlan } from "../../src/core/step-runner.ts";
 
 type TextPattern = string | RegExp;
 
 type ExpectedReviewProfile = {
+  dryRunStepContract?: DryRunReviewStepContract;
   model: string;
   timeoutMs: number;
   knowledgeMode?: ReviewKnowledgeMode;
@@ -135,6 +137,7 @@ function assertReviewProfile(
   assert.equal(actual.model, expected.model);
   assert.equal(actual.timeoutMs, expected.timeoutMs);
   assert.equal(actual.knowledgeMode, expected.knowledgeMode);
+  assert.equal(actual.dryRunStepContract, expected.dryRunStepContract);
 }
 
 function escapeRegExp(value: string): string {

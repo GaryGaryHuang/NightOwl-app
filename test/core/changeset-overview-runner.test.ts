@@ -54,6 +54,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
   // Step 0 uses Context7 by default so the LLM can retrieve library version info
   // from the changeset entries without needing a per-file retrieval step.
   assert.equal(profiles[0]?.knowledgeMode, "built-in-context7");
+  assert.equal(profiles[0]?.dryRunStepContract, "changeset-overview");
   assert.equal(profiles[0]?.model, "gpt-5.4-mini");
   assert.equal(profiles[0]?.outputBaseDir, "/workspace/repo");
   assert.equal(profiles[0]?.repoRoot, "/workspace/repo");

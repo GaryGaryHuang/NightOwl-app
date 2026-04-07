@@ -1,5 +1,6 @@
 import { createRunContext, type RunContext } from "./run-context.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
+import type { DryRunReviewStepContract } from "../services/dry-run-review-step-contract.ts";
 import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
 export interface ChangesetOverviewRunnerInput {
@@ -14,6 +15,7 @@ export interface ChangesetOverviewRunnerInput {
 
 export interface ReviewSessionFactoryLike {
   createSession(profile: {
+    dryRunStepContract?: DryRunReviewStepContract;
     knowledgeMode?: ReviewKnowledgeMode;
     model: string;
     outputBaseDir: string;
@@ -51,6 +53,7 @@ export class ChangesetOverviewRunner {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const session = await this.#reviewSessionFactory.createSession({
+          dryRunStepContract: "changeset-overview",
           knowledgeMode: "built-in-context7",
           model: input.model,
           outputBaseDir: input.outputBaseDir,

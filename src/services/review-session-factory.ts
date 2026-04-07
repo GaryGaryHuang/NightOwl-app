@@ -3,6 +3,7 @@ import {
 } from "@github/copilot-sdk";
 
 import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
+import type { DryRunReviewStepContract } from "./dry-run-review-step-contract.ts";
 import {
   type CopilotClientLike,
   SessionExecutor
@@ -12,6 +13,7 @@ import { ToolPolicyGuard } from "./tool-policy-guard.ts";
 import type { ToolAuditWriter } from "./tool-audit-writer.ts";
 
 export interface ReviewSessionProfile {
+  dryRunStepContract?: DryRunReviewStepContract;
   knowledgeMode?: ReviewKnowledgeMode;
   model: string;
   outputBaseDir: string;

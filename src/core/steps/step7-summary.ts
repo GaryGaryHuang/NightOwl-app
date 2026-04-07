@@ -75,6 +75,7 @@ export class Step7SummaryStep implements StepDefinition {
         )
       },
       reviewProfile: {
+        dryRunStepContract: "summary",
         model: "gpt-5-mini",
         timeoutMs: 300_000
       },

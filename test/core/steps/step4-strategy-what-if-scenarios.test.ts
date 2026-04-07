@@ -25,6 +25,7 @@ test("Step4StrategyWhatIfScenariosStep prepares the Step 4 prompt contract from 
     stepId: "step4-strategy-what-if-scenarios",
     sectionKey: "strategy-what-if-scenarios",
     reviewProfile: {
+      dryRunStepContract: "strategy-what-if-scenarios",
       model: "gpt-5.4-mini",
       timeoutMs: 300_000
     }

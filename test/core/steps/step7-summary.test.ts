@@ -27,6 +27,7 @@ test("Step7SummaryStep prepares the Step 7 prompt contract from current review o
     stepId: "step7-summary",
     sectionKey: "summary",
     reviewProfile: {
+      dryRunStepContract: "summary",
       model: "gpt-5-mini",
       timeoutMs: 300_000
     }

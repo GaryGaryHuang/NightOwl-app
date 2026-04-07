@@ -27,6 +27,7 @@ test("Step3KnowledgeSourceOfTruthStep prepares the Step 3 prompt contract from d
     stepId: "step3-knowledge-source-of-truth",
     sectionKey: "knowledge-source-of-truth",
     reviewProfile: {
+      dryRunStepContract: "knowledge-source-of-truth",
       model: "gpt-5-mini",
       knowledgeMode: "built-in-context7",
       timeoutMs: 300_000

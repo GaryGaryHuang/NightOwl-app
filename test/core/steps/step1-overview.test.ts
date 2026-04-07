@@ -36,6 +36,7 @@ test("Step1OverviewStep prepares the Step 1 prompt contract from RunContext and 
     stepId: "step1-overview",
     sectionKey: "overview",
     reviewProfile: {
+      dryRunStepContract: "overview",
       model: "gpt-5-mini",
       timeoutMs: 300_000
     }

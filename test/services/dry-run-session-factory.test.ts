@@ -5,28 +5,28 @@ import {
   DryRunReviewSessionFactory,
   DryRunJudgeSessionFactory
 } from "../../src/services/dry-run-session-factory.ts";
+import type { DryRunReviewStepContract } from "../../src/services/dry-run-review-step-contract.ts";
 
 // ---------------------------------------------------------------------------
 // DryRunReviewSessionFactory — per-step stub responses
 // ---------------------------------------------------------------------------
 
-function buildProfile(stepLabel: string) {
+function buildProfile(
+  dryRunStepContract: DryRunReviewStepContract,
+  systemMessage = "Completely different system prompt text."
+) {
   return {
     model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
-    systemMessage: [
-      "You are a senior code reviewer.",
-      "",
-      `## Current Step: ${stepLabel}`,
-      "Do only this step."
-    ].join("\n")
+    systemMessage,
+    dryRunStepContract
   };
 }
 
 test("DryRunReviewSessionFactory - Changeset Overview stub starts with ## Changeset Overview", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Changeset Overview"));
+  const session = await factory.createSession(buildProfile("changeset-overview"));
   const response = await session.sendAndWait("prompt");
 
   assert.ok(typeof response === "string");
@@ -35,7 +35,7 @@ test("DryRunReviewSessionFactory - Changeset Overview stub starts with ## Change
 
 test("DryRunReviewSessionFactory - Overview (Step 1) stub starts with ## Overview", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Overview"));
+  const session = await factory.createSession(buildProfile("overview"));
   const response = await session.sendAndWait("prompt");
 
   assert.ok(typeof response === "string");
@@ -44,7 +44,7 @@ test("DryRunReviewSessionFactory - Overview (Step 1) stub starts with ## Overvie
 
 test("DryRunReviewSessionFactory - Step 1 stub contains six required fields", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Overview"));
+  const session = await factory.createSession(buildProfile("overview"));
   const response = (await session.sendAndWait("prompt")) ?? "";
 
   const required = [
@@ -62,7 +62,7 @@ test("DryRunReviewSessionFactory - Step 1 stub contains six required fields", as
 
 test("DryRunReviewSessionFactory - Dependencies & Boundaries stub starts with correct heading", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Dependencies & Boundaries"));
+  const session = await factory.createSession(buildProfile("dependencies-boundaries"));
   const response = await session.sendAndWait("prompt");
 
   assert.ok(typeof response === "string");
@@ -71,7 +71,7 @@ test("DryRunReviewSessionFactory - Dependencies & Boundaries stub starts with co
 
 test("DryRunReviewSessionFactory - Knowledge & Source of Truth stub starts with correct heading", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Knowledge & Source of Truth"));
+  const session = await factory.createSession(buildProfile("knowledge-source-of-truth"));
   const response = await session.sendAndWait("prompt");
 
   assert.ok(typeof response === "string");
@@ -80,7 +80,7 @@ test("DryRunReviewSessionFactory - Knowledge & Source of Truth stub starts with 
 
 test("DryRunReviewSessionFactory - Strategy & What-if Scenarios stub starts with correct heading", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Strategy & What-if Scenarios"));
+  const session = await factory.createSession(buildProfile("strategy-what-if-scenarios"));
   const response = await session.sendAndWait("prompt");
 
   assert.ok(typeof response === "string");
@@ -89,7 +89,7 @@ test("DryRunReviewSessionFactory - Strategy & What-if Scenarios stub starts with
 
 test("DryRunReviewSessionFactory - Step 4 stub contains at least 3 W# items", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Strategy & What-if Scenarios"));
+  const session = await factory.createSession(buildProfile("strategy-what-if-scenarios"));
   const response = (await session.sendAndWait("prompt")) ?? "";
 
   const wMatches = response.match(/\bW\d+\b/gu) ?? [];
@@ -101,7 +101,7 @@ test("DryRunReviewSessionFactory - Step 4 stub contains at least 3 W# items", as
 
 test("DryRunReviewSessionFactory - Validation & Interrogation stub is valid JSON with empty findings", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Validation & Interrogation"));
+  const session = await factory.createSession(buildProfile("validation-interrogation"));
   const response = (await session.sendAndWait("prompt")) ?? "";
 
   let parsed: unknown;
@@ -118,7 +118,7 @@ test("DryRunReviewSessionFactory - Validation & Interrogation stub is valid JSON
 
 test("DryRunReviewSessionFactory - Cognitive Simulation stub is valid JSON with empty findings", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Cognitive Simulation"));
+  const session = await factory.createSession(buildProfile("cognitive-simulation"));
   const response = (await session.sendAndWait("prompt")) ?? "";
 
   let parsed: unknown;
@@ -131,7 +131,7 @@ test("DryRunReviewSessionFactory - Cognitive Simulation stub is valid JSON with 
 
 test("DryRunReviewSessionFactory - Summary stub starts with ## Summary", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Summary"));
+  const session = await factory.createSession(buildProfile("summary"));
   const response = await session.sendAndWait("prompt");
 
   assert.ok(typeof response === "string");
@@ -140,7 +140,7 @@ test("DryRunReviewSessionFactory - Summary stub starts with ## Summary", async (
 
 test("DryRunReviewSessionFactory - Step 7 stub contains three subsections", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Summary"));
+  const session = await factory.createSession(buildProfile("summary"));
   const response = (await session.sendAndWait("prompt")) ?? "";
 
   assert.ok(response.includes("審查基礎"), "Step 7 stub missing 審查基礎");
@@ -148,13 +148,49 @@ test("DryRunReviewSessionFactory - Step 7 stub contains three subsections", asyn
   assert.ok(response.includes("風險評估"), "Step 7 stub missing 風險評估");
 });
 
-test("DryRunReviewSessionFactory - unknown label returns fallback non-empty string", async () => {
+test("DryRunReviewSessionFactory - prompt wording changes do not affect stub selection when the explicit contract is unchanged", async () => {
   const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(buildProfile("Unknown Step XYZ"));
+  const session = await factory.createSession(
+    buildProfile(
+      "overview",
+      "No step heading is present here. The contract must drive selection."
+    )
+  );
   const response = await session.sendAndWait("prompt");
 
-  assert.ok(typeof response === "string" && response.length > 0, "fallback should return non-empty string");
-  assert.ok(response.includes("[dry-run]"), `fallback should contain [dry-run], got: ${response}`);
+  assert.ok(typeof response === "string");
+  assert.ok(response.startsWith("## Overview"), `got: ${response?.slice(0, 80)}`);
+});
+
+test("DryRunReviewSessionFactory - missing contract fails as an identifiable dry-run contract failure", async () => {
+  const factory = new DryRunReviewSessionFactory();
+
+  await assert.rejects(
+    () =>
+      factory.createSession({
+        model: "gpt-5.4-mini",
+        outputBaseDir: "/workspace/repo",
+        repoRoot: "/workspace/repo",
+        systemMessage: "system prompt"
+      }),
+    /dry-run contract failure: missing dryRunStepContract/u
+  );
+});
+
+test("DryRunReviewSessionFactory - unknown contract fails as an identifiable dry-run contract failure", async () => {
+  const factory = new DryRunReviewSessionFactory();
+
+  await assert.rejects(
+    () =>
+      factory.createSession({
+        model: "gpt-5.4-mini",
+        outputBaseDir: "/workspace/repo",
+        repoRoot: "/workspace/repo",
+        systemMessage: "system prompt",
+        dryRunStepContract: "unknown-step" as DryRunReviewStepContract
+      }),
+    /dry-run contract failure: unsupported dryRunStepContract 'unknown-step'/u
+  );
 });
 
 test("DryRunReviewSessionFactory - setAuditWriter() does not throw", () => {

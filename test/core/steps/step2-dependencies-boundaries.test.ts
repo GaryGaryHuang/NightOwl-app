@@ -27,6 +27,7 @@ test("Step2DependenciesBoundariesStep prepares the Step 2 prompt contract from d
     stepId: "step2-dependencies-boundaries",
     sectionKey: "dependencies-boundaries",
     reviewProfile: {
+      dryRunStepContract: "dependencies-boundaries",
       model: "gpt-5.4-mini",
       timeoutMs: 300_000
     }

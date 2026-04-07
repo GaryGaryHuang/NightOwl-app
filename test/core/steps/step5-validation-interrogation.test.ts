@@ -27,6 +27,7 @@ test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from 
     stepId: "step5-validation-interrogation",
     structuredTarget: "findings",
     reviewProfile: {
+      dryRunStepContract: "validation-interrogation",
       model: "gpt-5.4-mini",
       timeoutMs: 300_000
     }

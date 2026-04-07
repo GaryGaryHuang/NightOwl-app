@@ -3,6 +3,7 @@ import type { ReviewSectionKey } from "./review-section-contract.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload } from "./structured-output-validator.ts";
+import type { DryRunReviewStepContract } from "../services/dry-run-review-step-contract.ts";
 import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
 export interface StepExecutionPlan {
@@ -15,6 +16,7 @@ export interface StepExecutionPlan {
     userMessage: string;
   };
   reviewProfile: {
+    dryRunStepContract?: DryRunReviewStepContract;
     knowledgeMode?: ReviewKnowledgeMode;
     model: string;
     timeoutMs?: number;
@@ -44,6 +46,7 @@ export interface StepDefinition {
 
 export interface StepReviewSessionFactoryLike {
   createSession(profile: {
+    dryRunStepContract?: DryRunReviewStepContract;
     knowledgeMode?: ReviewKnowledgeMode;
     model: string;
     outputBaseDir: string;
@@ -106,14 +109,20 @@ export class StepRunner {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const plan = input.step.prepare(input.context);
-        const session = await this.#reviewSessionFactory.createSession({
+        const sessionProfile = {
+          ...(plan.reviewProfile.dryRunStepContract === undefined
+            ? {}
+            : { dryRunStepContract: plan.reviewProfile.dryRunStepContract }),
           knowledgeMode: plan.reviewProfile.knowledgeMode ?? "built-in-context7",
           model: plan.reviewProfile.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,
           systemMessage: plan.prompt.systemMessage,
-          workingDirectory: input.workingDirectory
-        });
+          ...(input.workingDirectory === undefined
+            ? {}
+            : { workingDirectory: input.workingDirectory })
+        };
+        const session = await this.#reviewSessionFactory.createSession(sessionProfile);
         const response = await session.sendAndWait(
           plan.prompt.userMessage,
           plan.reviewProfile.timeoutMs,

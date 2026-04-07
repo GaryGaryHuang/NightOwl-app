@@ -121,6 +121,7 @@ export class Step1OverviewStep implements StepDefinition {
         userMessage: buildStep1UserMessage(context, this.#runContext)
       },
       reviewProfile: {
+        dryRunStepContract: "overview",
         model: "gpt-5-mini",
         timeoutMs: 300_000
       },

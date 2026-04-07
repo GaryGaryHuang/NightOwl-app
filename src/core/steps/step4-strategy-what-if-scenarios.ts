@@ -136,6 +136,7 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
         )
       },
       reviewProfile: {
+        dryRunStepContract: "strategy-what-if-scenarios",
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },
