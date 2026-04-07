@@ -57,6 +57,8 @@ src/
     ├── knowledge.ts                KnowledgeSvc: MCP configuration
     ├── tool-policy-guard.ts        Tool permission hook
     ├── tool-audit-writer.ts        JSONL audit log
+    ├── web-fetch-hostname-normalization.ts
+    ├── web-fetch-public-address-policy.ts
     ├── web-fetch-hostname-classifier.ts
     └── web-fetch-redirect-resolver.ts
 ```
