@@ -1,5 +1,6 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { DefaultWebFetchPublicAddressPolicy, type WebFetchPublicAddressPolicy } from "./web-fetch-public-address-policy.ts";
+import { canonicalizeHostnameForComparison } from "./web-fetch-hostname-normalization.ts";
 
 export const DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS = 5000;
 export const UNSAFE_WEB_FETCH_HOSTNAME_REASON =
@@ -121,16 +122,4 @@ function defaultLookup(
   options: WebFetchHostnameLookupOptions
 ): Promise<WebFetchHostnameLookupResult[]> {
   return dnsLookup(hostname, options);
-}
-
-export function normalizeHostnameForNetworkChecks(hostname: string): string {
-  const lowercaseHostname = hostname.toLowerCase();
-
-  return lowercaseHostname.startsWith("[") && lowercaseHostname.endsWith("]")
-    ? lowercaseHostname.slice(1, -1)
-    : lowercaseHostname;
-}
-
-export function canonicalizeHostnameForComparison(hostname: string): string {
-  return normalizeHostnameForNetworkChecks(hostname).replace(/\.$/u, "");
 }

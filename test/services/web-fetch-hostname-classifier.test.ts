@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -172,4 +173,18 @@ test("DefaultWebFetchHostnameClassifier delegates resolved-address classificatio
     }
   );
   assert.deepEqual(seenAddresses, ["93.184.216.34", "198.51.100.10"]);
+});
+
+test("web-fetch hostname classifier does not re-export shared hostname normalization helpers", () => {
+  const source = readFileSync(
+    new URL("../../src/services/web-fetch-hostname-classifier.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.equal(
+    /export\s+function\s+(normalizeHostnameForNetworkChecks|canonicalizeHostnameForComparison)\s*\(/u.test(
+      source
+    ),
+    false
+  );
 });

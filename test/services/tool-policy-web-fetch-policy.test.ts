@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -184,4 +185,18 @@ test("tool policy web-fetch policy can be instantiated directly with explicit de
   });
 
   assert.equal(await policy.evaluate("https://docs.example.com/guide"), undefined);
+});
+
+test("tool policy web-fetch policy does not import shared hostname helpers from the classifier module", () => {
+  const source = readFileSync(
+    new URL("../../src/services/tool-policy-web-fetch-policy.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.equal(
+    /import\s*\{[^}]*canonicalizeHostnameForComparison[^}]*\}\s*from\s*"\.\/web-fetch-hostname-classifier\.ts";/u.test(
+      source
+    ),
+    false
+  );
 });

@@ -1,11 +1,11 @@
 import { isIP } from "node:net";
 
 import {
-  canonicalizeHostnameForComparison,
   DefaultWebFetchHostnameClassifier,
   DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS,
   type WebFetchHostnameClassifier
 } from "./web-fetch-hostname-classifier.ts";
+import { canonicalizeHostnameForComparison } from "./web-fetch-hostname-normalization.ts";
 import {
   isAllowedPublicWebFetchAddress,
   normalizeWebFetchAddress
