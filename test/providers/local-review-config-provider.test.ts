@@ -318,3 +318,18 @@ test("LocalReviewConfigProvider rejects malformed or invalid review config", () 
     configFixture.cleanup();
   }
 });
+
+test("LocalReviewConfigProvider preserves the stable path-aware invalid review config error surface", () => {
+  const configFixture = createReviewConfigProviderFixture();
+
+  try {
+    configFixture.writeRawReviewConfig("{");
+
+    assert.throws(
+      () => configFixture.loadReviewConfig(),
+      /invalid review config at .*\.nightowl\/reviewconfig\.json/u
+    );
+  } finally {
+    configFixture.cleanup();
+  }
+});
