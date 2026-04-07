@@ -58,6 +58,8 @@
     "test/core/step-runner.test.ts",
     "test/providers/local-git-provider.test.ts",
     "test/providers/local-review-file-filter.test.ts",
+    "test/providers/local-run-output-publisher.test.ts",
+    "test/providers/local-successful-snapshot-output-health-assessor.test.ts",
     "test/providers/local-workspace-provider.test.ts",
     "test/scripts/build-script.test.ts",
     "test/services/review-session-factory.test.ts",

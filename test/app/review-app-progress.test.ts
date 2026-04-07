@@ -63,7 +63,9 @@ test("createLocalReviewRunApp emits deterministic progress events for planning, 
       }
     },
     outputSink: {
-      initializeRun() {},
+      initializeRun() {
+        return this;
+      },
       publishFileReview() {},
       publishSkippedFile() {},
       publishRunSummary() {},

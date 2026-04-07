@@ -55,6 +55,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
       outputSink: {
         initializeRun() {
           initializeRunCalls += 1;
+          return this;
         },
         publishFileReview() {},
         publishSkippedFile() {},
@@ -139,6 +140,7 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
       outputSink: {
         initializeRun() {
           initializeRunCalls += 1;
+          return this;
         },
         publishFileReview() {},
         publishSkippedFile() {},
@@ -254,7 +256,9 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile(skipRecord) {
           skippedRecords.push(skipRecord);
@@ -549,7 +553,9 @@ async function assertPerFileContext7StartupFailureSkipsOneFile(input: {
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile(skipRecord) {
           skippedRecords.push(skipRecord);
@@ -664,7 +670,9 @@ async function assertPerFileCustomMcpStartupFailureSkipsOneFile(input: {
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile(skipRecord) {
           skippedRecords.push(skipRecord);
@@ -767,7 +775,9 @@ async function assertPerFileRemoteMcpStartupFailureSkipsOneFile(input: {
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile(skipRecord) {
           skippedRecords.push(skipRecord);
@@ -872,7 +882,9 @@ test("createLocalReviewRunApp does not call clientManager.start() in dry-run mod
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},
@@ -916,7 +928,9 @@ test("createLocalReviewRunApp completes dry-run flow and result has dryRun: true
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},

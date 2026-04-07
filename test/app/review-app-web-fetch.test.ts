@@ -79,7 +79,9 @@ test("createLocalReviewRunApp exposes runtime url guardrails and legacy web_fetc
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},
@@ -205,7 +207,9 @@ test("createLocalReviewRunApp applies repo-local web_fetch host allowlist withou
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},
@@ -328,7 +332,9 @@ test("createLocalReviewRunApp applies host policy without redirect-chain resolut
         }
       },
       outputSink: {
-        initializeRun() {},
+        initializeRun() {
+          return this;
+        },
         publishFileReview() {},
         publishSkippedFile() {},
         publishRunSummary() {},

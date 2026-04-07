@@ -11,6 +11,7 @@ import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
+import type { RunOutputPublisher } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { buildDependenciesResponse, buildFindingsForFile, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, buildSuccessfulStepResult, buildSummaryResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 
@@ -272,6 +273,7 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
       sourceProvider,
       reviewFileFilter,
       outputSink,
+      successfulSnapshotOutputHealthAssessor: outputSink,
       stepRunner: createConcurrentRunner({
         metrics: createConcurrencyMetrics(reviewableFiles.length),
         getBootstrapPublishCount: () => reviewableFiles.length,
@@ -358,6 +360,7 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
       sourceProvider,
       reviewFileFilter,
       outputSink,
+      successfulSnapshotOutputHealthAssessor: outputSink,
       stepRunner: createSharedAbortRunner({
         stepEvents,
         gateByFileAndStep: new Map([[`${siblingFile}:step1-overview`, siblingReleased.promise]])
@@ -664,50 +667,52 @@ function createSharedAbortRunner(input: {
 
 class BootstrapTrackingOutputSink {
   readonly #delegate = new LocalWorkspaceProvider();
+  #publisher?: RunOutputPublisher;
   bootstrapPublishCount = 0;
 
   initializeRun(outputTarget: Parameters<LocalWorkspaceProvider["initializeRun"]>[0]) {
-    this.#delegate.initializeRun(outputTarget);
+    this.#publisher = this.#delegate.initializeRun(outputTarget);
+    return this;
   }
 
   publishFileReview(
-    fileResult: Parameters<LocalWorkspaceProvider["publishFileReview"]>[0]
+    fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]
   ) {
     if (/- Status: Review not yet generated\./u.test(fileResult.content)) {
       this.bootstrapPublishCount += 1;
     }
 
-    this.#delegate.publishFileReview(fileResult);
+    this.#publisher!.publishFileReview(fileResult);
   }
 
   publishSkippedFile(
-    skipRecord: Parameters<LocalWorkspaceProvider["publishSkippedFile"]>[0]
+    skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]
   ) {
-    this.#delegate.publishSkippedFile(skipRecord);
+    this.#publisher!.publishSkippedFile(skipRecord);
   }
 
   publishRunSummary(
-    summaryResult: Parameters<LocalWorkspaceProvider["publishRunSummary"]>[0]
+    summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]
   ) {
-    this.#delegate.publishRunSummary(summaryResult);
+    this.#publisher!.publishRunSummary(summaryResult);
   }
 
   publishReviewIndex(
-    indexResult: Parameters<LocalWorkspaceProvider["publishReviewIndex"]>[0]
+    indexResult: Parameters<RunOutputPublisher["publishReviewIndex"]>[0]
   ) {
-    this.#delegate.publishReviewIndex(indexResult);
+    this.#publisher!.publishReviewIndex(indexResult);
   }
 
   publishRunManifest(
-    manifestResult: Parameters<LocalWorkspaceProvider["publishRunManifest"]>[0]
+    manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]
   ) {
-    this.#delegate.publishRunManifest(manifestResult);
+    this.#publisher!.publishRunManifest(manifestResult);
   }
 
   publishChangesetOverview(
-    result: Parameters<LocalWorkspaceProvider["publishChangesetOverview"]>[0]
+    result: Parameters<RunOutputPublisher["publishChangesetOverview"]>[0]
   ) {
-    this.#delegate.publishChangesetOverview(result);
+    this.#publisher!.publishChangesetOverview(result);
   }
 }
 
@@ -737,6 +742,7 @@ class SummaryFailingOutputSink {
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
     this.summaryPath = outputTarget.summaryPath;
+    return this;
   }
 
   publishFileReview(fileResult: { noteFilePath: string; content: string }) {
@@ -796,6 +802,7 @@ class SingleFileSnapshotFailingOutputSink {
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
+    return this;
   }
 
   publishFileReview(fileResult: { noteFilePath: string; content: string }) {
@@ -812,7 +819,7 @@ class SingleFileSnapshotFailingOutputSink {
     writeFileSync(fileResult.noteFilePath, fileResult.content);
   }
 
-  assessSuccessfulSnapshotFailure() {
+  assess() {
     return { faultScope: "single-file-output-fault" as const };
   }
 
@@ -876,6 +883,7 @@ class SharedTargetSnapshotFailingOutputSink {
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
+    return this;
   }
 
   publishFileReview(fileResult: { noteFilePath: string; content: string }) {
@@ -905,7 +913,7 @@ class SharedTargetSnapshotFailingOutputSink {
     writeFileSync(fileResult.noteFilePath, fileResult.content);
   }
 
-  assessSuccessfulSnapshotFailure() {
+  assess() {
     return { faultScope: "shared-output-target-fault" as const };
   }
 
@@ -969,6 +977,7 @@ class SkippedArtifactAbortOutputSink {
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
+    return this;
   }
 
   publishFileReview(fileResult: { noteFilePath: string; content: string }) {

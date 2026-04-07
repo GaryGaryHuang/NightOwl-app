@@ -73,7 +73,9 @@ function createSignalTestApp(options: {
       }
     },
     outputSink: {
-      initializeRun() {},
+      initializeRun() {
+        return this;
+      },
       publishFileReview() {},
       publishSkippedFile() {},
       publishRunSummary() {},

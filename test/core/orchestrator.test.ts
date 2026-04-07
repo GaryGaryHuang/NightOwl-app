@@ -706,12 +706,18 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     const writtenNotes = new Map<string, string>();
     const stepEvents: StepEvent[] = [];
     const failedNotePath = plannedNotes[1].noteFilePath;
+    const successfulSnapshotOutputHealthAssessor = {
+      assess() {
+        return { faultScope: "single-file-output-fault" as const };
+      }
+    };
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -722,9 +728,6 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        assessSuccessfulSnapshotFailure() {
-          return { faultScope: "single-file-output-fault" };
-        },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
@@ -733,6 +736,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
         publishRunManifest() {},
         publishChangesetOverview() {}
       },
+      successfulSnapshotOutputHealthAssessor,
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
           stepEvents.push([step.stepId, context.filePath]);
@@ -816,12 +820,18 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     const stepEvents: StepEvent[] = [];
     const outputCalls: OutputCall[] = [];
     const writtenNotes = new Map<string, string>();
+    const successfulSnapshotOutputHealthAssessor = {
+      assess() {
+        return { faultScope: "single-file-output-fault" as const };
+      }
+    };
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -836,9 +846,6 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        assessSuccessfulSnapshotFailure() {
-          return { faultScope: "single-file-output-fault" };
-        },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
@@ -847,6 +854,7 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
         publishRunManifest() {},
         publishChangesetOverview() {}
       },
+      successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
         async run() {
@@ -918,12 +926,18 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     const outputCalls: OutputCall[] = [];
     const writtenNotes = new Map<string, string>();
     const stepEvents: StepEvent[] = [];
+    const successfulSnapshotOutputHealthAssessor = {
+      assess() {
+        return { faultScope: "shared-output-target-fault" as const };
+      }
+    };
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -938,9 +952,6 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        assessSuccessfulSnapshotFailure() {
-          return { faultScope: "shared-output-target-fault" };
-        },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
@@ -949,6 +960,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
         publishRunManifest() {},
         publishChangesetOverview() {}
       },
+      successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
         async run() {
@@ -1019,12 +1031,18 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     )!.noteFilePath;
     const outputCalls: OutputCall[] = [];
     const stepEvents: StepEvent[] = [];
+    const successfulSnapshotOutputHealthAssessor = {
+      assess() {
+        throw new Error("classification unavailable");
+      }
+    };
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -1037,9 +1055,6 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
             throw new Error("note write failed");
           }
         },
-        assessSuccessfulSnapshotFailure() {
-          throw new Error("classification unavailable");
-        },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
@@ -1048,6 +1063,7 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
         publishRunManifest() {},
         publishChangesetOverview() {}
       },
+      successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
         async run() {
@@ -1115,12 +1131,18 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     const outputCalls: OutputCall[] = [];
     const stepEvents: StepEvent[] = [];
     const writtenNotes = new Map<string, string>();
+    const successfulSnapshotOutputHealthAssessor = {
+      assess() {
+        return { faultScope: "single-file-output-fault" as const };
+      }
+    };
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -1142,9 +1164,6 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        assessSuccessfulSnapshotFailure() {
-          return { faultScope: "single-file-output-fault" };
-        },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
@@ -1153,6 +1172,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
         publishRunManifest() {},
         publishChangesetOverview() {}
       },
+      successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
         async run() {
@@ -1222,12 +1242,18 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     const outputCalls: OutputCall[] = [];
     const stepEvents: StepEvent[] = [];
     const writtenNotes = new Map<string, string>();
+    const successfulSnapshotOutputHealthAssessor = {
+      assess() {
+        return { faultScope: "single-file-output-fault" as const };
+      }
+    };
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -1241,9 +1267,6 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
             throw new Error("note write failed");
           }
         },
-        assessSuccessfulSnapshotFailure() {
-          return { faultScope: "single-file-output-fault" };
-        },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
 
@@ -1256,6 +1279,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
         publishRunManifest() {},
         publishChangesetOverview() {}
       },
+      successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
         async run() {
@@ -1328,12 +1352,18 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     const writtenNotes = new Map<string, string>();
     const outputCalls: OutputCall[] = [];
     const stepEvents: StepEvent[] = [];
+    const successfulSnapshotOutputHealthAssessor = {
+      assess() {
+        return { faultScope: "single-file-output-fault" as const };
+      }
+    };
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -1348,9 +1378,6 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        assessSuccessfulSnapshotFailure() {
-          return { faultScope: "single-file-output-fault" };
-        },
         publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
@@ -1359,6 +1386,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
         publishRunManifest() {},
         publishChangesetOverview() {}
       },
+      successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: {
         async run() {
@@ -1427,6 +1455,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -1522,6 +1551,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -1627,6 +1657,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -1768,6 +1799,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
         initializeRun(outputTarget) {
           callOrder.push("initializeRun");
           callbackOutputTarget = outputTarget;
+          return this;
         },
         publishFileReview() {
           callOrder.push("publishFileReview");
@@ -1873,6 +1905,7 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
       outputSink: {
         initializeRun() {
           callOrder.push("initializeRun");
+          return this;
         },
         publishFileReview() {
           callOrder.push("publishFileReview");
@@ -1942,6 +1975,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
       outputSink: {
         initializeRun() {
           calls.push("initializeRun");
+          return this;
         },
         publishFileReview() {
           calls.push("publishFileReview");

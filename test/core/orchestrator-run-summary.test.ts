@@ -14,17 +14,20 @@ import type { RunStepInput, StepResult, StepRunner } from "../../src/core/step-r
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
-import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
+import type {
+  ReviewOutputSink,
+  RunOutputPublisher
+} from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { buildDependenciesResponse, buildFindingsForFile, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, buildSuccessfulStepResult, buildSummaryResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
 import type { Step7NarrativeRiskLevel, SuccessfulStepResultOptions } from "../helpers/orchestrator-fixture.ts";
 
 type OutputCall = [string, string];
-type FileReviewPublishResult = Parameters<ReviewOutputSink["publishFileReview"]>[0];
-type SkipRecord = Parameters<ReviewOutputSink["publishSkippedFile"]>[0];
-type RunSummaryPublishResult = Parameters<ReviewOutputSink["publishRunSummary"]>[0];
-type ReviewIndexPublishResult = Parameters<ReviewOutputSink["publishReviewIndex"]>[0];
-type RunManifestPublishResult = Parameters<ReviewOutputSink["publishRunManifest"]>[0];
+type FileReviewPublishResult = Parameters<RunOutputPublisher["publishFileReview"]>[0];
+type SkipRecord = Parameters<RunOutputPublisher["publishSkippedFile"]>[0];
+type RunSummaryPublishResult = Parameters<RunOutputPublisher["publishRunSummary"]>[0];
+type ReviewIndexPublishResult = Parameters<RunOutputPublisher["publishReviewIndex"]>[0];
+type RunManifestPublishResult = Parameters<RunOutputPublisher["publishRunManifest"]>[0];
 test("ReviewOrchestrator publishes deterministic summary.md for an all-successful run", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -474,6 +477,7 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
       outputSink: {
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult: FileReviewPublishResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -554,6 +558,7 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
       outputSink: {
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult: FileReviewPublishResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -647,6 +652,7 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
       outputSink: {
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
+          return this;
         },
         publishFileReview(fileResult: FileReviewPublishResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
@@ -1081,6 +1087,7 @@ class CorruptingSummaryOutputSink {
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
+    return this;
   }
 
   publishFileReview(fileResult: FileReviewPublishResult) {
@@ -1118,6 +1125,7 @@ class CorruptingIndexOutputSink {
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "# CORRUPTED SKIPPED LOG\n");
     this.#outputTarget = outputTarget;
+    return this;
   }
 
   publishFileReview(fileResult: FileReviewPublishResult) {
@@ -1160,6 +1168,7 @@ class SummaryFailingOutputSink {
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
     this.summaryPath = outputTarget.summaryPath;
+    return this;
   }
 
   publishFileReview(fileResult: FileReviewPublishResult) {
@@ -1206,6 +1215,7 @@ class IndexFailingOutputSink {
     this.#outputTarget = outputTarget;
     this.summaryPath = outputTarget.summaryPath;
     this.indexPath = outputTarget.indexPath;
+    return this;
   }
 
   publishFileReview(fileResult: FileReviewPublishResult) {
@@ -1256,6 +1266,7 @@ class ManifestFailingOutputSink {
     this.summaryPath = outputTarget.summaryPath;
     this.indexPath = outputTarget.indexPath;
     this.manifestPath = outputTarget.manifestPath;
+    return this;
   }
 
   publishFileReview(fileResult: FileReviewPublishResult) {
@@ -1299,6 +1310,7 @@ class RecordingOutputSink {
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
     this.calls.push("initializeRun");
+    return this;
   }
 
   publishFileReview(fileResult: FileReviewPublishResult) {
@@ -1349,6 +1361,7 @@ class IndexRecordingOutputSink {
     writeFileSync(outputTarget.skippedPath, "");
     this.#outputTarget = outputTarget;
     this.calls.push("initializeRun");
+    return this;
   }
 
   publishFileReview(fileResult: FileReviewPublishResult) {

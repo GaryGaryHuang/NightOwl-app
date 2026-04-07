@@ -8,7 +8,10 @@ import {
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { ReviewFileFilter } from "../../src/providers/review-file-filter.ts";
 import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
-import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
+import type {
+  ReviewOutputSink,
+  RunOutputPublisher
+} from "../../src/providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import type { StepDefinition } from "../../src/core/step-runner.ts";
@@ -56,7 +59,7 @@ function createPassthroughReviewFileFilter(): ReviewFileFilter {
   };
 }
 
-interface TrackingOutputSink extends ReviewOutputSink {
+interface TrackingOutputSink extends ReviewOutputSink, RunOutputPublisher {
   calls: string[];
 }
 
@@ -66,6 +69,7 @@ function createTrackingOutputSink(): TrackingOutputSink {
     calls,
     initializeRun(_outputTarget) {
       calls.push("initializeRun");
+      return this;
     },
     publishFileReview(_result) {
       calls.push("publishFileReview");
