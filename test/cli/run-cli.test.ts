@@ -188,6 +188,38 @@ test("runCli reports a usage error when head_ref is missing", async () => {
   assert.match(stderr.join("\n"), /review --check/i);
 });
 
+test("runCli rejects surplus positional input before startup feedback and app invocation", async () => {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  const calls: string[] = [];
+
+  const exitCode = await runCli(["main", "feature-branch", "unexpected"], {
+    app: {
+      async run() {
+        calls.push("app.run");
+        throw new Error("review app must not run after parser usage error");
+      }
+    },
+    stdout: {
+      log(message) {
+        stdout.push(String(message));
+      }
+    },
+    stderr: {
+      error(message) {
+        stderr.push(String(message));
+      }
+    }
+  });
+
+  assert.equal(exitCode, 1);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(stdout, []);
+  assert.match(stderr.join("\n"), /Unexpected positional input: unexpected/u);
+  assert.match(stderr.join("\n"), /review <base_ref> <head_ref>/u);
+  assert.match(stderr.join("\n"), /review --check/u);
+});
+
 test("runCli dispatches --check to the availability checker and ignores the review app", async () => {
   const stdout: string[] = [];
   const stderr: string[] = [];

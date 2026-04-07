@@ -111,6 +111,32 @@ test("parseReviewCommand combines --dry-run with --repo and --context", () => {
   assert.deepEqual(parsed.request.userContext, ["PR-42"]);
 });
 
+test("parseReviewCommand rejects surplus positional input after head ref", () => {
+  assert.throws(
+    () => parseReviewCommand(["main", "feature-branch", "unexpected"]),
+    (error) =>
+      error instanceof CliUsageError &&
+      /Unexpected positional input: unexpected/.test(error.message)
+  );
+});
+
+test("parseReviewCommand rejects surplus positional input when options are interleaved", () => {
+  assert.throws(
+    () =>
+      parseReviewCommand([
+        "main",
+        "--dry-run",
+        "feature-branch",
+        "--context",
+        "PR-42",
+        "unexpected"
+      ]),
+    (error) =>
+      error instanceof CliUsageError &&
+      /Unexpected positional input: unexpected/.test(error.message)
+  );
+});
+
 test("parseReviewCommand does not treat --dry-run as unknown option", () => {
   assert.doesNotThrow(() => parseReviewCommand(["main", "head", "--dry-run"]));
 });
@@ -152,6 +178,17 @@ test("parseReviewCommand gives --check precedence over unknown options", () => {
 
 test("parseReviewCommand tolerates repeated --check flags", () => {
   const parsed = parseReviewCommand(["--check", "main", "--check"]);
+
+  assert.deepEqual(parsed, { kind: "check" });
+});
+
+test("parseReviewCommand gives --check precedence over surplus positional input", () => {
+  const parsed = parseReviewCommand([
+    "--check",
+    "main",
+    "feature-branch",
+    "unexpected"
+  ]);
 
   assert.deepEqual(parsed, { kind: "check" });
 });

@@ -16,80 +16,120 @@ export type ParsedReviewCommand =
   | { kind: "check" }
   | { kind: "run"; request: RunRequest };
 
+interface ParsedRunTokens {
+  positionals: string[];
+  userContext: string[];
+  repoPath?: string;
+  dryRun: boolean;
+}
+
 /**
  * Parse the review command into the RunRequest consumed by the app layer.
  */
 export function parseReviewCommand(argv: string[]): ParsedReviewCommand {
-  if (argv.includes("--check")) {
+  if (isCheckMode(argv)) {
     return { kind: "check" };
-  }
-
-  const positionals: string[] = [];
-  const userContext: string[] = [];
-  let repoPath: string | undefined;
-  let dryRun = false;
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-
-    if (arg === "--repo") {
-      const value = argv[index + 1];
-
-      if (!value || value.startsWith("--")) {
-        throw new CliUsageError(`Missing value for --repo\nUsage: ${USAGE}`);
-      }
-
-      repoPath = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--dry-run") {
-      dryRun = true;
-      continue;
-    }
-
-    if (arg === "--context") {
-      const value = argv[index + 1];
-
-      if (!value || value.startsWith("--")) {
-        throw new CliUsageError(`Missing value for --context\nUsage: ${USAGE}`);
-      }
-
-      // Preserve repeated --context values in the order the user supplied them.
-      userContext.push(value);
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith("--")) {
-      throw new CliUsageError(`Unknown option: ${arg}\nUsage: ${USAGE}`);
-    }
-
-    positionals.push(arg);
-  }
-
-  if (positionals.length === 0) {
-    throw new CliUsageError(`Missing required base_ref\nUsage: ${USAGE}`);
-  }
-
-  if (positionals.length === 1) {
-    throw new CliUsageError(`Missing required head_ref\nUsage: ${USAGE}`);
-  }
-
-  const request: RunRequest = {
-    baseRef: positionals[0],
-    headRef: positionals[1],
-    userContext,
-    dryRun
-  };
-
-  if (repoPath) {
-    request.repoPath = repoPath;
   }
 
   return {
     kind: "run",
-    request
+    request: buildRunRequest(validateRunTokens(scanRunTokens(argv)))
   };
+}
+
+function isCheckMode(argv: string[]): boolean {
+  return argv.includes("--check");
+}
+
+function scanRunTokens(argv: string[]): ParsedRunTokens {
+  const tokens: ParsedRunTokens = {
+    positionals: [],
+    userContext: [],
+    dryRun: false
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+
+    switch (arg) {
+      case "--repo": {
+        const value = readOptionValue(argv, index, "--repo");
+        tokens.repoPath = value;
+        index += 1;
+        break;
+      }
+
+      case "--dry-run":
+        tokens.dryRun = true;
+        break;
+
+      case "--context": {
+        const value = readOptionValue(argv, index, "--context");
+        tokens.userContext.push(value);
+        index += 1;
+        break;
+      }
+
+      default:
+        if (arg.startsWith("--")) {
+          throw usageError(`Unknown option: ${arg}`);
+        }
+
+        tokens.positionals.push(arg);
+        break;
+    }
+  }
+
+  return tokens;
+}
+
+function readOptionValue(
+  argv: string[],
+  index: number,
+  optionName: "--repo" | "--context"
+): string {
+  const value = argv[index + 1];
+
+  if (!value || value.startsWith("--")) {
+    throw usageError(`Missing value for ${optionName}`);
+  }
+
+  return value;
+}
+
+function validateRunTokens(tokens: ParsedRunTokens): ParsedRunTokens {
+  const { positionals } = tokens;
+
+  if (positionals.length === 0) {
+    throw usageError("Missing required base_ref");
+  }
+
+  if (positionals.length === 1) {
+    throw usageError("Missing required head_ref");
+  }
+
+  if (positionals.length > 2) {
+    throw usageError(`Unexpected positional input: ${positionals[2]}`);
+  }
+
+  return tokens;
+}
+
+function buildRunRequest(tokens: ParsedRunTokens): RunRequest {
+  const request: RunRequest = {
+    baseRef: tokens.positionals[0],
+    headRef: tokens.positionals[1],
+    userContext: tokens.userContext,
+    dryRun: tokens.dryRun
+  };
+
+  if (tokens.repoPath) {
+    request.repoPath = tokens.repoPath;
+  }
+
+  return request;
+}
+
+function usageError(message: string): CliUsageError {
+  return new CliUsageError(`${message}\nUsage: ${USAGE}`);
 }
