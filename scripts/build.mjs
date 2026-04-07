@@ -1,14 +1,9 @@
-// Build with Node's native stripTypeScriptTypes (no tsc or bundler dependency).
-// Specifiers are rewritten .ts → .js so the dist/ output runs as plain ESM.
-import { stripTypeScriptTypes } from "node:module";
+import { execFileSync } from "node:child_process";
 import {
   chmodSync,
-  mkdirSync,
+  existsSync,
   readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync
+  rmSync
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,60 +11,47 @@ import { fileURLToPath } from "node:url";
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
 const repoRoot = path.resolve(currentDir, "..");
-const srcRoot = path.join(repoRoot, "src");
 const distRoot = path.join(repoRoot, "dist");
+const buildConfigPath = path.join(repoRoot, "tsconfig.build.json");
+const builtCliPath = path.join(distRoot, "bin", "review.js");
+const tscCliPath = path.join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+const CLI_SHEBANG = "#!/usr/bin/env node";
 
-rmSync(distRoot, { force: true, recursive: true });
-mkdirSync(distRoot, { recursive: true });
+cleanDistOutput();
+runTypeScriptBuild();
+assertBuiltCliArtifact();
+chmodSync(builtCliPath, 0o755);
 
-for (const sourcePath of listTypeScriptFiles(srcRoot)) {
-  const relativePath = path.relative(srcRoot, sourcePath);
-  const outputPath = path.join(
-    distRoot,
-    relativePath.replace(/\.ts$/u, ".js")
-  );
-  const outputDir = path.dirname(outputPath);
-  const sourceCode = readFileSync(sourcePath, "utf8");
-  const transformed = stripTypeScriptTypes(sourceCode, {
-    mode: "transform",
-    sourceMap: false
+function cleanDistOutput() {
+  rmSync(distRoot, { force: true, recursive: true });
+}
+
+function runTypeScriptBuild() {
+  if (!existsSync(tscCliPath)) {
+    throw new Error(
+      "TypeScript compiler not found at node_modules/typescript/bin/tsc. Run npm install before npm run build."
+    );
+  }
+
+  execFileSync(process.execPath, [tscCliPath, "-p", buildConfigPath], {
+    cwd: repoRoot,
+    stdio: "inherit"
   });
-  const rewritten = rewriteTypeScriptSpecifiers(transformed);
-
-  mkdirSync(outputDir, { recursive: true });
-  writeFileSync(outputPath, rewritten);
-
-  if (relativePath.startsWith(`bin${path.sep}`)) {
-    chmodSync(outputPath, 0o755);
-  }
 }
 
-function listTypeScriptFiles(directoryPath) {
-  const entries = readdirSync(directoryPath).sort();
-  const files = [];
-
-  for (const entry of entries) {
-    const fullPath = path.join(directoryPath, entry);
-    const stats = statSync(fullPath);
-
-    if (stats.isDirectory()) {
-      files.push(...listTypeScriptFiles(fullPath));
-      continue;
-    }
-
-    if (fullPath.endsWith(".ts")) {
-      files.push(fullPath);
-    }
+function assertBuiltCliArtifact() {
+  if (!existsSync(builtCliPath)) {
+    throw new Error(
+      `Build completed without the expected CLI artifact at ${builtCliPath}.`
+    );
   }
 
-  return files;
-}
+  const firstLine = readFileSync(builtCliPath, "utf8")
+    .split("\n", 1)[0];
 
-function rewriteTypeScriptSpecifiers(code) {
-  return code
-    .replace(
-      /((?:import|export)\s.+?\sfrom\s+["'])(\.[^"']+)\.ts(["'])/gsu,
-      "$1$2.js$3"
-    )
-    .replace(/(import\s*\(\s*["'])(\.[^"']+)\.ts(["']\s*\))/gsu, "$1$2.js$3");
+  if (firstLine !== CLI_SHEBANG) {
+    throw new Error(
+      `Built CLI artifact at ${builtCliPath} is missing the expected shebang ${CLI_SHEBANG}.`
+    );
+  }
 }

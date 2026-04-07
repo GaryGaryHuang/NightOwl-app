@@ -55,6 +55,7 @@
     "test/core/step-runner.test.ts",
     "test/providers/local-git-provider.test.ts",
     "test/providers/local-workspace-provider.test.ts",
+    "test/scripts/build-script.test.ts",
     "test/services/review-session-factory.test.ts",
     "test/services/tool-policy-guard.test.ts"
   ],

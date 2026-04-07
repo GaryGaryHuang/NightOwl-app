@@ -29,6 +29,7 @@ test("package exposes an installable review executable", () => {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-bin-test-"));
   const appCopyDir = path.join(tempDir, "app");
   const cacheDir = path.join(tempDir, "cache");
+  const copiedNodeModulesDir = path.join(appCopyDir, "node_modules");
   const prefixDir = path.join(tempDir, "prefix");
 
   // Copy source without node_modules / cache / dist so that `npm pack` builds
@@ -45,6 +46,9 @@ test("package exposes an installable review executable", () => {
     }
   });
   rmSync(path.join(appCopyDir, "dist"), { force: true, recursive: true });
+  cpSync(path.join(repoRoot, "node_modules"), copiedNodeModulesDir, {
+    recursive: true
+  });
 
   const packResult = spawnSync(
     "npm",
