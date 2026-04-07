@@ -15,10 +15,14 @@ import { StructuredOutputValidator } from "../core/structured-output-validator.t
 import { LocalGitProvider } from "../providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../providers/local-review-file-filter.ts";
 import { LocalReviewConfigProvider } from "../providers/local-review-config-provider.ts";
+import { LocalSuccessfulSnapshotOutputHealthAssessor } from "../providers/local-successful-snapshot-output-health-assessor.ts";
 import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
 import type { ReviewConfigProvider } from "../providers/review-config-provider.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
-import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
+import type {
+  ReviewOutputSink,
+  SuccessfulSnapshotOutputHealthAssessor
+} from "../providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 import { JudgeSessionFactory } from "../services/judge-session-factory.ts";
 import { KnowledgeSvc } from "../services/knowledge.ts";
@@ -51,6 +55,7 @@ export interface CreateLocalReviewRunAppOptions {
     getClient(): CopilotClientLike;
   };
   outputSink?: ReviewOutputSink;
+  successfulSnapshotOutputHealthAssessor?: SuccessfulSnapshotOutputHealthAssessor;
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   reviewConfigProvider?: ReviewConfigProvider;
   reviewFileFilter?: ReviewFileFilter;
@@ -89,6 +94,9 @@ export function createLocalReviewRunApp(
   const reviewFileFilter =
     options.reviewFileFilter ?? new LocalReviewFileFilter();
   const outputSink = options.outputSink ?? new LocalWorkspaceProvider();
+  const successfulSnapshotOutputHealthAssessor =
+    options.successfulSnapshotOutputHealthAssessor ??
+    new LocalSuccessfulSnapshotOutputHealthAssessor();
   const reviewConfigProvider =
     options.reviewConfigProvider ?? new LocalReviewConfigProvider();
   const judgeSessionFactory = new JudgeSessionFactory({ clientManager });
@@ -158,6 +166,7 @@ export function createLocalReviewRunApp(
         reviewFileFilter,
         sourceProvider,
         outputSink,
+        successfulSnapshotOutputHealthAssessor,
         stepRunner,
         workingDirectory: options.workingDirectory,
         timestampProvider: options.timestampProvider,

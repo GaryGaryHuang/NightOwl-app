@@ -1,171 +1,23 @@
 import {
-  accessSync,
-  appendFileSync,
-  constants,
   mkdirSync,
-  statSync,
   writeFileSync
 } from "node:fs";
-import path from "node:path";
 
 import type { OutputTarget } from "../core/review-path-resolver.ts";
-import type {
-  ChangesetOverviewResult,
-  FileReviewResult,
-  ReviewIndexResult,
-  ReviewOutputSink,
-  RunManifestResult,
-  RunSummaryResult,
-  SuccessfulSnapshotFailureAssessment,
-  SuccessfulSnapshotFailureInput,
-  SkipRecord
-} from "./review-output-sink.ts";
+import { LocalRunOutputPublisher } from "./local-run-output-publisher.ts";
+import type { ReviewOutputSink } from "./review-output-sink.ts";
 
 /**
- * Local Markdown output sink for per-file notes and run-level artifacts.
- * It also classifies write failures so the orchestrator can decide between skip and abort.
+ * Bootstrap-level local output sink that initializes the review workspace
+ * and yields a run-scoped publisher bound to the resolved OutputTarget.
  */
 export class LocalWorkspaceProvider implements ReviewOutputSink {
-  #outputTarget?: OutputTarget;
-
-  initializeRun(outputTarget: OutputTarget): void {
+  initializeRun(outputTarget: OutputTarget): LocalRunOutputPublisher {
     // Create shared run directories up front and truncate append-only artifacts before workers start.
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
     writeFileSync(outputTarget.toolAuditPath, "");
-    this.#outputTarget = outputTarget;
+    return new LocalRunOutputPublisher(outputTarget);
   }
-
-  publishFileReview(fileResult: FileReviewResult): void {
-    mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
-    writeFileSync(fileResult.noteFilePath, fileResult.content);
-  }
-
-  assessSuccessfulSnapshotFailure(
-    input: SuccessfulSnapshotFailureInput
-  ): SuccessfulSnapshotFailureAssessment {
-    if (!this.#outputTarget) {
-      return { faultScope: "shared-output-target-fault" };
-    }
-
-    // Use errno plus the failing path to distinguish a one-file write problem from a shared target fault.
-    const code =
-      isErrnoException(input.error) && typeof input.error.code === "string"
-        ? input.error.code
-        : undefined;
-
-    if (!code) {
-      return { faultScope: "shared-output-target-fault" };
-    }
-
-    if (SHARED_TARGET_ERROR_CODES.has(code)) {
-      return { faultScope: "shared-output-target-fault" };
-    }
-
-    const errorPath = resolveErrnoPath(input.error);
-    const expectedNotePath = path.resolve(input.noteFilePath);
-
-    if (
-      !SINGLE_FILE_ERROR_CODES.has(code) ||
-      !errorPath ||
-      errorPath !== expectedNotePath
-    ) {
-      return { faultScope: "shared-output-target-fault" };
-    }
-
-    try {
-      assertWritableDirectory(this.#outputTarget.basePath);
-      assertWritableDirectory(this.#outputTarget.filesPath);
-    } catch {
-      return { faultScope: "shared-output-target-fault" };
-    }
-
-    return { faultScope: "single-file-output-fault" };
-  }
-
-  publishSkippedFile(skipRecord: SkipRecord): void {
-    if (!this.#outputTarget) {
-      throw new Error("Run output target has not been initialized.");
-    }
-
-    appendFileSync(
-      this.#outputTarget.skippedPath,
-      `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
-    );
-  }
-
-  publishRunSummary(summaryResult: RunSummaryResult): void {
-    if (!this.#outputTarget) {
-      throw new Error("Run output target has not been initialized.");
-    }
-
-    writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
-  }
-
-  publishReviewIndex(indexResult: ReviewIndexResult): void {
-    if (!this.#outputTarget) {
-      throw new Error("Run output target has not been initialized.");
-    }
-
-    writeFileSync(this.#outputTarget.indexPath, indexResult.content);
-  }
-
-  publishRunManifest(manifestResult: RunManifestResult): void {
-    if (!this.#outputTarget) {
-      throw new Error("Run output target has not been initialized.");
-    }
-
-    writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
-  }
-
-  publishChangesetOverview(result: ChangesetOverviewResult): void {
-    if (!this.#outputTarget) {
-      throw new Error("Run output target has not been initialized.");
-    }
-
-    // Keep the overview snapshot newline-terminated so the rendered output stays stable.
-    const content = result.content.endsWith("\n")
-      ? result.content
-      : result.content + "\n";
-    writeFileSync(this.#outputTarget.changesetOverviewPath, content);
-  }
-}
-
-const SHARED_TARGET_ERROR_CODES = new Set([
-  "EACCES",
-  "EDQUOT",
-  "EIO",
-  "EMFILE",
-  "ENFILE",
-  "ENOSPC",
-  "EPERM",
-  "EROFS"
-]);
-
-const SINGLE_FILE_ERROR_CODES = new Set([
-  "EISDIR",
-  "ENAMETOOLONG"
-]);
-
-function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error;
-}
-
-function resolveErrnoPath(error: unknown): string | undefined {
-  if (!isErrnoException(error) || typeof error.path !== "string") {
-    return undefined;
-  }
-
-  return path.resolve(error.path);
-}
-
-function assertWritableDirectory(targetPath: string): void {
-  const stat = statSync(targetPath);
-
-  if (!stat.isDirectory()) {
-    throw new Error(`${targetPath} is not a directory`);
-  }
-
-  accessSync(targetPath, constants.W_OK);
 }

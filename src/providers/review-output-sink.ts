@@ -31,7 +31,17 @@ export type SuccessfulSnapshotFaultScope =
   | "single-file-output-fault"
   | "shared-output-target-fault";
 
+export interface RunOutputPublisher {
+  publishFileReview(fileResult: FileReviewResult): void;
+  publishSkippedFile(skipRecord: SkipRecord): void;
+  publishRunSummary(summaryResult: RunSummaryResult): void;
+  publishReviewIndex(indexResult: ReviewIndexResult): void;
+  publishRunManifest(manifestResult: RunManifestResult): void;
+  publishChangesetOverview(result: ChangesetOverviewResult): void;
+}
+
 export interface SuccessfulSnapshotFailureInput {
+  outputTarget: OutputTarget;
   noteFilePath: string;
   error: unknown;
 }
@@ -40,29 +50,22 @@ export interface SuccessfulSnapshotFailureAssessment {
   faultScope: SuccessfulSnapshotFaultScope;
 }
 
+export interface SuccessfulSnapshotOutputHealthAssessor {
+  assess(input: SuccessfulSnapshotFailureInput): SuccessfulSnapshotFailureAssessment;
+}
+
 export interface ReviewOutputSink {
-  initializeRun(outputTarget: OutputTarget): void;
-  publishFileReview(fileResult: FileReviewResult): void;
-  assessSuccessfulSnapshotFailure?(
-    input: SuccessfulSnapshotFailureInput
-  ): SuccessfulSnapshotFailureAssessment;
-  publishSkippedFile(skipRecord: SkipRecord): void;
-  publishRunSummary(summaryResult: RunSummaryResult): void;
-  publishReviewIndex(indexResult: ReviewIndexResult): void;
-  publishRunManifest(manifestResult: RunManifestResult): void;
-  publishChangesetOverview(result: ChangesetOverviewResult): void;
+  initializeRun(outputTarget: OutputTarget): RunOutputPublisher;
 }
 
 export function resolveSuccessfulSnapshotFailureAssessment(
-  outputSink: ReviewOutputSink,
+  assessor: SuccessfulSnapshotOutputHealthAssessor,
   input: SuccessfulSnapshotFailureInput
 ): SuccessfulSnapshotFailureAssessment {
   try {
     // Default to the conservative shared-target classification unless the sink can prove a single-file fault.
     return (
-      outputSink.assessSuccessfulSnapshotFailure?.(input) ?? {
-        faultScope: "shared-output-target-fault"
-      }
+      assessor.assess(input) ?? { faultScope: "shared-output-target-fault" }
     );
   } catch {
     return { faultScope: "shared-output-target-fault" };

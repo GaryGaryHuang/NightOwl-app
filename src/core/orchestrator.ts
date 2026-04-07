@@ -46,7 +46,9 @@ import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boun
 import { Step1OverviewStep } from "./steps/step1-overview.ts";
 import {
   resolveSuccessfulSnapshotFailureAssessment,
-  type ReviewOutputSink
+  type ReviewOutputSink,
+  type RunOutputPublisher,
+  type SuccessfulSnapshotOutputHealthAssessor
 } from "../providers/review-output-sink.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
@@ -70,6 +72,7 @@ export interface ReviewOrchestratorOptions {
   reviewFileFilter: ReviewFileFilter;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
+  successfulSnapshotOutputHealthAssessor: SuccessfulSnapshotOutputHealthAssessor;
   stepRunner: Pick<StepRunner, "run">;
   workingDirectory: string;
   timestampProvider?: () => string;
@@ -83,6 +86,7 @@ export class ReviewOrchestrator {
   readonly #reviewFileFilter: ReviewFileFilter;
   readonly #sourceProvider: ReviewSourceProvider;
   readonly #outputSink: ReviewOutputSink;
+  readonly #successfulSnapshotOutputHealthAssessor: SuccessfulSnapshotOutputHealthAssessor;
   readonly #stepRunner: Pick<StepRunner, "run">;
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
@@ -107,6 +111,8 @@ export class ReviewOrchestrator {
     this.#reviewFileFilter = options.reviewFileFilter;
     this.#sourceProvider = options.sourceProvider;
     this.#outputSink = options.outputSink;
+    this.#successfulSnapshotOutputHealthAssessor =
+      options.successfulSnapshotOutputHealthAssessor;
     this.#stepRunner = options.stepRunner;
     this.#workingDirectory = options.workingDirectory;
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
@@ -204,10 +210,10 @@ export class ReviewOrchestrator {
     });
     const plannedNoteFiles = planNoteFiles(outputTarget.filesPath, reviewableFiles);
 
-    this.#outputSink.initializeRun(outputTarget);
+    const outputPublisher = this.#outputSink.initializeRun(outputTarget);
     throwIfRunAborted();
 
-    this.#outputSink.publishChangesetOverview({ content: runContext.changesetOverview });
+    outputPublisher.publishChangesetOverview({ content: runContext.changesetOverview });
     throwIfRunAborted();
 
     this.#onOutputTargetReady?.(outputTarget);
@@ -224,7 +230,7 @@ export class ReviewOrchestrator {
     // Publish bootstrap snapshots before any per-file step runs so every file starts from the same skeleton.
     for (const plannedNote of plannedNoteFiles) {
       throwIfRunAborted();
-      this.#outputSink.publishFileReview({
+      outputPublisher.publishFileReview({
         noteFilePath: plannedNote.noteFilePath,
         content: this.#finalizer.render(
           new FileReviewContext({
@@ -269,35 +275,18 @@ export class ReviewOrchestrator {
     ];
     const sharedAbortState: AbortState = {};
     const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
-    let skippedAppendQueue = Promise.resolve();
-    // skipped.md is shared across workers, so serialize appends through a promise queue.
-    const publishSkippedFileSerialized = (skipRecord: {
-      filePath: string;
-      stepId: string;
-      reason: string;
-    }): Promise<void> => {
-      const queuedPublish = skippedAppendQueue.then(() => {
-        if (runAbortState.error) {
-          throw runAbortState.error;
-        }
-
-        this.#outputSink.publishSkippedFile(skipRecord);
-      });
-
-      skippedAppendQueue = queuedPublish;
-      return queuedPublish;
-    };
 
     await this.#runPlannedFileWorkers({
       plannedNoteFiles,
       outcomeSlots,
+      outputPublisher,
+      outputTarget,
       request,
       repoRoot,
       signal: options?.signal,
       steps,
       runAbortState,
-      sharedAbortState,
-      publishSkippedFileSerialized
+      sharedAbortState
     });
 
     const successfulFiles = outcomeSlots.flatMap((slot) =>
@@ -314,7 +303,7 @@ export class ReviewOrchestrator {
       skippedFileCount: skippedFiles.length
     });
 
-    this.#outputSink.publishRunSummary({
+    outputPublisher.publishRunSummary({
       content: this.#runSummaryFinalizer.render({
         repoRoot,
         baseRef: request.baseRef,
@@ -324,7 +313,7 @@ export class ReviewOrchestrator {
         skippedFiles
       })
     });
-    this.#outputSink.publishReviewIndex({
+    outputPublisher.publishReviewIndex({
       content: this.#reviewIndexFinalizer.render({
         repoRoot,
         baseRef: request.baseRef,
@@ -335,7 +324,7 @@ export class ReviewOrchestrator {
         plannedNotes: plannedNoteFiles
       })
     });
-    this.#outputSink.publishRunManifest({
+    outputPublisher.publishRunManifest({
       content: this.#runManifestFinalizer.render({
         repoRoot,
         baseRef: request.baseRef,
@@ -361,17 +350,14 @@ export class ReviewOrchestrator {
   async #runPlannedFileWorkers(input: {
     plannedNoteFiles: PlannedNoteFile[];
     outcomeSlots: PlannedOutcomeSlot[];
+    outputPublisher: RunOutputPublisher;
+    outputTarget: OutputTarget;
     request: RunRequest;
     repoRoot: string;
     signal?: AbortSignal;
     runAbortState: AbortState;
     steps: StepDefinition[];
     sharedAbortState: SharedAbortState;
-    publishSkippedFileSerialized(input: {
-      filePath: string;
-      stepId: string;
-      reason: string;
-    }): Promise<void>;
   }): Promise<void> {
     const workerCount = Math.min(
       this.#maxConcurrentFiles,
@@ -423,13 +409,14 @@ export class ReviewOrchestrator {
             await this.#processPlannedFile({
               workItem,
               outcomeSlots: input.outcomeSlots,
+              outputPublisher: input.outputPublisher,
+              outputTarget: input.outputTarget,
               request: input.request,
               repoRoot: input.repoRoot,
               signal: input.signal,
               runAbortState: input.runAbortState,
               sharedAbortState: input.sharedAbortState,
-              steps: input.steps,
-              publishSkippedFileSerialized: input.publishSkippedFileSerialized
+              steps: input.steps
             });
           } catch (error) {
             input.runAbortState.error ??= error;
@@ -447,17 +434,14 @@ export class ReviewOrchestrator {
   async #processPlannedFile(input: {
     workItem: PlannedFileWorkItem;
     outcomeSlots: PlannedOutcomeSlot[];
+    outputPublisher: RunOutputPublisher;
+    outputTarget: OutputTarget;
     request: RunRequest;
     repoRoot: string;
     signal?: AbortSignal;
     runAbortState: AbortState;
     sharedAbortState: SharedAbortState;
     steps: StepDefinition[];
-    publishSkippedFileSerialized(input: {
-      filePath: string;
-      stepId: string;
-      reason: string;
-    }): Promise<void>;
   }): Promise<void> {
     let diffContent: string;
 
@@ -519,7 +503,7 @@ export class ReviewOrchestrator {
         fileContext.markInterrupted(step.stepId, reason);
 
         try {
-          this.#outputSink.publishFileReview({
+          input.outputPublisher.publishFileReview({
             noteFilePath: fileContext.noteFilePath,
             content: this.#finalizer.render(fileContext)
           });
@@ -534,7 +518,7 @@ export class ReviewOrchestrator {
         }
 
         try {
-          await input.publishSkippedFileSerialized({
+          input.outputPublisher.publishSkippedFile({
             filePath: fileContext.filePath,
             stepId: step.stepId,
             reason
@@ -575,15 +559,16 @@ export class ReviewOrchestrator {
       }
 
       try {
-        this.#outputSink.publishFileReview({
+        input.outputPublisher.publishFileReview({
           noteFilePath: fileContext.noteFilePath,
           content: this.#finalizer.render(fileContext)
         });
       } catch (outputError) {
         // A snapshot write failure is classified before deciding whether the run should abort or the file should skip.
         const assessment = resolveSuccessfulSnapshotFailureAssessment(
-          this.#outputSink,
+          this.#successfulSnapshotOutputHealthAssessor,
           {
+            outputTarget: input.outputTarget,
             noteFilePath: fileContext.noteFilePath,
             error: outputError
           }
@@ -599,8 +584,8 @@ export class ReviewOrchestrator {
           context: fileContext,
           stepId: step.stepId,
           error: outputError,
+          outputPublisher: input.outputPublisher,
           runAbortState: input.runAbortState,
-          publishSkippedFileSerialized: input.publishSkippedFileSerialized,
           sharedAbortState: input.sharedAbortState
         });
         input.outcomeSlots[input.workItem.plannedIndex] = {
@@ -651,12 +636,8 @@ export class ReviewOrchestrator {
     context: FileReviewContext;
     stepId: string;
     error: unknown;
+    outputPublisher: RunOutputPublisher;
     runAbortState: AbortState;
-    publishSkippedFileSerialized(input: {
-      filePath: string;
-      stepId: string;
-      reason: string;
-    }): Promise<void>;
     sharedAbortState: SharedAbortState;
   }): Promise<void> {
     const reason =
@@ -669,7 +650,7 @@ export class ReviewOrchestrator {
     }
 
     try {
-      this.#outputSink.publishFileReview({
+      input.outputPublisher.publishFileReview({
         noteFilePath: input.context.noteFilePath,
         content: this.#finalizer.render(input.context)
       });
@@ -684,7 +665,7 @@ export class ReviewOrchestrator {
     }
 
     try {
-      await input.publishSkippedFileSerialized({
+      input.outputPublisher.publishSkippedFile({
         filePath: input.context.filePath,
         stepId: input.stepId,
         reason
