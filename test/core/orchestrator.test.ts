@@ -12,6 +12,8 @@ import { StructuredOutputValidator } from "../../src/core/structured-output-vali
 import { StepRunner } from "../../src/core/step-runner.ts";
 import type { RunStepInput, StepResult } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
+import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
+import { ReviewFileFilterError } from "../../src/providers/review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
@@ -31,8 +33,9 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 
     fixture.commitAll("add third changed file for step2 gating");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -41,6 +44,7 @@ test("ReviewOrchestrator does not start Step 3, Step 4, Step 5, Step 6, or Step 
     const reviewAttempts = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -160,8 +164,9 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
     fixture.commitAll("add third changed file for step1 gating");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -169,6 +174,7 @@ test("ReviewOrchestrator does not start Step 2 or later steps for a failed Step 
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -259,8 +265,9 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
     fixture.commitAll("add third changed file for step1 snapshot preservation");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -274,6 +281,7 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
     const laterFile = reviewableFiles[2];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -353,8 +361,9 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
     fixture.commitAll("add third changed file for getDiff failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -388,11 +397,9 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
         },
         getCurrentBranch(repoRootArg) {
           return sourceProvider.getCurrentBranch(repoRootArg);
-        },
-        filterIgnoredFiles(repoRootArg, files) {
-          return sourceProvider.filterIgnoredFiles(repoRootArg, files);
         }
       },
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -540,6 +547,7 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -598,6 +606,83 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
   }
 });
 
+test("ReviewOrchestrator aborts before output initialization and file dispatch when review file filtering fails during planning", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for review file filter failure");
+
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: {
+        filterReviewableFiles() {
+          throw new ReviewFileFilterError(
+            "filterReviewableFiles",
+            "Review file filter failed during filterReviewableFiles.",
+            { cause: new Error("reviewignore read failed") }
+          );
+        }
+      },
+      outputSink: {
+        initializeRun(outputTarget) {
+          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        },
+        publishFileReview(fileResult) {
+          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+        },
+        publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+        },
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {},
+        publishChangesetOverview() {}
+      },
+      stepRunner: {
+        async run({ context, step }: RunStepInput): Promise<StepResult> {
+          stepEvents.push([step.stepId, context.filePath]);
+          throw new Error("should not start steps");
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    await assert.rejects(
+      () =>
+        orchestrator.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: [],
+          dryRun: false
+        }),
+      (error: unknown) =>
+        error instanceof ReviewFileFilterError &&
+        error.operation === "filterReviewableFiles" &&
+        error.cause instanceof Error &&
+        error.cause.message === "reviewignore read failed"
+    );
+
+    assert.deepEqual(outputCalls, []);
+    assert.deepEqual(stepEvents, []);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
 test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves earlier bootstrap notes, and stops the bootstrap loop before Step 1", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -607,8 +692,9 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     fixture.commitAll("add third changed file for bootstrap publish failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -622,6 +708,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     const failedNotePath = plannedNotes[1].noteFilePath;
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -708,8 +795,9 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     fixture.commitAll("add third changed file for successful snapshot skip downgrade");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -730,6 +818,7 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     const writtenNotes = new Map<string, string>();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -811,8 +900,9 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     fixture.commitAll("add third changed file for shared-target successful snapshot failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -830,6 +920,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -911,8 +1002,9 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     fixture.commitAll("add third changed file for failed successful snapshot assessment");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -929,6 +1021,7 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1004,8 +1097,9 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     fixture.commitAll("add third changed file for successful snapshot downgrade interrupted publish failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -1023,6 +1117,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     const writtenNotes = new Map<string, string>();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1109,8 +1204,9 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     fixture.commitAll("add third changed file for successful snapshot downgrade skipped publish failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -1128,6 +1224,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     const writtenNotes = new Map<string, string>();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1212,8 +1309,9 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     fixture.commitAll("add third changed file for later successful snapshot failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -1232,6 +1330,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1314,8 +1413,9 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -1323,6 +1423,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
     const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1397,8 +1498,9 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     fixture.commitAll("add third changed file for interrupted snapshot publish failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -1416,6 +1518,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1500,8 +1603,9 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
     fixture.commitAll("add third changed file for skipped log publish failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -1519,6 +1623,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1596,6 +1701,7 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
     const outputTarget = path.join(realpathSync(fixture.repoDir), ".nightowl", "review");
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: {
         initializeRun() {
           calls.push("initializeRun");
@@ -1657,6 +1763,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: {
         initializeRun(outputTarget) {
           callOrder.push("initializeRun");
@@ -1722,6 +1829,7 @@ test("ReviewOrchestrator works normally when onOutputTargetReady callback is not
   try {
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: {
         async run(input) {
@@ -1761,6 +1869,7 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
     const callOrder: string[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: {
         initializeRun() {
           callOrder.push("initializeRun");
@@ -1829,6 +1938,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
     const calls: string[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: {
         initializeRun() {
           calls.push("initializeRun");
@@ -1897,6 +2007,7 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -2003,5 +2114,3 @@ function createStepFailureRunner(input: {
     }
   };
 }
-
-

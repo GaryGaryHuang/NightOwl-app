@@ -9,6 +9,7 @@ import { createRunContext } from "../../src/core/run-context.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
+import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
@@ -57,6 +58,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     const observedPrompts: Array<{ stepId: StepId; prompt: string }> = [];
     const observedDisconnects: string[] = [];
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const stepRunner = createObservedStepRunner({
       observedDisconnects,
       observedProfiles,
@@ -86,6 +88,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     });
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner,
       changesetOverviewRunner: {
@@ -111,6 +114,7 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
     const outputBaseDir = realpathSync(fixture.repoDir);
     const { repoRoot, reviewableFiles } = collectReviewableFiles({
       sourceProvider,
+      reviewFileFilter,
       repoDir: fixture.repoDir
     });
     const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
@@ -179,8 +183,9 @@ test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file and cont
     fixture.commitAll("add third changed file for step4 gating");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -189,6 +194,7 @@ test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file and cont
     const reviewAttempts = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -300,13 +306,15 @@ test("ReviewOrchestrator renders `## Findings` with `- 無` when Step 5 returns 
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -379,13 +387,15 @@ test("ReviewOrchestrator treats confidence-filtered empty findings as a successf
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -483,8 +493,10 @@ test("ReviewOrchestrator uses configured thresholds when Step 5 filters findings
 
     const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -608,8 +620,9 @@ test("ReviewOrchestrator retries Step 5 after deterministic validation failure a
 
     const reviewAttempts = new Map();
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -617,6 +630,7 @@ test("ReviewOrchestrator retries Step 5 after deterministic validation failure a
     const judgeCallsByStep = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -793,8 +807,9 @@ test("ReviewOrchestrator skips Step 5 after review startup failure retry exhaust
     fixture.commitAll("add third changed file for step5 startup failure");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -802,6 +817,7 @@ test("ReviewOrchestrator skips Step 5 after review startup failure retry exhaust
     let sessionCount = 0;
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -882,8 +898,9 @@ async function assertStep5Failure(input: {
     fixture.commitAll(`add third changed file for ${input.title}`);
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -899,6 +916,7 @@ async function assertStep5Failure(input: {
     const judgeCallsByStep = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {

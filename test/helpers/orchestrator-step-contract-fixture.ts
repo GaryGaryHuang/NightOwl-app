@@ -27,15 +27,17 @@ export type StepId =
 // returns internally, avoiding false-positive path mismatches in assertions.
 export function collectReviewableFiles(input: {
   sourceProvider: {
-    filterIgnoredFiles(repoRoot: string, files: string[]): string[];
     getChangedFiles(repoRoot: string, baseRef: string, headRef: string): string[];
+  };
+  reviewFileFilter: {
+    filterReviewableFiles(repoRoot: string, files: string[]): string[];
   };
   repoDir: string;
   baseRef?: string;
   headRef?: string;
 }) {
   const repoRoot = realpathSync(input.repoDir);
-  const reviewableFiles = input.sourceProvider.filterIgnoredFiles(
+  const reviewableFiles = input.reviewFileFilter.filterReviewableFiles(
     repoRoot,
     input.sourceProvider.getChangedFiles(
       repoRoot,

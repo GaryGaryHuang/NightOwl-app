@@ -9,6 +9,7 @@ import { createRunContext } from "../../src/core/run-context.ts";
 import type { Finding, FileReviewContext } from "../../src/core/file-review-context.ts";
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
+import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { buildDependenciesResponse, buildFindingsForFile, buildKnowledgeResponse, buildOverviewResponse, buildStrategyResponse, buildSuccessfulStepResult, buildSummaryResponse, escapeRegExp } from "../helpers/orchestrator-fixture.ts";
@@ -23,8 +24,9 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
     fixture.commitAll("add changed files for bounded concurrency ordering");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -54,15 +56,16 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
     const outputSink = new BootstrapTrackingOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createConcurrentRunner({
         metrics,
         getBootstrapPublishCount: () => outputSink.bootstrapPublishCount,
         completionDelayByFile: new Map([
           [confirmedFastSuccessfulFile, 0],
-          [confirmedSkippedFile, 5],
-          [mediumOrSlowSuccessfulFile, 35],
-          [confirmedSlowSuccessfulFile, 60]
+          [confirmedSkippedFile, 80],
+          [mediumOrSlowSuccessfulFile, 140],
+          [confirmedSlowSuccessfulFile, 220]
         ]),
         failedFile: confirmedSkippedFile,
         failedStepId: "step5-validation-interrogation",
@@ -168,7 +171,8 @@ test("ReviewOrchestrator keeps an all-skipped run as a completed run under bound
     fixture.commitAll("add third changed file for all-skipped bounded concurrency");
 
     const sourceProvider = new LocalGitProvider();
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewFileFilter = new LocalReviewFileFilter();
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       sourceProvider.resolveRepoRoot(fixture.appDir),
       sourceProvider.getChangedFiles(sourceProvider.resolveRepoRoot(fixture.appDir), "main", "feature-branch")
     );
@@ -176,6 +180,7 @@ test("ReviewOrchestrator keeps an all-skipped run as a completed run under bound
     const outputSink = new LocalWorkspaceProvider();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createConcurrentRunner({
         metrics,
@@ -241,8 +246,9 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
     fixture.commitAll("add enough changed files for concurrent single-file output fault");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -264,6 +270,7 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
     });
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createConcurrentRunner({
         metrics: createConcurrencyMetrics(reviewableFiles.length),
@@ -321,8 +328,9 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
     fixture.commitAll("add files for shared-target successful snapshot abort coordination");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -348,6 +356,7 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
     });
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createSharedAbortRunner({
         stepEvents,
@@ -402,8 +411,9 @@ test("ReviewOrchestrator suppresses later interrupted snapshots and skipped reco
     fixture.commitAll("add files for skipped artifact abort coordination");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -419,6 +429,7 @@ test("ReviewOrchestrator suppresses later interrupted snapshots and skipped reco
     });
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createSharedAbortRunner({
         stepEvents,
@@ -473,7 +484,8 @@ test("ReviewOrchestrator still fails the run without returning a completed resul
     fixture.commitAll("add third changed file for fatal bounded concurrency summary failure");
 
     const sourceProvider = new LocalGitProvider();
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewFileFilter = new LocalReviewFileFilter();
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       sourceProvider.resolveRepoRoot(fixture.appDir),
       sourceProvider.getChangedFiles(sourceProvider.resolveRepoRoot(fixture.appDir), "main", "feature-branch")
     );
@@ -481,6 +493,7 @@ test("ReviewOrchestrator still fails the run without returning a completed resul
     const outputSink = new SummaryFailingOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createConcurrentRunner({
         metrics,

@@ -25,11 +25,13 @@ test("createLocalReviewRunApp emits deterministic progress events for planning, 
       getChangedFiles() {
         return ["src/app.ts", "packages/app/index.ts"];
       },
-      filterIgnoredFiles(_repoRoot, files) {
-        return files;
-      },
       getDiff(_repoRoot, _baseRef, _headRef, filePath) {
         return `--- a/${filePath}\n+++ b/${filePath}\n@@ -1 +1 @@\n-old\n+new\n`;
+      }
+    },
+    reviewFileFilter: {
+      filterReviewableFiles(_repoRoot: string, files: string[]) {
+        return files;
       }
     },
     reviewConfigProvider: {

@@ -48,6 +48,7 @@ import {
   resolveSuccessfulSnapshotFailureAssessment,
   type ReviewOutputSink
 } from "../providers/review-output-sink.ts";
+import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
@@ -66,6 +67,7 @@ export interface ReviewOrchestratorOptions {
   maxConcurrentFiles?: number;
   onProgressEvent?: RunProgressEventHandler;
   onOutputTargetReady?: (outputTarget: OutputTarget) => void;
+  reviewFileFilter: ReviewFileFilter;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   stepRunner: Pick<StepRunner, "run">;
@@ -78,6 +80,7 @@ export interface ReviewOrchestratorOptions {
  */
 export class ReviewOrchestrator {
   readonly #changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
+  readonly #reviewFileFilter: ReviewFileFilter;
   readonly #sourceProvider: ReviewSourceProvider;
   readonly #outputSink: ReviewOutputSink;
   readonly #stepRunner: Pick<StepRunner, "run">;
@@ -101,6 +104,7 @@ export class ReviewOrchestrator {
     }
 
     this.#changesetOverviewRunner = options.changesetOverviewRunner;
+    this.#reviewFileFilter = options.reviewFileFilter;
     this.#sourceProvider = options.sourceProvider;
     this.#outputSink = options.outputSink;
     this.#stepRunner = options.stepRunner;
@@ -188,7 +192,7 @@ export class ReviewOrchestrator {
       request.baseRef,
       request.headRef
     );
-    const reviewableFiles = this.#sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = this.#reviewFileFilter.filterReviewableFiles(
       repoRoot,
       changedFiles
     );

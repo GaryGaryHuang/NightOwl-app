@@ -6,6 +6,7 @@ import {
   ReviewRunInterruptedError
 } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import type { ReviewFileFilter } from "../../src/providers/review-file-filter.ts";
 import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
@@ -36,9 +37,6 @@ function createMockSourceProvider(files: string[]): ReviewSourceProvider {
     ): string[] {
       return files;
     },
-    filterIgnoredFiles(_repoRoot: string, changedFiles: string[]): string[] {
-      return changedFiles;
-    },
     getDiff(
       _repoRoot: string,
       _baseRef: string,
@@ -46,6 +44,14 @@ function createMockSourceProvider(files: string[]): ReviewSourceProvider {
       _filePath: string
     ): string {
       return "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n";
+    }
+  };
+}
+
+function createPassthroughReviewFileFilter(): ReviewFileFilter {
+  return {
+    filterReviewableFiles(_repoRoot: string, files: string[]): string[] {
+      return files;
     }
   };
 }
@@ -123,6 +129,7 @@ function createBaseOrchestrator(overrides: {
     timestampProvider: () => "03131430",
     sourceProvider:
       overrides.sourceProvider ?? createMockSourceProvider(TEST_FILES),
+    reviewFileFilter: createPassthroughReviewFileFilter(),
     outputSink: overrides.outputSink ?? createTrackingOutputSink(),
     stepRunner: overrides.stepRunner ?? createNoOpStepRunner(),
     changesetOverviewRunner: overrides.changesetOverviewRunner ?? {

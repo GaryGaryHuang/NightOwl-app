@@ -9,6 +9,7 @@ import { createRunContext } from "../../src/core/run-context.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
+import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
@@ -114,8 +115,9 @@ test("ReviewOrchestrator can complete a run with both successful and skipped fil
     fixture.commitAll("add third changed file for mixed-result run");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -124,6 +126,7 @@ test("ReviewOrchestrator can complete a run with both successful and skipped fil
     const outputBaseDir = realpathSync(fixture.repoDir);
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: createSkipAwareRunner({
         failedFile,
@@ -197,8 +200,9 @@ async function assertSkipScenario(input: {
     fixture.commitAll(`add third changed file for ${input.title}`);
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -206,6 +210,7 @@ async function assertSkipScenario(input: {
     const laterFile = reviewableFiles[2];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: createSkipAwareRunner({
         failedFile,

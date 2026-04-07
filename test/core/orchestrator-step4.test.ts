@@ -6,6 +6,7 @@ import { createRunContext } from "../../src/core/run-context.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
+import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
@@ -48,8 +49,10 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
     const observedStepEvents: Array<[StepId, string]> = [];
     const observedPrompts: Array<{ stepId: StepId; prompt: string }> = [];
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: createObservedStepRunner({
         observedDisconnects,
@@ -80,6 +83,7 @@ test("ReviewOrchestrator passes the Step 4 snapshot into Step 5 and publishes Fi
 
     const { reviewableFiles } = collectReviewableFiles({
       sourceProvider,
+      reviewFileFilter,
       repoDir: fixture.repoDir
     });
     const step5Prompt = observedPrompts.find(
@@ -118,8 +122,10 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
     fixture.commitAll("add third changed file for step4 exhaustion");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const { reviewableFiles } = collectReviewableFiles({
       sourceProvider,
+      reviewFileFilter,
       repoDir: fixture.repoDir
     });
     const failedFile = reviewableFiles[1];
@@ -127,6 +133,7 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
     const reviewAttempts = new Map();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {
@@ -227,13 +234,16 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
     const reviewAttempts = new Map();
     const judgeAttempts = new Map();
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const { reviewableFiles } = collectReviewableFiles({
       sourceProvider,
+      reviewFileFilter,
       repoDir: fixture.repoDir
     });
     const retryFile = reviewableFiles[1];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: new StepRunner({
         reviewSessionFactory: {

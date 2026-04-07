@@ -397,8 +397,10 @@ test("runCli surfaces a clear runtime error when Step 0 session startup fails", 
       },
       getCurrentBranch() {
         throw new Error("unreachable");
-      },
-      filterIgnoredFiles() {
+      }
+    },
+    reviewFileFilter: {
+      filterReviewableFiles() {
         throw new Error("unreachable");
       }
     },

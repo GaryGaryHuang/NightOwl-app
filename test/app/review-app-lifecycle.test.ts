@@ -63,11 +63,13 @@ function createSignalTestApp(options: {
       getChangedFiles() {
         return TEST_FILES;
       },
-      filterIgnoredFiles(_repoRoot: string, files: string[]) {
-        return files;
-      },
       getDiff() {
         return "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n";
+      }
+    },
+    reviewFileFilter: {
+      filterReviewableFiles(_repoRoot: string, files: string[]) {
+        return files;
       }
     },
     outputSink: {

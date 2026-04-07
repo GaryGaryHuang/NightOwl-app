@@ -13,9 +13,11 @@ import { JudgeService } from "../core/judge.ts";
 import { StepRunner } from "../core/step-runner.ts";
 import { StructuredOutputValidator } from "../core/structured-output-validator.ts";
 import { LocalGitProvider } from "../providers/local-git-provider.ts";
+import { LocalReviewFileFilter } from "../providers/local-review-file-filter.ts";
 import { LocalReviewConfigProvider } from "../providers/local-review-config-provider.ts";
 import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
 import type { ReviewConfigProvider } from "../providers/review-config-provider.ts";
+import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 import { JudgeSessionFactory } from "../services/judge-session-factory.ts";
@@ -51,6 +53,7 @@ export interface CreateLocalReviewRunAppOptions {
   outputSink?: ReviewOutputSink;
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   reviewConfigProvider?: ReviewConfigProvider;
+  reviewFileFilter?: ReviewFileFilter;
   sourceProvider?: ReviewSourceProvider;
   stepRunner?: Pick<StepRunner, "run">;
   workingDirectory: string;
@@ -83,6 +86,8 @@ export function createLocalReviewRunApp(
   const gracefulShutdownTimeoutMs =
     options.gracefulShutdownTimeoutMs ?? DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
   const sourceProvider = options.sourceProvider ?? new LocalGitProvider();
+  const reviewFileFilter =
+    options.reviewFileFilter ?? new LocalReviewFileFilter();
   const outputSink = options.outputSink ?? new LocalWorkspaceProvider();
   const reviewConfigProvider =
     options.reviewConfigProvider ?? new LocalReviewConfigProvider();
@@ -150,6 +155,7 @@ export function createLocalReviewRunApp(
         });
       const orchestrator = new ReviewOrchestrator({
         changesetOverviewRunner,
+        reviewFileFilter,
         sourceProvider,
         outputSink,
         stepRunner,

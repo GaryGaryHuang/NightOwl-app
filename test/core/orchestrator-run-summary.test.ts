@@ -12,6 +12,7 @@ import type { Finding } from "../../src/core/file-review-context.ts";
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import type { RunStepInput, StepResult, StepRunner } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
+import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
@@ -31,13 +32,15 @@ test("ReviewOrchestrator publishes deterministic summary.md for an all-successfu
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: createSuccessfulSummaryRunner(),
       changesetOverviewRunner: {
@@ -119,8 +122,9 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
     fixture.commitAll("add third changed file for mixed aggregate summary");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -128,6 +132,7 @@ test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal
     const outputSink = new CorruptingSummaryOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createMixedResultRunner(skippedFile),
       changesetOverviewRunner: {
@@ -200,6 +205,7 @@ test("ReviewOrchestrator publishes summary.md for zero planned files with explic
 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: {
         async run() {
@@ -268,14 +274,16 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run with zero 
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const outputSink = new CorruptingSummaryOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createAllSkippedRunner(new Set(reviewableFiles)),
       changesetOverviewRunner: {
@@ -342,8 +350,9 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
     fixture.commitAll("add third changed file for review index");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -351,6 +360,7 @@ test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run
     const outputSink = new CorruptingIndexOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createMixedResultRunner(skippedFile),
       changesetOverviewRunner: {
@@ -412,6 +422,7 @@ test("ReviewOrchestrator publishes index.md for zero planned files with explicit
 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: {
         async run() {
@@ -459,6 +470,7 @@ test("ReviewOrchestrator does not publish summary.md when applyTo fails after bo
     const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: {
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -538,6 +550,7 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
     const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: {
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -600,8 +613,9 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
     fixture.commitAll("add third changed file for getDiff no-summary");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -627,11 +641,9 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
         },
         getCurrentBranch(repoRootArg) {
           return sourceProvider.getCurrentBranch(repoRootArg);
-        },
-        filterIgnoredFiles(repoRootArg, files) {
-          return sourceProvider.filterIgnoredFiles(repoRootArg, files);
         }
       },
+      reviewFileFilter,
       outputSink: {
         initializeRun(outputTarget: OutputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -700,6 +712,7 @@ test("ReviewOrchestrator aborts when publishRunSummary fails and preserves per-f
     const outputSink = new SummaryFailingOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink,
       stepRunner: createSuccessfulSummaryRunner(),
       changesetOverviewRunner: {
@@ -743,6 +756,7 @@ test("ReviewOrchestrator aborts when publishReviewIndex fails after summary.md i
     const outputSink = new IndexFailingOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink,
       stepRunner: createSuccessfulSummaryRunner(),
       changesetOverviewRunner: {
@@ -788,6 +802,7 @@ test("ReviewOrchestrator aborts when publishRunManifest fails after summary.md a
     const outputSink = new ManifestFailingOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink,
       stepRunner: createSuccessfulSummaryRunner(),
       changesetOverviewRunner: {
@@ -835,8 +850,9 @@ test("ReviewOrchestrator publishes summary.md, index.md, and manifest.json only 
     fixture.commitAll("add third changed file for summary publish ordering");
 
     const sourceProvider = new LocalGitProvider();
+    const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = sourceProvider.filterIgnoredFiles(
+    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
       sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
@@ -844,6 +860,7 @@ test("ReviewOrchestrator publishes summary.md, index.md, and manifest.json only 
     const outputSink = new RecordingOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
+      reviewFileFilter,
       outputSink,
       stepRunner: createMixedResultRunner(skippedFile),
       changesetOverviewRunner: {
@@ -900,6 +917,7 @@ test("ReviewOrchestrator publishes manifest.json only after publishReviewIndex a
     const outputSink = new IndexRecordingOutputSink();
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink,
       stepRunner: createMixedResultRunner("README.md"),
       changesetOverviewRunner: {
@@ -957,6 +975,7 @@ test("ReviewOrchestrator wires successfulFiles and skippedFiles arrays to Review
 
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: createMixedResultRunner("README.md"),
       changesetOverviewRunner: {

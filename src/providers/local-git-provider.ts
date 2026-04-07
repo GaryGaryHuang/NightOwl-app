@@ -1,17 +1,21 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import ignore from "ignore";
-
-import type { ReviewSourceProvider } from "./review-source-provider.ts";
+import {
+  ReviewSourceProviderError,
+  type ReviewSourceProvider,
+  type ReviewSourceProviderOperation
+} from "./review-source-provider.ts";
 
 /**
  * Local git source adapter backed by the repository's `git` executable.
  */
 export class LocalGitProvider implements ReviewSourceProvider {
   resolveRepoRoot(startPath: string): string {
-    return runGit(path.resolve(startPath), ["rev-parse", "--show-toplevel"]);
+    return runGit("resolveRepoRoot", path.resolve(startPath), [
+      "rev-parse",
+      "--show-toplevel"
+    ]);
   }
 
   getChangedFiles(
@@ -19,7 +23,7 @@ export class LocalGitProvider implements ReviewSourceProvider {
     baseRef: string,
     headRef: string
   ): string[] {
-    const output = runGit(repoRoot, [
+    const output = runGit("getChangedFiles", repoRoot, [
       "diff",
       `${baseRef}...${headRef}`,
       "--name-only",
@@ -35,7 +39,7 @@ export class LocalGitProvider implements ReviewSourceProvider {
     headRef: string
   ): string[] {
     // Step 0 needs name-status output so it can see deleted files as part of the full changeset.
-    const output = runGit(repoRoot, [
+    const output = runGit("getChangesetEntries", repoRoot, [
       "diff",
       `${baseRef}...${headRef}`,
       "--name-status"
@@ -50,46 +54,39 @@ export class LocalGitProvider implements ReviewSourceProvider {
     headRef: string,
     filePath: string
   ): string {
-    return runGit(repoRoot, ["diff", `${baseRef}...${headRef}`, "--", filePath]);
+    return runGit("getDiff", repoRoot, [
+      "diff",
+      `${baseRef}...${headRef}`,
+      "--",
+      filePath
+    ]);
   }
 
   getCurrentBranch(repoRoot: string): string | undefined {
-    const branchName = runGit(repoRoot, ["branch", "--show-current"]);
+    const branchName = runGit("getCurrentBranch", repoRoot, [
+      "branch",
+      "--show-current"
+    ]);
 
     return branchName || undefined;
   }
+}
 
-  filterIgnoredFiles(repoRoot: string, files: string[]): string[] {
-    const reviewIgnorePath = path.join(repoRoot, ".nightowl", "reviewignore");
-    const sourceFiles = files.filter((filePath) => !isNightOwlNamespacePath(filePath));
-
-    if (!existsSync(reviewIgnorePath)) {
-      return [...sourceFiles];
-    }
-
-    const matcher = ignore().add(readFileSync(reviewIgnorePath, "utf8"));
-
-    // `reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
-    return sourceFiles.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
+function runGit(
+  operation: ReviewSourceProviderOperation,
+  cwd: string,
+  args: string[]
+): string {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8"
+    }).trim();
+  } catch (error) {
+    throw new ReviewSourceProviderError(
+      operation,
+      `Review source provider failed during ${operation}.`,
+      { cause: error }
+    );
   }
-}
-
-function normalizeFilePath(filePath: string): string {
-  return filePath.replace(/\\/gu, "/");
-}
-
-function isNightOwlNamespacePath(filePath: string): boolean {
-  const normalizedPath = normalizeFilePath(filePath);
-
-  return (
-    normalizedPath === ".nightowl" ||
-    normalizedPath.startsWith(".nightowl/")
-  );
-}
-
-function runGit(cwd: string, args: string[]): string {
-  return execFileSync("git", args, {
-    cwd,
-    encoding: "utf8"
-  }).trim();
 }
