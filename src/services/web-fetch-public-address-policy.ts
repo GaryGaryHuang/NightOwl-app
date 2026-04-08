@@ -34,7 +34,7 @@ export function normalizeWebFetchAddress(address: string): string {
     : lowercaseAddress;
 }
 
-export function extractMappedIpv4(address: string): string | undefined {
+function extractMappedIpv4(address: string): string | undefined {
   if (!address.startsWith("::ffff:")) {
     return undefined;
   }
@@ -124,21 +124,20 @@ function isDisallowedWebFetchIpv4(address: string): boolean {
 }
 
 function isDisallowedWebFetchIpv6(address: string): boolean {
-  const normalizedAddress = normalizeWebFetchAddress(address);
-  const mappedIpv4 = extractMappedIpv4(normalizedAddress);
+  const mappedIpv4 = extractMappedIpv4(address);
 
   if (mappedIpv4) {
     return isDisallowedWebFetchIpv4(mappedIpv4);
   }
 
   return (
-    normalizedAddress === "::" ||
-    normalizedAddress === "::1" ||
-    normalizedAddress.startsWith("fc") ||
-    normalizedAddress.startsWith("fd") ||
-    /^fe[89ab]/u.test(normalizedAddress) ||
-    /^fe[cdef]/u.test(normalizedAddress) ||
-    normalizedAddress.startsWith("ff") ||
-    /^2001:0?db8:/u.test(normalizedAddress)
+    address === "::" ||
+    address === "::1" ||
+    address.startsWith("fc") ||
+    address.startsWith("fd") ||
+    /^fe[89ab]/u.test(address) ||
+    /^fe[cdef]/u.test(address) ||
+    address.startsWith("ff") ||
+    /^2001:0?db8:/u.test(address)
   );
 }
