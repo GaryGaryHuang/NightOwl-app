@@ -2,10 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  DEFAULT_CONFIDENCE_THRESHOLDS,
-  parseConfidenceThresholdsConfig,
-  resolveConfidenceThresholdsFromConfigObject
+  DEFAULT_CONFIDENCE_THRESHOLDS
 } from "../../src/core/confidence-thresholds.ts";
+import { resolveConfidenceThresholdsFromConfigObject } from "../../src/providers/review-config-field-resolvers.ts";
 
 // ---------------------------------------------------------------------------
 // DEFAULT_CONFIDENCE_THRESHOLDS
@@ -144,48 +143,3 @@ test("validateThreshold: string value throws", () => {
   );
 });
 
-// ---------------------------------------------------------------------------
-// parseConfidenceThresholdsConfig
-// ---------------------------------------------------------------------------
-
-test("parseConfidenceThresholdsConfig: valid JSON with partial override delegates correctly", () => {
-  assert.deepEqual(
-    parseConfidenceThresholdsConfig('{"confidenceThresholds":{"must":70}}'),
-    { must: 70, nice: 90 }
-  );
-});
-
-test("parseConfidenceThresholdsConfig: valid JSON with no confidenceThresholds returns defaults", () => {
-  assert.deepEqual(
-    parseConfidenceThresholdsConfig('{}'),
-    { must: 80, nice: 90 }
-  );
-});
-
-test("parseConfidenceThresholdsConfig: malformed JSON throws", () => {
-  assert.throws(
-    () => parseConfidenceThresholdsConfig("not json"),
-    { message: "invalid review config" }
-  );
-});
-
-test("parseConfidenceThresholdsConfig: non-object root (string) throws", () => {
-  assert.throws(
-    () => parseConfidenceThresholdsConfig('"string"'),
-    { message: "invalid review config" }
-  );
-});
-
-test("parseConfidenceThresholdsConfig: array root throws", () => {
-  assert.throws(
-    () => parseConfidenceThresholdsConfig("[1,2]"),
-    { message: "invalid review config" }
-  );
-});
-
-test("parseConfidenceThresholdsConfig: null root throws", () => {
-  assert.throws(
-    () => parseConfidenceThresholdsConfig("null"),
-    { message: "invalid review config" }
-  );
-});

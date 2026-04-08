@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  DEFAULT_MAX_CONCURRENT_FILES,
-  resolveMaxConcurrentFilesFromConfigObject
+  DEFAULT_MAX_CONCURRENT_FILES
 } from "../../src/core/max-concurrent-files.ts";
+import { resolveMaxConcurrentFilesFromConfigObject } from "../../src/providers/review-config-field-resolvers.ts";
 
 // ---------------------------------------------------------------------------
 // DEFAULT_MAX_CONCURRENT_FILES
