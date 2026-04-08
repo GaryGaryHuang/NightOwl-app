@@ -214,6 +214,24 @@ test("LocalReviewConfigProvider rejects invalid remote MCP shapes before Step 0"
   }
 });
 
+test("LocalReviewConfigProvider rejects local MCP entry with command absent or blank before Step 0", () => {
+  const configFixture = createReviewConfigProviderFixture();
+
+  try {
+    configFixture.writeReviewConfig({
+      mcpServers: { demo: { type: "local" } }
+    });
+    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
+
+    configFixture.writeReviewConfig({
+      mcpServers: { demo: { type: "local", command: "   " } }
+    });
+    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
+  } finally {
+    configFixture.cleanup();
+  }
+});
+
 test("LocalReviewConfigProvider resolves local MCP entries with cwd and timeout and rejects invalid shapes", () => {
   const configFixture = createReviewConfigProviderFixture();
 
