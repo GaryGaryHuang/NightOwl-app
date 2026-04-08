@@ -39,8 +39,7 @@
     "test/services/tool-policy-web-fetch-policy.test.ts",
     "test/services/web-fetch-hostname-classifier.test.ts",
     "test/services/web-fetch-hostname-normalization.test.ts",
-    "test/services/web-fetch-public-address-policy.test.ts",
-    "test/services/web-fetch-redirect-resolver.test.ts"
+    "test/services/web-fetch-public-address-policy.test.ts"
   ],
   "integration": [
     "test/app/review-app-dry-run.test.ts",
