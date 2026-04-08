@@ -126,3 +126,27 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output ta
     fixture.cleanup();
   }
 });
+
+// iserrnoexception-predicate-correctness spec: regression anchor confirming that a plain Error
+// (no code property) is classified as shared-output-target-fault after the predicate fix.
+// isErrnoException is module-private; behaviour is verified through the public assess() interface.
+test("isErrnoException predicate correctness: assess() classifies plain Error with no code as shared-output-target-fault", () => {
+  const fixture = createWorkspaceProviderFixture();
+  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
+
+  try {
+    fixture.provider.initializeRun(fixture.outputTarget);
+    const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
+
+    assert.deepEqual(
+      assessor.assess({
+        outputTarget: fixture.outputTarget,
+        noteFilePath,
+        error: new Error("something failed")
+      }),
+      { faultScope: "shared-output-target-fault" }
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});

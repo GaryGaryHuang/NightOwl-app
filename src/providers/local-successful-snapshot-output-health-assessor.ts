@@ -67,7 +67,7 @@ const SHARED_TARGET_ERROR_CODES = new Set([
 const SINGLE_FILE_ERROR_CODES = new Set(["EISDIR", "ENAMETOOLONG"]);
 
 function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error;
+  return error instanceof Error && "code" in error;
 }
 
 function unwrapOutputCause(error: unknown): unknown {
