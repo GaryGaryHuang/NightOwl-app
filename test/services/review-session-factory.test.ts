@@ -9,6 +9,7 @@ import {
   type ToolPolicyGuardOptions
 } from "../../src/services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
+import type { ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
 import {
   BASE_REVIEW_PROFILE,
   createAuditFileFixture,
@@ -47,11 +48,11 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
     kind: "denied-no-approval-rule-and-could-not-request-from-user"
   });
   readonly preToolUseCalls: Array<{
-    auditWriter?: ToolAuditWriter;
+    auditWriter?: ToolAuditSink;
     profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">;
   }> = [];
   readonly permissionCalls: Array<{
-    auditWriter?: ToolAuditWriter;
+    auditWriter?: ToolAuditSink;
     profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">;
   }> = [];
 
@@ -61,7 +62,7 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
 
   override buildPreToolUseHook(
     profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">,
-    auditWriter?: ToolAuditWriter
+    auditWriter?: ToolAuditSink
   ): PreToolUseHook {
     this.preToolUseCalls.push({ auditWriter, profile });
     return this.preToolUseHook;
@@ -69,7 +70,7 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
 
   override buildPermissionHandler(
     profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">,
-    auditWriter?: ToolAuditWriter
+    auditWriter?: ToolAuditSink
   ): PermissionHandler {
     this.permissionCalls.push({ auditWriter, profile });
     return this.permissionHandler;
@@ -204,7 +205,7 @@ test("ReviewSessionFactory injects mixed local and remote MCP entries for review
 test("ReviewSessionFactory threads audit writer via auditWriterProvider", async () => {
   const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const toolPolicyGuard = new SpyToolPolicyGuard();
-  let capturedWriter: ToolAuditWriter | undefined = undefined;
+  let capturedWriter: ToolAuditSink | undefined = undefined;
   const factory = new ReviewSessionFactory({
     clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
       assertRecordedReviewSessionConfig(config);

@@ -1,9 +1,7 @@
-import { readFileSync } from "node:fs";
-
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../../src/services/tool-policy-guard.ts";
 import { ToolPolicyWebFetchPolicy } from "../../src/services/tool-policy-web-fetch-policy.ts";
-import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
+import type { ToolAuditRecord, ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
 import type {
   WebFetchHostnameClassification,
   WebFetchHostnameClassifier
@@ -22,7 +20,7 @@ export function createPolicySession(options?: {
   webFetchDeniedHosts?: string[];
   hostnameClassifier?: WebFetchHostnameClassifier;
   webFetchHostnameClassificationTimeoutMs?: number;
-  auditWriter?: ToolAuditWriter;
+  auditWriter?: ToolAuditSink;
 }) {
   const guard = new ToolPolicyGuard({
     ...(options?.webFetchAllowedHosts === undefined
@@ -108,11 +106,11 @@ export class FakeHostnameClassifier implements WebFetchHostnameClassifier {
   }
 }
 
-export function readAuditLines(auditPath: string): ReturnType<typeof JSON.parse>[] {
-  const content = readFileSync(auditPath, "utf8");
+export class InMemoryAuditSink implements ToolAuditSink {
+  readonly records: ToolAuditRecord[] = [];
 
-  return content
-    .split("\n")
-    .filter((line) => line.length > 0)
-    .map((line) => JSON.parse(line));
+  append(record: ToolAuditRecord): void {
+    this.records.push(record);
+  }
 }
+
