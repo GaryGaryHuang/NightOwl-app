@@ -47,6 +47,8 @@ export class KnowledgeSvc {
     let context7Config = context7;
 
     if (this.#context7ApiKey) {
+      // API key is injected exclusively via the KnowledgeSvc constructor.
+      // Repo-local context7 override config cannot supply or override the API key header.
       context7Config = {
         ...context7Config,
         headers: {
@@ -81,10 +83,6 @@ export class KnowledgeSvc {
       } else {
         if (!isLocalConfig(config)) {
           throw new Error(`custom MCP '${name}' must use a local or remote MCP shape`);
-        }
-
-        if (!config.command) {
-          throw new Error(`custom MCP '${name}' is missing command`);
         }
 
         const resolvedConfig: MCPLocalServerConfig = {
@@ -127,6 +125,8 @@ function mergeContext7Config(
   base: MCPRemoteServerConfig,
   override: ReviewContext7OverrideConfig
 ): MCPRemoteServerConfig {
+  // tools replacement: repo-local override fully replaces the built-in wildcard default,
+  // rather than appending to it. If override.tools is absent, the built-in default is kept.
   const tools =
     override.tools === undefined
       ? [...base.tools]
@@ -134,6 +134,7 @@ function mergeContext7Config(
 
   return {
     type: "http",
+    // url is always taken from the built-in base; repo-local context7 override cannot change it.
     url: base.url,
     tools,
     ...(base.headers === undefined ? {} : { headers: { ...base.headers } }),

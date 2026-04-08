@@ -20,7 +20,7 @@ export class ReviewConfigProviderError extends Error {
 
 export interface ReviewLocalMcpServerConfig {
   type: "local" | "stdio";
-  command?: string;
+  command: string;
   args?: string[];
   env?: Record<string, string>;
   tools?: string[];

@@ -108,11 +108,13 @@ export function createLocalMcpServer(
   overrides: Partial<ReviewLocalMcpServerConfig> = {}
 ): ReviewLocalMcpServerConfig {
   return {
-    type: "local",
-    command: "npx",
-    args: ["-y", "@example/demo-mcp"],
-    tools: ["*"],
-    ...overrides
+    type: overrides.type ?? "local",
+    command: overrides.command ?? "npx",
+    args: overrides.args ?? ["-y", "@example/demo-mcp"],
+    tools: overrides.tools ?? ["*"],
+    ...(overrides.env !== undefined ? { env: overrides.env } : {}),
+    ...(overrides.cwd !== undefined ? { cwd: overrides.cwd } : {}),
+    ...(overrides.timeout !== undefined ? { timeout: overrides.timeout } : {})
   };
 }
 
