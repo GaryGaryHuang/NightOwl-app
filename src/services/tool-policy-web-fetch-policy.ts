@@ -7,8 +7,9 @@ import {
 } from "./web-fetch-hostname-classifier.ts";
 import { canonicalizeHostnameForComparison } from "./web-fetch-hostname-normalization.ts";
 import {
-  isAllowedPublicWebFetchAddress,
-  normalizeWebFetchAddress
+  DefaultWebFetchPublicAddressPolicy,
+  normalizeWebFetchAddress,
+  type WebFetchPublicAddressPolicy
 } from "./web-fetch-public-address-policy.ts";
 
 export interface ToolPolicyDecisionDeny {
@@ -24,6 +25,7 @@ export const CONFIGURED_WEB_FETCH_HOST_REASON =
   "Review sessions only allow fetching configured public https hosts.";
 
 export interface ToolPolicyWebFetchPolicyOptions {
+  addressPolicy?: WebFetchPublicAddressPolicy;
   hostnameClassifier?: WebFetchHostnameClassifier;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
@@ -31,6 +33,7 @@ export interface ToolPolicyWebFetchPolicyOptions {
 }
 
 export class ToolPolicyWebFetchPolicy {
+  readonly #addressPolicy: WebFetchPublicAddressPolicy;
   readonly #hostnameClassifier: WebFetchHostnameClassifier;
   readonly #webFetchAllowedHosts?: Set<string>;
   readonly #webFetchWildcardSuffixes?: readonly string[];
@@ -39,6 +42,8 @@ export class ToolPolicyWebFetchPolicy {
   readonly #webFetchHostnameClassificationTimeoutMs: number;
 
   constructor(options: ToolPolicyWebFetchPolicyOptions) {
+    this.#addressPolicy =
+      options.addressPolicy ?? new DefaultWebFetchPublicAddressPolicy();
     this.#hostnameClassifier =
       options.hostnameClassifier ?? new DefaultWebFetchHostnameClassifier();
     this.#webFetchHostnameClassificationTimeoutMs =
@@ -85,7 +90,7 @@ export class ToolPolicyWebFetchPolicy {
   }
 
   async evaluate(urlString: string): Promise<ToolPolicyDecision> {
-    const parsedUrl = parseAllowedWebFetchUrl(urlString);
+    const parsedUrl = parseAllowedWebFetchUrl(urlString, this.#addressPolicy);
 
     if (!parsedUrl) {
       return {
@@ -175,7 +180,7 @@ function evaluateWebFetchDenyList(
   return undefined;
 }
 
-function parseAllowedWebFetchUrl(urlString: string): URL | undefined {
+function parseAllowedWebFetchUrl(urlString: string, addressPolicy: WebFetchPublicAddressPolicy): URL | undefined {
   let parsed: URL;
 
   try {
@@ -200,11 +205,11 @@ function parseAllowedWebFetchUrl(urlString: string): URL | undefined {
   const ipVersion = isIP(normalizedHostname);
 
   if (ipVersion === 4) {
-    return isAllowedPublicWebFetchAddress(normalizedHostname) ? parsed : undefined;
+    return addressPolicy.isAllowed(normalizedHostname) ? parsed : undefined;
   }
 
   if (ipVersion === 6) {
-    return isAllowedPublicWebFetchAddress(normalizedHostname) ? parsed : undefined;
+    return addressPolicy.isAllowed(normalizedHostname) ? parsed : undefined;
   }
 
   return parsed;
