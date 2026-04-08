@@ -59,8 +59,7 @@ src/
     ├── tool-audit-writer.ts        JSONL audit log
     ├── web-fetch-hostname-normalization.ts
     ├── web-fetch-public-address-policy.ts
-    ├── web-fetch-hostname-classifier.ts
-    └── web-fetch-redirect-resolver.ts
+    └── web-fetch-hostname-classifier.ts
 ```
 
 ### Key Config Files

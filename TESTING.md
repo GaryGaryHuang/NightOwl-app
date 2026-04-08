@@ -171,7 +171,7 @@ Shared fixtures follow the `create*Fixture()` / `build*Response()` naming conven
 | `git-fixture.ts` | Create real temporary Git repos (main + feature branch) with `writeFile`, `commitAll`, `cleanup` |
 | `orchestrator-fixture.ts` | Fake LLM responses for each SOP step; `detectStepId` routing by system message |
 | `orchestrator-step-contract-fixture.ts` | Wire step-response router into orchestrator; collect reviewable files and read output |
-| `review-app-fixture.ts` | Fake `WebFetchRedirectResolver`; `buildSessionResponse` routing by system message |
+| `review-app-fixture.ts` | `buildSessionResponse` routing by system message |
 | `review-session-runtime-contract-fixture.ts` | Recording client manager that captures `SessionConfig`; `createAssistantSession` |
 | `step-prompt-contract-fixture.ts` | Shape assertions for `StepExecutionPlan` (`assertSectionPlanShape`, `assertStructuredPlanShape`) |
 | `step-runner-contract-fixture.ts` | Default `FileReviewContext` builder; `applySection`; `seedStep4Context` for prerequisite state |
