@@ -197,13 +197,6 @@ test("DryRunReviewSessionFactory - unknown contract fails as an identifiable dry
   );
 });
 
-test("DryRunReviewSessionFactory - setAuditWriter() does not throw", () => {
-  const factory = new DryRunReviewSessionFactory();
-  assert.doesNotThrow(() => {
-    factory.setAuditWriter({} as Parameters<typeof factory.setAuditWriter>[0]);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // DryRunJudgeSessionFactory
 // ---------------------------------------------------------------------------

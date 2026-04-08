@@ -199,11 +199,12 @@ test("ReviewSessionFactory injects mixed local and remote MCP entries for review
   assert.equal(receivedConfigs[1]?.mcpServers, undefined);
 });
 
-// setAuditWriter is called mid-run (after the run output path is known);
-// only sessions created after the call should receive the writer.
-test("ReviewSessionFactory only passes audit writer to sessions created after setAuditWriter", async () => {
+// auditWriterProvider is supplied at construction time; sessions created before the provider
+// starts returning a writer receive undefined, and those after receive the writer.
+test("ReviewSessionFactory threads audit writer via auditWriterProvider", async () => {
   const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const toolPolicyGuard = new SpyToolPolicyGuard();
+  let capturedWriter: ToolAuditWriter | undefined = undefined;
   const factory = new ReviewSessionFactory({
     clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
       assertRecordedReviewSessionConfig(config);
@@ -217,7 +218,8 @@ test("ReviewSessionFactory only passes audit writer to sessions created after se
         async disconnect() {}
       };
     }),
-    toolPolicyGuard
+    toolPolicyGuard,
+    auditWriterProvider: () => capturedWriter
   });
 
   await factory.createSession(BASE_REVIEW_PROFILE);
@@ -225,7 +227,7 @@ test("ReviewSessionFactory only passes audit writer to sessions created after se
   const auditFixture = createAuditFileFixture();
   try {
     const auditWriter = new ToolAuditWriter(auditFixture.auditPath);
-    factory.setAuditWriter(auditWriter);
+    capturedWriter = auditWriter;
 
     await factory.createSession(BASE_REVIEW_PROFILE);
 

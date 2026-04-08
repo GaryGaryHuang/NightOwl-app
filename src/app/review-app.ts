@@ -110,9 +110,11 @@ export function createLocalReviewRunApp(
       // In dry-run mode substitute stub factories so no Copilot CLI or AI calls are made.
       const isDryRun = request.dryRun === true;
 
+      const auditWriterHolder: { current?: ToolAuditWriter } = {};
+
       const reviewSessionFactory: Pick<
         ReviewSessionFactory,
-        "createSession" | "setAuditWriter"
+        "createSession"
       > = isDryRun
         ? new DryRunReviewSessionFactory()
         : (() => {
@@ -132,7 +134,8 @@ export function createLocalReviewRunApp(
             return new ReviewSessionFactory({
               clientManager,
               knowledgeSvc,
-              toolPolicyGuard
+              toolPolicyGuard,
+              auditWriterProvider: () => auditWriterHolder.current
             });
           })();
 
@@ -167,9 +170,8 @@ export function createLocalReviewRunApp(
         onProgressEvent: options.onProgressEvent,
         onOutputTargetReady: (outputTarget) => {
           // Wire the audit writer only after the run output path exists; Step 0 sessions created earlier are not audited.
-          // setAuditWriter is a no-op on DryRunReviewSessionFactory.
           const auditWriter = new ToolAuditWriter(outputTarget.toolAuditPath);
-          reviewSessionFactory.setAuditWriter(auditWriter);
+          auditWriterHolder.current = auditWriter;
         }
       });
 

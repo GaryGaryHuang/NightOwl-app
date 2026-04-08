@@ -38,6 +38,7 @@ export interface ReviewSessionFactoryOptions {
   };
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   toolPolicyGuard: ToolPolicyGuard;
+  auditWriterProvider?: () => ToolAuditWriter | undefined;
 }
 
 /**
@@ -47,21 +48,23 @@ export class ReviewSessionFactory {
   readonly #clientManager: ReviewSessionFactoryOptions["clientManager"];
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   readonly #toolPolicyGuard: ToolPolicyGuard;
-  #auditWriter?: ToolAuditWriter;
+  readonly #auditWriterProvider?: () => ToolAuditWriter | undefined;
 
   constructor(options: ReviewSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
     this.#knowledgeSvc = options.knowledgeSvc;
     this.#toolPolicyGuard = options.toolPolicyGuard;
+    this.#auditWriterProvider = options.auditWriterProvider;
   }
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
+    const auditWriter = this.#auditWriterProvider?.();
     const sessionConfig: SessionConfig = {
       availableTools: [...REVIEW_AVAILABLE_TOOLS],
       hooks: {
         onPreToolUse: this.#toolPolicyGuard.buildPreToolUseHook(
           profile,
-          this.#auditWriter
+          auditWriter
         )
       },
       model: profile.model,
@@ -83,7 +86,7 @@ export class ReviewSessionFactory {
       },
       onPermissionRequest: this.#toolPolicyGuard.buildPermissionHandler(
         profile,
-        this.#auditWriter
+        auditWriter
       )
     };
 
@@ -103,9 +106,5 @@ export class ReviewSessionFactory {
     const session = await this.#clientManager.getClient().createSession(sessionConfig);
 
     return new SessionExecutor(session);
-  }
-
-  setAuditWriter(writer: ToolAuditWriter): void {
-    this.#auditWriter = writer;
   }
 }

@@ -1,4 +1,3 @@
-import type { ToolAuditWriter } from "./tool-audit-writer.ts";
 import {
   getDryRunStubResponse
 } from "./dry-run-stub-catalog.ts";
@@ -48,11 +47,6 @@ export class DryRunReviewSessionFactory {
     }
 
     return buildStubSessionExecutor(getDryRunStubResponse(contract));
-  }
-
-  /** No-op: dry-run sessions do not call tools and produce no audit records. */
-  setAuditWriter(_writer: ToolAuditWriter): void {
-    // intentional no-op
   }
 }
 
