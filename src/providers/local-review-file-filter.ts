@@ -1,8 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 
 import ignore from "ignore";
 
+import {
+  isNightOwlNamespacePath,
+  reviewIgnorePath
+} from "../core/nightowl-namespace.ts";
 import {
   ReviewFileFilterError,
   type ReviewFileFilter
@@ -13,15 +16,15 @@ import {
  */
 export class LocalReviewFileFilter implements ReviewFileFilter {
   filterReviewableFiles(repoRoot: string, files: string[]): string[] {
-    const reviewIgnorePath = path.join(repoRoot, ".nightowl", "reviewignore");
+    const reviewIgnoreFilePath = reviewIgnorePath(repoRoot);
     const sourceFiles = files.filter((filePath) => !isNightOwlNamespacePath(filePath));
 
-    if (!existsSync(reviewIgnorePath)) {
+    if (!existsSync(reviewIgnoreFilePath)) {
       return [...sourceFiles];
     }
 
     try {
-      const matcher = ignore().add(readFileSync(reviewIgnorePath, "utf8"));
+      const matcher = ignore().add(readFileSync(reviewIgnoreFilePath, "utf8"));
 
       // `reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
       return sourceFiles.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
@@ -37,10 +40,4 @@ export class LocalReviewFileFilter implements ReviewFileFilter {
 
 function normalizeFilePath(filePath: string): string {
   return filePath.replace(/\\/gu, "/");
-}
-
-function isNightOwlNamespacePath(filePath: string): boolean {
-  const normalizedPath = normalizeFilePath(filePath);
-
-  return normalizedPath === ".nightowl" || normalizedPath.startsWith(".nightowl/");
 }

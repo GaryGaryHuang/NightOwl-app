@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
-import path from "node:path";
 
+import { reviewConfigPath } from "../core/nightowl-namespace.ts";
 import type {
   ReviewConfig,
   ReviewConfigProvider
@@ -16,7 +16,7 @@ import {
  */
 export class LocalReviewConfigProvider implements ReviewConfigProvider {
   loadReviewConfig(repoRoot: string): ReviewConfig {
-    const configPath = path.join(repoRoot, ".nightowl", "reviewconfig.json");
+    const configPath = reviewConfigPath(repoRoot);
 
     if (!existsSync(configPath)) {
       return buildDefaultReviewConfig();

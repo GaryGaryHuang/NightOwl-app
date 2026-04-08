@@ -1,5 +1,7 @@
 import path from "node:path";
 
+import { nightowlRoot } from "../core/nightowl-namespace.ts";
+
 import type { ReviewSessionProfile } from "./review-session-factory.ts";
 
 export interface ToolPolicyDecisionDeny {
@@ -404,14 +406,14 @@ function isAllowedReadPath(
 ): boolean {
   const resolvedPath = path.resolve(requestedPath);
   const repoRoot = path.resolve(profile.repoRoot);
-  const nightowlRoot = path.join(path.resolve(profile.repoRoot), ".nightowl");
-  const reviewRoot = path.join(nightowlRoot, "review");
+  const nightowlRootPath = nightowlRoot(path.resolve(profile.repoRoot));
+  const reviewRoot = path.join(nightowlRootPath, "review");
 
   const isWithinRepoSourceTree =
     resolvedPath === repoRoot ||
     (resolvedPath.startsWith(`${repoRoot}${path.sep}`) &&
-      resolvedPath !== nightowlRoot &&
-      !resolvedPath.startsWith(`${nightowlRoot}${path.sep}`));
+      resolvedPath !== nightowlRootPath &&
+      !resolvedPath.startsWith(`${nightowlRootPath}${path.sep}`));
 
   return (
     isWithinRepoSourceTree ||

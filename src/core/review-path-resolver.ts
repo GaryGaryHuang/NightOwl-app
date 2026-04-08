@@ -34,7 +34,7 @@ export function buildOutputTarget(
   input: ResolveOutputTargetInput
 ): OutputTarget {
   const sessionId = buildSessionId(input);
-  const basePath = path.join(input.outputBaseDir, ".nightowl", "review", sessionId);
+  const basePath = path.join(reviewOutputRoot(input.outputBaseDir), sessionId);
 
   return {
     basePath,
@@ -87,6 +87,8 @@ export function planNoteFiles(
 }
 
 import path from "node:path";
+
+import { reviewOutputRoot } from "./nightowl-namespace.ts";
 
 function sanitizeSegment(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]+/gu, "_").replace(/_+/gu, "_");
