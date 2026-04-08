@@ -85,11 +85,8 @@ export class LocalRunOutputPublisher implements RunOutputPublisher {
   }
 
   publishChangesetOverview(result: ChangesetOverviewResult): void {
-    const content = result.content.endsWith("\n")
-      ? result.content
-      : result.content + "\n";
     try {
-      writeFileSync(this.#outputTarget.changesetOverviewPath, content);
+      writeFileSync(this.#outputTarget.changesetOverviewPath, result.content);
     } catch (error) {
       throw toOutputBoundaryError(
         "publishChangesetOverview",

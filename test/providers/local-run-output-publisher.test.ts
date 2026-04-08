@@ -177,24 +177,6 @@ test("run-scoped output publisher publishes changeset overview content to change
   }
 });
 
-test("run-scoped output publisher appends trailing newline when changeset overview content does not end with one", () => {
-  const fixture = createWorkspaceProviderFixture();
-
-  try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
-    publisher.publishChangesetOverview({
-      content: "## Changeset Overview\n\n- Modified `src/app.ts`"
-    });
-
-    assert.equal(
-      fixture.readFile(fixture.outputTarget.changesetOverviewPath),
-      "## Changeset Overview\n\n- Modified `src/app.ts`\n"
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
-
 test("run-scoped output publishers do not share output state across runs", () => {
   const fixtureA = createWorkspaceProviderFixture();
   const fixtureB = createWorkspaceProviderFixture();

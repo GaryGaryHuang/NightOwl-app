@@ -13,6 +13,7 @@
     "test/core/review-path-resolver.test.ts",
     "test/core/review-section-contract.test.ts",
     "test/core/risk-level.test.ts",
+    "test/core/run-context.test.ts",
     "test/core/run-manifest-finalizer.test.ts",
     "test/core/run-summary-finalizer.test.ts",
     "test/core/steps/step1-overview.test.ts",

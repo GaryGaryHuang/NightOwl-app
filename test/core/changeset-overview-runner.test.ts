@@ -47,7 +47,7 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
     changedFilesList: ["M\tsrc/app.ts", "D\tobsolete.txt"]
   });
 
-  assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：feature");
+  assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：feature\n");
   assert.deepEqual(runContext.userContext, [
     "PR-123",
     "https://example.com/spec"
@@ -119,7 +119,7 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   });
 
   assert.equal(createCalls, 2);
-  assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：retry");
+  assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：retry\n");
   assert.equal(prompts.length, 2);
   assertTaggedBlockContains(prompts[0] ?? "", "changed_files", ["M\tsrc/app.ts"]);
   // When userContext is empty the <user_context> tag must be fully absent,
