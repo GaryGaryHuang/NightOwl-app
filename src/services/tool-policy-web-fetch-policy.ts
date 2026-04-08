@@ -5,7 +5,7 @@ import {
   DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS,
   type WebFetchHostnameClassifier
 } from "./web-fetch-hostname-classifier.ts";
-import { canonicalizeHostnameForComparison, normalizeHostnameForNetworkChecks } from "./web-fetch-hostname-normalization.ts";
+import { canonicalizeHostnameForComparison } from "./web-fetch-hostname-normalization.ts";
 import {
   DefaultWebFetchPublicAddressPolicy,
   type WebFetchPublicAddressPolicy
@@ -58,7 +58,7 @@ export class ToolPolicyWebFetchPolicy {
 
       for (const host of options.webFetchAllowedHosts) {
         if (host.startsWith("*.")) {
-          wildcardSuffixes.push(`.${host.slice(2)}`);
+          wildcardSuffixes.push(`.${canonicalizeHostnameForComparison(host.slice(2))}`);
         } else {
           exactHosts.add(canonicalizeHostnameForComparison(host));
         }
@@ -77,7 +77,7 @@ export class ToolPolicyWebFetchPolicy {
 
       for (const host of options.webFetchDeniedHosts) {
         if (host.startsWith("*.")) {
-          deniedWildcardSuffixes.push(`.${host.slice(2)}`);
+          deniedWildcardSuffixes.push(`.${canonicalizeHostnameForComparison(host.slice(2))}`);
         } else {
           exactDenied.add(canonicalizeHostnameForComparison(host));
         }
@@ -98,16 +98,16 @@ export class ToolPolicyWebFetchPolicy {
       };
     }
 
-    const hostPolicyDecision = this.evaluateHostPolicy(parsedUrl);
+    const hostPolicyDecision = this.#evaluateHostPolicy(parsedUrl);
 
     if (hostPolicyDecision) {
       return hostPolicyDecision;
     }
 
-    return this.evaluateHostnameClassification(parsedUrl);
+    return this.#evaluateHostnameClassification(parsedUrl);
   }
 
-  evaluateHostPolicy(url: URL): ToolPolicyDecision {
+  #evaluateHostPolicy(url: URL): ToolPolicyDecision {
     const normalizedHostname = canonicalizeHostnameForComparison(url.hostname);
 
     if (this.#webFetchAllowedHosts !== undefined) {
@@ -135,7 +135,7 @@ export class ToolPolicyWebFetchPolicy {
     return undefined;
   }
 
-  async evaluateHostnameClassification(url: URL): Promise<ToolPolicyDecision> {
+  async #evaluateHostnameClassification(url: URL): Promise<ToolPolicyDecision> {
     const normalizedHostname = canonicalizeHostnameForComparison(url.hostname);
 
     if (isIP(normalizedHostname) !== 0) {
@@ -195,7 +195,7 @@ function parseAllowedWebFetchUrl(urlString: string, addressPolicy: WebFetchPubli
     return undefined;
   }
 
-  const normalizedHostname = normalizeHostnameForNetworkChecks(parsed.hostname);
+  const normalizedHostname = canonicalizeHostnameForComparison(parsed.hostname);
 
   if (normalizedHostname === "localhost") {
     return undefined;

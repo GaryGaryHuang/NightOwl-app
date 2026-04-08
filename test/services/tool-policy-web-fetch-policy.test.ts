@@ -259,6 +259,55 @@ test("tool policy web-fetch policy preserves default IP literal behavior when no
   });
 });
 
+test("tool policy web-fetch policy canonicalizes uppercase wildcard allowed-host entries at construction time", async () => {
+  // Uppercase wildcard: *.EXAMPLE.COM should match docs.example.com
+  const uppercaseWildcard = new ToolPolicyWebFetchPolicy({
+    webFetchAllowedHosts: ["*.EXAMPLE.COM"],
+    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
+  });
+  assert.equal(
+    await uppercaseWildcard.evaluate("https://docs.example.com/guide"),
+    undefined
+  );
+
+  // Wildcard-only match: api.example.com is not covered by the exact-host entry DOCS.EXAMPLE.COM
+  const mixedCase = new ToolPolicyWebFetchPolicy({
+    webFetchAllowedHosts: ["DOCS.EXAMPLE.COM", "*.EXAMPLE.COM"],
+    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
+  });
+  assert.equal(
+    await mixedCase.evaluate("https://api.example.com/v1/ref"),
+    undefined
+  );
+
+  // Regression guard: non-matching URL must still be denied
+  const allowlistWithUppercaseWildcard = new ToolPolicyWebFetchPolicy({
+    webFetchAllowedHosts: ["*.EXAMPLE.COM"],
+    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
+  });
+  assert.deepEqual(
+    await allowlistWithUppercaseWildcard.evaluate("https://vuejs.org/guide"),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
+    }
+  );
+});
+
+test("tool policy web-fetch policy canonicalizes uppercase wildcard denied-host entries at construction time", async () => {
+  const policy = new ToolPolicyWebFetchPolicy({
+    webFetchDeniedHosts: ["*.EVIL.ORG"],
+    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
+  });
+  assert.deepEqual(
+    await policy.evaluate("https://sub.evil.org/payload"),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
+    }
+  );
+});
+
 test("tool policy web-fetch policy does not import shared hostname helpers from the classifier module", () => {
   const source = readFileSync(
     new URL("../../src/services/tool-policy-web-fetch-policy.ts", import.meta.url),
