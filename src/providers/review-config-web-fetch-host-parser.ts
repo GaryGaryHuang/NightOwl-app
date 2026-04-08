@@ -1,6 +1,7 @@
 import {
   invalidReviewConfigError
 } from "./review-config-parse-helpers.ts";
+import { canonicalizeHostnameForComparison } from "../services/web-fetch-hostname-normalization.ts";
 
 export function resolveWebFetchAllowedHostsFromConfigObject(
   config: Record<string, unknown>
@@ -50,7 +51,7 @@ function readWebFetchHostEntry(value: unknown): string {
     throw invalidReviewConfigError();
   }
 
-  const canonical = canonicalizeHostname(trimmed);
+  const canonical = canonicalizeHostnameForComparison(trimmed);
 
   if (
     canonical.length === 0 ||
@@ -74,7 +75,7 @@ function readWildcardWebFetchHostEntry(trimmed: string): string {
     throw invalidReviewConfigError();
   }
 
-  const canonicalBase = canonicalizeHostname(base);
+  const canonicalBase = canonicalizeHostnameForComparison(base);
 
   if (
     canonicalBase.length === 0 ||
@@ -85,10 +86,6 @@ function readWildcardWebFetchHostEntry(trimmed: string): string {
   }
 
   return `*.${canonicalBase}`;
-}
-
-function canonicalizeHostname(value: string): string {
-  return value.toLowerCase().replace(/\.$/u, "");
 }
 
 function isIpLiteral(value: string): boolean {
