@@ -25,13 +25,11 @@ export class LocalReviewConfigProvider implements ReviewConfigProvider {
     try {
       return parseReviewConfig(readFileSync(configPath, "utf8"));
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "invalid review config";
-
       // Re-throw with the file path so invalid config errors point back to the source file.
+      // The enriched inner error is preserved via `cause` for diagnostic access.
       throw new ReviewConfigProviderError(
         "loadReviewConfig",
-        `${message} at ${configPath}`,
+        `invalid review config at ${configPath}`,
         {
           cause: error,
           configPath
