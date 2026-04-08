@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ChangesetOverviewRunner
+  ChangesetOverviewRunner,
+  type ReviewSessionFactoryLike
 } from "../../src/core/changeset-overview-runner.ts";
-import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import {
   SessionExecutor,
   SessionTurnAbortedError
@@ -16,8 +16,10 @@ import {
   assertTextExcludesAll
 } from "../helpers/step-prompt-contract-fixture.ts";
 
+type Step0Profile = Parameters<ReviewSessionFactoryLike["createSession"]>[0];
+
 test("ChangesetOverviewRunner builds Step 0 input from changeset entries and user context", async () => {
-  const profiles: ReviewSessionProfile[] = [];
+  const profiles: Step0Profile[] = [];
   const prompts: string[] = [];
   const timeouts: number[] = [];
   const runner = new ChangesetOverviewRunner({

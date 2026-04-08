@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   DryRunReviewSessionFactory,
-  DryRunJudgeSessionFactory
+  DryRunJudgeSessionFactory,
+  type DryRunReviewSessionProfile
 } from "../../src/services/dry-run-session-factory.ts";
 import type { DryRunReviewStepContract } from "../../src/services/dry-run-review-step-contract.ts";
 
@@ -167,12 +168,15 @@ test("DryRunReviewSessionFactory - missing contract fails as an identifiable dry
 
   await assert.rejects(
     () =>
-      factory.createSession({
-        model: "gpt-5.4-mini",
-        outputBaseDir: "/workspace/repo",
-        repoRoot: "/workspace/repo",
-        systemMessage: "system prompt"
-      }),
+      factory.createSession(
+        // Type assertion bypasses compile-time check to verify runtime missing-contract detection.
+        {
+          model: "gpt-5.4-mini",
+          outputBaseDir: "/workspace/repo",
+          repoRoot: "/workspace/repo",
+          systemMessage: "system prompt"
+        } as Omit<DryRunReviewSessionProfile, "dryRunStepContract"> as DryRunReviewSessionProfile
+      ),
     /dry-run contract failure: missing dryRunStepContract/u
   );
 });
@@ -188,7 +192,7 @@ test("DryRunReviewSessionFactory - unknown contract fails as an identifiable dry
         repoRoot: "/workspace/repo",
         systemMessage: "system prompt",
         dryRunStepContract: "unknown-step" as DryRunReviewStepContract
-      }),
+      } as DryRunReviewSessionProfile),
     /dry-run contract failure: unsupported dryRunStepContract 'unknown-step'/u
   );
 });

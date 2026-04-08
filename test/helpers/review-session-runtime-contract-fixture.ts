@@ -8,12 +8,17 @@ import type {
   ReviewLocalMcpServerConfig,
   ReviewRemoteMcpServerConfig
 } from "../../src/providers/review-config-provider.ts";
-import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
+import {
+  type ReviewSessionProfile,
+  REVIEW_AVAILABLE_TOOLS
+} from "../../src/services/review-session-factory.ts";
 import type {
   CopilotClientLike,
   SessionLike
 } from "../../src/services/session-executor.ts";
 import type { ToolAuditRecord } from "../../src/services/tool-audit-writer.ts";
+
+export const EXPECTED_REVIEW_AVAILABLE_TOOLS = REVIEW_AVAILABLE_TOOLS;
 
 export const BASE_REVIEW_PROFILE: ReviewSessionProfile = {
   model: "gpt-5.4-mini",

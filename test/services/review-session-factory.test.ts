@@ -15,7 +15,8 @@ import {
   createLocalMcpServer,
   createRecordedConfigs,
   createRemoteMcpServer,
-  createSessionRecordingClientManager
+  createSessionRecordingClientManager,
+  EXPECTED_REVIEW_AVAILABLE_TOOLS
 } from "../helpers/review-session-runtime-contract-fixture.ts";
 
 type PreToolUseHook = NonNullable<
@@ -110,6 +111,7 @@ test("ReviewSessionFactory creates a non-streaming review session and delegates 
   ]);
   assert.deepEqual(receivedConfigs, [
     {
+      availableTools: EXPECTED_REVIEW_AVAILABLE_TOOLS,
       hooks: {
         onPreToolUse: toolPolicyGuard.preToolUseHook
       },
@@ -271,5 +273,30 @@ test("ReviewSessionFactory system prompt uses customize mode and does not inject
   assert.deepEqual(
     Object.keys(systemMessage.sections).sort(),
     ["code_change_rules", "custom_instructions", "guidelines", "identity", "last_instructions", "tone", "tool_efficiency", "tool_instructions"]
+  );
+});
+
+test("ReviewSessionFactory sets availableTools to exactly the SOP tool set", async () => {
+  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
+  const factory = new ReviewSessionFactory({
+    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
+      assertRecordedReviewSessionConfig(config);
+      return {
+        async sendAndWait() {
+          return { type: "assistant.message", data: { content: "ok" } };
+        },
+        async disconnect() {}
+      };
+    }),
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const availableTools = receivedConfigs[0]?.availableTools;
+  assert.ok(availableTools !== undefined, "availableTools should be present in session config");
+  assert.deepEqual(
+    new Set(availableTools),
+    new Set(EXPECTED_REVIEW_AVAILABLE_TOOLS)
   );
 });
