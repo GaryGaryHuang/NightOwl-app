@@ -129,7 +129,7 @@ test("LocalReviewConfigProvider accepts boundary threshold values and a validate
         },
         mcpServers: {
           context7: {
-            type: "http",
+            type: "context7",
             tools: ["resolve-library-id"],
             timeout: 20000
           }

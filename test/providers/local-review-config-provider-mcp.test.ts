@@ -382,10 +382,10 @@ test("LocalReviewConfigProvider passes through type stdio for non-built-in entri
 });
 
 // `context7` is the only built-in MCP server name. The provider treats it as
-// an override config: type must be "http" or omitted (defaults to "http");
+// an override config: type must be "http" or "context7" or omitted (defaults to "context7");
 // local and sse types are rejected because the built-in Context7 integration
 // only supports the HTTP transport.
-test("LocalReviewConfigProvider accepts same-name context7 override with type http or omitted and rejects unsupported types before Step 0", () => {
+test("LocalReviewConfigProvider accepts same-name context7 override with type http, context7, or omitted and rejects unsupported types before Step 0", () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
@@ -399,7 +399,7 @@ test("LocalReviewConfigProvider accepts same-name context7 override with type ht
     });
     assert.deepEqual(configFixture.loadReviewConfig().mcpServers, {
       context7: {
-        type: "http",
+        type: "context7",
         tools: ["resolve-library-id"]
       }
     });
@@ -413,7 +413,7 @@ test("LocalReviewConfigProvider accepts same-name context7 override with type ht
     });
     assert.deepEqual(configFixture.loadReviewConfig().mcpServers, {
       context7: {
-        type: "http",
+        type: "context7",
         timeout: 20000
       }
     });

@@ -62,13 +62,13 @@ test("resolveMcpServersFromConfigObject preserves context7 override and omission
     }),
     {
       context7: {
-        type: "http",
+        type: "context7",
         timeout: 20000
       }
     }
   );
 
-  // type: "http" explicitly provided — must be accepted and normalized identically
+  // type: "http" explicitly provided in config — must be accepted and normalized to "context7"
   assert.deepEqual(
     resolveMcpServersFromConfigObject({
       mcpServers: {
@@ -81,9 +81,27 @@ test("resolveMcpServersFromConfigObject preserves context7 override and omission
     }),
     {
       context7: {
-        type: "http",
+        type: "context7",
         tools: ["resolve-library-id"],
         timeout: 10000
+      }
+    }
+  );
+
+  // type: "context7" explicitly provided in config — must also be accepted and normalized identically
+  assert.deepEqual(
+    resolveMcpServersFromConfigObject({
+      mcpServers: {
+        context7: {
+          type: "context7",
+          tools: ["resolve-library-id"]
+        }
+      }
+    }),
+    {
+      context7: {
+        type: "context7",
+        tools: ["resolve-library-id"]
       }
     }
   );

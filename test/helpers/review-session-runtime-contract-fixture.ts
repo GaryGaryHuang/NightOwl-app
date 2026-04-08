@@ -7,7 +7,7 @@ import type {
   ReviewContext7OverrideConfig,
   ReviewLocalMcpServerConfig,
   ReviewRemoteMcpServerConfig
-} from "../../src/providers/review-config-provider.ts";
+} from "../../src/core/review-mcp-server-config.ts";
 import {
   type ReviewSessionProfile,
   REVIEW_AVAILABLE_TOOLS
@@ -138,7 +138,7 @@ export function createContext7Override(
   overrides: Partial<ReviewContext7OverrideConfig> = {}
 ): ReviewContext7OverrideConfig {
   return {
-    type: "http",
+    type: "context7",
     ...overrides
   };
 }
