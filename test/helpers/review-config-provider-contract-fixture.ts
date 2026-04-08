@@ -1,8 +1,8 @@
 import type { ConfidenceThresholds } from "../../src/core/confidence-thresholds.ts";
+import type { ReviewMcpServers } from "../../src/core/review-mcp-server-config.ts";
 import { LocalReviewConfigProvider } from "../../src/providers/local-review-config-provider.ts";
 import type {
-  ReviewConfig,
-  ReviewMcpServers
+  ReviewConfig
 } from "../../src/providers/review-config-provider.ts";
 import { createReviewRepoFixture } from "./git-fixture.ts";
 

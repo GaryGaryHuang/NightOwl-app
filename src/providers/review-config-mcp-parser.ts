@@ -1,7 +1,7 @@
 import type {
   ReviewMcpServerConfig,
   ReviewMcpServers
-} from "./review-config-provider.ts";
+} from "../core/review-mcp-server-config.ts";
 import {
   isPlainObject,
   readNonBlankString,
@@ -76,8 +76,8 @@ function resolveContext7OverrideEntry(
 ): ReviewMcpServerConfig {
   const rawType = rawDefinition.type;
 
-  if (rawType !== undefined && rawType !== "http") {
-    throw new Error("'type' must be \"http\" if provided");
+  if (rawType !== undefined && rawType !== "http" && rawType !== "context7") {
+    throw new Error("'type' must be \"http\" or \"context7\" if provided");
   }
 
   for (const key of Object.keys(rawDefinition)) {
@@ -105,7 +105,7 @@ function resolveContext7OverrideEntry(
   }
 
   return {
-    type: "http",
+    type: "context7",
     ...(tools === undefined ? {} : { tools }),
     ...(timeout === undefined ? {} : { timeout })
   };

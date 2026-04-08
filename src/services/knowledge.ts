@@ -11,7 +11,7 @@ import type {
   ReviewMcpServerConfig,
   ReviewRemoteMcpServerConfig,
   ReviewMcpServers
-} from "../providers/review-config-provider.ts";
+} from "../core/review-mcp-server-config.ts";
 
 const CONTEXT7_REMOTE_URL = "https://mcp.context7.com/mcp";
 
@@ -106,7 +106,7 @@ export class KnowledgeSvc {
 function isRemoteConfig(
   config: ReviewMcpServerConfig
 ): config is ReviewRemoteMcpServerConfig {
-  return (config.type === "http" || config.type === "sse") && "url" in config;
+  return config.type === "http" || config.type === "sse";
 }
 
 function isLocalConfig(
@@ -118,7 +118,7 @@ function isLocalConfig(
 function isContext7OverrideConfig(
   config: ReviewMcpServerConfig
 ): config is ReviewContext7OverrideConfig {
-  return config.type === "http" && !("url" in config);
+  return config.type === "context7";
 }
 
 function mergeContext7Config(

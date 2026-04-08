@@ -1,11 +1,13 @@
 import {
-  DEFAULT_CONFIDENCE_THRESHOLDS,
-  resolveConfidenceThresholdsFromConfigObject
+  DEFAULT_CONFIDENCE_THRESHOLDS
 } from "../core/confidence-thresholds.ts";
 import {
-  DEFAULT_MAX_CONCURRENT_FILES,
-  resolveMaxConcurrentFilesFromConfigObject
+  DEFAULT_MAX_CONCURRENT_FILES
 } from "../core/max-concurrent-files.ts";
+import {
+  resolveConfidenceThresholdsFromConfigObject,
+  resolveMaxConcurrentFilesFromConfigObject
+} from "./review-config-field-resolvers.ts";
 import type { ReviewConfig } from "./review-config-provider.ts";
 import {
   invalidReviewConfigError,
