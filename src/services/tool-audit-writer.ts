@@ -8,10 +8,14 @@ export interface ToolAuditRecord {
   args: Record<string, string | undefined>;
 }
 
+export interface ToolAuditSink {
+  append(record: ToolAuditRecord): void;
+}
+
 /**
  * Append tool-decision audit records to the JSONL log on a best-effort basis.
  */
-export class ToolAuditWriter {
+export class ToolAuditWriter implements ToolAuditSink {
   readonly #auditFilePath: string;
 
   constructor(auditFilePath: string) {

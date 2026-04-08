@@ -9,7 +9,7 @@ import {
   evaluateReadonlyShellCommand,
   READONLY_BASH_DENY_REASON
 } from "./tool-policy-shell-policy.ts";
-import type { ToolAuditWriter } from "./tool-audit-writer.ts";
+import type { ToolAuditSink } from "./tool-audit-writer.ts";
 import {
   ToolPolicyWebFetchPolicy,
   UNSAFE_WEB_FETCH_URL_REASON,
@@ -52,7 +52,7 @@ export class ToolPolicyGuard {
 
   buildPermissionHandler(
     profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
-    auditWriter?: ToolAuditWriter
+    auditWriter?: ToolAuditSink
   ): PermissionHandler {
     return async (request) => {
       if (
@@ -292,7 +292,7 @@ export class ToolPolicyGuard {
 
   buildPreToolUseHook(
     profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
-    auditWriter?: ToolAuditWriter
+    auditWriter?: ToolAuditSink
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
       if (URL_TOOL_NAMES.has(input.toolName)) {

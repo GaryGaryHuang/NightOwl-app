@@ -9,7 +9,7 @@ import {
 } from "./session-executor.ts";
 import type { KnowledgeSvc } from "./knowledge.ts";
 import { ToolPolicyGuard } from "./tool-policy-guard.ts";
-import type { ToolAuditWriter } from "./tool-audit-writer.ts";
+import type { ToolAuditSink } from "./tool-audit-writer.ts";
 
 export interface ReviewSessionProfile {
   knowledgeMode?: ReviewKnowledgeMode;
@@ -38,7 +38,7 @@ export interface ReviewSessionFactoryOptions {
   };
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   toolPolicyGuard: ToolPolicyGuard;
-  auditWriterProvider?: () => ToolAuditWriter | undefined;
+  auditWriterProvider?: () => ToolAuditSink | undefined;
 }
 
 /**
@@ -48,7 +48,7 @@ export class ReviewSessionFactory {
   readonly #clientManager: ReviewSessionFactoryOptions["clientManager"];
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   readonly #toolPolicyGuard: ToolPolicyGuard;
-  readonly #auditWriterProvider?: () => ToolAuditWriter | undefined;
+  readonly #auditWriterProvider?: () => ToolAuditSink | undefined;
 
   constructor(options: ReviewSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
