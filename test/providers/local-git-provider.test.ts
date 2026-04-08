@@ -6,6 +6,120 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { ReviewSourceProviderError } from "../../src/providers/review-source-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
+// --- unit tests (stubbed GitRunner, no real I/O) ---
+
+test("LocalGitProvider (unit) resolveRepoRoot returns runner output unchanged", () => {
+  const provider = new LocalGitProvider(() => "/home/user/project");
+  assert.equal(provider.resolveRepoRoot("/any/start"), "/home/user/project");
+});
+
+test("LocalGitProvider (unit) resolveRepoRoot wraps runner error in ReviewSourceProviderError", () => {
+  const cause = new Error("git failed");
+  const provider = new LocalGitProvider(() => { throw cause; });
+  assert.throws(
+    () => provider.resolveRepoRoot("/any/start"),
+    (error: unknown) =>
+      error instanceof ReviewSourceProviderError &&
+      error.operation === "resolveRepoRoot" &&
+      error.cause === cause
+  );
+});
+
+test("LocalGitProvider (unit) getChangedFiles splits multiline runner output into string[]", () => {
+  const provider = new LocalGitProvider(() => "src/a.ts\nsrc/b.ts\nsrc/c.ts");
+  assert.deepEqual(
+    provider.getChangedFiles("/repo", "main", "feature"),
+    ["src/a.ts", "src/b.ts", "src/c.ts"]
+  );
+});
+
+test("LocalGitProvider (unit) getChangedFiles returns [] when runner returns empty string", () => {
+  const provider = new LocalGitProvider(() => "");
+  assert.deepEqual(provider.getChangedFiles("/repo", "main", "feature"), []);
+});
+
+test("LocalGitProvider (unit) getChangedFiles wraps runner error in ReviewSourceProviderError", () => {
+  const cause = new Error("git failed");
+  const provider = new LocalGitProvider(() => { throw cause; });
+  assert.throws(
+    () => provider.getChangedFiles("/repo", "main", "feature"),
+    (error: unknown) =>
+      error instanceof ReviewSourceProviderError &&
+      error.operation === "getChangedFiles" &&
+      error.cause === cause
+  );
+});
+
+test("LocalGitProvider (unit) getChangesetEntries splits multiline runner output into string[]", () => {
+  const provider = new LocalGitProvider(() => "M\tsrc/a.ts\nD\tsrc/old.ts\nA\tsrc/new.ts");
+  assert.deepEqual(
+    provider.getChangesetEntries("/repo", "main", "feature"),
+    ["M\tsrc/a.ts", "D\tsrc/old.ts", "A\tsrc/new.ts"]
+  );
+});
+
+test("LocalGitProvider (unit) getChangesetEntries returns [] when runner returns empty string", () => {
+  const provider = new LocalGitProvider(() => "");
+  assert.deepEqual(provider.getChangesetEntries("/repo", "main", "feature"), []);
+});
+
+test("LocalGitProvider (unit) getChangesetEntries wraps runner error in ReviewSourceProviderError", () => {
+  const cause = new Error("git failed");
+  const provider = new LocalGitProvider(() => { throw cause; });
+  assert.throws(
+    () => provider.getChangesetEntries("/repo", "main", "feature"),
+    (error: unknown) =>
+      error instanceof ReviewSourceProviderError &&
+      error.operation === "getChangesetEntries" &&
+      error.cause === cause
+  );
+});
+
+test("LocalGitProvider (unit) getDiff returns runner output unchanged when non-empty", () => {
+  const diffOutput = "diff --git a/src/a.ts b/src/a.ts\n+added line";
+  const provider = new LocalGitProvider(() => diffOutput);
+  assert.equal(provider.getDiff("/repo", "main", "feature", "src/a.ts"), diffOutput);
+});
+
+test("LocalGitProvider (unit) getDiff returns empty string when runner returns empty string", () => {
+  const provider = new LocalGitProvider(() => "");
+  assert.equal(provider.getDiff("/repo", "main", "feature", "src/a.ts"), "");
+});
+
+test("LocalGitProvider (unit) getDiff wraps runner error in ReviewSourceProviderError", () => {
+  const cause = new Error("git failed");
+  const provider = new LocalGitProvider(() => { throw cause; });
+  assert.throws(
+    () => provider.getDiff("/repo", "main", "feature", "src/a.ts"),
+    (error: unknown) =>
+      error instanceof ReviewSourceProviderError &&
+      error.operation === "getDiff" &&
+      error.cause === cause
+  );
+});
+
+test("LocalGitProvider (unit) getCurrentBranch returns runner output when non-empty", () => {
+  const provider = new LocalGitProvider(() => "feature-branch");
+  assert.equal(provider.getCurrentBranch("/repo"), "feature-branch");
+});
+
+test("LocalGitProvider (unit) getCurrentBranch returns undefined when runner returns empty string", () => {
+  const provider = new LocalGitProvider(() => "");
+  assert.equal(provider.getCurrentBranch("/repo"), undefined);
+});
+
+test("LocalGitProvider (unit) getCurrentBranch wraps runner error in ReviewSourceProviderError", () => {
+  const cause = new Error("git failed");
+  const provider = new LocalGitProvider(() => { throw cause; });
+  assert.throws(
+    () => provider.getCurrentBranch("/repo"),
+    (error: unknown) =>
+      error instanceof ReviewSourceProviderError &&
+      error.operation === "getCurrentBranch" &&
+      error.cause === cause
+  );
+});
+
 test("LocalGitProvider resolves the repository top-level from a subdirectory", () => {
   const fixture = createReviewRepoFixture();
 
