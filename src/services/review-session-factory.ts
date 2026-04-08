@@ -3,7 +3,6 @@ import {
 } from "@github/copilot-sdk";
 
 import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
-import type { DryRunReviewStepContract } from "./dry-run-review-step-contract.ts";
 import {
   type CopilotClientLike,
   SessionExecutor
@@ -13,7 +12,6 @@ import { ToolPolicyGuard } from "./tool-policy-guard.ts";
 import type { ToolAuditWriter } from "./tool-audit-writer.ts";
 
 export interface ReviewSessionProfile {
-  dryRunStepContract?: DryRunReviewStepContract;
   knowledgeMode?: ReviewKnowledgeMode;
   model: string;
   outputBaseDir: string;
@@ -21,6 +19,18 @@ export interface ReviewSessionProfile {
   systemMessage: string;
   workingDirectory?: string;
 }
+
+/**
+ * The explicit set of tool names exposed to LLM in review sessions.
+ * Matches the SOP tool capability set defined in tool-spec.md §3.1.
+ */
+export const REVIEW_AVAILABLE_TOOLS = [
+  "bash",
+  "web_fetch",
+  "view",
+  "grep",
+  "glob"
+] as const;
 
 export interface ReviewSessionFactoryOptions {
   clientManager: {
@@ -47,6 +57,7 @@ export class ReviewSessionFactory {
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
     const sessionConfig: SessionConfig = {
+      availableTools: [...REVIEW_AVAILABLE_TOOLS],
       hooks: {
         onPreToolUse: this.#toolPolicyGuard.buildPreToolUseHook(
           profile,

@@ -3,11 +3,16 @@ import {
   getDryRunStubResponse
 } from "./dry-run-stub-catalog.ts";
 import {
-  isDryRunReviewStepContract
+  isDryRunReviewStepContract,
+  type DryRunReviewStepContract
 } from "./dry-run-review-step-contract.ts";
 import type { ReviewSessionProfile } from "./review-session-factory.ts";
 import type { JudgeSessionProfile } from "./judge-session-factory.ts";
 import { SessionExecutor } from "./session-executor.ts";
+
+export interface DryRunReviewSessionProfile extends ReviewSessionProfile {
+  dryRunStepContract: DryRunReviewStepContract;
+}
 
 function buildStubSessionExecutor(response: string): SessionExecutor {
   return new SessionExecutor({
@@ -28,7 +33,7 @@ function buildStubSessionExecutor(response: string): SessionExecutor {
  */
 export class DryRunReviewSessionFactory {
   async createSession(
-    profile: ReviewSessionProfile
+    profile: DryRunReviewSessionProfile
   ): Promise<SessionExecutor> {
     const contract = profile.dryRunStepContract;
 
