@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  isAllowedPublicWebFetchAddress,
-  normalizeWebFetchAddress
+  isAllowedPublicWebFetchAddress
 } from "../../src/services/web-fetch-public-address-policy.ts";
 
 test("shared public-address policy allows representative public IPv4 and IPv6 addresses", () => {
@@ -58,7 +57,3 @@ test("shared public-address policy classifies IPv4-mapped IPv6 by the mapped IPv
   assert.equal(isAllowedPublicWebFetchAddress("::ffff:c633:640a"), false);
 });
 
-test("shared public-address policy normalizes bracketed addresses before classification", () => {
-  assert.equal(normalizeWebFetchAddress("[::1]"), "::1");
-  assert.equal(normalizeWebFetchAddress("[::ffff:127.0.0.1]"), "::ffff:127.0.0.1");
-});

@@ -1,5 +1,7 @@
 import { isIP } from "node:net";
 
+import { normalizeHostnameForNetworkChecks } from "./web-fetch-hostname-normalization.ts";
+
 export interface WebFetchPublicAddressPolicy {
   isAllowed(address: string): boolean;
 }
@@ -12,7 +14,7 @@ export class DefaultWebFetchPublicAddressPolicy
 }
 
 export function isAllowedPublicWebFetchAddress(address: string): boolean {
-  const normalizedAddress = normalizeWebFetchAddress(address);
+  const normalizedAddress = normalizeHostnameForNetworkChecks(address);
   const ipVersion = isIP(normalizedAddress);
 
   if (ipVersion === 4) {
@@ -24,14 +26,6 @@ export function isAllowedPublicWebFetchAddress(address: string): boolean {
   }
 
   return false;
-}
-
-export function normalizeWebFetchAddress(address: string): string {
-  const lowercaseAddress = address.toLowerCase();
-
-  return lowercaseAddress.startsWith("[") && lowercaseAddress.endsWith("]")
-    ? lowercaseAddress.slice(1, -1)
-    : lowercaseAddress;
 }
 
 function extractMappedIpv4(address: string): string | undefined {

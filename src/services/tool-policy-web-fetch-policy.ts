@@ -5,10 +5,9 @@ import {
   DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS,
   type WebFetchHostnameClassifier
 } from "./web-fetch-hostname-classifier.ts";
-import { canonicalizeHostnameForComparison } from "./web-fetch-hostname-normalization.ts";
+import { canonicalizeHostnameForComparison, normalizeHostnameForNetworkChecks } from "./web-fetch-hostname-normalization.ts";
 import {
   DefaultWebFetchPublicAddressPolicy,
-  normalizeWebFetchAddress,
   type WebFetchPublicAddressPolicy
 } from "./web-fetch-public-address-policy.ts";
 
@@ -196,7 +195,7 @@ function parseAllowedWebFetchUrl(urlString: string, addressPolicy: WebFetchPubli
     return undefined;
   }
 
-  const normalizedHostname = normalizeWebFetchAddress(parsed.hostname);
+  const normalizedHostname = normalizeHostnameForNetworkChecks(parsed.hostname);
 
   if (normalizedHostname === "localhost") {
     return undefined;
