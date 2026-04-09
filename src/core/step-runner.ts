@@ -2,7 +2,7 @@ import type { FileReviewContext } from "./file-review-context.ts";
 import type { ReviewSectionKey } from "./review-section-contract.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
-import type { FindingsPayload } from "./structured-output-validator.ts";
+import type { FindingsPayload } from "./file-review-context.ts";
 import type { DryRunReviewStepContract } from "../services/dry-run-review-step-contract.ts";
 import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
@@ -96,7 +96,7 @@ export interface StepRunnerOptions {
 export class StepRunner {
   readonly #reviewSessionFactory: StepReviewSessionFactoryLike;
   readonly #judgeService?: StepRunnerOptions["judgeService"];
-  readonly #structuredOutputValidator?: StepRunnerOptions["structuredOutputValidator"];
+  readonly #structuredOutputValidator: NonNullable<StepRunnerOptions["structuredOutputValidator"]>;
 
   constructor(options: StepRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
@@ -152,10 +152,6 @@ export class StepRunner {
             throw new Error(judgeResult.cause ?? "judge rejected");
           }
         } else if (plan.completionCheck?.kind === "deterministic") {
-          if (!this.#structuredOutputValidator) {
-            throw new Error("structured output validator is not configured");
-          }
-
           validatedResponse = this.#structuredOutputValidator.validate({
             validatorId: plan.completionCheck.validatorId,
             responseText: response,

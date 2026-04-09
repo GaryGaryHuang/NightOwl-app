@@ -1,7 +1,7 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import type { FindingsPayload } from "../structured-output-validator.ts";
+import type { FindingsPayload } from "../file-review-context.ts";
 
 // Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [

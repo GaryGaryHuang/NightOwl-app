@@ -35,6 +35,10 @@ export interface Finding {
   confidence: number;
 }
 
+export interface FindingsPayload {
+  findings: Finding[];
+}
+
 export interface ReviewStructuredState {
   findings?: Finding[];
 }

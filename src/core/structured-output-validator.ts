@@ -4,12 +4,9 @@ import {
 } from "./confidence-thresholds.ts";
 import type {
   Finding,
+  FindingsPayload,
   FindingTraceability
 } from "./file-review-context.ts";
-
-export interface FindingsPayload {
-  findings: Finding[];
-}
 
 export interface StructuredOutputValidatorOptions {
   confidenceThresholds?: ConfidenceThresholds;
