@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RunManifestFinalizer } from "../../src/core/run-manifest-finalizer.ts";
+import {
+  MANIFEST_SCHEMA_VERSION,
+  RunManifestFinalizer
+} from "../../src/core/run-manifest-finalizer.ts";
+import type {
+  ManifestSchema,
+  SuccessfulFileEntry
+} from "../../src/core/run-manifest-finalizer.ts";
 import {
   createFinding,
   createOutputTarget,
@@ -37,17 +44,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     ]
   });
 
-  const parsed = JSON.parse(rendered) as {
-    artifacts: Record<string, string>;
-    files: Array<Record<string, string | number>>;
-    schemaVersion: number;
-    repoRoot: string;
-    baseRef: string;
-    headRef: string;
-    plannedFileCount: number;
-    successfulFileCount: number;
-    skippedFileCount: number;
-  };
+  const parsed = JSON.parse(rendered) as ManifestSchema;
 
   assert.deepEqual(Object.keys(parsed), [
     "schemaVersion",
@@ -60,7 +57,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     "artifacts",
     "files"
   ]);
-  assert.equal(parsed.schemaVersion, 2);
+  assert.equal(parsed.schemaVersion, MANIFEST_SCHEMA_VERSION);
   assert.equal(parsed.repoRoot, "/workspace/repo");
   assert.equal(parsed.baseRef, "main");
   assert.equal(parsed.headRef, "feature-branch");
@@ -130,9 +127,7 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
     skippedFiles: [createSkippedFile("tests/api/index.ts", "step1-overview", "judge rejected")]
   });
 
-  const parsed = JSON.parse(rendered) as {
-    files: Array<Record<string, string | number>>;
-  };
+  const parsed = JSON.parse(rendered) as ManifestSchema;
 
   assert.deepEqual(
     parsed.files.map((entry) => entry.filePath),
@@ -146,9 +141,9 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
     parsed.files[1].notePath,
     "/workspace/.nightowl/review/feature-branch_03131430/files/tests__api__index.ts.md"
   );
-  assert.equal(parsed.files[2].riskLevel, "None");
-  assert.equal(parsed.files[2].mustCount, 0);
-  assert.equal(parsed.files[2].niceCount, 0);
+  assert.equal((parsed.files[2] as SuccessfulFileEntry).riskLevel, "None");
+  assert.equal((parsed.files[2] as SuccessfulFileEntry).mustCount, 0);
+  assert.equal((parsed.files[2] as SuccessfulFileEntry).niceCount, 0);
 });
 
 test("RunManifestFinalizer renders an empty files array for zero-file runs", () => {
@@ -164,7 +159,7 @@ test("RunManifestFinalizer renders an empty files array for zero-file runs", () 
     skippedFiles: []
   });
 
-  const parsed = JSON.parse(rendered) as { files: unknown[] };
+  const parsed = JSON.parse(rendered) as ManifestSchema;
   assert.deepEqual(parsed.files, []);
 });
 
@@ -181,7 +176,7 @@ test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct pa
     skippedFiles: []
   });
 
-  const parsed = JSON.parse(rendered) as { artifacts: Record<string, string> };
+  const parsed = JSON.parse(rendered) as ManifestSchema;
   assert.equal(
     parsed.artifacts.toolAuditPath,
     "/workspace/.nightowl/review/feature-branch_03131430/tool-audit.jsonl"
