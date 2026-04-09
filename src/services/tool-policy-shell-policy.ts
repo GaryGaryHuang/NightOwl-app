@@ -117,7 +117,20 @@ function isAllowedReadonlyBashCommand(
   return true;
 }
 
-function splitTopLevelChainSegments(command: string): string[] | undefined {
+/**
+ * Core quote-aware splitter. Iterates over `command` and calls `isDelimiter`
+ * at every top-level character (i.e. not inside quotes and not being escaped).
+ *
+ * `isDelimiter` return value semantics:
+ *   - `0`          : not a delimiter; append char to currentSegment
+ *   - `n > 0`      : delimiter consuming n chars; commit currentSegment, reset,
+ *                    advance the loop index by `n - 1` to skip already-consumed chars
+ *   - `undefined`  : illegal character in current context; return `undefined` immediately
+ */
+function splitOnTopLevelDelimiter(
+  command: string,
+  isDelimiter: (char: string, nextChar: string | undefined) => number | undefined
+): string[] | undefined {
   const segments: string[] = [];
   let currentSegment = "";
   let inSingleQuote = false;
@@ -171,15 +184,17 @@ function splitTopLevelChainSegments(command: string): string[] | undefined {
       continue;
     }
 
-    if (char === "&") {
-      if (i + 1 < command.length && command[i + 1] === "&") {
-        segments.push(currentSegment);
-        currentSegment = "";
-        i++;
-        continue;
-      }
+    const consumed = isDelimiter(char, command[i + 1]);
 
+    if (consumed === undefined) {
       return undefined;
+    }
+
+    if (consumed > 0) {
+      segments.push(currentSegment);
+      currentSegment = "";
+      i += consumed - 1;
+      continue;
     }
 
     currentSegment += char;
@@ -192,6 +207,16 @@ function splitTopLevelChainSegments(command: string): string[] | undefined {
   segments.push(currentSegment);
 
   return segments;
+}
+
+function splitTopLevelChainSegments(command: string): string[] | undefined {
+  return splitOnTopLevelDelimiter(command, (char, nextChar) => {
+    if (char === "&") {
+      return nextChar === "&" ? 2 : undefined;
+    }
+
+    return 0;
+  });
 }
 
 /**
@@ -232,73 +257,7 @@ function extractCdCwd(
 }
 
 function splitTopLevelPipelineSegments(command: string): string[] | undefined {
-  const segments: string[] = [];
-  let currentSegment = "";
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  let escaping = false;
-
-  for (const char of command) {
-    if (escaping) {
-      currentSegment += char;
-      escaping = false;
-      continue;
-    }
-
-    if (inSingleQuote) {
-      currentSegment += char;
-
-      if (char === "'") {
-        inSingleQuote = false;
-      }
-
-      continue;
-    }
-
-    if (char === "\\") {
-      currentSegment += char;
-      escaping = true;
-      continue;
-    }
-
-    if (inDoubleQuote) {
-      currentSegment += char;
-
-      if (char === '"') {
-        inDoubleQuote = false;
-      }
-
-      continue;
-    }
-
-    if (char === "'") {
-      currentSegment += char;
-      inSingleQuote = true;
-      continue;
-    }
-
-    if (char === '"') {
-      currentSegment += char;
-      inDoubleQuote = true;
-      continue;
-    }
-
-    if (char === "|") {
-      segments.push(currentSegment);
-      currentSegment = "";
-      continue;
-    }
-
-    currentSegment += char;
-  }
-
-  if (escaping || inSingleQuote || inDoubleQuote) {
-    return undefined;
-  }
-
-  segments.push(currentSegment);
-
-  return segments;
+  return splitOnTopLevelDelimiter(command, (char) => (char === "|" ? 1 : 0));
 }
 
 function isAllowedSingleSegment(
@@ -351,6 +310,10 @@ function hasOnlyAllowedPathArguments(
       continue;
     }
 
+    // Plain names (no path separator) are intentionally not path-checked here.
+    // Their safety relies on the invariant that `baseDirectory` is always either
+    // `repoRoot` or a path previously validated by `extractCdCwd` — so any bare
+    // name resolves within the already-verified boundary.
     if (
       looksLikePath(token) &&
       !isAllowedReviewReadPath(resolvePathToken(token, baseDirectory), profile.repoRoot)
