@@ -20,11 +20,8 @@ function extractSignalName(reason: unknown): "SIGINT" | "SIGTERM" | undefined {
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
 import { FileReviewContext } from "./file-review-context.ts";
 import { ReviewNoteFinalizer } from "./finalizer.ts";
-import {
-  RunSummaryFinalizer,
-  type SkippedFileOutcome,
-  type SuccessfulFileOutcome
-} from "./run-summary-finalizer.ts";
+import { RunSummaryFinalizer } from "./run-summary-finalizer.ts";
+import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
 import { ReviewIndexFinalizer } from "./review-index-finalizer.ts";
 import { RunManifestFinalizer } from "./run-manifest-finalizer.ts";
 import type { RunContext } from "./run-context.ts";

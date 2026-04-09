@@ -3,10 +3,7 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "../../src/core/review-path-resolver.ts";
-import type {
-  SkippedFileOutcome,
-  SuccessfulFileOutcome
-} from "../../src/core/run-summary-finalizer.ts";
+import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../../src/core/run-outcomes.ts";
 
 // Stable fake path used as the default base for all output target fixtures;
 // does not need to exist on disk since finalizer tests operate on in-memory

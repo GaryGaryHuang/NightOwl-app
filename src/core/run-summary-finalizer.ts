@@ -1,16 +1,5 @@
-import type { Finding } from "./file-review-context.ts";
 import { deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "./risk-level.ts";
-
-export interface SuccessfulFileOutcome {
-  filePath: string;
-  findings: Finding[];
-}
-
-export interface SkippedFileOutcome {
-  filePath: string;
-  stepId: string;
-  reason: string;
-}
+import type { SuccessfulFileOutcome, SkippedFileOutcome } from "./run-outcomes.ts";
 
 export interface RunSummaryRenderInput {
   repoRoot: string;

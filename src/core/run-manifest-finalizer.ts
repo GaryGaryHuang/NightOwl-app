@@ -3,10 +3,7 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "./review-path-resolver.ts";
-import type {
-  SkippedFileOutcome,
-  SuccessfulFileOutcome
-} from "./run-summary-finalizer.ts";
+import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
 
 export interface RunManifestRenderInput {
   repoRoot: string;
