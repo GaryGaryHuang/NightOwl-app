@@ -46,7 +46,7 @@ const ALLOWED_BASH_PREFIXES = [
   "awk"
 ];
 
-const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output"]);
+const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output", "-exec", "-execdir"]);
 
 export function evaluateReadonlyShellCommand(
   command: string,

@@ -438,6 +438,66 @@ test("tool policy shell policy resolves cd relative path against initial cwd", (
   );
 });
 
+// ---------------------------------------------------------------------------
+// Subcommand execution guard — -exec and -execdir
+// ---------------------------------------------------------------------------
+
+test("tool policy shell policy denies find with -exec predicate", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("find . -exec sh {} +", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies find with -exec even when subcommand is allowlisted", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("find . -name '*.ts' -exec cat {} +", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies find with -execdir predicate", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("find . -execdir sh {} +", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies find -exec appearing in a pipeline segment", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("git log --oneline | find . -exec cat {} +", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies find -exec appearing in an && chain segment", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("git status && find . -exec sh {} +", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy denies non-find allowlisted command containing -exec", () => {
+  assert.deepEqual(
+    evaluateReadonlyShellCommand("git show -exec sh {} +", BASE_PROFILE),
+    { permissionDecision: "deny", permissionDecisionReason: READONLY_BASH_DENY_REASON }
+  );
+});
+
+test("tool policy shell policy allows find without -exec or -execdir", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand("find . -name '*.ts' -type f", BASE_PROFILE),
+    undefined
+  );
+});
+
+test("tool policy shell policy does not trigger -exec denial for -executable (exact token match)", () => {
+  assert.equal(
+    evaluateReadonlyShellCommand("find . -executable -type f", BASE_PROFILE),
+    undefined
+  );
+});
+
 test("tool policy shell policy ignores cd flags and extracts non-flag path token", () => {
   assert.equal(
     evaluateReadonlyShellCommand("cd -P /workspace/repo && git status", BASE_PROFILE),
