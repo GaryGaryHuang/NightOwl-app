@@ -1,8 +1,5 @@
 import type { Finding } from "./file-review-context.ts";
-
-// Must findings at or above this threshold are promoted to High risk; below it they stay Medium.
-// Intentionally matches DEFAULT_CONFIDENCE_THRESHOLDS.nice so only high-conviction must findings drive the strongest signal.
-const HIGH_CONFIDENCE_THRESHOLD = 90;
+import { DEFAULT_CONFIDENCE_THRESHOLDS } from "./confidence-thresholds.ts";
 
 export type RiskLevel = "High" | "Medium" | "Low" | "None";
 
@@ -16,6 +13,15 @@ export const RISK_ORDER: Record<RiskLevel, number> = {
 
 /**
  * Collapse finalized findings into the run-level risk label shown in summaries, indexes, and manifests.
+ *
+ * The High-risk threshold is sourced from `DEFAULT_CONFIDENCE_THRESHOLDS.nice`. This value is
+ * intentionally independent of user-configurable `ReviewConfig.confidenceThresholds`: risk labels
+ * express fixed quality semantics and must not drift with per-repo filtering preferences.
+ *
+ * The rationale for using the nice default threshold as the High-risk boundary: the nice threshold
+ * represents the high-conviction bar — the same bar used to filter noise from nice-to-have
+ * suggestions. Only must findings whose confidence reaches this level should escalate to the
+ * strongest risk signal.
  */
 export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel {
   if (!findings || findings.length === 0) {
@@ -26,7 +32,7 @@ export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel 
     findings.some(
       (finding) =>
         finding.type === "must" &&
-        finding.confidence >= HIGH_CONFIDENCE_THRESHOLD
+        finding.confidence >= DEFAULT_CONFIDENCE_THRESHOLDS.nice
     )
   ) {
     return "High";
