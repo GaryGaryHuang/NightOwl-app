@@ -6,7 +6,7 @@ import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step2DependenciesBoundariesStep } from "../../../src/core/steps/step2-dependencies-boundaries.ts";
 import {
   assertNightOwlSharedToolGuidance,
-  assertJudgeCriteriaContains,
+  assertResolveCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
   assertTextContainsAll,
@@ -15,7 +15,7 @@ import {
 
 // `ReviewNoteFinalizer` renders the accumulated <current_review> block from all
 // sections written so far; Steps 2-7 all receive it as prompt context.
-test("Step2DependenciesBoundariesStep prepares the Step 2 prompt contract from diff and current review", () => {
+test("Step2DependenciesBoundariesStep prepares the Step 2 prompt contract from diff and current review", async () => {
   const context = createContextWithOverview();
   const step = new Step2DependenciesBoundariesStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -25,14 +25,13 @@ test("Step2DependenciesBoundariesStep prepares the Step 2 prompt contract from d
 
   assertSectionPlanShape(plan, {
     stepId: "step2-dependencies-boundaries",
-    sectionKey: "dependencies-boundaries",
     reviewProfile: {
       dryRunStepContract: "dependencies-boundaries",
       model: "gpt-5.4-mini",
       timeoutMs: 300_000
     }
   });
-  assertJudgeCriteriaContains(plan.completionCheck, [
+  await assertResolveCriteriaContains(plan, [
     "段落 `## Dependencies & Boundaries` 必須存在",
     "相依清單",
     "Contract",

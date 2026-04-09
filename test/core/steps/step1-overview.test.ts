@@ -6,7 +6,7 @@ import { createRunContext } from "../../../src/core/run-context.ts";
 import { Step1OverviewStep } from "../../../src/core/steps/step1-overview.ts";
 import {
   assertNightOwlSharedToolGuidance,
-  assertJudgeCriteriaContains,
+  assertResolveCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
   assertTextContainsAll,
@@ -16,7 +16,7 @@ import {
 // Step 1 is the only step that draws from RunContext (Step 0 output) rather than
 // prior step sections; it seeds the per-file review with changeset context and
 // file-level diff.
-test("Step1OverviewStep prepares the Step 1 prompt contract from RunContext and file metadata", () => {
+test("Step1OverviewStep prepares the Step 1 prompt contract from RunContext and file metadata", async () => {
   const runContext = createRunContext({
     changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
     userContext: []
@@ -34,14 +34,13 @@ test("Step1OverviewStep prepares the Step 1 prompt contract from RunContext and 
 
   assertSectionPlanShape(plan, {
     stepId: "step1-overview",
-    sectionKey: "overview",
     reviewProfile: {
       dryRunStepContract: "overview",
       model: "gpt-5-mini",
       timeoutMs: 300_000
     }
   });
-  assertJudgeCriteriaContains(plan.completionCheck, [
+  await assertResolveCriteriaContains(plan, [
     "段落 `## Overview` 必須存在",
     "整體理解",
     "行為變更",

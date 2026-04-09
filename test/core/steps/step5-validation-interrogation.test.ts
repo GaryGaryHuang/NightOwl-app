@@ -6,14 +6,14 @@ import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
 import {
   assertNightOwlSharedToolGuidance,
-  assertDeterministicFindingsCheck,
+  assertResolveUsesValidator,
   assertStructuredPlanShape,
   assertTaggedBlockContains,
   assertTextContainsAll,
   assertTextExcludesAll
 } from "../../helpers/step-prompt-contract-fixture.ts";
 
-test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from diff and current review", () => {
+test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from diff and current review", async () => {
   const context = createContextWithStep4();
   const step = new Step5ValidationInterrogationStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -22,10 +22,9 @@ test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from 
   const plan = step.prepare(context);
 
   // Steps 5-6 produce structured JSON (findings array) rather than a Markdown
-  // section; assertStructuredPlanShape verifies the structuredTarget contract.
+  // section; assertStructuredPlanShape verifies the stepId and reviewProfile.
   assertStructuredPlanShape(plan, {
     stepId: "step5-validation-interrogation",
-    structuredTarget: "findings",
     reviewProfile: {
       dryRunStepContract: "validation-interrogation",
       model: "gpt-5.4-mini",
@@ -33,8 +32,8 @@ test("Step5ValidationInterrogationStep prepares the Step 5 prompt contract from 
     }
   });
 
-  // completionCheck validates JSON structure rather than natural-language criteria.
-  assertDeterministicFindingsCheck(plan.completionCheck);
+  // resolve() validates JSON structure via validator rather than judge criteria.
+  await assertResolveUsesValidator(plan);
 
   assertTextContainsAll(plan.prompt.systemMessage, [
     "## Current Step: Validation & Interrogation",

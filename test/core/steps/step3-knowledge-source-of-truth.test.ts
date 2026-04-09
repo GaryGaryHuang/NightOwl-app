@@ -6,14 +6,14 @@ import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step3KnowledgeSourceOfTruthStep } from "../../../src/core/steps/step3-knowledge-source-of-truth.ts";
 import {
   assertNightOwlSharedToolGuidance,
-  assertJudgeCriteriaContains,
+  assertResolveCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
   assertTextContainsAll,
   assertTextExcludesAll
 } from "../../helpers/step-prompt-contract-fixture.ts";
 
-test("Step3KnowledgeSourceOfTruthStep prepares the Step 3 prompt contract from diff and current review", () => {
+test("Step3KnowledgeSourceOfTruthStep prepares the Step 3 prompt contract from diff and current review", async () => {
   const context = createContextWithStep2();
   const step = new Step3KnowledgeSourceOfTruthStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -25,7 +25,6 @@ test("Step3KnowledgeSourceOfTruthStep prepares the Step 3 prompt contract from d
   // external knowledge retrieval; all other steps have knowledgeMode unset.
   assertSectionPlanShape(plan, {
     stepId: "step3-knowledge-source-of-truth",
-    sectionKey: "knowledge-source-of-truth",
     reviewProfile: {
       dryRunStepContract: "knowledge-source-of-truth",
       model: "gpt-5-mini",
@@ -33,7 +32,7 @@ test("Step3KnowledgeSourceOfTruthStep prepares the Step 3 prompt contract from d
       timeoutMs: 300_000
     }
   });
-  assertJudgeCriteriaContains(plan.completionCheck, [
+  await assertResolveCriteriaContains(plan, [
     "段落 `## Knowledge & Source of Truth` 必須存在",
     "版本／文件參考",
     "採用規則與假設",

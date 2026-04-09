@@ -7,7 +7,7 @@ import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step7SummaryStep } from "../../../src/core/steps/step7-summary.ts";
 import {
   assertNightOwlSharedToolGuidance,
-  assertJudgeCriteriaContains,
+  assertResolveCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
   assertTaggedBlockExcludes,
@@ -15,7 +15,7 @@ import {
   assertTextExcludesAll
 } from "../../helpers/step-prompt-contract-fixture.ts";
 
-test("Step7SummaryStep prepares the Step 7 prompt contract from current review only", () => {
+test("Step7SummaryStep prepares the Step 7 prompt contract from current review only", async () => {
   const context = createContextWithFindings([createFinding("must", 91, "最終問題")]);
   const step = new Step7SummaryStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -25,14 +25,13 @@ test("Step7SummaryStep prepares the Step 7 prompt contract from current review o
 
   assertSectionPlanShape(plan, {
     stepId: "step7-summary",
-    sectionKey: "summary",
     reviewProfile: {
       dryRunStepContract: "summary",
       model: "gpt-5-mini",
       timeoutMs: 300_000
     }
   });
-  assertJudgeCriteriaContains(plan.completionCheck, [
+  await assertResolveCriteriaContains(plan, [
     "段落 `## Summary` 必須存在",
     "### 審查基礎",
     "改動概要",
@@ -80,7 +79,7 @@ test("Step7SummaryStep prepares the Step 7 prompt contract from current review o
 // Risk level is determined solely by the model's summary output — it is never
 // pre-specified in the prompt, so the prompt contract is identical regardless
 // of whether findings are `must` or `nice`.
-test("Step7SummaryStep uses consistent prompt and criteria regardless of findings risk level", () => {
+test("Step7SummaryStep uses consistent prompt and criteria regardless of findings risk level", async () => {
   const context = createContextWithFindings([createFinding("nice", 95, "建議項")]);
   const step = new Step7SummaryStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -89,7 +88,7 @@ test("Step7SummaryStep uses consistent prompt and criteria regardless of finding
   const plan = step.prepare(context);
 
   assertTextExcludesAll(plan.prompt.userMessage, ["<required_risk_level>"]);
-  assertJudgeCriteriaContains(plan.completionCheck, [
+  await assertResolveCriteriaContains(plan, [
     "改動概要",
     "依據規範",
     "審查假設",
@@ -100,7 +99,7 @@ test("Step7SummaryStep uses consistent prompt and criteria regardless of finding
 
 // Same empty-findings contract as Step 6: `- 無` must appear, not an absent
 // section or a stub, and <required_risk_level> must still be absent.
-test("Step7SummaryStep carries explicit empty findings state in current review", () => {
+test("Step7SummaryStep carries explicit empty findings state in current review", async () => {
   const context = createContextWithFindings([]);
   const step = new Step7SummaryStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -114,7 +113,7 @@ test("Step7SummaryStep carries explicit empty findings state in current review",
   );
   assert.doesNotMatch(plan.prompt.userMessage, /無 findings\./u);
   assert.doesNotMatch(plan.prompt.userMessage, /<required_risk_level>/u);
-  assertJudgeCriteriaContains(plan.completionCheck, [
+  await assertResolveCriteriaContains(plan, [
     "### 行為變更提醒",
     "### 風險評估"
   ]);

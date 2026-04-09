@@ -6,7 +6,7 @@ import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
 import {
   assertNightOwlSharedToolGuidance,
-  assertDeterministicFindingsCheck,
+  assertResolveUsesValidator,
   assertStructuredPlanShape,
   assertTaggedBlockContains,
   assertTaggedBlockExcludes,
@@ -14,7 +14,7 @@ import {
   assertTextExcludesAll
 } from "../../helpers/step-prompt-contract-fixture.ts";
 
-test("Step6CognitiveSimulationStep prepares the Step 6 prompt contract from diff and current review", () => {
+test("Step6CognitiveSimulationStep prepares the Step 6 prompt contract from diff and current review", async () => {
   const context = createContextWithStep5Findings();
   const step = new Step6CognitiveSimulationStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -24,14 +24,13 @@ test("Step6CognitiveSimulationStep prepares the Step 6 prompt contract from diff
 
   assertStructuredPlanShape(plan, {
     stepId: "step6-cognitive-simulation",
-    structuredTarget: "findings",
     reviewProfile: {
       dryRunStepContract: "cognitive-simulation",
       model: "gpt-5.4-mini",
       timeoutMs: 300_000
     }
   });
-  assertDeterministicFindingsCheck(plan.completionCheck);
+  await assertResolveUsesValidator(plan);
 
   assertTextContainsAll(plan.prompt.systemMessage, [
     "## Current Step: Cognitive Simulation",

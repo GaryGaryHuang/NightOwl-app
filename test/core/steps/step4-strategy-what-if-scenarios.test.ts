@@ -6,14 +6,14 @@ import { ReviewNoteFinalizer } from "../../../src/core/finalizer.ts";
 import { Step4StrategyWhatIfScenariosStep } from "../../../src/core/steps/step4-strategy-what-if-scenarios.ts";
 import {
   assertNightOwlSharedToolGuidance,
-  assertJudgeCriteriaContains,
+  assertResolveCriteriaContains,
   assertSectionPlanShape,
   assertTaggedBlockContains,
   assertTextContainsAll,
   assertTextExcludesAll
 } from "../../helpers/step-prompt-contract-fixture.ts";
 
-test("Step4StrategyWhatIfScenariosStep prepares the Step 4 prompt contract from diff and current review", () => {
+test("Step4StrategyWhatIfScenariosStep prepares the Step 4 prompt contract from diff and current review", async () => {
   const context = createContextWithStep3();
   const step = new Step4StrategyWhatIfScenariosStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -23,14 +23,13 @@ test("Step4StrategyWhatIfScenariosStep prepares the Step 4 prompt contract from 
 
   assertSectionPlanShape(plan, {
     stepId: "step4-strategy-what-if-scenarios",
-    sectionKey: "strategy-what-if-scenarios",
     reviewProfile: {
       dryRunStepContract: "strategy-what-if-scenarios",
       model: "gpt-5.4-mini",
       timeoutMs: 300_000
     }
   });
-  assertJudgeCriteriaContains(plan.completionCheck, [
+  await assertResolveCriteriaContains(plan, [
     "段落 `## Strategy & What-if Scenarios` 必須存在",
     "高風險區域",
     "What-if",
@@ -70,11 +69,11 @@ test("Step4StrategyWhatIfScenariosStep prepares the Step 4 prompt contract from 
   ]);
 });
 
-// Step 4 is a plain Markdown section step — `applyTo` only writes to the
+// Step 4 is a plain Markdown section step — resolve() only writes to the
 // strategy-what-if-scenarios section and must not populate findings or advance
 // into Steps 5-6 territory. This distinguishes section steps (1-4, 7) from the
 // structured JSON steps (5-6).
-test("Step4StrategyWhatIfScenariosStep remains a section-only state update under strategy-what-if-scenarios", () => {
+test("Step4StrategyWhatIfScenariosStep remains a section-only state update under strategy-what-if-scenarios", async () => {
   const context = createContextWithStep3();
   const step = new Step4StrategyWhatIfScenariosStep({
     reviewNoteFinalizer: new ReviewNoteFinalizer()
@@ -93,7 +92,19 @@ test("Step4StrategyWhatIfScenariosStep remains a section-only state update under
 
   assert.equal(context.getSection("strategy-what-if-scenarios"), undefined);
 
-  plan.applyTo(context, responseText);
+  const deferred = await plan.resolve(responseText, {
+    judgeService: {
+      async evaluate() {
+        return { passed: true };
+      }
+    },
+    validator: {
+      validate() {
+        return { findings: [] };
+      }
+    }
+  });
+  deferred(context);
 
   assert.equal(context.getSection("strategy-what-if-scenarios"), responseText);
   assert.doesNotMatch(context.getSection("strategy-what-if-scenarios") ?? "", /^## Findings/mu);
