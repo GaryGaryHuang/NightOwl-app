@@ -1,7 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
-import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import type { FindingsPayload } from "../file-review-context.ts";
+import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
 
 // Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [
@@ -117,8 +116,6 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
   prepare(context: FileReviewContext): StepExecutionPlan {
     return {
       stepId: this.stepId,
-      kind: "structured",
-      structuredTarget: "findings",
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP5_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep5UserMessage(
@@ -131,16 +128,16 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },
-      completionCheck: {
-        kind: "deterministic",
-        validatorId: "findings-json"
-      },
-      applyTo(targetContext: FileReviewContext, response: string | FindingsPayload) {
-        // Deterministic validation already normalized the payload shape, so this step only has to persist the surviving findings.
-        const findings =
-          typeof response === "string" ? [] : response.findings;
+      async resolve(response: string, services: StepResolveServices) {
+        const payload = services.validator.validate({
+          validatorId: "findings-json",
+          responseText: response,
+          diffContent: context.diffContent
+        });
 
-        targetContext.updateStructuredState({ findings });
+        return (targetContext: FileReviewContext) => {
+          targetContext.updateStructuredState({ findings: payload.findings });
+        };
       }
     };
   }
