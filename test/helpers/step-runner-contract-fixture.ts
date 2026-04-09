@@ -2,7 +2,7 @@ import {
   type FileReviewContextInput,
   FileReviewContext
 } from "../../src/core/file-review-context.ts";
-import type { StepExecutionPlan, StepReviewSessionFactoryLike } from "../../src/core/step-runner.ts";
+import type { StepExecutionPlan, StepReviewSessionFactoryLike, StepResolveServices } from "../../src/core/step-runner.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
@@ -22,13 +22,26 @@ export function createStepRunnerContext(
   });
 }
 
-export function applySection(sectionKey: string): StepExecutionPlan["applyTo"] {
-  return (targetContext, response) => {
-    if (typeof response !== "string") {
-      throw new Error(`expected string response for section ${sectionKey}`);
-    }
+export function makeSectionResolve(sectionKey: string): StepExecutionPlan["resolve"] {
+  return async (response, _services) => {
+    return (targetContext) => {
+      targetContext.setSection(sectionKey, response);
+    };
+  };
+}
 
-    targetContext.setSection(sectionKey, response);
+export function makePassingJudgeServices(): StepResolveServices {
+  return {
+    judgeService: {
+      async evaluate(_input) {
+        return { passed: true };
+      }
+    },
+    validator: {
+      validate(_input) {
+        return { findings: [] };
+      }
+    }
   };
 }
 

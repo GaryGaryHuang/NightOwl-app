@@ -17,13 +17,11 @@ export function assertSectionPlanShape(
   plan: StepExecutionPlan,
   expected: {
     stepId: string;
-    sectionKey: string;
+    sectionKey?: string;
     reviewProfile: ExpectedReviewProfile;
   }
 ): void {
   assert.equal(plan.stepId, expected.stepId);
-  assert.equal(plan.kind, "section");
-  assert.equal(plan.sectionKey, expected.sectionKey);
   assertReviewProfile(plan.reviewProfile, expected.reviewProfile);
 }
 
@@ -31,38 +29,58 @@ export function assertStructuredPlanShape(
   plan: StepExecutionPlan,
   expected: {
     stepId: string;
-    structuredTarget: "findings";
+    structuredTarget?: "findings";
     reviewProfile: ExpectedReviewProfile;
   }
 ): void {
   assert.equal(plan.stepId, expected.stepId);
-  assert.equal(plan.kind, "structured");
-  assert.equal(plan.structuredTarget, expected.structuredTarget);
   assertReviewProfile(plan.reviewProfile, expected.reviewProfile);
 }
 
-// Asserts the completion check is a judge check and that its criteria text
-// contains every expected pattern. The explicit kind guard prevents tests from
-// silently passing when a step switched from judge to deterministic completion.
-export function assertJudgeCriteriaContains(
-  completionCheck: StepExecutionPlan["completionCheck"],
+// Asserts that resolving the plan calls judgeService.evaluate() with criteria
+// containing all expected patterns. The step must use judgeService for validation.
+export async function assertResolveCriteriaContains(
+  plan: StepExecutionPlan,
   patterns: TextPattern[]
-): void {
-  assert.ok(completionCheck);
-  assert.equal(completionCheck?.kind, "judge");
-  assertTextContainsAll(
-    completionCheck?.kind === "judge" ? completionCheck.criteria : "",
-    patterns
-  );
+): Promise<void> {
+  let capturedCriteria: string | undefined;
+
+  await plan.resolve("## Section\n- content", {
+    judgeService: {
+      async evaluate(input) {
+        capturedCriteria = input.criteria;
+        return { passed: true };
+      }
+    },
+    validator: {
+      validate() {
+        return { findings: [] };
+      }
+    }
+  });
+
+  assert.ok(capturedCriteria !== undefined, "resolve() did not call judgeService.evaluate()");
+  assertTextContainsAll(capturedCriteria, patterns);
 }
 
-export function assertDeterministicFindingsCheck(
-  completionCheck: StepExecutionPlan["completionCheck"]
-): void {
-  assert.deepEqual(completionCheck, {
-    kind: "deterministic",
-    validatorId: "findings-json"
+// Asserts that resolving the plan calls validator.validate() (deterministic path).
+export async function assertResolveUsesValidator(
+  plan: StepExecutionPlan,
+  responseText: string = "{\"findings\":[]}"
+): Promise<void> {
+  let validatorCalled = false;
+
+  await plan.resolve(responseText, {
+    judgeService: undefined,
+    validator: {
+      validate() {
+        validatorCalled = true;
+        return { findings: [] };
+      }
+    }
   });
+
+  assert.ok(validatorCalled, "resolve() did not call validator.validate()");
 }
 
 export function assertTextContainsAll(

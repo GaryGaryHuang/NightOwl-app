@@ -11,6 +11,7 @@ import { Step6CognitiveSimulationStep } from "../../src/core/steps/step6-cogniti
 import { Step7SummaryStep } from "../../src/core/steps/step7-summary.ts";
 import {
   type StepExecutionPlan,
+  type StepResolveServices,
   StepRunner
 } from "../../src/core/step-runner.ts";
 import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
@@ -19,7 +20,6 @@ import {
   SessionTurnAbortedError
 } from "../../src/services/session-executor.ts";
 import {
-  applySection,
   createReviewSessionFactory,
   createStepRunnerContext,
   diffHunkTraceability,
@@ -28,23 +28,23 @@ import {
 } from "../helpers/step-runner-contract-fixture.ts";
 
 // Minimal step-definition factory used by tests that focus on StepRunner
-// behavior (retry, judge, error wrapping) rather than prompt content.
+// behavior (retry, error wrapping) rather than prompt content or judge/validator logic.
 function createSectionTestStep(input: {
   stepId?: string;
   sectionKey?: ReviewSectionKey;
   systemMessage?: string;
   userMessage?: string;
-  completionCheck?: StepExecutionPlan["completionCheck"];
   reviewProfile?: StepExecutionPlan["reviewProfile"];
-  applyTo?: StepExecutionPlan["applyTo"];
+  resolve?: StepExecutionPlan["resolve"];
 }) {
+  const stepId = input.stepId ?? "step1-overview";
+  const sectionKey = input.sectionKey ?? "overview";
+
   return {
-    stepId: input.stepId ?? "step1-overview",
+    stepId,
     prepare() {
       return {
-        stepId: input.stepId ?? "step1-overview",
-        kind: "section" as const,
-        sectionKey: input.sectionKey ?? "overview",
+        stepId,
         prompt: {
           systemMessage: input.systemMessage ?? "system prompt",
           userMessage: input.userMessage ?? "user prompt"
@@ -53,12 +53,42 @@ function createSectionTestStep(input: {
           model: "gpt-5-mini",
           timeoutMs: 300_000
         },
-        ...(input.completionCheck === undefined
-          ? {}
-          : { completionCheck: input.completionCheck }),
-        applyTo: input.applyTo ?? applySection(input.sectionKey ?? "overview")
+        resolve: input.resolve ?? (async (response: string) => {
+          return (context: import("../../src/core/file-review-context.ts").FileReviewContext) => {
+            context.setSection(sectionKey, response);
+          };
+        })
       };
     }
+  };
+}
+
+// Helper resolve that calls judgeService — use in tests that verify judge invocation or retry via judge rejection.
+function makeSectionResolveWithJudge(
+  stepId: string,
+  filePath: string,
+  sectionKey: ReviewSectionKey,
+  criteria: string
+): StepExecutionPlan["resolve"] {
+  return async (response: string, services: StepResolveServices) => {
+    if (!services.judgeService) {
+      throw new Error("judge service is not configured");
+    }
+
+    const judgeResult = await services.judgeService.evaluate({
+      stepId,
+      filePath,
+      criteria,
+      sectionContent: response
+    });
+
+    if (!judgeResult.passed) {
+      throw new Error(judgeResult.cause ?? "judge rejected");
+    }
+
+    return (context: import("../../src/core/file-review-context.ts").FileReviewContext) => {
+      context.setSection(sectionKey, response);
+    };
   };
 }
 
@@ -66,15 +96,15 @@ function createStructuredTestStep(input: {
   stepId?: string;
   userMessage?: string;
   reviewProfile?: StepExecutionPlan["reviewProfile"];
-  applyTo?: StepExecutionPlan["applyTo"];
+  resolve?: StepExecutionPlan["resolve"];
 }) {
+  const stepId = input.stepId ?? "step5-validation-interrogation";
+
   return {
-    stepId: input.stepId ?? "step5-validation-interrogation",
+    stepId,
     prepare() {
       return {
-        stepId: input.stepId ?? "step5-validation-interrogation",
-        kind: "structured" as const,
-        structuredTarget: "findings" as const,
+        stepId,
         prompt: {
           systemMessage: "system prompt",
           userMessage: input.userMessage ?? "user prompt"
@@ -83,18 +113,16 @@ function createStructuredTestStep(input: {
           model: "gpt-5-mini",
           timeoutMs: 300_000
         },
-        completionCheck: {
-          kind: "deterministic" as const,
-          validatorId: "findings-json" as const
-        },
-        applyTo:
-          input.applyTo ??
-          ((context, response) => {
-            if (typeof response === "string") {
-              throw new Error("expected structured response");
-            }
-            context.updateStructuredState({ findings: response.findings });
-          })
+        resolve: input.resolve ?? (async (response: string, services: StepResolveServices) => {
+          const payload = services.validator.validate({
+            validatorId: "findings-json",
+            responseText: response
+          });
+
+          return (context: import("../../src/core/file-review-context.ts").FileReviewContext) => {
+            context.updateStructuredState({ findings: payload.findings });
+          };
+        })
       };
     }
   };
@@ -181,6 +209,7 @@ test("StepRunner does not consume retry budget or start judge when a section-ste
   let reviewAttempts = 0;
   let abortCalls = 0;
   let judgeCalls = 0;
+  let retryCallCount = 0;
   let resolveSend:
     | ((value: { data?: { content?: string } } | undefined) => void)
     | undefined;
@@ -209,6 +238,9 @@ test("StepRunner does not consume retry budget or start judge when a section-ste
         judgeCalls += 1;
         return { passed: true };
       }
+    },
+    onStepRetry() {
+      retryCallCount += 1;
     }
   });
 
@@ -216,10 +248,7 @@ test("StepRunner does not consume retry budget or start judge when a section-ste
     () =>
       runner.run({
         step: createSectionTestStep({
-          completionCheck: {
-            kind: "judge",
-            criteria: "must contain overview fields"
-          }
+          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -231,6 +260,7 @@ test("StepRunner does not consume retry budget or start judge when a section-ste
   assert.equal(reviewAttempts, 1);
   assert.equal(abortCalls, 1);
   assert.equal(judgeCalls, 0);
+  assert.equal(retryCallCount, 0);
 });
 
 test("StepRunner does not consume retry budget or run deterministic validation when a structured-step review turn is aborted", async () => {
@@ -348,10 +378,7 @@ test("StepRunner retries the whole section-step when judge rejects the first att
 
   const result = await runner.run({
     step: createSectionTestStep({
-      completionCheck: {
-        kind: "judge",
-        criteria: "must contain overview fields"
-      }
+      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -387,10 +414,7 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
     () =>
       runner.run({
         step: createSectionTestStep({
-          completionCheck: {
-            kind: "judge",
-            criteria: "must contain overview fields"
-          }
+          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -429,10 +453,7 @@ test("StepRunner retries the whole step on judge timeout with fresh review and j
 
   const result = await runner.run({
     step: createSectionTestStep({
-      completionCheck: {
-        kind: "judge",
-        criteria: "must contain overview fields"
-      }
+      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -464,10 +485,7 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
     () =>
       runner.run({
         step: createSectionTestStep({
-          completionCheck: {
-            kind: "judge",
-            criteria: "must contain overview fields"
-          }
+          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -511,10 +529,7 @@ test("StepRunner retries the whole step when review session startup fails and ev
 
   const result = await runner.run({
     step: createSectionTestStep({
-      completionCheck: {
-        kind: "judge",
-        criteria: "must contain overview fields"
-      }
+      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -547,10 +562,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
     () =>
       runner.run({
         step: createSectionTestStep({
-          completionCheck: {
-            kind: "judge",
-            criteria: "must contain overview fields"
-          }
+          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -1362,4 +1374,207 @@ test("StepRunner rebuilds Step 7 current review from the last successful Step 6 
   result.applyTo(context);
 
   assert.match(context.getSection("summary") ?? "", /^## Summary/u);
+});
+
+test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause when the first attempt fails", async () => {
+  const context = createStepRunnerContext();
+  const retryInfos: unknown[] = [];
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return "## Overview\n- 整體理解：attempt 1";
+      }
+    }),
+    judgeService: {
+      async evaluate(input) {
+        if (retryInfos.length === 0) {
+          return { passed: false, cause: "judge rejected" };
+        }
+
+        return { passed: true };
+      }
+    },
+    onStepRetry(info) {
+      retryInfos.push({ ...info });
+    }
+  });
+
+  const result = await runner.run({
+    step: createSectionTestStep({
+      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  result.applyTo(context);
+
+  assert.equal(retryInfos.length, 1);
+  assert.deepEqual(retryInfos[0], {
+    stepId: "step1-overview",
+    filePath: "src/app.ts",
+    attempt: 0,
+    cause: "judge rejected"
+  });
+});
+
+test("StepRunner does not invoke onStepRetry when the step succeeds on the first attempt", async () => {
+  const context = createStepRunnerContext();
+  let retryCallCount = 0;
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return "## Overview\n- 整體理解：成功一次完成";
+      }
+    }),
+    onStepRetry() {
+      retryCallCount += 1;
+    }
+  });
+
+  const result = await runner.run({
+    step: createSectionTestStep({}),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  result.applyTo(context);
+
+  assert.equal(retryCallCount, 0);
+});
+
+test("StepRunner swallows exceptions thrown by onStepRetry and does not propagate them", async () => {
+  const context = createStepRunnerContext();
+  let reviewAttempts = 0;
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        reviewAttempts += 1;
+        return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
+      }
+    }),
+    judgeService: {
+      async evaluate() {
+        if (reviewAttempts === 1) {
+          return { passed: false, cause: "judge rejected" };
+        }
+
+        return { passed: true };
+      }
+    },
+    onStepRetry() {
+      throw new Error("onStepRetry exploded");
+    }
+  });
+
+  // Should not throw despite onStepRetry throwing
+  const result = await runner.run({
+    step: createSectionTestStep({
+      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  result.applyTo(context);
+
+  assert.equal(reviewAttempts, 2);
+  assert.match(context.getSection("overview") ?? "", /attempt 2/u);
+});
+
+test("StepRunner invokes onStepRetry when prepare itself throws on the first attempt", async () => {
+  const context = createStepRunnerContext();
+  const retryInfos: unknown[] = [];
+  let prepareAttempts = 0;
+
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return "## Overview\n- 整體理解：retry after prepare failure";
+      }
+    }),
+    onStepRetry(info) {
+      retryInfos.push({ ...info });
+    }
+  });
+
+  const result = await runner.run({
+    step: {
+      stepId: "step1-overview",
+      prepare() {
+        prepareAttempts += 1;
+
+        if (prepareAttempts === 1) {
+          throw new Error("prepare exploded");
+        }
+
+        return {
+          stepId: "step1-overview",
+          prompt: { systemMessage: "system prompt", userMessage: "user prompt" },
+          reviewProfile: { model: "gpt-5-mini", timeoutMs: 300_000 },
+          async resolve(response: string) {
+            return (targetContext: import("../../src/core/file-review-context.ts").FileReviewContext) => {
+              targetContext.setSection("overview", response);
+            };
+          }
+        };
+      }
+    },
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  result.applyTo(context);
+
+  assert.equal(prepareAttempts, 2);
+  assert.equal(retryInfos.length, 1);
+  assert.deepEqual(retryInfos[0], {
+    stepId: "step1-overview",
+    filePath: "src/app.ts",
+    attempt: 0,
+    cause: "prepare exploded"
+  });
+  assert.match(context.getSection("overview") ?? "", /retry after prepare failure/u);
+});
+
+test("StepRunner does not invoke onStepRetry on the final attempt failure", async () => {
+  const context = createStepRunnerContext();
+  const retryInfos: unknown[] = [];
+
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        return "## Overview\n- 整體理解：always fails judge";
+      }
+    }),
+    judgeService: {
+      async evaluate() {
+        return { passed: false, cause: "judge rejected" };
+      }
+    },
+    onStepRetry(info) {
+      retryInfos.push({ ...info });
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      runner.run({
+        step: createSectionTestStep({
+          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+        }),
+        context,
+        outputBaseDir: "/workspace/output",
+        repoRoot: "/workspace/repo"
+      }),
+    /Step step1-overview failed for src\/app\.ts: judge rejected/u
+  );
+
+  // Called exactly once for attempt 0; NOT called for the final failure (attempt 1).
+  assert.equal(retryInfos.length, 1);
+  assert.equal((retryInfos[0] as { attempt: number }).attempt, 0);
 });
