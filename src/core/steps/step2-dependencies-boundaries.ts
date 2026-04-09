@@ -1,7 +1,7 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
 import { DEPENDENCIES_BOUNDARIES_SECTION } from "../review-section-contract.ts";
-import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
+import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
 
 // Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [
@@ -114,10 +114,9 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
+    const { stepId } = this;
     return {
-      stepId: this.stepId,
-      kind: "section",
-      sectionKey: DEPENDENCIES_BOUNDARIES_SECTION.key,
+      stepId,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP2_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep2UserMessage(context, this.#reviewNoteFinalizer.render(context))
@@ -127,12 +126,25 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },
-      completionCheck: {
-        kind: "judge",
-        criteria: STEP2_JUDGE_CRITERIA
-      },
-      applyTo(targetContext: FileReviewContext, responseText: string) {
-        targetContext.setSection(DEPENDENCIES_BOUNDARIES_SECTION.key, responseText);
+      async resolve(response: string, services: StepResolveServices) {
+        if (!services.judgeService) {
+          throw new Error("judge service is not configured");
+        }
+
+        const judgeResult = await services.judgeService.evaluate({
+          stepId,
+          filePath: context.filePath,
+          criteria: STEP2_JUDGE_CRITERIA,
+          sectionContent: response
+        });
+
+        if (!judgeResult.passed) {
+          throw new Error(judgeResult.cause ?? "judge rejected");
+        }
+
+        return (targetContext: FileReviewContext) => {
+          targetContext.setSection(DEPENDENCIES_BOUNDARIES_SECTION.key, response);
+        };
       }
     };
   }

@@ -1,7 +1,7 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import { OVERVIEW_SECTION } from "../review-section-contract.ts";
 import type { RunContext } from "../run-context.ts";
-import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
+import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
 
 // Duplicated in each step file and changeset-overview-runner.ts to keep step definitions self-contained.
 // When modifying, keep all copies in sync.
@@ -112,10 +112,9 @@ export class Step1OverviewStep implements StepDefinition {
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
+    const { stepId } = this;
     return {
-      stepId: this.stepId,
-      kind: "section",
-      sectionKey: OVERVIEW_SECTION.key,
+      stepId,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP1_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep1UserMessage(context, this.#runContext)
@@ -125,12 +124,25 @@ export class Step1OverviewStep implements StepDefinition {
         model: "gpt-5-mini",
         timeoutMs: 300_000
       },
-      completionCheck: {
-        kind: "judge",
-        criteria: STEP1_JUDGE_CRITERIA
-      },
-      applyTo(targetContext: FileReviewContext, responseText: string) {
-        targetContext.setSection(OVERVIEW_SECTION.key, responseText);
+      async resolve(response: string, services: StepResolveServices) {
+        if (!services.judgeService) {
+          throw new Error("judge service is not configured");
+        }
+
+        const judgeResult = await services.judgeService.evaluate({
+          stepId,
+          filePath: context.filePath,
+          criteria: STEP1_JUDGE_CRITERIA,
+          sectionContent: response
+        });
+
+        if (!judgeResult.passed) {
+          throw new Error(judgeResult.cause ?? "judge rejected");
+        }
+
+        return (targetContext: FileReviewContext) => {
+          targetContext.setSection(OVERVIEW_SECTION.key, response);
+        };
       }
     };
   }

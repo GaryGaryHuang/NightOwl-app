@@ -1,7 +1,7 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
 import { SUMMARY_SECTION } from "../review-section-contract.ts";
-import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
+import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
 
 // Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
 const COMMON_SYSTEM_MESSAGE = [
@@ -64,10 +64,9 @@ export class Step7SummaryStep implements StepDefinition {
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
+    const { stepId } = this;
     return {
-      stepId: this.stepId,
-      kind: "section",
-      sectionKey: SUMMARY_SECTION.key,
+      stepId,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep7UserMessage(
@@ -79,12 +78,25 @@ export class Step7SummaryStep implements StepDefinition {
         model: "gpt-5-mini",
         timeoutMs: 300_000
       },
-      completionCheck: {
-        kind: "judge",
-        criteria: buildStep7JudgeCriteria()
-      },
-      applyTo(targetContext: FileReviewContext, responseText: string) {
-        targetContext.setSection(SUMMARY_SECTION.key, responseText);
+      async resolve(response: string, services: StepResolveServices) {
+        if (!services.judgeService) {
+          throw new Error("judge service is not configured");
+        }
+
+        const judgeResult = await services.judgeService.evaluate({
+          stepId,
+          filePath: context.filePath,
+          criteria: buildStep7JudgeCriteria(),
+          sectionContent: response
+        });
+
+        if (!judgeResult.passed) {
+          throw new Error(judgeResult.cause ?? "judge rejected");
+        }
+
+        return (targetContext: FileReviewContext) => {
+          targetContext.setSection(SUMMARY_SECTION.key, response);
+        };
       }
     };
   }
