@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  isAllowedReviewReadPath,
   isNightOwlNamespacePath,
   nightowlRoot,
   reviewConfigPath,
@@ -67,4 +68,51 @@ test("isNightOwlNamespacePath returns false for an empty string", () => {
 
 test("isNightOwlNamespacePath normalizes Windows backslashes before comparison", () => {
   assert.equal(isNightOwlNamespacePath(".nightowl\\reviewconfig.json"), true);
+});
+
+// --- isAllowedReviewReadPath ---
+
+test("isAllowedReviewReadPath allows repo root itself", () => {
+  assert.equal(isAllowedReviewReadPath("/workspace/repo", "/workspace/repo"), true);
+});
+
+test("isAllowedReviewReadPath allows a file inside repo source tree", () => {
+  assert.equal(isAllowedReviewReadPath("/workspace/repo/src/app.ts", "/workspace/repo"), true);
+});
+
+test("isAllowedReviewReadPath allows review output root itself", () => {
+  assert.equal(isAllowedReviewReadPath("/workspace/repo/.nightowl/review", "/workspace/repo"), true);
+});
+
+test("isAllowedReviewReadPath allows a file inside review output", () => {
+  assert.equal(
+    isAllowedReviewReadPath("/workspace/repo/.nightowl/review/session1/file.md", "/workspace/repo"),
+    true
+  );
+});
+
+test("isAllowedReviewReadPath denies the .nightowl root itself", () => {
+  assert.equal(isAllowedReviewReadPath("/workspace/repo/.nightowl", "/workspace/repo"), false);
+});
+
+test("isAllowedReviewReadPath denies reviewconfig.json under .nightowl", () => {
+  assert.equal(
+    isAllowedReviewReadPath("/workspace/repo/.nightowl/reviewconfig.json", "/workspace/repo"),
+    false
+  );
+});
+
+test("isAllowedReviewReadPath denies reviewignore under .nightowl", () => {
+  assert.equal(
+    isAllowedReviewReadPath("/workspace/repo/.nightowl/reviewignore", "/workspace/repo"),
+    false
+  );
+});
+
+test("isAllowedReviewReadPath denies a path entirely outside repo root", () => {
+  assert.equal(isAllowedReviewReadPath("/etc/passwd", "/workspace/repo"), false);
+});
+
+test("isAllowedReviewReadPath denies a sibling directory that shares the repo root prefix", () => {
+  assert.equal(isAllowedReviewReadPath("/workspace/repo-other/src/app.ts", "/workspace/repo"), false);
 });
