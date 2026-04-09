@@ -37,6 +37,17 @@ const EMPTY_TOOL_ARGS_DEFERRED_REASON =
 const WEB_FETCH_POLICY_FAIL_CLOSED_REASON =
   "URL policy evaluation failed; denied as a precaution.";
 
+// Module-scoped intermediate decision record produced by each kind branch inside
+// buildPermissionHandler. A single post-dispatch segment reads this record to
+// write the audit entry and return the SDK result, keeping audit assembly logic
+// in one place rather than duplicated across every branch.
+type HandlerDecisionRecord = {
+  tool: string;
+  decision: "allow" | "deny";
+  reason?: string;
+  args: Record<string, string | undefined>;
+};
+
 export interface ToolPolicyGuardOptions
   extends ToolPolicyWebFetchPolicyOptions {}
 
@@ -65,55 +76,34 @@ export class ToolPolicyGuard {
     auditWriter?: ToolAuditSink
   ): PermissionHandler {
     return async (request) => {
+      let record: HandlerDecisionRecord;
+
       if (
         request.kind === "read" &&
         typeof request.path === "string" &&
         isAllowedReviewReadPath(request.path, profile.repoRoot)
       ) {
-        auditWriter?.append({
-          ts: new Date().toISOString(),
-          tool: "read",
-          decision: "allow",
-          args: { path: request.path }
-        });
-
-        return { kind: "approved" };
-      }
-
-      if (request.kind === "read") {
+        record = { tool: "read", decision: "allow", args: { path: request.path } };
+      } else if (request.kind === "read") {
         const readPath = typeof request.path === "string" ? request.path : undefined;
-        const reason = "Read path is outside the allowed boundary.";
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
+        record = {
           tool: "read",
           decision: "deny",
-          reason,
+          reason: "Read path is outside the allowed boundary.",
           args: readPath !== undefined ? { path: readPath } : {}
-        });
-
-        return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
-      }
-
-      if (request.kind === "write") {
+        };
+      } else if (request.kind === "write") {
         const fileName =
           "fileName" in request && typeof request.fileName === "string"
             ? request.fileName
             : undefined;
-        const reason = "Write operations are not permitted in review sessions.";
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
+        record = {
           tool: "write",
           decision: "deny",
-          reason,
+          reason: "Write operations are not permitted in review sessions.",
           args: fileName !== undefined ? { path: fileName } : {}
-        });
-
-        return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
-      }
-
-      if (request.kind === "shell") {
+        };
+      } else if (request.kind === "shell") {
         const fullCommandText =
           typeof request.fullCommandText === "string"
             ? request.fullCommandText
@@ -124,179 +114,91 @@ export class ToolPolicyGuard {
 
         if (fullCommandText) {
           try {
-            const decision = evaluateReadonlyShellCommand(
-              fullCommandText,
-              profile
-            );
-            if (decision) {
-              auditWriter?.append({
-                ts: new Date().toISOString(),
-                tool: request.kind,
-                decision: "deny",
-                reason: decision.permissionDecisionReason,
-                args
-              });
-
-              return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+            const policyDecision = evaluateReadonlyShellCommand(fullCommandText, profile);
+            if (policyDecision) {
+              record = { tool: request.kind, decision: "deny", reason: policyDecision.permissionDecisionReason, args };
+            } else {
+              record = { tool: request.kind, decision: "allow", args };
             }
           } catch {
-            auditWriter?.append({
-              ts: new Date().toISOString(),
-              tool: request.kind,
-              decision: "deny",
-              reason: SHELL_POLICY_FAIL_CLOSED_REASON,
-              args
-            });
-
-            return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+            record = { tool: request.kind, decision: "deny", reason: SHELL_POLICY_FAIL_CLOSED_REASON, args };
           }
+        } else {
+          record = { tool: request.kind, decision: "allow", args };
         }
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
-          tool: request.kind,
-          decision: "allow",
-          args
-        });
-
-        return { kind: "approved" };
-      }
-
-      if (request.kind === "url") {
-        const url =
-          typeof request.url === "string" ? request.url : "";
+      } else if (request.kind === "url") {
+        const url = typeof request.url === "string" ? request.url : "";
         const args: Record<string, string | undefined> = url ? { url } : {};
 
         if (url) {
           try {
-            const decision = await this.#webFetchPolicy.evaluate(url);
-            if (decision) {
-              auditWriter?.append({
-                ts: new Date().toISOString(),
-                tool: request.kind,
-                decision: "deny",
-                reason: decision.permissionDecisionReason,
-                args
-              });
-
-              return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+            const policyDecision = await this.#webFetchPolicy.evaluate(url);
+            if (policyDecision) {
+              record = { tool: request.kind, decision: "deny", reason: policyDecision.permissionDecisionReason, args };
+            } else {
+              record = { tool: request.kind, decision: "allow", args };
             }
           } catch {
-            auditWriter?.append({
-              ts: new Date().toISOString(),
-              tool: request.kind,
-              decision: "deny",
-              reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
-              args
-            });
-
-            return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+            record = { tool: request.kind, decision: "deny", reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON, args };
           }
+        } else {
+          record = { tool: request.kind, decision: "allow", args };
         }
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
-          tool: request.kind,
-          decision: "allow",
-          args
-        });
-
-        return { kind: "approved" };
-      }
-
-      if (request.kind === "mcp") {
+      } else if (request.kind === "mcp") {
         const serverName =
-          typeof request.serverName === "string"
-            ? request.serverName
-            : undefined;
+          typeof request.serverName === "string" ? request.serverName : undefined;
         const toolName =
-          typeof request.toolName === "string"
-            ? request.toolName
-            : undefined;
+          typeof request.toolName === "string" ? request.toolName : undefined;
         const args: Record<string, string | undefined> = {};
         if (serverName !== undefined) args.serverName = serverName;
         if (toolName !== undefined) args.toolName = toolName;
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
-          tool: "mcp",
-          decision: "allow",
-          args
-        });
-
-        return { kind: "approved" };
-      }
-
-      if (request.kind === "custom-tool") {
+        record = { tool: "mcp", decision: "allow", args };
+      } else if (request.kind === "custom-tool") {
         const toolName =
-          typeof request.toolName === "string"
-            ? request.toolName
-            : undefined;
+          typeof request.toolName === "string" ? request.toolName : undefined;
         const args: Record<string, string | undefined> = {};
         if (toolName !== undefined) args.toolName = toolName;
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
-          tool: "custom-tool",
-          decision: "deny",
-          reason: CUSTOM_TOOL_DENY_REASON,
-          args
-        });
-
-        return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
-      }
-
-      // Defensive: memory kind (not in SDK PermissionRequest.kind union,
-      // but exists in session-events.d.ts). Low-risk; approve.
-      if (request.kind === "memory") {
+        record = { tool: "custom-tool", decision: "deny", reason: CUSTOM_TOOL_DENY_REASON, args };
+      } else if (request.kind === "memory") {
+        // Defensive: memory kind (not in SDK PermissionRequest.kind union,
+        // but exists in session-events.d.ts). Low-risk; approve.
         const subject =
-          typeof request.subject === "string"
-            ? request.subject
-            : undefined;
+          typeof request.subject === "string" ? request.subject : undefined;
         const args: Record<string, string | undefined> = {};
         if (subject !== undefined) args.subject = subject;
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
-          tool: "memory",
-          decision: "allow",
-          args
-        });
-
-        return { kind: "approved" };
-      }
-
-      // Defensive: hook kind (not in SDK PermissionRequest.kind union).
-      // Unknown security implications; fail-closed deny.
-      if (request.kind === "hook") {
+        record = { tool: "memory", decision: "allow", args };
+      } else if (request.kind === "hook") {
+        // Defensive: hook kind (not in SDK PermissionRequest.kind union).
+        // Unknown security implications; fail-closed deny.
         const toolName =
-          typeof request.toolName === "string"
-            ? request.toolName
-            : undefined;
+          typeof request.toolName === "string" ? request.toolName : undefined;
         const args: Record<string, string | undefined> = {};
         if (toolName !== undefined) args.toolName = toolName;
-
-        auditWriter?.append({
-          ts: new Date().toISOString(),
-          tool: "hook",
-          decision: "deny",
-          reason: HOOK_DENY_REASON,
-          args
-        });
-
-        return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+        record = { tool: "hook", decision: "deny", reason: HOOK_DENY_REASON, args };
+      } else {
+        // Unknown kind — fail-closed.
+        // Exhaustive check: if the SDK adds a new kind to the PermissionRequest.kind
+        // union and a dedicated branch is not added above, TypeScript reports a type
+        // error on the next line. This assertion does not execute at runtime.
+        const _exhaustiveCheck: never = request.kind;
+        void _exhaustiveCheck;
+        record = { tool: request.kind as string, decision: "deny", reason: UNKNOWN_KIND_DENY_REASON, args: {} };
       }
 
-      // Unknown kind — fail-closed
+      // Post-dispatch: write the single audit record and return the SDK result.
+      // Audit assembly is centralised here so any future field addition only
+      // needs to be made in one place rather than in every kind branch.
       auditWriter?.append({
         ts: new Date().toISOString(),
-        tool: request.kind,
-        decision: "deny",
-        reason: UNKNOWN_KIND_DENY_REASON,
-        args: {}
+        tool: record.tool,
+        decision: record.decision,
+        ...(record.reason !== undefined ? { reason: record.reason } : {}),
+        args: record.args
       });
 
-      return { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+      return record.decision === "allow"
+        ? { kind: "approved" }
+        : { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
     };
   }
 
