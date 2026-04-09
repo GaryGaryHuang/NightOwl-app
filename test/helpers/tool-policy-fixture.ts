@@ -7,8 +7,7 @@ import type {
   WebFetchHostnameClassifier
 } from "../../src/services/web-fetch-hostname-classifier.ts";
 
-export const BASE_PROFILE: Pick<ReviewSessionProfile, "outputBaseDir" | "repoRoot"> = {
-  outputBaseDir: "/workspace/repo",
+export const BASE_PROFILE: Pick<ReviewSessionProfile, "repoRoot"> = {
   repoRoot: "/workspace/repo"
 };
 

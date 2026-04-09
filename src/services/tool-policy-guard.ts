@@ -2,9 +2,8 @@ import {
   type PermissionHandler,
   type SessionConfig
 } from "@github/copilot-sdk";
-import path from "node:path";
 
-import { nightowlRoot } from "../core/nightowl-namespace.ts";
+import { isAllowedReviewReadPath } from "../core/nightowl-namespace.ts";
 import type { ReviewSessionProfile } from "./review-session-factory.ts";
 import {
   evaluateReadonlyShellCommand,
@@ -51,15 +50,25 @@ export class ToolPolicyGuard {
     this.#webFetchPolicy = new ToolPolicyWebFetchPolicy(options);
   }
 
+  // SDK exposes two independent interception paths:
+  //   - onPermissionRequest (PermissionHandler): intercepts SDK permission request
+  //     events, covering read / write / shell / url / mcp / custom-tool etc.
+  //   - onPreToolUse (PreToolUseHook): first gate before tool execution,
+  //     used for inline tool-args validation of web_fetch and bash tools.
+  //
+  // Both paths fire independently and are not mutually exclusive. A single AI
+  // tool call may therefore produce two audit log entries — one from each path.
+  // This is expected behaviour: audit records represent SDK interception events,
+  // not the number of AI-initiated actions.
   buildPermissionHandler(
-    profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+    profile: Pick<ReviewSessionProfile, "repoRoot">,
     auditWriter?: ToolAuditSink
   ): PermissionHandler {
     return async (request) => {
       if (
         request.kind === "read" &&
         typeof request.path === "string" &&
-        isAllowedReadPath(request.path, profile)
+        isAllowedReviewReadPath(request.path, profile.repoRoot)
       ) {
         auditWriter?.append({
           ts: new Date().toISOString(),
@@ -292,7 +301,7 @@ export class ToolPolicyGuard {
   }
 
   buildPreToolUseHook(
-    profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+    profile: Pick<ReviewSessionProfile, "repoRoot">,
     auditWriter?: ToolAuditSink
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
@@ -403,28 +412,6 @@ export class ToolPolicyGuard {
       }
     };
   }
-}
-
-function isAllowedReadPath(
-  requestedPath: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
-): boolean {
-  const resolvedPath = path.resolve(requestedPath);
-  const repoRoot = path.resolve(profile.repoRoot);
-  const nightowlRootPath = nightowlRoot(repoRoot);
-  const reviewRoot = path.join(nightowlRootPath, "review");
-
-  const isWithinRepoSourceTree =
-    resolvedPath === repoRoot ||
-    (resolvedPath.startsWith(`${repoRoot}${path.sep}`) &&
-      resolvedPath !== nightowlRootPath &&
-      !resolvedPath.startsWith(`${nightowlRootPath}${path.sep}`));
-
-  return (
-    isWithinRepoSourceTree ||
-    resolvedPath === reviewRoot ||
-    resolvedPath.startsWith(`${reviewRoot}${path.sep}`)
-  );
 }
 
 export {

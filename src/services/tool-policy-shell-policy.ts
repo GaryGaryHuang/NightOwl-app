@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { nightowlRoot } from "../core/nightowl-namespace.ts";
+import { isAllowedReviewReadPath } from "../core/nightowl-namespace.ts";
 
 import type { ReviewSessionProfile } from "./review-session-factory.ts";
 
@@ -54,7 +54,7 @@ const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output"]);
 
 export function evaluateReadonlyShellCommand(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  profile: Pick<ReviewSessionProfile, "repoRoot">,
   commandCwd?: string
 ): ToolPolicyDecision {
   return isAllowedReadonlyBashCommand(command, profile, commandCwd)
@@ -67,7 +67,7 @@ export function evaluateReadonlyShellCommand(
 
 function isAllowedReadonlyBashCommand(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  profile: Pick<ReviewSessionProfile, "repoRoot">,
   commandCwd?: string
 ): boolean {
   const trimmedCommand = command.trim();
@@ -205,7 +205,7 @@ function splitTopLevelChainSegments(command: string): string[] | undefined {
  */
 function extractCdCwd(
   chainSegment: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  profile: Pick<ReviewSessionProfile, "repoRoot">,
   effectiveCwd?: string
 ): string | false | undefined {
   const trimmed = chainSegment.trim();
@@ -228,7 +228,7 @@ function extractCdCwd(
 
   const resolvedPath = resolvePathToken(pathToken, baseDirectory);
 
-  if (!isAllowedReadPath(resolvedPath, profile)) {
+  if (!isAllowedReviewReadPath(resolvedPath, profile.repoRoot)) {
     return false;
   }
 
@@ -307,7 +307,7 @@ function splitTopLevelPipelineSegments(command: string): string[] | undefined {
 
 function isAllowedSingleSegment(
   segment: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  profile: Pick<ReviewSessionProfile, "repoRoot">,
   commandCwd?: string
 ): boolean {
   const trimmed = segment.trim();
@@ -337,7 +337,7 @@ function matchesAllowedBashPrefix(command: string, prefix: string): boolean {
 
 function hasOnlyAllowedPathArguments(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">,
+  profile: Pick<ReviewSessionProfile, "repoRoot">,
   commandCwd?: string
 ): boolean {
   const tokens = command.split(/\s+/u).filter(Boolean);
@@ -357,7 +357,7 @@ function hasOnlyAllowedPathArguments(
 
     if (
       looksLikePath(token) &&
-      !isAllowedReadPath(resolvePathToken(token, baseDirectory), profile)
+      !isAllowedReviewReadPath(resolvePathToken(token, baseDirectory), profile.repoRoot)
     ) {
       return false;
     }
@@ -397,27 +397,5 @@ function containsDangerousFlag(command: string): boolean {
 
   return tokens.some(
     (token) => DANGEROUS_BASH_FLAGS.has(token) || token.startsWith("--output=")
-  );
-}
-
-function isAllowedReadPath(
-  requestedPath: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot" | "outputBaseDir">
-): boolean {
-  const resolvedPath = path.resolve(requestedPath);
-  const repoRoot = path.resolve(profile.repoRoot);
-  const nightowlRootPath = nightowlRoot(path.resolve(profile.repoRoot));
-  const reviewRoot = path.join(nightowlRootPath, "review");
-
-  const isWithinRepoSourceTree =
-    resolvedPath === repoRoot ||
-    (resolvedPath.startsWith(`${repoRoot}${path.sep}`) &&
-      resolvedPath !== nightowlRootPath &&
-      !resolvedPath.startsWith(`${nightowlRootPath}${path.sep}`));
-
-  return (
-    isWithinRepoSourceTree ||
-    resolvedPath === reviewRoot ||
-    resolvedPath.startsWith(`${reviewRoot}${path.sep}`)
   );
 }
