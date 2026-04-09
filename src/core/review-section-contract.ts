@@ -63,7 +63,16 @@ export type ReviewSectionKey = (typeof REVIEW_SECTION_DEFINITIONS)[number]["key"
 const REVIEW_SECTION_CONTRACT = buildReviewSectionContract(REVIEW_SECTION_DEFINITIONS);
 
 /**
- * Freeze and validate the section contract once so all step writers and finalizers share the same canonical layout.
+ * Builds and validates a frozen {@link ReviewSectionContract} from an array of section definitions.
+ *
+ * This function is called at module load time to create the canonical singleton `REVIEW_SECTION_CONTRACT`
+ * used by all lookup helpers in this module. It validates uniqueness constraints and freeze-locks the
+ * resulting contract so consumers cannot drift from the declared section ordering.
+ *
+ * @internal Exported solely so tests can pass arbitrary definition arrays to exercise validation
+ * error paths (duplicate key, duplicate order, invalid shape). The canonical contract for production
+ * use is the module-level singleton — callers should not construct additional contract instances for
+ * use in production logic.
  */
 export function buildReviewSectionContract(
   definitions: readonly ReviewSectionDefinition[]
@@ -97,7 +106,7 @@ export function buildReviewSectionContract(
   postFindings.sort((left, right) => left.order - right.order);
 
   return Object.freeze({
-    definitions: Object.freeze([...definitionsByKey.values()]),
+    definitions: Object.freeze([...preFindings, ...postFindings]),
     definitionsByKey,
     definitionsBySlot: Object.freeze({
       "pre-findings": Object.freeze([...preFindings]),
@@ -113,12 +122,6 @@ export function assertReviewSectionKey(sectionKey: string): asserts sectionKey i
 }
 
 // Lookup helpers read from the frozen contract so callers cannot drift from the declared section ordering.
-export function getReviewSectionDefinition(
-  sectionKey: ReviewSectionKey
-): ReviewSectionDefinition {
-  return REVIEW_SECTION_CONTRACT.definitionsByKey.get(sectionKey)!;
-}
-
 export function getReviewSectionDefinitionsForSlot(
   slot: ReviewSectionRenderSlot
 ): readonly ReviewSectionDefinition[] {

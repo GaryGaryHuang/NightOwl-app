@@ -128,3 +128,23 @@ test("buildReviewSectionContract rejects missing key and stepId deterministicall
     /missing stepId/u
   );
 });
+
+test("buildReviewSectionContract produces contract.definitions sorted by slot then order, regardless of input order", () => {
+  // Fixture satisfies both conditions required to make Map insertion order observably differ from sorted result:
+  // (a) a post-findings definition appears before pre-findings definitions in the input array
+  // (b) pre-findings definitions are provided in non-ascending order (order 2 before order 1)
+  const contract = buildReviewSectionContract([
+    { key: "summary", stepId: "step7-summary", renderSlot: "post-findings", order: 1 },
+    { key: "dependencies-boundaries", stepId: "step2", renderSlot: "pre-findings", order: 2 },
+    { key: "overview", stepId: "step1", renderSlot: "pre-findings", order: 1 }
+  ]);
+
+  assert.deepEqual(
+    contract.definitions.map((definition) => ({ key: definition.key, renderSlot: definition.renderSlot, order: definition.order })),
+    [
+      { key: "overview", renderSlot: "pre-findings", order: 1 },
+      { key: "dependencies-boundaries", renderSlot: "pre-findings", order: 2 },
+      { key: "summary", renderSlot: "post-findings", order: 1 }
+    ]
+  );
+});
