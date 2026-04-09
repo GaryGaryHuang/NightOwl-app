@@ -10,13 +10,9 @@ import {
   DefaultWebFetchPublicAddressPolicy,
   type WebFetchPublicAddressPolicy
 } from "./web-fetch-public-address-policy.ts";
+import type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
 
-export interface ToolPolicyDecisionDeny {
-  permissionDecision: "deny";
-  permissionDecisionReason: string;
-}
-
-export type ToolPolicyDecision = ToolPolicyDecisionDeny | undefined;
+export type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
 
 export const UNSAFE_WEB_FETCH_URL_REASON =
   "Review sessions only allow fetching absolute public https URLs.";

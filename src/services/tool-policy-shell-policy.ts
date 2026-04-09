@@ -3,13 +3,9 @@ import path from "node:path";
 import { isAllowedReviewReadPath } from "../core/nightowl-namespace.ts";
 
 import type { ReviewSessionProfile } from "./review-session-factory.ts";
+import type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
 
-export interface ToolPolicyDecisionDeny {
-  permissionDecision: "deny";
-  permissionDecisionReason: string;
-}
-
-export type ToolPolicyDecision = ToolPolicyDecisionDeny | undefined;
+export type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
 
 export const READONLY_BASH_DENY_REASON =
   "Review sessions only allow repo-local read-only shell analysis commands.";
