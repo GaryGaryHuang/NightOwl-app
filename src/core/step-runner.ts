@@ -1,16 +1,30 @@
 import type { FileReviewContext } from "./file-review-context.ts";
-import type { ReviewSectionKey } from "./review-section-contract.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload } from "./file-review-context.ts";
 import type { DryRunReviewStepContract } from "../services/dry-run-review-step-contract.ts";
 import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
+export interface StepResolveServices {
+  judgeService?: {
+    evaluate(input: {
+      stepId: string;
+      filePath: string;
+      criteria: string;
+      sectionContent: string;
+    }): Promise<{ passed: boolean; cause?: string }>;
+  };
+  validator: {
+    validate(input: {
+      validatorId: "findings-json";
+      responseText: string;
+      diffContent?: string;
+    }): FindingsPayload;
+  };
+}
+
 export interface StepExecutionPlan {
   stepId: string;
-  kind: "section" | "structured";
-  sectionKey?: ReviewSectionKey;
-  structuredTarget?: "findings";
   prompt: {
     systemMessage: string;
     userMessage: string;
@@ -21,17 +35,10 @@ export interface StepExecutionPlan {
     model: string;
     timeoutMs?: number;
   };
-  completionCheck?: {
-    kind: "judge";
-    criteria: string;
-  } | {
-    kind: "deterministic";
-    validatorId: "findings-json";
-  };
-  applyTo(
-    context: FileReviewContext,
-    response: string | FindingsPayload
-  ): void;
+  resolve(
+    response: string,
+    services: StepResolveServices
+  ): Promise<(context: FileReviewContext) => void>;
 }
 
 export interface StepResult {
@@ -71,6 +78,13 @@ export interface RunStepInput {
   workingDirectory?: string;
 }
 
+export interface StepRetryInfo {
+  stepId: string;
+  filePath: string;
+  attempt: number;
+  cause: string;
+}
+
 export interface StepRunnerOptions {
   reviewSessionFactory: StepReviewSessionFactoryLike;
   judgeService?: {
@@ -88,6 +102,7 @@ export interface StepRunnerOptions {
       diffContent?: string;
     }): FindingsPayload;
   };
+  onStepRetry?: (info: StepRetryInfo) => void;
 }
 
 /**
@@ -97,12 +112,14 @@ export class StepRunner {
   readonly #reviewSessionFactory: StepReviewSessionFactoryLike;
   readonly #judgeService?: StepRunnerOptions["judgeService"];
   readonly #structuredOutputValidator: NonNullable<StepRunnerOptions["structuredOutputValidator"]>;
+  readonly #onStepRetry?: (info: StepRetryInfo) => void;
 
   constructor(options: StepRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
     this.#judgeService = options.judgeService;
     this.#structuredOutputValidator =
       options.structuredOutputValidator ?? new StructuredOutputValidator();
+    this.#onStepRetry = options.onStepRetry;
   }
 
   async run(input: RunStepInput): Promise<StepResult> {
@@ -134,36 +151,16 @@ export class StepRunner {
           throw new Error("empty review response");
         }
 
-        let validatedResponse: string | FindingsPayload = response;
-
-        if (plan.completionCheck?.kind === "judge") {
-          if (!this.#judgeService) {
-            throw new Error("judge service is not configured");
-          }
-
-          const judgeResult = await this.#judgeService.evaluate({
-            stepId: plan.stepId,
-            filePath: input.context.filePath,
-            criteria: plan.completionCheck.criteria,
-            sectionContent: response
-          });
-
-          if (!judgeResult.passed) {
-            throw new Error(judgeResult.cause ?? "judge rejected");
-          }
-        } else if (plan.completionCheck?.kind === "deterministic") {
-          validatedResponse = this.#structuredOutputValidator.validate({
-            validatorId: plan.completionCheck.validatorId,
-            responseText: response,
-            diffContent: input.context.diffContent
-          });
-        }
+        const deferred = await plan.resolve(response, {
+          judgeService: this.#judgeService,
+          validator: this.#structuredOutputValidator
+        });
 
         return {
           stepId: plan.stepId,
           applyTo(context: FileReviewContext) {
             // Defer canonical state mutation until the orchestrator accepts the validated step result.
-            plan.applyTo(context, validatedResponse);
+            deferred(context);
           }
         };
       } catch (error) {
@@ -179,6 +176,17 @@ export class StepRunner {
 
         if (attempt === 1) {
           throw contextualError;
+        }
+
+        try {
+          this.#onStepRetry?.({
+            stepId: input.step.stepId,
+            filePath: input.context.filePath,
+            attempt,
+            cause: message
+          });
+        } catch {
+          // swallow: onStepRetry is a side-channel notification only
         }
       }
     }
