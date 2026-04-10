@@ -275,7 +275,6 @@ export class ReviewOrchestrator {
         reviewNoteFinalizer: this.#finalizer
       })
     ];
-    const sharedAbortState: AbortState = {};
     const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
 
     await this.#runPlannedFileWorkers({
@@ -287,8 +286,7 @@ export class ReviewOrchestrator {
       repoRoot,
       signal: options?.signal,
       steps,
-      runAbortState,
-      sharedAbortState
+      runAbortState
     });
 
     const successfulFiles = outcomeSlots.flatMap((slot) =>
@@ -359,7 +357,6 @@ export class ReviewOrchestrator {
     signal?: AbortSignal;
     runAbortState: AbortState;
     steps: StepDefinition[];
-    sharedAbortState: SharedAbortState;
   }): Promise<void> {
     const workerCount = Math.min(
       this.#maxConcurrentFiles,
@@ -417,7 +414,6 @@ export class ReviewOrchestrator {
               repoRoot: input.repoRoot,
               signal: input.signal,
               runAbortState: input.runAbortState,
-              sharedAbortState: input.sharedAbortState,
               steps: input.steps
             });
           } catch (error) {
@@ -442,7 +438,6 @@ export class ReviewOrchestrator {
     repoRoot: string;
     signal?: AbortSignal;
     runAbortState: AbortState;
-    sharedAbortState: SharedAbortState;
     steps: StepDefinition[];
   }): Promise<void> {
     let diffContent: string;
@@ -511,7 +506,6 @@ export class ReviewOrchestrator {
           });
         } catch (outputError) {
           input.runAbortState.error ??= outputError;
-          input.sharedAbortState.error ??= outputError;
           throw outputError;
         }
 
@@ -527,24 +521,15 @@ export class ReviewOrchestrator {
           });
         } catch (outputError) {
           input.runAbortState.error ??= outputError;
-          input.sharedAbortState.error ??= outputError;
           throw outputError;
         }
 
-        input.outcomeSlots[input.workItem.plannedIndex] = {
-          skipped: {
-            filePath: fileContext.filePath,
-            stepId: step.stepId,
-            reason
-          }
-        };
-
-        this.#emitProgressEvent({
-          type: "file-skipped",
+        this.#recordFileSkipped({
+          outcomeSlots: input.outcomeSlots,
+          plannedIndex: input.workItem.plannedIndex,
           filePath: fileContext.filePath,
           stepId: step.stepId,
-          reason,
-          ...countResolvedOutcomes(input.outcomeSlots)
+          reason
         });
 
         return;
@@ -578,33 +563,48 @@ export class ReviewOrchestrator {
 
         if (assessment.faultScope === "shared-output-target-fault") {
           input.runAbortState.error ??= outputError;
-          input.sharedAbortState.error ??= outputError;
           throw outputError;
         }
 
-        await this.#downgradeSuccessfulSnapshotOutputFailure({
-          context: fileContext,
-          stepId: step.stepId,
-          error: outputError,
-          outputPublisher: input.outputPublisher,
-          runAbortState: input.runAbortState,
-          sharedAbortState: input.sharedAbortState
-        });
-        input.outcomeSlots[input.workItem.plannedIndex] = {
-          skipped: {
+        const reason = outputError instanceof Error ? outputError.message : String(outputError);
+
+        fileContext.markInterrupted(step.stepId, reason);
+
+        if (input.runAbortState.error) {
+          return;
+        }
+
+        try {
+          input.outputPublisher.publishFileReview({
+            noteFilePath: fileContext.noteFilePath,
+            content: this.#finalizer.render(fileContext)
+          });
+        } catch (innerOutputError) {
+          input.runAbortState.error ??= innerOutputError;
+          throw innerOutputError;
+        }
+
+        if (input.runAbortState.error) {
+          return;
+        }
+
+        try {
+          input.outputPublisher.publishSkippedFile({
             filePath: fileContext.filePath,
             stepId: step.stepId,
-            reason:
-              outputError instanceof Error ? outputError.message : String(outputError)
-          }
-        };
+            reason
+          });
+        } catch (innerOutputError) {
+          input.runAbortState.error ??= innerOutputError;
+          throw innerOutputError;
+        }
 
-        this.#emitProgressEvent({
-          type: "file-skipped",
+        this.#recordFileSkipped({
+          outcomeSlots: input.outcomeSlots,
+          plannedIndex: input.workItem.plannedIndex,
           filePath: fileContext.filePath,
           stepId: step.stepId,
-          reason: outputError instanceof Error ? outputError.message : String(outputError),
-          ...countResolvedOutcomes(input.outcomeSlots)
+          reason
         });
         return;
       }
@@ -634,49 +634,28 @@ export class ReviewOrchestrator {
     });
   }
 
-  async #downgradeSuccessfulSnapshotOutputFailure(input: {
-    context: FileReviewContext;
+  #recordFileSkipped(input: {
+    outcomeSlots: PlannedOutcomeSlot[];
+    plannedIndex: number;
+    filePath: string;
     stepId: string;
-    error: unknown;
-    outputPublisher: RunOutputPublisher;
-    runAbortState: AbortState;
-    sharedAbortState: SharedAbortState;
-  }): Promise<void> {
-    const reason =
-      input.error instanceof Error ? input.error.message : String(input.error);
-
-    input.context.markInterrupted(input.stepId, reason);
-
-    if (input.runAbortState.error) {
-      return;
-    }
-
-    try {
-      input.outputPublisher.publishFileReview({
-        noteFilePath: input.context.noteFilePath,
-        content: this.#finalizer.render(input.context)
-      });
-    } catch (outputError) {
-      input.runAbortState.error ??= outputError;
-      input.sharedAbortState.error ??= outputError;
-      throw outputError;
-    }
-
-    if (input.runAbortState.error) {
-      return;
-    }
-
-    try {
-      input.outputPublisher.publishSkippedFile({
-        filePath: input.context.filePath,
+    reason: string;
+  }): void {
+    input.outcomeSlots[input.plannedIndex] = {
+      skipped: {
+        filePath: input.filePath,
         stepId: input.stepId,
-        reason
-      });
-    } catch (outputError) {
-      input.runAbortState.error ??= outputError;
-      input.sharedAbortState.error ??= outputError;
-      throw outputError;
-    }
+        reason: input.reason
+      }
+    };
+
+    this.#emitProgressEvent({
+      type: "file-skipped",
+      filePath: input.filePath,
+      stepId: input.stepId,
+      reason: input.reason,
+      ...countResolvedOutcomes(input.outcomeSlots)
+    });
   }
 
   #emitProgressEvent(event: RunProgressEvent): void {
@@ -698,7 +677,6 @@ interface AbortState {
   error?: unknown;
 }
 
-type SharedAbortState = AbortState;
 
 function countResolvedOutcomes(outcomeSlots: PlannedOutcomeSlot[]): {
   successfulFileCount: number;
