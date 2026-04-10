@@ -205,7 +205,7 @@ export class ReviewOrchestrator {
       changedFiles
     );
     const outputTarget = buildOutputTarget({
-      outputBaseDir: repoRoot,
+      repoRoot,
       branchName,
       headRef: request.headRef,
       timestamp: this.#timestampProvider()

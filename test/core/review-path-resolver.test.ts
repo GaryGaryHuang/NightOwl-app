@@ -10,7 +10,6 @@ import {
 
 test("buildSessionId sanitizes branch names", () => {
   const sessionId = buildSessionId({
-    outputBaseDir: "/workspace",
     branchName: "feature/review path",
     headRef: "feature/review path",
     timestamp: "03131430"
@@ -21,7 +20,6 @@ test("buildSessionId sanitizes branch names", () => {
 
 test("buildSessionId falls back to head ref when branch name is unavailable", () => {
   const sessionId = buildSessionId({
-    outputBaseDir: "/workspace",
     headRef: "refs/pull/42/head",
     timestamp: "03131430"
   });
@@ -31,7 +29,6 @@ test("buildSessionId falls back to head ref when branch name is unavailable", ()
 
 test("buildSessionId collapses repeated invalid separators in branch names", () => {
   const collapsed = buildSessionId({
-    outputBaseDir: "/workspace",
     branchName: "feature///review   path",
     headRef: "feature///review   path",
     timestamp: "03131430"
@@ -40,9 +37,19 @@ test("buildSessionId collapses repeated invalid separators in branch names", () 
   assert.equal(collapsed, "feature_review_path_03131430");
 });
 
+test("buildSessionId accepts narrow BuildSessionIdInput without repoRoot", () => {
+  const sessionId = buildSessionId({
+    branchName: "main",
+    headRef: "main",
+    timestamp: "04101200"
+  });
+
+  assert.equal(sessionId, "main_04101200");
+});
+
 test("buildOutputTarget returns review output paths", () => {
   const target = buildOutputTarget({
-    outputBaseDir: "/workspace",
+    repoRoot: "/workspace",
     branchName: "feature_login",
     headRef: "feature_login",
     timestamp: "03131430"
@@ -60,8 +67,9 @@ test("buildOutputTarget returns review output paths", () => {
   });
 });
 
-test("buildOutputTarget includes toolAuditPath under the session basePath", () => {  const target = buildOutputTarget({
-    outputBaseDir: "/workspace",
+test("buildOutputTarget includes toolAuditPath under the session basePath", () => {
+  const target = buildOutputTarget({
+    repoRoot: "/workspace",
     branchName: "feature_login",
     headRef: "feature_login",
     timestamp: "03131430"
@@ -79,7 +87,7 @@ test("buildOutputTarget includes toolAuditPath under the session basePath", () =
 
 test("buildOutputTarget includes changesetOverviewPath under the session basePath", () => {
   const target = buildOutputTarget({
-    outputBaseDir: "/workspace",
+    repoRoot: "/workspace",
     branchName: "feature_login",
     headRef: "feature_login",
     timestamp: "03131430"

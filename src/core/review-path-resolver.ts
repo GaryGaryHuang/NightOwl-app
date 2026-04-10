@@ -1,3 +1,13 @@
+import path from "node:path";
+
+import { reviewOutputRoot } from "./nightowl-namespace.ts";
+
+export interface BuildSessionIdInput {
+  branchName?: string;
+  headRef: string;
+  timestamp: string;
+}
+
 export interface OutputTarget {
   basePath: string;
   changesetOverviewPath: string;
@@ -9,11 +19,8 @@ export interface OutputTarget {
   toolAuditPath: string;
 }
 
-export interface ResolveOutputTargetInput {
-  outputBaseDir: string;
-  branchName?: string;
-  headRef: string;
-  timestamp: string;
+export interface ResolveOutputTargetInput extends BuildSessionIdInput {
+  repoRoot: string;
 }
 
 export interface PlannedNoteFile {
@@ -21,7 +28,7 @@ export interface PlannedNoteFile {
   noteFilePath: string;
 }
 
-export function buildSessionId(input: ResolveOutputTargetInput): string {
+export function buildSessionId(input: BuildSessionIdInput): string {
   // Sanitize the branch-derived prefix so session IDs stay filesystem-safe and deterministic.
   const candidate = sanitizeSegment(input.branchName ?? input.headRef);
   const fallback = sanitizeSegment(input.headRef);
@@ -34,7 +41,7 @@ export function buildOutputTarget(
   input: ResolveOutputTargetInput
 ): OutputTarget {
   const sessionId = buildSessionId(input);
-  const basePath = path.join(reviewOutputRoot(input.outputBaseDir), sessionId);
+  const basePath = path.join(reviewOutputRoot(input.repoRoot), sessionId);
 
   return {
     basePath,
@@ -55,6 +62,9 @@ export function planNoteFiles(
   // Start from the basename and prepend parent segments only as needed until every note filename is unique.
   const depths = new Map(changedFiles.map((filePath) => [filePath, 1]));
 
+  // Termination invariant: every conflict pass increments the depth of at least one conflicting
+  // path. Since path segment count is bounded above by the number of directory components in each
+  // file path, the loop must terminate in at most max(depth(filePath)) passes.
   while (true) {
     // Recompute the whole mapping each pass so collision resolution stays deterministic.
     const collisions = new Map();
@@ -85,10 +95,6 @@ export function planNoteFiles(
     }
   }
 }
-
-import path from "node:path";
-
-import { reviewOutputRoot } from "./nightowl-namespace.ts";
 
 function sanitizeSegment(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]+/gu, "_").replace(/_+/gu, "_");
