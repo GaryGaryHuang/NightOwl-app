@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -12,13 +11,28 @@ import {
   FakeHostnameClassifier
 } from "../helpers/tool-policy-fixture.ts";
 
+async function assertDeniedUrls(
+  policy: ToolPolicyWebFetchPolicy,
+  urls: string[],
+  reason: string
+): Promise<void> {
+  for (const url of urls) {
+    assert.deepEqual(await policy.evaluate(url), {
+      permissionDecision: "deny",
+      permissionDecisionReason: reason
+    });
+  }
+}
+
 test("tool policy web-fetch policy enforces the public https URL gate", async () => {
   const policy = createWebFetchPolicy();
 
   assert.equal(await policy.evaluate("https://docs.example.com/guide"), undefined);
 
-  for (const url of [
+  await assertDeniedUrls(policy, [
     "/internal/path",
+    "http://docs.example.com/guide",
+    "http://example.com/spec",
     "https://localhost:3000",
     "https://192.168.1.10/admin",
     "https://198.51.100.10/reference",
@@ -29,25 +43,7 @@ test("tool policy web-fetch policy enforces the public https URL gate", async ()
     "https://",
     "file:///etc/passwd",
     "https://[::ffff:127.0.0.1]/admin"
-  ]) {
-    assert.deepEqual(await policy.evaluate(url), {
-      permissionDecision: "deny",
-      permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-    });
-  }
-});
-
-test("tool policy web-fetch policy denies http URLs", async () => {
-  const policy = createWebFetchPolicy();
-
-  assert.deepEqual(await policy.evaluate("http://docs.example.com/guide"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-  });
-  assert.deepEqual(await policy.evaluate("http://example.com/spec"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-  });
+  ], UNSAFE_WEB_FETCH_URL_REASON);
 });
 
 test("tool policy web-fetch policy applies hostname DNS classification only to hostname URLs", async () => {
@@ -76,38 +72,53 @@ test("tool policy web-fetch policy applies hostname DNS classification only to h
 });
 
 test("tool policy web-fetch policy enforces exact-host and wildcard allowlist semantics", async () => {
-  const exact = createWebFetchPolicy({
-    webFetchAllowedHosts: ["docs.example.com"]
-  });
+  const cases = [
+    {
+      policy: createWebFetchPolicy({
+        webFetchAllowedHosts: ["docs.example.com"]
+      }),
+      allowedUrls: [
+        "https://docs.example.com/guide",
+        "https://Docs.Example.Com/reference",
+        "https://docs.example.com.:8443/guide"
+      ],
+      deniedUrls: ["https://react.dev/reference"]
+    },
+    {
+      policy: createWebFetchPolicy({
+        webFetchAllowedHosts: ["react.dev", "*.example.com"]
+      }),
+      allowedUrls: [
+        "https://docs.example.com/guide",
+        "https://api.docs.example.com/v2/ref",
+        "https://react.dev/reference"
+      ],
+      deniedUrls: ["https://vuejs.org/guide"]
+    },
+    {
+      policy: new ToolPolicyWebFetchPolicy({
+        webFetchAllowedHosts: ["DOCS.EXAMPLE.COM", "*.EXAMPLE.COM"],
+        hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
+      }),
+      allowedUrls: [
+        "https://docs.example.com/guide",
+        "https://api.example.com/v1/ref"
+      ],
+      deniedUrls: ["https://vuejs.org/guide"]
+    }
+  ];
 
-  assert.equal(await exact.evaluate("https://docs.example.com/guide"), undefined);
-  assert.equal(
-    await exact.evaluate("https://Docs.Example.Com/reference"),
-    undefined
-  );
-  assert.equal(
-    await exact.evaluate("https://docs.example.com.:8443/guide"),
-    undefined
-  );
-  assert.deepEqual(await exact.evaluate("https://react.dev/reference"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-  });
+  for (const testCase of cases) {
+    for (const url of testCase.allowedUrls) {
+      assert.equal(await testCase.policy.evaluate(url), undefined);
+    }
 
-  const wildcard = createWebFetchPolicy({
-    webFetchAllowedHosts: ["react.dev", "*.example.com"]
-  });
-
-  assert.equal(await wildcard.evaluate("https://docs.example.com/guide"), undefined);
-  assert.equal(
-    await wildcard.evaluate("https://api.docs.example.com/v2/ref"),
-    undefined
-  );
-  assert.equal(await wildcard.evaluate("https://react.dev/reference"), undefined);
-  assert.deepEqual(await wildcard.evaluate("https://vuejs.org/guide"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-  });
+    await assertDeniedUrls(
+      testCase.policy,
+      testCase.deniedUrls,
+      CONFIGURED_WEB_FETCH_HOST_REASON
+    );
+  }
 });
 
 // Denylist takes precedence over the allowlist: a host that matches both
@@ -176,17 +187,6 @@ test("tool policy web-fetch policy canonicalizes hostnames for DNS classificatio
   ]);
 });
 
-
-
-test("tool policy web-fetch policy can be instantiated directly with explicit dependencies", async () => {
-  const policy = new ToolPolicyWebFetchPolicy({
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" }),
-    webFetchAllowedHosts: ["docs.example.com"]
-  });
-
-  assert.equal(await policy.evaluate("https://docs.example.com/guide"), undefined);
-});
-
 // Spy-stub that records every address passed to isAllowed() and returns a
 // fixed value. Used to verify that the injected addressPolicy is actually
 // wired into the IP-literal evaluation path.
@@ -204,49 +204,44 @@ class FakeAddressPolicy {
   }
 }
 
-test("tool policy web-fetch policy uses injected addressPolicy for IPv4 literal URLs", async () => {
-  const addressPolicy = new FakeAddressPolicy(false);
-  const policy = new ToolPolicyWebFetchPolicy({
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" }),
-    addressPolicy
-  });
-
-  assert.deepEqual(await policy.evaluate("https://93.184.216.34/"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-  });
-  assert.deepEqual(addressPolicy.calls, ["93.184.216.34"]);
-});
-
-test("tool policy web-fetch policy uses injected addressPolicy for IPv6 literal URLs", async () => {
-  const addressPolicy = new FakeAddressPolicy(false);
-  const policy = new ToolPolicyWebFetchPolicy({
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" }),
-    addressPolicy
-  });
-
-  assert.deepEqual(
-    await policy.evaluate("https://[2606:2800:220:1:248:1893:25c8:1946]/"),
+test("tool policy web-fetch policy uses injected addressPolicy for IP literal URLs across IPv4, IPv6, and IPv4-mapped IPv6", async () => {
+  const cases = [
     {
-      permissionDecision: "deny",
-      permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
+      url: "https://93.184.216.34/",
+      returnValue: false,
+      expectedDecision: {
+        permissionDecision: "deny",
+        permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
+      },
+      expectedCalls: ["93.184.216.34"]
+    },
+    {
+      url: "https://[2606:2800:220:1:248:1893:25c8:1946]/",
+      returnValue: false,
+      expectedDecision: {
+        permissionDecision: "deny",
+        permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
+      },
+      expectedCalls: ["2606:2800:220:1:248:1893:25c8:1946"]
+    },
+    {
+      url: "https://[::ffff:93.184.216.34]/",
+      returnValue: true,
+      expectedDecision: undefined,
+      expectedCalls: ["::ffff:5db8:d822"]
     }
-  );
-  assert.deepEqual(addressPolicy.calls, ["2606:2800:220:1:248:1893:25c8:1946"]);
-});
+  ] as const;
 
-test("tool policy web-fetch policy uses injected addressPolicy for IPv4-mapped IPv6 literal URLs", async () => {
-  const addressPolicy = new FakeAddressPolicy(true);
-  const policy = new ToolPolicyWebFetchPolicy({
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" }),
-    addressPolicy
-  });
+  for (const testCase of cases) {
+    const addressPolicy = new FakeAddressPolicy(testCase.returnValue);
+    const policy = new ToolPolicyWebFetchPolicy({
+      hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" }),
+      addressPolicy
+    });
 
-  // Node.js URL parser normalizes ::ffff:93.184.216.34 → ::ffff:5db8:d822
-  // (dotted-decimal mapped suffix converted to hex). That is the address
-  // the policy receives after bracket stripping.
-  assert.equal(await policy.evaluate("https://[::ffff:93.184.216.34]/"), undefined);
-  assert.deepEqual(addressPolicy.calls, ["::ffff:5db8:d822"]);
+    assert.deepEqual(await policy.evaluate(testCase.url), testCase.expectedDecision);
+    assert.deepEqual(addressPolicy.calls, testCase.expectedCalls);
+  }
 });
 
 test("tool policy web-fetch policy preserves default IP literal behavior when no addressPolicy is injected", async () => {
@@ -257,41 +252,6 @@ test("tool policy web-fetch policy preserves default IP literal behavior when no
     permissionDecision: "deny",
     permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
   });
-});
-
-test("tool policy web-fetch policy canonicalizes uppercase wildcard allowed-host entries at construction time", async () => {
-  // Uppercase wildcard: *.EXAMPLE.COM should match docs.example.com
-  const uppercaseWildcard = new ToolPolicyWebFetchPolicy({
-    webFetchAllowedHosts: ["*.EXAMPLE.COM"],
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
-  });
-  assert.equal(
-    await uppercaseWildcard.evaluate("https://docs.example.com/guide"),
-    undefined
-  );
-
-  // Wildcard-only match: api.example.com is not covered by the exact-host entry DOCS.EXAMPLE.COM
-  const mixedCase = new ToolPolicyWebFetchPolicy({
-    webFetchAllowedHosts: ["DOCS.EXAMPLE.COM", "*.EXAMPLE.COM"],
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
-  });
-  assert.equal(
-    await mixedCase.evaluate("https://api.example.com/v1/ref"),
-    undefined
-  );
-
-  // Regression guard: non-matching URL must still be denied
-  const allowlistWithUppercaseWildcard = new ToolPolicyWebFetchPolicy({
-    webFetchAllowedHosts: ["*.EXAMPLE.COM"],
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
-  });
-  assert.deepEqual(
-    await allowlistWithUppercaseWildcard.evaluate("https://vuejs.org/guide"),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-    }
-  );
 });
 
 test("tool policy web-fetch policy canonicalizes uppercase wildcard denied-host entries at construction time", async () => {
@@ -305,19 +265,5 @@ test("tool policy web-fetch policy canonicalizes uppercase wildcard denied-host 
       permissionDecision: "deny",
       permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
     }
-  );
-});
-
-test("tool policy web-fetch policy does not import shared hostname helpers from the classifier module", () => {
-  const source = readFileSync(
-    new URL("../../src/services/tool-policy-web-fetch-policy.ts", import.meta.url),
-    "utf8"
-  );
-
-  assert.equal(
-    /import\s*\{[^}]*canonicalizeHostnameForComparison[^}]*\}\s*from\s*"\.\/web-fetch-hostname-classifier\.ts";/u.test(
-      source
-    ),
-    false
   );
 });

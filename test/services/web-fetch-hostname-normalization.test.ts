@@ -6,38 +6,44 @@ import {
   normalizeHostnameForNetworkChecks
 } from "../../src/services/web-fetch-hostname-normalization.ts";
 
-test("shared hostname normalization lowercases mixed-case hostnames", () => {
-  assert.equal(
-    normalizeHostnameForNetworkChecks("Docs.Example.Com"),
-    "docs.example.com"
-  );
+test("shared hostname normalization lowercases input and strips surrounding brackets for network checks", () => {
+  const cases = [
+    {
+      input: "Docs.Example.Com",
+      expected: "docs.example.com"
+    },
+    {
+      input: "[Docs.Example.Com]",
+      expected: "docs.example.com"
+    },
+    {
+      input: "[::1]",
+      expected: "::1"
+    },
+    {
+      input: "[::ffff:127.0.0.1]",
+      expected: "::ffff:127.0.0.1"
+    }
+  ] as const;
+
+  for (const testCase of cases) {
+    assert.equal(normalizeHostnameForNetworkChecks(testCase.input), testCase.expected);
+  }
 });
 
-test("shared hostname normalization strips surrounding brackets for network checks", () => {
-  assert.equal(
-    normalizeHostnameForNetworkChecks("[Docs.Example.Com]"),
-    "docs.example.com"
-  );
-});
+test("shared hostname canonicalization preserves normalized structure while stripping a trailing dot for comparison", () => {
+  const cases = [
+    {
+      input: "Docs.Example.Com.",
+      expected: "docs.example.com"
+    },
+    {
+      input: "api.docs.example.com",
+      expected: "api.docs.example.com"
+    }
+  ] as const;
 
-test("shared hostname normalization strips surrounding brackets from IPv6 address strings for network checks", () => {
-  assert.equal(normalizeHostnameForNetworkChecks("[::1]"), "::1");
-  assert.equal(
-    normalizeHostnameForNetworkChecks("[::ffff:127.0.0.1]"),
-    "::ffff:127.0.0.1"
-  );
-});
-
-test("shared hostname canonicalization strips a trailing dot for comparison", () => {
-  assert.equal(
-    canonicalizeHostnameForComparison("Docs.Example.Com."),
-    "docs.example.com"
-  );
-});
-
-test("shared hostname canonicalization preserves interior structure", () => {
-  assert.equal(
-    canonicalizeHostnameForComparison("api.docs.example.com"),
-    "api.docs.example.com"
-  );
+  for (const testCase of cases) {
+    assert.equal(canonicalizeHostnameForComparison(testCase.input), testCase.expected);
+  }
 });

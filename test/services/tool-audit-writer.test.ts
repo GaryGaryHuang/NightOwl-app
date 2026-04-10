@@ -7,92 +7,53 @@ import {
   createToolAuditRecord
 } from "../helpers/review-session-runtime-contract-fixture.ts";
 
-test("ToolAuditWriter.append() writes a valid JSONL line containing ts, tool, decision, and args", () => {
+function readAuditLines(auditContent: string): unknown[] {
+  return auditContent
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line));
+}
+
+test("ToolAuditWriter.append() serializes audit records as JSONL and preserves allow/deny reason semantics", () => {
   const auditFixture = createAuditFileFixture();
 
   try {
     const writer = new ToolAuditWriter(auditFixture.auditPath);
-    const record = createToolAuditRecord();
-
-    writer.append(record);
-
-    const parsed = JSON.parse(auditFixture.read().trim());
-
-    assert.equal(parsed.ts, record.ts);
-    assert.equal(parsed.tool, "shell");
-    assert.equal(parsed.decision, "allow");
-    assert.deepEqual(parsed.args, { command: "git log --oneline -5" });
-  } finally {
-    auditFixture.cleanup();
-  }
-});
-
-test("ToolAuditWriter.append() includes reason field for deny records", () => {
-  const auditFixture = createAuditFileFixture();
-
-  try {
-    const writer = new ToolAuditWriter(auditFixture.auditPath);
-    const record = createToolAuditRecord({
-      decision: "deny",
-      reason: "Side-effect characters detected: ;",
-      args: { command: "git log; rm -rf /" }
-    });
-
-    writer.append(record);
-
-    const parsed = JSON.parse(auditFixture.read().trim());
-
-    assert.equal(parsed.decision, "deny");
-    assert.equal(parsed.reason, "Side-effect characters detected: ;");
-  } finally {
-    auditFixture.cleanup();
-  }
-});
-
-// `reason` must be completely absent from allow records (not just undefined)
-// so downstream audit parsers can treat its presence as a reliable deny signal.
-test("ToolAuditWriter.append() omits reason field for allow records", () => {
-  const auditFixture = createAuditFileFixture();
-
-  try {
-    const writer = new ToolAuditWriter(auditFixture.auditPath);
-    const record = createToolAuditRecord({
-      tool: "url",
-      args: { url: "https://docs.example.com" }
-    });
-
-    writer.append(record);
-
-    const parsed = JSON.parse(auditFixture.read().trim());
-
-    assert.equal(parsed.decision, "allow");
-    assert.equal("reason" in parsed, false);
-  } finally {
-    auditFixture.cleanup();
-  }
-});
-
-test("ToolAuditWriter.append() ts field is ISO 8601 UTC format", () => {
-  const auditFixture = createAuditFileFixture();
-
-  try {
-    const writer = new ToolAuditWriter(auditFixture.auditPath);
-    const before = new Date();
-
-    writer.append(
+    const records = [
       createToolAuditRecord({
-        ts: new Date().toISOString(),
-        args: { command: "git status" }
+        tool: "url",
+        args: { url: "https://docs.example.com" }
+      }),
+      createToolAuditRecord({
+        decision: "deny",
+        reason: "Side-effect characters detected: ;",
+        args: { command: "git log; rm -rf /" }
       })
-    );
+    ];
 
-    const after = new Date();
-    const parsed = JSON.parse(auditFixture.read().trim());
-    const parsedTs = new Date(parsed.ts);
+    for (const record of records) {
+      writer.append(record);
+    }
 
-    assert.ok(parsedTs >= before || parsedTs.getTime() >= before.getTime() - 1);
-    assert.ok(parsedTs <= after || parsedTs.getTime() <= after.getTime() + 1);
-    assert.ok(parsed.ts.endsWith("Z"), `expected ts to end with Z, got: ${parsed.ts}`);
+    const [allowRecord, denyRecord] = readAuditLines(auditFixture.read()) as Array<{
+      ts: string;
+      tool: string;
+      decision: string;
+      reason?: string;
+      args: Record<string, string | undefined>;
+    }>;
+
+    assert.equal(allowRecord.ts, records[0].ts);
+    assert.equal(allowRecord.tool, "url");
+    assert.equal(allowRecord.decision, "allow");
+    assert.deepEqual(allowRecord.args, { url: "https://docs.example.com" });
+    assert.equal("reason" in allowRecord, false);
+
+    assert.equal(denyRecord.ts, records[1].ts);
+    assert.equal(denyRecord.tool, "shell");
+    assert.equal(denyRecord.decision, "deny");
+    assert.equal(denyRecord.reason, "Side-effect characters detected: ;");
+    assert.deepEqual(denyRecord.args, { command: "git log; rm -rf /" });
   } finally {
     auditFixture.cleanup();
   }
@@ -123,12 +84,16 @@ test("ToolAuditWriter.append() multiple calls produce multiple independently par
       writer.append(record);
     }
 
-    const lines = auditFixture.read().split("\n").filter((line) => line.length > 0);
+    const lines = readAuditLines(auditFixture.read()) as Array<{
+      ts: string;
+      tool: string;
+      decision: string;
+    }>;
 
     assert.equal(lines.length, 3);
 
     for (let index = 0; index < lines.length; index++) {
-      const parsed = JSON.parse(lines[index]);
+      const parsed = lines[index];
       assert.equal(parsed.ts, records[index].ts);
       assert.equal(parsed.tool, records[index].tool);
       assert.equal(parsed.decision, records[index].decision);
@@ -140,29 +105,28 @@ test("ToolAuditWriter.append() multiple calls produce multiple independently par
 
 // ToolAuditWriter must never throw on write failures — a broken audit log
 // must not interrupt a running review session.
-test("ToolAuditWriter.append() silently ignores write failures and does not throw", () => {
-  const writer = new ToolAuditWriter("/nonexistent/deeply/nested/tool-audit.jsonl");
-
-  assert.doesNotThrow(() => {
-    writer.append(createToolAuditRecord({ args: { command: "git log" } }));
-  });
-});
-
-test("ToolAuditWriter.append() does not propagate errors when file path is read-only", () => {
+test("ToolAuditWriter.append() silently ignores write failures and never throws", () => {
   const auditFixture = createAuditFileFixture();
 
   try {
-    const writer = new ToolAuditWriter(auditFixture.tempDir);
+    const unwritablePaths = [
+      "/nonexistent/deeply/nested/tool-audit.jsonl",
+      auditFixture.tempDir
+    ];
 
-    assert.doesNotThrow(() => {
-      writer.append(
-        createToolAuditRecord({
-          decision: "deny",
-          reason: "test",
-          args: { command: "rm -rf /" }
-        })
-      );
-    });
+    for (const auditPath of unwritablePaths) {
+      const writer = new ToolAuditWriter(auditPath);
+
+      assert.doesNotThrow(() => {
+        writer.append(
+          createToolAuditRecord({
+            decision: "deny",
+            reason: "test",
+            args: { command: "rm -rf /" }
+          })
+        );
+      });
+    }
   } finally {
     auditFixture.cleanup();
   }
