@@ -1,7 +1,14 @@
 export type ReviewSectionRenderSlot = "pre-findings" | "post-findings";
 
+export type ReviewSectionKey =
+  | "overview"
+  | "dependencies-boundaries"
+  | "knowledge-source-of-truth"
+  | "strategy-what-if-scenarios"
+  | "summary";
+
 export interface ReviewSectionDefinition {
-  key: string;
+  key: ReviewSectionKey;
   stepId: string;
   renderSlot: ReviewSectionRenderSlot;
   order: number;
@@ -58,8 +65,6 @@ export const REVIEW_SECTION_DEFINITIONS = [
   SUMMARY_SECTION
 ] as const satisfies readonly ReviewSectionDefinition[];
 
-export type ReviewSectionKey = (typeof REVIEW_SECTION_DEFINITIONS)[number]["key"];
-
 const REVIEW_SECTION_CONTRACT = buildReviewSectionContract(REVIEW_SECTION_DEFINITIONS);
 
 /**
@@ -84,8 +89,7 @@ export function buildReviewSectionContract(
   for (const definition of definitions) {
     validateDefinitionShape(definition);
 
-    const sectionKey = definition.key as ReviewSectionKey;
-    if (definitionsByKey.has(sectionKey)) {
+    if (definitionsByKey.has(definition.key)) {
       throw new Error(`duplicate section identifier: ${definition.key}`);
     }
 
@@ -98,7 +102,7 @@ export function buildReviewSectionContract(
     }
 
     const frozenDefinition = Object.freeze({ ...definition });
-    definitionsByKey.set(sectionKey, frozenDefinition);
+    definitionsByKey.set(definition.key, frozenDefinition);
     slotDefinitions.push(frozenDefinition);
   }
 

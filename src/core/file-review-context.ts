@@ -1,5 +1,4 @@
 import type { ReviewSectionKey } from "./review-section-contract.ts";
-import { assertReviewSectionKey } from "./review-section-contract.ts";
 
 export interface FileReviewContextInput {
   filePath: string;
@@ -70,13 +69,11 @@ export class FileReviewContext {
     this.headRef = input.headRef;
   }
 
-  setSection(sectionKey: string, content: string): void {
-    assertReviewSectionKey(sectionKey);
+  setSection(sectionKey: ReviewSectionKey, content: string): void {
     this.#sections.set(sectionKey, content);
   }
 
-  getSection(sectionKey: string): string | undefined {
-    assertReviewSectionKey(sectionKey);
+  getSection(sectionKey: ReviewSectionKey): string | undefined {
     return this.#sections.get(sectionKey);
   }
 
@@ -85,11 +82,8 @@ export class FileReviewContext {
   }
 
   // Findings are replaced wholesale, not merged, because Step 6 produces the complete final set.
-  updateStructuredState(patch: Partial<ReviewStructuredState>): void {
-    if (Object.hasOwn(patch, "findings")) {
-      // Keep formal findings detached from caller-owned arrays and objects.
-      this.#structuredState.findings = patch.findings?.map(cloneFinding);
-    }
+  setFindings(findings: Finding[]): void {
+    this.#structuredState.findings = findings.map(cloneFinding);
   }
 
   getStructuredState(): ReviewStructuredState {

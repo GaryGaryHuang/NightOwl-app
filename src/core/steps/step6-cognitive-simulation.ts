@@ -142,7 +142,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
 
         // Step 6 replaces the provisional findings with the post-simulation final set.
         return (targetContext: FileReviewContext) => {
-          targetContext.updateStructuredState({ findings: payload.findings });
+          targetContext.setFindings(payload.findings);
         };
       }
     };

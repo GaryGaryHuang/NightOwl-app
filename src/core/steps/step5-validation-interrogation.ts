@@ -136,7 +136,7 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
         });
 
         return (targetContext: FileReviewContext) => {
-          targetContext.updateStructuredState({ findings: payload.findings });
+          targetContext.setFindings(payload.findings);
         };
       }
     };
