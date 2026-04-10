@@ -970,3 +970,74 @@ test("createLocalReviewRunApp completes dry-run flow and result has dryRun: true
     fixture.cleanup();
   }
 });
+
+// ---------------------------------------------------------------------------
+// context7ApiKey injection
+// ---------------------------------------------------------------------------
+
+test("createLocalReviewRunApp passes context7ApiKey option to the session config as headers.CONTEXT7_API_KEY", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const sessionConfigs: SessionConfig[] = [];
+
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      context7ApiKey: "injected-test-key",
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              sessionConfigs.push(config);
+              // Abort after the first session to keep the test fast.
+              throw new Error("abort after first session");
+            }
+          };
+        }
+      },
+      outputSink: defineOutputSinkDouble({
+        initializeRun() {
+          return this;
+        },
+        publishFileReview() {},
+        publishSkippedFile() {},
+        publishRunSummary() {},
+        publishReviewIndex() {},
+        publishRunManifest() {},
+        publishChangesetOverview() {}
+      })
+    });
+
+    await assert.rejects(
+      () =>
+        app.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: [],
+          dryRun: false
+        }),
+      /abort after first session/u
+    );
+
+    assert.ok(sessionConfigs.length >= 1, "at least one session must have been attempted");
+
+    // The Step 0 (Changeset Overview) session config should contain the injected API key.
+    const step0Config = sessionConfigs.find((c) => isChangesetOverviewSystemMessage(c.systemMessage));
+    assert.ok(step0Config, "a Step 0 session config must be present");
+    assert.equal(
+      (step0Config.mcpServers?.context7 as { headers?: Record<string, string> } | undefined)
+        ?.headers?.CONTEXT7_API_KEY,
+      "injected-test-key",
+      "injected context7ApiKey must appear in session config headers"
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});

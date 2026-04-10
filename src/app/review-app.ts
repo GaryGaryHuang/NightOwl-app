@@ -53,6 +53,7 @@ export interface CreateLocalReviewRunAppOptions {
     forceStop(): Promise<void>;
     getClient(): CopilotClientLike;
   };
+  context7ApiKey?: string;
   outputSink?: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor?: SuccessfulSnapshotOutputHealthAssessor;
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
@@ -121,7 +122,7 @@ export function createLocalReviewRunApp(
         const knowledgeSvc =
           options.knowledgeSvc ??
           new KnowledgeSvc({
-            context7ApiKey: process.env.CONTEXT7_API_KEY,
+            context7ApiKey: options.context7ApiKey ?? process.env.CONTEXT7_API_KEY,
             userMcpServers: reviewConfig.mcpServers
           });
         const toolPolicyGuard = new ToolPolicyGuard({
