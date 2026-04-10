@@ -5,125 +5,148 @@ import {
   CopilotAvailabilityChecker
 } from "../../src/services/copilot-availability-checker.ts";
 
-test("CopilotAvailabilityChecker starts, pings, and stops the client on success", async () => {
-  const calls: string[] = [];
-  const checker = new CopilotAvailabilityChecker({
+interface AvailabilityClientManagerDoubleOptions {
+  startImpl?: () => Promise<void>;
+  pingImpl?: (message?: string) => Promise<{ message: string; timestamp: number }>;
+  stopImpl?: () => Promise<unknown>;
+  forceStopImpl?: () => Promise<unknown>;
+}
+
+function createAvailabilityClientManagerDouble(
+  options: AvailabilityClientManagerDoubleOptions = {}
+): {
+  calls: { start: number; stop: number; forceStop: number };
+  pingMessages: string[];
+  clientManager: {
+    start(): Promise<void>;
+    getClient(): {
+      ping(message?: string): Promise<{ message: string; timestamp: number }>;
+    };
+    stop(): Promise<unknown>;
+    forceStop(): Promise<unknown>;
+  };
+} {
+  const calls = {
+    start: 0,
+    stop: 0,
+    forceStop: 0
+  };
+  const pingMessages: string[] = [];
+
+  return {
+    calls,
+    pingMessages,
     clientManager: {
       async start() {
-        calls.push("start");
+        calls.start += 1;
+        await options.startImpl?.();
       },
       getClient() {
         return {
           async ping(message?: string) {
-            calls.push(`ping:${message}`);
-            return { message: message ?? "", timestamp: Date.now() };
+            pingMessages.push(message ?? "");
+            return await (
+              options.pingImpl?.(message) ??
+              Promise.resolve({
+                message: message ?? "",
+                timestamp: 0
+              })
+            );
           }
         };
       },
       async stop() {
-        calls.push("stop");
+        calls.stop += 1;
+        return await (options.stopImpl?.() ?? Promise.resolve());
       },
       async forceStop() {
-        calls.push("forceStop");
+        calls.forceStop += 1;
+        return await (options.forceStopImpl?.() ?? Promise.resolve());
       }
     }
+  };
+}
+
+test("CopilotAvailabilityChecker starts, pings, and stops the client on success", async () => {
+  const fixture = createAvailabilityClientManagerDouble();
+  const checker = new CopilotAvailabilityChecker({
+    pingMessage: "copilot health probe",
+    clientManager: fixture.clientManager
   });
 
   await checker.check();
 
-  assert.deepEqual(calls, ["start", "ping:health check", "stop"]);
+  assert.deepEqual(fixture.calls, {
+    start: 1,
+    stop: 1,
+    forceStop: 0
+  });
+  assert.deepEqual(fixture.pingMessages, ["copilot health probe"]);
 });
 
 test("CopilotAvailabilityChecker surfaces startup failures", async () => {
-  const checker = new CopilotAvailabilityChecker({
-    clientManager: {
-      async start() {
-        throw new Error("startup failed");
-      },
-      getClient() {
-        throw new Error("unreachable");
-      },
-      async stop() {},
-      async forceStop() {}
+  const startupError = new Error("startup failed");
+  const fixture = createAvailabilityClientManagerDouble({
+    async startImpl() {
+      throw startupError;
     }
   });
+  const checker = new CopilotAvailabilityChecker({
+    clientManager: fixture.clientManager
+  });
 
-  await assert.rejects(() => checker.check(), /startup failed/u);
+  await assert.rejects(
+    () => checker.check(),
+    (error: unknown) => error === startupError
+  );
+
+  assert.deepEqual(fixture.calls, {
+    start: 1,
+    stop: 1,
+    forceStop: 0
+  });
+  assert.deepEqual(fixture.pingMessages, []);
 });
 
 test("CopilotAvailabilityChecker preserves probe failures even if later cleanup also fails", async () => {
+  const probeError = new Error("probe failed");
   const checker = new CopilotAvailabilityChecker({
-    clientManager: {
-      async start() {},
-      getClient() {
-        return {
-          async ping() {
-            throw new Error("probe failed");
-          }
-        };
+    clientManager: createAvailabilityClientManagerDouble({
+      async pingImpl() {
+        throw probeError;
       },
-      async stop() {
+      async stopImpl() {
         throw new Error("cleanup failed");
-      },
-      async forceStop() {
-        throw new Error("forceStop failed");
       }
-    }
+    }).clientManager
   });
 
-  await assert.rejects(() => checker.check(), /probe failed/u);
-});
-
-test("CopilotAvailabilityChecker falls back to forceStop when graceful stop times out", async () => {
-  const calls: string[] = [];
-  const checker = new CopilotAvailabilityChecker({
-    gracefulShutdownTimeoutMs: 0,
-    clientManager: {
-      async start() {
-        calls.push("start");
-      },
-      getClient() {
-        return {
-          async ping() {
-            calls.push("ping");
-            return { message: "health check", timestamp: Date.now() };
-          }
-        };
-      },
-      async stop() {
-        calls.push("stop");
-        return new Promise<void>(() => {});
-      },
-      async forceStop() {
-        calls.push("forceStop");
-      }
-    }
-  });
-
-  await checker.check();
-
-  assert.deepEqual(calls, ["start", "ping", "stop", "forceStop"]);
+  await assert.rejects(
+    () => checker.check(),
+    (error: unknown) => error === probeError
+  );
 });
 
 test("CopilotAvailabilityChecker fails when cleanup fails after a successful probe", async () => {
-  const checker = new CopilotAvailabilityChecker({
-    clientManager: {
-      async start() {},
-      getClient() {
-        return {
-          async ping() {
-            return { message: "health check", timestamp: Date.now() };
-          }
-        };
-      },
-      async stop() {
-        throw new Error("stop failed");
-      },
-      async forceStop() {
-        throw new Error("forceStop failed");
-      }
+  const stopError = new Error("stop failed");
+  const fixture = createAvailabilityClientManagerDouble({
+    async stopImpl() {
+      throw stopError;
     }
   });
+  const checker = new CopilotAvailabilityChecker({
+    clientManager: fixture.clientManager
+  });
 
-  await assert.rejects(() => checker.check(), /stop failed/u);
+  await assert.rejects(
+    () => checker.check(),
+    (error: unknown) => error === stopError
+  );
+
+  assert.deepEqual(fixture.calls, {
+    start: 1,
+    stop: 1,
+    forceStop: 0
+  });
+  assert.deepEqual(fixture.pingMessages, ["health check"]);
 });

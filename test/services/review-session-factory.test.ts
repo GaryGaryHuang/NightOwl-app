@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { SessionConfig } from "@github/copilot-sdk";
+import type { MCPServerConfig, SessionConfig } from "@github/copilot-sdk";
 
-import { KnowledgeSvc } from "../../src/services/knowledge.ts";
-import { ReviewSessionFactory } from "../../src/services/review-session-factory.ts";
+import {
+  ReviewSessionFactory,
+  type ReviewSessionFactoryOptions
+} from "../../src/services/review-session-factory.ts";
 import {
   ToolPolicyGuard,
   type ToolPolicyGuardOptions
@@ -13,9 +15,7 @@ import type { ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
 import {
   BASE_REVIEW_PROFILE,
   createAuditFileFixture,
-  createLocalMcpServer,
   createRecordedConfigs,
-  createRemoteMcpServer,
   createSessionRecordingClientManager,
   EXPECTED_REVIEW_AVAILABLE_TOOLS
 } from "../helpers/review-session-runtime-contract-fixture.ts";
@@ -37,6 +37,53 @@ function assertRecordedReviewSessionConfig(
   assert.ok(config.hooks);
   assert.ok(config.hooks.onPreToolUse);
   assert.ok(config.onPermissionRequest);
+}
+
+function createReviewSessionFactoryHarness(
+  options: Partial<
+    Pick<
+      ReviewSessionFactoryOptions,
+      "knowledgeSvc" | "toolPolicyGuard" | "auditWriterProvider"
+    >
+  > = {}
+) {
+  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
+  const factory = new ReviewSessionFactory({
+    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
+      assertRecordedReviewSessionConfig(config);
+      return {
+        async sendAndWait() {
+          return {
+            type: "assistant.message",
+            data: { content: "ok" }
+          };
+        },
+        async disconnect() {}
+      };
+    }),
+    toolPolicyGuard: options.toolPolicyGuard ?? new SpyToolPolicyGuard(),
+    ...(options.knowledgeSvc === undefined
+      ? {}
+      : { knowledgeSvc: options.knowledgeSvc }),
+    ...(options.auditWriterProvider === undefined
+      ? {}
+      : { auditWriterProvider: options.auditWriterProvider })
+  });
+
+  return {
+    factory,
+    receivedConfigs
+  };
+}
+
+function getRecordedConfig(
+  receivedConfigs: RecordedReviewSessionConfig[],
+  index = 0
+): RecordedReviewSessionConfig {
+  const config = receivedConfigs[index];
+
+  assert.ok(config, `expected a recorded session config at index ${index}`);
+  return config;
 }
 
 // Subclassing ToolPolicyGuard lets the test record which auditWriter and profile
@@ -78,21 +125,8 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
 }
 
 test("ReviewSessionFactory creates a non-streaming review session and delegates hook construction to ToolPolicyGuard", async () => {
-  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const toolPolicyGuard = new SpyToolPolicyGuard();
-  const factory = new ReviewSessionFactory({
-    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
-      assertRecordedReviewSessionConfig(config);
-      return {
-        async sendAndWait() {
-          return {
-            type: "assistant.message",
-            data: { content: "ok" }
-          };
-        },
-        async disconnect() {}
-      };
-    }),
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
     toolPolicyGuard
   });
 
@@ -110,115 +144,62 @@ test("ReviewSessionFactory creates a non-streaming review session and delegates 
       profile: BASE_REVIEW_PROFILE
     }
   ]);
-  assert.deepEqual(receivedConfigs, [
-    {
-      availableTools: EXPECTED_REVIEW_AVAILABLE_TOOLS,
-      hooks: {
-        onPreToolUse: toolPolicyGuard.preToolUseHook
-      },
-      model: "gpt-5.4-mini",
-      reasoningEffort: "high",
-      streaming: false,
-      onPermissionRequest: toolPolicyGuard.permissionHandler,
-      systemMessage: {
-        mode: "customize",
-        sections: {
-          identity: { action: "remove" },
-          tone: { action: "remove" },
-          tool_efficiency: { action: "remove" },
-          code_change_rules: { action: "remove" },
-          guidelines: { action: "remove" },
-          tool_instructions: { action: "remove" },
-          custom_instructions: { action: "remove" },
-          last_instructions: { action: "remove" }
-        },
-        content: "system prompt"
-      },
-      workingDirectory: "/workspace/repo"
-    }
-  ]);
-  assert.equal(receivedConfigs[0]?.excludedTools, undefined);
+  assert.equal(receivedConfigs.length, 1);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.hooks.onPreToolUse, toolPolicyGuard.preToolUseHook);
+  assert.equal(config.onPermissionRequest, toolPolicyGuard.permissionHandler);
+  assert.equal(config.model, "gpt-5.4-mini");
+  assert.equal(config.reasoningEffort, "high");
+  assert.equal(config.streaming, false);
+  assert.equal(config.workingDirectory, "/workspace/repo");
+  assert.equal(config.mcpServers, undefined);
+  assert.equal(config.excludedTools, undefined);
 });
 
-test("ReviewSessionFactory injects mixed local and remote MCP entries for review sessions and keeps judge sessions MCP-free", async () => {
-  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
-  const factory = new ReviewSessionFactory({
-    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
-      assertRecordedReviewSessionConfig(config);
-      return {
-        async sendAndWait() {
-          return {
-            type: "assistant.message",
-            data: { content: "ok" }
-          };
-        },
-        async disconnect() {}
-      };
-    }),
-    knowledgeSvc: new KnowledgeSvc({
-      userMcpServers: {
-        demo: createLocalMcpServer(),
-        "my-remote": createRemoteMcpServer(),
-        "auth-sse": {
-          type: "sse",
-          url: "https://sse.example.com/mcp",
-          headers: { Authorization: "Bearer tok" },
-          timeout: 30000
-        }
+test("ReviewSessionFactory injects MCP servers only when KnowledgeSvc returns them for the resolved knowledge mode", async () => {
+  const knowledgeModeCalls: string[] = [];
+  const builtInServers: Record<string, MCPServerConfig> = {
+    context7: {
+      type: "http",
+      url: "https://mcp.context7.com/mcp",
+      tools: ["*"]
+    },
+    demo: {
+      type: "local",
+      command: "node",
+      args: ["server.js"],
+      tools: ["search"]
+    }
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    knowledgeSvc: {
+      getMcpServers(knowledgeMode) {
+        knowledgeModeCalls.push(knowledgeMode);
+        return knowledgeMode === "built-in-context7" ? builtInServers : undefined;
       }
-    }),
+    },
     toolPolicyGuard: new ToolPolicyGuard({})
   });
 
-  // review session (default knowledgeMode) → MCP servers are injected
   await factory.createSession(BASE_REVIEW_PROFILE);
-  // disabled knowledgeMode → no MCP servers; verifies knowledge mode controls injection
   await factory.createSession({
     ...BASE_REVIEW_PROFILE,
     systemMessage: "disabled prompt",
     knowledgeMode: "disabled"
   });
 
-  const reviewMcp = receivedConfigs[0]?.mcpServers;
-  assert.ok(reviewMcp);
-  assert.equal(reviewMcp.context7?.type, "http");
-  assert.equal(
-    (reviewMcp.context7 as { url?: string }).url,
-    "https://mcp.context7.com/mcp"
-  );
-  assert.equal(reviewMcp.demo?.type, "local");
-  assert.equal((reviewMcp["my-remote"] as { type: string }).type, "http");
-  assert.equal(
-    (reviewMcp["my-remote"] as { url: string }).url,
-    "https://mcp.example.com/v1"
-  );
-  assert.equal((reviewMcp["auth-sse"] as { type: string }).type, "sse");
-  assert.equal(
-    (reviewMcp["auth-sse"] as { timeout?: number }).timeout,
-    30000
-  );
-  assert.equal(receivedConfigs[1]?.mcpServers, undefined);
+  assert.deepEqual(knowledgeModeCalls, ["built-in-context7", "disabled"]);
+  assert.deepEqual(getRecordedConfig(receivedConfigs, 0).mcpServers, builtInServers);
+  assert.equal(getRecordedConfig(receivedConfigs, 1).mcpServers, undefined);
 });
 
 // auditWriterProvider is supplied at construction time; sessions created before the provider
 // starts returning a writer receive undefined, and those after receive the writer.
 test("ReviewSessionFactory threads audit writer via auditWriterProvider", async () => {
-  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const toolPolicyGuard = new SpyToolPolicyGuard();
   let capturedWriter: ToolAuditSink | undefined = undefined;
-  const factory = new ReviewSessionFactory({
-    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
-      assertRecordedReviewSessionConfig(config);
-      return {
-        async sendAndWait() {
-          return {
-            type: "assistant.message",
-            data: { content: "ok" }
-          };
-        },
-        async disconnect() {}
-      };
-    }),
+  const { factory } = createReviewSessionFactoryHarness({
     toolPolicyGuard,
     auditWriterProvider: () => capturedWriter
   });
@@ -242,20 +223,7 @@ test("ReviewSessionFactory threads audit writer via auditWriterProvider", async 
 });
 
 test("ReviewSessionFactory system prompt uses customize mode and does not inject repoRoot", async () => {
-  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
-  const factory = new ReviewSessionFactory({
-    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
-      assertRecordedReviewSessionConfig(config);
-      return {
-        async sendAndWait() {
-          return {
-            type: "assistant.message",
-            data: { content: "ok" }
-          };
-        },
-        async disconnect() {}
-      };
-    }),
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
     toolPolicyGuard: new SpyToolPolicyGuard()
   });
 
@@ -280,17 +248,7 @@ test("ReviewSessionFactory system prompt uses customize mode and does not inject
 });
 
 test("ReviewSessionFactory sets availableTools to exactly the SOP tool set", async () => {
-  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
-  const factory = new ReviewSessionFactory({
-    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
-      assertRecordedReviewSessionConfig(config);
-      return {
-        async sendAndWait() {
-          return { type: "assistant.message", data: { content: "ok" } };
-        },
-        async disconnect() {}
-      };
-    }),
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
     toolPolicyGuard: new SpyToolPolicyGuard()
   });
 
