@@ -353,7 +353,7 @@ test("ReviewOrchestrator preserves a full successful Step 7 snapshot when a late
   }
 });
 
-test("ReviewOrchestrator preserves an already-published full Step 7 snapshot when getDiff fails after output initialization", async () => {
+test("ReviewOrchestrator skips a file when getDiff fails and lets other files complete normally", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -501,34 +501,42 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      new RegExp(
-        `step1-overview.*${escapeRegExp(failedFile)}.*git diff failed|${escapeRegExp(failedFile)}.*step1-overview.*git diff failed`,
-        "u"
-      )
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
+
+    // The failed file should be skipped, other files should complete normally.
+    assert.equal(result.successfulFileCount, reviewableFiles.length - 1);
+    assert.equal(result.skippedFileCount, 1);
+
+    // Steps should have run for all files except the failed one.
+    assert.equal(
+      executedSteps.filter(([, fp]) => fp === failedFile).length,
+      0
     );
 
-    assert.deepEqual(executedSteps, [
-      ["step1-overview", reviewableFiles[0]],
-      ["step2-dependencies-boundaries", reviewableFiles[0]],
-      ["step3-knowledge-source-of-truth", reviewableFiles[0]],
-      ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
-      ["step5-validation-interrogation", reviewableFiles[0]],
-      ["step6-cognitive-simulation", reviewableFiles[0]],
-      ["step7-summary", reviewableFiles[0]]
-    ]);
-
+    // The first file should have a complete review with Findings.
     const firstNote = readFileSync(plannedNotes[0].noteFilePath, "utf8");
     assert.match(firstNote, /^## Findings/mu);
     assert.doesNotMatch(firstNote, /Review not yet generated/u);
+
+    // The failed file should have an interrupted snapshot with diff-loading warning.
+    const failedNote = readFileSync(
+      plannedNotes.find(({ filePath }) => filePath === failedFile)!.noteFilePath,
+      "utf8"
+    );
+    assert.match(failedNote, /> \[!WARNING\] Review Interrupted/u);
+    assert.match(failedNote, /diff-loading/u);
+    assert.match(failedNote, /git diff failed/u);
+
+    // The skipped.md should reference diff-loading, not step1-overview.
+    const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
+    assert.match(skippedLog, /diff-loading/u);
+    assert.doesNotMatch(skippedLog, /step1-overview/u);
   } finally {
     fixture.cleanup();
   }

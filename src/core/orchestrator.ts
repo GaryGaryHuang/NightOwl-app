@@ -451,11 +451,48 @@ export class ReviewOrchestrator {
         input.workItem.plannedNote.filePath
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const reason = error instanceof Error ? error.message : String(error);
 
-      throw new Error(
-        `Step step1-overview failed for ${input.workItem.plannedNote.filePath}: ${message}`
-      );
+      const fileContext = new FileReviewContext({
+        filePath: input.workItem.plannedNote.filePath,
+        noteFilePath: input.workItem.plannedNote.noteFilePath,
+        diffContent: "",
+        baseRef: input.request.baseRef,
+        headRef: input.request.headRef
+      });
+
+      fileContext.markInterrupted("diff-loading", reason);
+
+      try {
+        input.outputPublisher.publishFileReview({
+          noteFilePath: fileContext.noteFilePath,
+          content: this.#finalizer.render(fileContext)
+        });
+      } catch (outputError) {
+        input.runAbortState.error ??= outputError;
+        throw outputError;
+      }
+
+      try {
+        input.outputPublisher.publishSkippedFile({
+          filePath: fileContext.filePath,
+          stepId: "diff-loading",
+          reason
+        });
+      } catch (outputError) {
+        input.runAbortState.error ??= outputError;
+        throw outputError;
+      }
+
+      this.#recordFileSkipped({
+        outcomeSlots: input.outcomeSlots,
+        plannedIndex: input.workItem.plannedIndex,
+        filePath: fileContext.filePath,
+        stepId: "diff-loading",
+        reason
+      });
+
+      return;
     }
 
     const fileContext = new FileReviewContext({

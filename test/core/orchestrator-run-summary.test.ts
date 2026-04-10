@@ -610,7 +610,7 @@ test("ReviewOrchestrator does not publish summary.md when Step 0 fails before ou
   }
 });
 
-test("ReviewOrchestrator does not publish summary.md when getDiff fails after bootstrap", async () => {
+test("ReviewOrchestrator publishes summary.md and skipped.md when getDiff fails for one file after bootstrap", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -685,32 +685,39 @@ test("ReviewOrchestrator does not publish summary.md when getDiff fails after bo
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      /git diff failed/u
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
 
+    assert.equal(result.skippedFileCount, 1);
+    assert.equal(result.successfulFileCount, reviewableFiles.length - 1);
+
+    // Run completes and publishes summary and index because getDiff failure is now a file skip.
     assert.equal(
       outputCalls.some(([callType]) => callType === "publishRunSummary"),
-      false
+      true
     );
     assert.equal(
       outputCalls.some(([callType]) => callType === "publishReviewIndex"),
-      false
+      true
+    );
+    // The skipped file should have been published.
+    assert.equal(
+      outputCalls.some(
+        ([callType, arg]) => callType === "publishSkippedFile" && arg === failedFile
+      ),
+      true
     );
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator aborts when publishRunSummary fails and preserves per-file artifacts", async () => {
+test("ReviewOrchestrator records finalizerFailure for summary and continues other finalizers when publishRunSummary fails", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
