@@ -59,32 +59,39 @@ export async function runCli(
     resolvedRuntime.stdout.log(formatLocalReviewRunSummary(result));
     return 0;
   } catch (error) {
-    resolvedRuntime?.progressReporter.finalize();
-
     const stderr = resolvedRuntime?.stderr ?? runtime.stderr ?? console;
 
     if (error instanceof CliUsageError) {
+      resolvedRuntime?.progressReporter.finalize();
       stderr.error(error.message);
       return 1;
     }
 
     if (error instanceof ReviewRunInterruptedError) {
       if (error.signal === "SIGTERM") {
+        resolvedRuntime?.progressReporter.finalize();
         stderr.error("Review run terminated by SIGTERM.");
         return 143;
       }
       if (error.signal === "SIGINT") {
+        resolvedRuntime?.progressReporter.finalize();
         stderr.error("Review run interrupted by SIGINT.");
         return 130;
       }
+      resolvedRuntime?.progressReporter.finalize();
       stderr.error("Review run interrupted.");
       return 130;
     }
 
     const message =
       error instanceof Error ? error.message : "NightOwl CLI failed unexpectedly.";
+    resolvedRuntime?.progressReporter.finalize();
     stderr.error(message);
     return 1;
+  } finally {
+    // Safety net: guarantees finalize() runs even if a future branch omits the
+    // explicit call above. CliProgressRenderer.finalize() is idempotent.
+    resolvedRuntime?.progressReporter.finalize();
   }
 }
 
