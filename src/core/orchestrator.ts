@@ -52,6 +52,11 @@ import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
+export interface FinalizerFailure {
+  artifact: "summary" | "index" | "manifest";
+  message: string;
+}
+
 export interface ReviewRunSummary {
   repoRoot: string;
   runContext: RunContext;
@@ -60,6 +65,7 @@ export interface ReviewRunSummary {
   successfulFileCount: number;
   skippedFileCount: number;
   dryRun: boolean;
+  finalizerFailures: FinalizerFailure[];
 }
 
 export interface ReviewOrchestratorOptions {
@@ -303,38 +309,63 @@ export class ReviewOrchestrator {
       skippedFileCount: skippedFiles.length
     });
 
-    outputPublisher.publishRunSummary({
-      content: this.#runSummaryFinalizer.render({
-        repoRoot,
-        baseRef: request.baseRef,
-        headRef: request.headRef,
-        plannedFileCount: plannedNoteFiles.length,
-        successfulFiles,
-        skippedFiles
-      })
-    });
-    outputPublisher.publishReviewIndex({
-      content: this.#reviewIndexFinalizer.render({
-        repoRoot,
-        baseRef: request.baseRef,
-        headRef: request.headRef,
-        successfulFiles,
-        skippedFiles,
-        outputTarget,
-        plannedNotes: plannedNoteFiles
-      })
-    });
-    outputPublisher.publishRunManifest({
-      content: this.#runManifestFinalizer.render({
-        repoRoot,
-        baseRef: request.baseRef,
-        headRef: request.headRef,
-        successfulFiles,
-        skippedFiles,
-        outputTarget,
-        plannedNotes: plannedNoteFiles
-      })
-    });
+    const finalizerFailures: FinalizerFailure[] = [];
+
+    try {
+      outputPublisher.publishRunSummary({
+        content: this.#runSummaryFinalizer.render({
+          repoRoot,
+          baseRef: request.baseRef,
+          headRef: request.headRef,
+          plannedFileCount: plannedNoteFiles.length,
+          successfulFiles,
+          skippedFiles
+        })
+      });
+    } catch (error) {
+      finalizerFailures.push({
+        artifact: "summary",
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    try {
+      outputPublisher.publishReviewIndex({
+        content: this.#reviewIndexFinalizer.render({
+          repoRoot,
+          baseRef: request.baseRef,
+          headRef: request.headRef,
+          successfulFiles,
+          skippedFiles,
+          outputTarget,
+          plannedNotes: plannedNoteFiles
+        })
+      });
+    } catch (error) {
+      finalizerFailures.push({
+        artifact: "index",
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    try {
+      outputPublisher.publishRunManifest({
+        content: this.#runManifestFinalizer.render({
+          repoRoot,
+          baseRef: request.baseRef,
+          headRef: request.headRef,
+          successfulFiles,
+          skippedFiles,
+          outputTarget,
+          plannedNotes: plannedNoteFiles
+        })
+      });
+    } catch (error) {
+      finalizerFailures.push({
+        artifact: "manifest",
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
 
     return {
       repoRoot,
@@ -343,7 +374,8 @@ export class ReviewOrchestrator {
       plannedFileCount: plannedNoteFiles.length,
       successfulFileCount: successfulFiles.length,
       skippedFileCount: skippedFiles.length,
-      dryRun: request.dryRun ?? false
+      dryRun: request.dryRun ?? false,
+      finalizerFailures
     };
   }
 

@@ -741,27 +741,27 @@ test("ReviewOrchestrator records finalizerFailure for summary and continues othe
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      /summary write failed/u
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
 
+    assert.equal(result.finalizerFailures.length, 1);
+    assert.equal(result.finalizerFailures[0].artifact, "summary");
+    assert.match(result.finalizerFailures[0].message, /summary write failed/u);
     assert.equal(outputSink.writtenFileReviews.length > 0, true);
     assert.equal(outputSink.publishRunSummaryCalls, 1);
-    assert.equal(existsSync(outputSink.summaryPath ?? ""), false);
+    assert.equal(outputSink.publishReviewIndexCalls, 1);
+    assert.equal(outputSink.publishRunManifestCalls, 1);
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator aborts when publishReviewIndex fails after summary.md is written and preserves completed artifacts", async () => {
+test("ReviewOrchestrator records finalizerFailure for index and continues manifest when publishReviewIndex fails", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -785,29 +785,28 @@ test("ReviewOrchestrator aborts when publishReviewIndex fails after summary.md i
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      /index write failed/u
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
 
+    assert.equal(result.finalizerFailures.length, 1);
+    assert.equal(result.finalizerFailures[0].artifact, "index");
+    assert.match(result.finalizerFailures[0].message, /index write failed/u);
     assert.equal(outputSink.publishRunSummaryCalls, 1);
     assert.equal(outputSink.publishReviewIndexCalls, 1);
+    assert.equal(outputSink.publishRunManifestCalls, 1);
     assert.equal(existsSync(outputSink.summaryPath ?? ""), true);
-    assert.equal(existsSync(outputSink.indexPath ?? ""), false);
     assert.ok(outputSink.writtenFileReviews.length > 0);
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator aborts when publishRunManifest fails after summary.md and index.md are written and preserves completed artifacts", async () => {
+test("ReviewOrchestrator records finalizerFailure for manifest when publishRunManifest fails and preserves summary and index", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -831,18 +830,17 @@ test("ReviewOrchestrator aborts when publishRunManifest fails after summary.md a
       timestampProvider: () => "03131430"
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      /manifest write failed/u
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
 
+    assert.equal(result.finalizerFailures.length, 1);
+    assert.equal(result.finalizerFailures[0].artifact, "manifest");
+    assert.match(result.finalizerFailures[0].message, /manifest write failed/u);
     assert.equal(outputSink.publishRunSummaryCalls, 1);
     assert.equal(outputSink.publishReviewIndexCalls, 1);
     assert.equal(outputSink.publishRunManifestCalls, 1);
@@ -850,6 +848,103 @@ test("ReviewOrchestrator aborts when publishRunManifest fails after summary.md a
     assert.equal(existsSync(outputSink.indexPath ?? ""), true);
     assert.equal(existsSync(outputSink.manifestPath ?? ""), false);
     assert.ok(outputSink.writtenFileReviews.length > 0);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator returns empty finalizerFailures when all finalizers succeed", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+
+    const outputSink = new RecordingOutputSink();
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
+      outputSink,
+      stepRunner: createSuccessfulSummaryRunner(),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
+
+    assert.deepEqual(result.finalizerFailures, []);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator records multiple finalizerFailures in call order when summary and manifest both fail", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: new LocalGitProvider(),
+      reviewFileFilter: new LocalReviewFileFilter(),
+      outputSink: defineOutputSinkDouble({
+        initializeRun(outputTarget: OutputTarget) {
+          mkdirSync(outputTarget.basePath, { recursive: true });
+          mkdirSync(outputTarget.filesPath, { recursive: true });
+          writeFileSync(outputTarget.skippedPath, "");
+          return this;
+        },
+        publishFileReview(fileResult: FileReviewPublishResult) {
+          mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
+          writeFileSync(fileResult.noteFilePath, fileResult.content);
+        },
+        publishSkippedFile(skipRecord: SkipRecord) {},
+        publishRunSummary(_summaryResult: RunSummaryPublishResult) {
+          throw new Error("summary boom");
+        },
+        publishReviewIndex(indexResult: ReviewIndexPublishResult) {},
+        publishRunManifest(_manifestResult: RunManifestPublishResult) {
+          throw new Error("manifest boom");
+        },
+        publishChangesetOverview() {}
+      }),
+      stepRunner: createSuccessfulSummaryRunner(),
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03131430"
+    });
+
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
+
+    assert.equal(result.finalizerFailures.length, 2);
+    assert.equal(result.finalizerFailures[0].artifact, "summary");
+    assert.equal(result.finalizerFailures[1].artifact, "manifest");
   } finally {
     fixture.cleanup();
   }
@@ -1168,6 +1263,8 @@ class SummaryFailingOutputSink {
   #outputTarget!: OutputTarget;
   writtenFileReviews: string[] = [];
   publishRunSummaryCalls = 0;
+  publishReviewIndexCalls = 0;
+  publishRunManifestCalls = 0;
   summaryPath?: string;
 
   initializeRun(outputTarget: OutputTarget) {
@@ -1197,12 +1294,14 @@ class SummaryFailingOutputSink {
     throw new Error("summary write failed");
   }
 
-  publishReviewIndex(_indexResult: ReviewIndexPublishResult) {
-    throw new Error("should not publish index after summary failure");
+  publishReviewIndex(indexResult: ReviewIndexPublishResult) {
+    this.publishReviewIndexCalls += 1;
+    writeFileSync(this.#outputTarget.indexPath, indexResult.content);
   }
 
-  publishRunManifest(_manifestResult: RunManifestPublishResult) {
-    throw new Error("should not publish manifest after summary failure");
+  publishRunManifest(manifestResult: RunManifestPublishResult) {
+    this.publishRunManifestCalls += 1;
+    writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
   }
 
   publishChangesetOverview() {}
@@ -1213,6 +1312,7 @@ class IndexFailingOutputSink {
   writtenFileReviews: string[] = [];
   publishRunSummaryCalls = 0;
   publishReviewIndexCalls = 0;
+  publishRunManifestCalls = 0;
   summaryPath?: string;
   indexPath?: string;
 
@@ -1249,8 +1349,9 @@ class IndexFailingOutputSink {
     throw new Error("index write failed");
   }
 
-  publishRunManifest(_manifestResult: RunManifestPublishResult) {
-    throw new Error("should not publish manifest after index failure");
+  publishRunManifest(manifestResult: RunManifestPublishResult) {
+    this.publishRunManifestCalls += 1;
+    writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
   }
 
   publishChangesetOverview() {}

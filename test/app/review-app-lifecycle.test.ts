@@ -639,7 +639,8 @@ test("formatLocalReviewRunSummary keeps only completion counts in the final CLI 
     plannedFileCount: 1,
     successfulFileCount: 1,
     skippedFileCount: 0,
-    dryRun: false
+    dryRun: false,
+    finalizerFailures: []
   };
 
   const output = formatLocalReviewRunSummary(result);

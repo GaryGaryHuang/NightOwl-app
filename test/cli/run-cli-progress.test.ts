@@ -155,7 +155,8 @@ function createCompletedRunResult(): ReviewRunSummary {
     plannedFileCount: 2,
     successfulFileCount: 1,
     skippedFileCount: 1,
-    dryRun: false
+    dryRun: false,
+    finalizerFailures: []
   };
 }
 

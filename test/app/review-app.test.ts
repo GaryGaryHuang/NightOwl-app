@@ -829,6 +829,7 @@ function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): Revi
     successfulFileCount: 1,
     skippedFileCount: 0,
     dryRun: false,
+    finalizerFailures: [],
     ...overrides
   };
 }
@@ -852,6 +853,25 @@ test("formatLocalReviewRunSummary does not add [DRY RUN] prefix when dryRun is f
     `Expected plain header, got: ${summary.split("\n")[0]}`
   );
   assert.ok(!summary.includes("[DRY RUN]"), "Must not contain [DRY RUN] when dryRun is false");
+});
+
+test("formatLocalReviewRunSummary has no warning line when finalizerFailures is empty", () => {
+  const result = buildMinimalRunSummary({ finalizerFailures: [] });
+  const summary = formatLocalReviewRunSummary(result);
+
+  assert.ok(!summary.includes("Warning:"), "Must not contain Warning when finalizerFailures is empty");
+});
+
+test("formatLocalReviewRunSummary appends warning line listing failed artifact names when finalizerFailures is non-empty", () => {
+  const result = buildMinimalRunSummary({
+    finalizerFailures: [
+      { artifact: "summary", message: "ENOSPC" },
+      { artifact: "manifest", message: "disk full" }
+    ]
+  });
+  const summary = formatLocalReviewRunSummary(result);
+
+  assert.match(summary, /Warning: Failed to write run-level artifacts: summary, manifest/u);
 });
 
 // ---------------------------------------------------------------------------

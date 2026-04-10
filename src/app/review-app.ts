@@ -209,10 +209,17 @@ export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
   const header = result.dryRun
     ? `[DRY RUN] ${LOCAL_REVIEW_RUN_HEADER}`
     : LOCAL_REVIEW_RUN_HEADER;
-  return [
+  const lines = [
     header,
     `Planned files: ${result.plannedFileCount}`,
     `Successful files: ${result.successfulFileCount}`,
     `Skipped files: ${result.skippedFileCount}`
-  ].join("\n");
+  ];
+
+  if (result.finalizerFailures.length > 0) {
+    const artifacts = result.finalizerFailures.map((f) => f.artifact).join(", ");
+    lines.push(`Warning: Failed to write run-level artifacts: ${artifacts}`);
+  }
+
+  return lines.join("\n");
 }

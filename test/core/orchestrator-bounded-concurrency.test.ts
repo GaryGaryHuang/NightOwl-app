@@ -478,7 +478,7 @@ test("ReviewOrchestrator suppresses later interrupted snapshots and skipped reco
   }
 });
 
-test("ReviewOrchestrator still fails the run without returning a completed result when summary publishing fails after concurrent file processing", async () => {
+test("ReviewOrchestrator records finalizerFailure when summary publishing fails after concurrent file processing", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -520,21 +520,19 @@ test("ReviewOrchestrator still fails the run without returning a completed resul
       maxConcurrentFiles: 2
     });
 
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      /summary write failed/u
-    );
+    const result = await orchestrator.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
 
+    assert.equal(result.finalizerFailures.length, 1);
+    assert.equal(result.finalizerFailures[0].artifact, "summary");
+    assert.match(result.finalizerFailures[0].message, /summary write failed/u);
     assert.equal(metrics.maxActiveFiles, 2);
     assert.equal(outputSink.publishRunSummaryCalls, 1);
-    assert.equal(existsSync(outputSink.summaryPath ?? ""), false);
     assert.ok(outputSink.writtenFileReviews.length > 0);
   } finally {
     fixture.cleanup();
@@ -763,13 +761,9 @@ class SummaryFailingOutputSink {
     throw new Error("summary write failed");
   }
 
-  publishReviewIndex() {
-    throw new Error("should not publish index after summary failure");
-  }
+  publishReviewIndex() {}
 
-  publishRunManifest() {
-    throw new Error("should not publish manifest after summary failure");
-  }
+  publishRunManifest() {}
 
   publishChangesetOverview() {}
 }

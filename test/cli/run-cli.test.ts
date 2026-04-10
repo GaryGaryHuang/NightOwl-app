@@ -569,6 +569,7 @@ function createCompletedRunResult(
     successfulFileCount: 2,
     skippedFileCount: 0,
     dryRun: false,
+    finalizerFailures: [],
     ...restOverrides
   };
 }
@@ -579,12 +580,19 @@ function renderExpectedSummary(result: ReviewRunSummary): string {
   const header = result.dryRun
     ? `[DRY RUN] Review run completed.`
     : "Review run completed.";
-  return [
+  const lines = [
     header,
     `Planned files: ${result.plannedFileCount}`,
     `Successful files: ${result.successfulFileCount}`,
     `Skipped files: ${result.skippedFileCount}`
-  ].join("\n");
+  ];
+
+  if (result.finalizerFailures.length > 0) {
+    const artifacts = result.finalizerFailures.map((f) => f.artifact).join(", ");
+    lines.push(`Warning: Failed to write run-level artifacts: ${artifacts}`);
+  }
+
+  return lines.join("\n");
 }
 
 function renderExpectedStartup(dryRun = false): string {
