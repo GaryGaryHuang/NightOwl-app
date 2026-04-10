@@ -134,14 +134,14 @@ function validateManifest(manifest) {
   };
 }
 
-function printViolations(title, entries) {
+function printViolations(title, entries, logger) {
   if (entries.length === 0) {
     return;
   }
 
-  console.error(`\n  ${title}:`);
+  logger.error(`\n  ${title}:`);
   for (const entry of entries) {
-    console.error(`    ${entry}`);
+    logger.error(`    ${entry}`);
   }
 }
 
@@ -209,17 +209,19 @@ export function evaluateTestTierManifest({ manifest, parseViolations = [], diskF
 
 function reportManifestVerification(result, logger = console) {
   logger.error(`✗ ${MANIFEST_VERIFICATION_ERROR_MESSAGE}:`);
-  printViolations("Manifest schema violations", result.allSchemaViolations);
-  printViolations("Manifest sort-order violations", result.sortOrderViolations);
-  printViolations("Manifest path-format violations", result.pathFormatViolations);
-  printViolations("Files listed in more than one tier", result.duplicates);
+  printViolations("Manifest schema violations", result.allSchemaViolations, logger);
+  printViolations("Manifest sort-order violations", result.sortOrderViolations, logger);
+  printViolations("Manifest path-format violations", result.pathFormatViolations, logger);
+  printViolations("Files listed in more than one tier", result.duplicates, logger);
   printViolations(
     "Test files on disk but not in manifest (assign to unit/integration/e2e)",
-    result.missingFromManifest
+    result.missingFromManifest,
+    logger
   );
   printViolations(
     "Manifest entries with no corresponding file on disk",
-    result.staleInManifest
+    result.staleInManifest,
+    logger
   );
 }
 
