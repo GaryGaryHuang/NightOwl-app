@@ -1,5 +1,6 @@
 import type {
   FileReviewContext,
+  Finding,
   FindingTraceability
 } from "./file-review-context.ts";
 import { getReviewSectionDefinitionsForSlot } from "./review-section-contract.ts";
@@ -33,9 +34,7 @@ export class ReviewNoteFinalizer {
       !warningBlock
     ) {
       return [
-        `# ${context.filePath}`,
-        "",
-        `- Source file: \`${context.filePath}\``,
+        ...renderFileHeader(context.filePath),
         "- Status: Review not yet generated."
       ].join("\n");
     }
@@ -47,9 +46,7 @@ export class ReviewNoteFinalizer {
       warningBlock
     ) {
       return [
-        `# ${context.filePath}`,
-        "",
-        `- Source file: \`${context.filePath}\``,
+        ...renderFileHeader(context.filePath),
         "- Status: Review not yet generated.",
         "",
         warningBlock
@@ -57,9 +54,7 @@ export class ReviewNoteFinalizer {
     }
 
     return [
-      `# ${context.filePath}`,
-      "",
-      `- Source file: \`${context.filePath}\``,
+      ...renderFileHeader(context.filePath),
       "",
       ...[
         ...preFindingsSections,
@@ -73,8 +68,12 @@ export class ReviewNoteFinalizer {
   }
 }
 
+function renderFileHeader(filePath: string): string[] {
+  return [`# ${filePath}`, "", `- Source file: \`${filePath}\``];
+}
+
 function renderFindingsSection(
-  findings: ReturnType<FileReviewContext["getStructuredState"]>["findings"]
+  findings: Finding[] | undefined
 ): string | undefined {
   if (!findings) {
     return undefined;
@@ -108,11 +107,15 @@ function formatTraceability(traceability: FindingTraceability): string {
     return traceability.hunkHeader;
   }
 
-  if (traceability.lineStart === traceability.lineEnd) {
-    return `L${traceability.lineStart}`;
+  if (traceability.kind === "line-range") {
+    if (traceability.lineStart === traceability.lineEnd) {
+      return `L${traceability.lineStart}`;
+    }
+    return `L${traceability.lineStart}-L${traceability.lineEnd}`;
   }
 
-  return `L${traceability.lineStart}-L${traceability.lineEnd}`;
+  const _exhaustive: never = traceability;
+  throw new Error(`unhandled FindingTraceability kind: ${(_exhaustive as FindingTraceability).kind}`);
 }
 
 function renderInterruptionWarning(

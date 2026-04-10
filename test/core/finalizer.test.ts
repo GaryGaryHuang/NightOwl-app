@@ -540,6 +540,37 @@ test("ReviewNoteFinalizer renders empty findings as a single - 無 marker", () =
   assertTextExcludesAll(rendered, ["無 findings."]);
 });
 
+test("ReviewNoteFinalizer throws for an unknown FindingTraceability kind", () => {
+  const finalizer = new ReviewNoteFinalizer();
+  const context = createContext();
+  context.updateStructuredState({
+    findings: [
+      {
+        type: "must",
+        title: "test finding",
+        traceability: { kind: "unknown-kind" } as any,
+        context: "ctx",
+        deviation: "dev",
+        impact: "impact",
+        suggestion: "fix",
+        confidence: 90
+      }
+    ]
+  });
+
+  assert.throws(
+    () => finalizer.render(context),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(
+        err.message.includes("unknown-kind"),
+        `expected error message to contain "unknown-kind", got: ${err.message}`
+      );
+      return true;
+    }
+  );
+});
+
 function createContext(diffContent = DIFF_CONTENT): FileReviewContext {
   return new FileReviewContext({
     filePath: FILE_PATH,
