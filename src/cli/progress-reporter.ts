@@ -41,6 +41,7 @@ interface ProgressSnapshot {
 class CliProgressRenderer {
   readonly #stdout: CliProgressStdout;
   readonly #isTTY: boolean;
+  #surface: CliSurfaceState = { hasLiveLine: false };
 
   constructor(stdout: CliProgressStdout) {
     this.#stdout = stdout;
@@ -51,89 +52,73 @@ class CliProgressRenderer {
     return this.#stdout;
   }
 
-  finalize(surface: CliSurfaceState): CliSurfaceState {
-    if (!this.#isTTY || !surface.hasLiveLine) {
-      return surface;
+  finalize(): void {
+    if (!this.#isTTY || !this.#surface.hasLiveLine) {
+      return;
     }
 
     this.#stdout.write?.(CLEAR_LINE);
-    return { hasLiveLine: false };
+    this.#surface = { hasLiveLine: false };
   }
 
   applyInstruction(
     snapshot: ProgressSnapshot,
-    instruction: ProgressRenderInstruction,
-    surface: CliSurfaceState
-  ): CliSurfaceState {
-    let nextSurface = surface;
-
+    instruction: ProgressRenderInstruction
+  ): void {
     if (instruction.appendMessage) {
-      nextSurface = this.#appendBlock(snapshot, instruction.appendMessage, nextSurface);
+      this.#appendBlock(snapshot, instruction.appendMessage);
     }
 
     if (instruction.renderProgress) {
-      nextSurface = this.#renderProgress(
-        snapshot,
-        instruction.renderProgress,
-        nextSurface
-      );
+      this.#renderProgress(snapshot, instruction.renderProgress);
     }
-
-    return nextSurface;
   }
 
   #appendBlock(
     snapshot: ProgressSnapshot,
-    message: string,
-    surface: CliSurfaceState
-  ): CliSurfaceState {
-    let nextSurface = surface;
-
-    if (this.#isTTY && nextSurface.hasLiveLine) {
+    message: string
+  ): void {
+    if (this.#isTTY && this.#surface.hasLiveLine) {
       this.#stdout.write?.(CLEAR_LINE);
-      nextSurface = { hasLiveLine: false };
+      this.#surface = { hasLiveLine: false };
     }
 
     this.#stdout.log(message);
 
     if (!this.#isTTY) {
-      return nextSurface;
+      return;
     }
 
-    return this.#renderLiveLine(snapshot, nextSurface);
+    this.#renderLiveLine(snapshot);
   }
 
   #renderProgress(
     snapshot: ProgressSnapshot,
-    options: { significant: boolean },
-    surface: CliSurfaceState
-  ): CliSurfaceState {
+    options: { significant: boolean }
+  ): void {
     if (snapshot.plannedFileCount === undefined) {
-      return surface;
+      return;
     }
 
     if (this.#isTTY) {
-      return this.#renderLiveLine(snapshot, surface);
+      this.#renderLiveLine(snapshot);
+      return;
     }
 
     if (!options.significant) {
-      return surface;
+      return;
     }
 
     this.#stdout.log(this.#buildLiveLine(snapshot));
-    return surface;
   }
 
-  #renderLiveLine(
-    snapshot: ProgressSnapshot,
-    surface: CliSurfaceState
-  ): CliSurfaceState {
+  #renderLiveLine(snapshot: ProgressSnapshot): void {
     if (!this.#isTTY || snapshot.plannedFileCount === undefined) {
-      return surface;
+      return;
     }
 
     this.#stdout.write?.(`${CLEAR_LINE}${this.#buildLiveLine(snapshot)}`);
-    return { hasLiveLine: true };
+    this.#surface = { hasLiveLine: true };
   }
 
   #buildLiveLine(snapshot: ProgressSnapshot): string {
@@ -169,7 +154,6 @@ class CliProgressRenderer {
 export class CliProgressReporter {
   readonly #renderer: CliProgressRenderer;
   #state: CliProgressState = createInitialProgressState();
-  #surface: CliSurfaceState = { hasLiveLine: false };
 
   constructor(options: { stdout: CliProgressStdout }) {
     this.#renderer = new CliProgressRenderer(options.stdout);
@@ -183,15 +167,11 @@ export class CliProgressReporter {
     const { state, instruction } = reduceProgressEvent(this.#state, event);
 
     this.#state = state;
-    this.#surface = this.#renderer.applyInstruction(
-      createProgressSnapshot(state),
-      instruction,
-      this.#surface
-    );
+    this.#renderer.applyInstruction(createProgressSnapshot(state), instruction);
   }
 
   finalize(): void {
-    this.#surface = this.#renderer.finalize(this.#surface);
+    this.#renderer.finalize();
   }
 }
 
@@ -204,7 +184,7 @@ function createInitialProgressState(): CliProgressState {
   };
 }
 
-function reduceProgressEvent(
+export function reduceProgressEvent(
   current: CliProgressState,
   event: RunProgressEvent
 ): { state: CliProgressState; instruction: ProgressRenderInstruction } {
@@ -291,7 +271,7 @@ function reduceProgressEvent(
   }
 }
 
-function withActiveFileProgress(
+export function withActiveFileProgress(
   current: CliProgressState,
   filePath: string,
   claimOrder: number
@@ -311,7 +291,7 @@ function withActiveFileProgress(
   };
 }
 
-function withResolvedOutcome(
+export function withResolvedOutcome(
   current: CliProgressState,
   filePath: string,
   successfulFileCount: number,
@@ -328,7 +308,7 @@ function withResolvedOutcome(
   };
 }
 
-function createProgressSnapshot(state: CliProgressState): ProgressSnapshot {
+export function createProgressSnapshot(state: CliProgressState): ProgressSnapshot {
   return {
     activeFileSummary: buildActiveFileSummary(state.activeFiles),
     activeFileCount: state.activeFiles.size,
@@ -337,7 +317,7 @@ function createProgressSnapshot(state: CliProgressState): ProgressSnapshot {
   };
 }
 
-function buildActiveFileSummary(
+export function buildActiveFileSummary(
   activeFiles: Map<string, ActiveFileState>
 ): string {
   const orderedFiles = [...activeFiles.entries()]
