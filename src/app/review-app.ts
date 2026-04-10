@@ -68,10 +68,6 @@ export interface CreateLocalReviewRunAppOptions {
   onProgressEvent?: RunProgressEventHandler;
 }
 
-type LocalReviewRunClientManager = NonNullable<
-  CreateLocalReviewRunAppOptions["clientManager"]
->;
-
 export interface ReviewApp {
   run(request: RunRequest): Promise<ReviewRunSummary>;
 }
@@ -95,8 +91,6 @@ export function createLocalReviewRunApp(
     new LocalSuccessfulSnapshotOutputHealthAssessor();
   const reviewConfigProvider =
     options.reviewConfigProvider ?? new LocalReviewConfigProvider();
-  const judgeSessionFactory = new JudgeSessionFactory({ clientManager });
-  const judgeService = new JudgeService({ judgeSessionFactory });
 
   return {
     async run(request: RunRequest): Promise<ReviewRunSummary> {
@@ -110,38 +104,40 @@ export function createLocalReviewRunApp(
       // In dry-run mode substitute stub factories so no Copilot CLI or AI calls are made.
       const isDryRun = request.dryRun === true;
 
-      const auditWriterHolder: { current?: ToolAuditWriter } = {};
+      // judgeSessionFactory and judgeService are request-scoped: built after isDryRun is known.
+      const judgeSessionFactory = isDryRun
+        ? new DryRunJudgeSessionFactory()
+        : new JudgeSessionFactory({ clientManager });
+      const judgeService = new JudgeService({ judgeSessionFactory });
 
-      const reviewSessionFactory: Pick<
-        ReviewSessionFactory,
-        "createSession"
-      > = isDryRun
-        ? new DryRunReviewSessionFactory()
-        : (() => {
-            const knowledgeSvc =
-              options.knowledgeSvc ??
-              new KnowledgeSvc({
-                context7ApiKey: process.env.CONTEXT7_API_KEY,
-                userMcpServers: reviewConfig.mcpServers
-              });
-            const toolPolicyGuard = new ToolPolicyGuard({
-              hostnameClassifier: options.webFetchHostnameClassifier,
-              webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
-              webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
-              webFetchHostnameClassificationTimeoutMs:
-                options.webFetchHostnameClassificationTimeoutMs
-            });
-            return new ReviewSessionFactory({
-              clientManager,
-              knowledgeSvc,
-              toolPolicyGuard,
-              auditWriterProvider: () => auditWriterHolder.current
-            });
-          })();
+      // auditWriter is a closure-scoped let shared between auditWriterProvider and onOutputTargetReady.
+      // Sessions created before onOutputTargetReady fires (e.g. Step 0) receive no audit writer.
+      let auditWriter: ToolAuditWriter | undefined;
 
-      const effectiveJudgeService = isDryRun
-        ? new JudgeService({ judgeSessionFactory: new DryRunJudgeSessionFactory() })
-        : judgeService;
+      let reviewSessionFactory: Pick<ReviewSessionFactory, "createSession">;
+      if (isDryRun) {
+        reviewSessionFactory = new DryRunReviewSessionFactory();
+      } else {
+        const knowledgeSvc =
+          options.knowledgeSvc ??
+          new KnowledgeSvc({
+            context7ApiKey: process.env.CONTEXT7_API_KEY,
+            userMcpServers: reviewConfig.mcpServers
+          });
+        const toolPolicyGuard = new ToolPolicyGuard({
+          hostnameClassifier: options.webFetchHostnameClassifier,
+          webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
+          webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
+          webFetchHostnameClassificationTimeoutMs:
+            options.webFetchHostnameClassificationTimeoutMs
+        });
+        reviewSessionFactory = new ReviewSessionFactory({
+          clientManager,
+          knowledgeSvc,
+          toolPolicyGuard,
+          auditWriterProvider: () => auditWriter
+        });
+      }
 
       const changesetOverviewRunner =
         options.changesetOverviewRunner ??
@@ -152,7 +148,7 @@ export function createLocalReviewRunApp(
         options.stepRunner ??
         new StepRunner({
           reviewSessionFactory,
-          judgeService: effectiveJudgeService,
+          judgeService,
           structuredOutputValidator: new StructuredOutputValidator({
             confidenceThresholds: reviewConfig.confidenceThresholds
           })
@@ -170,16 +166,13 @@ export function createLocalReviewRunApp(
         onProgressEvent: options.onProgressEvent,
         onOutputTargetReady: (outputTarget) => {
           // Wire the audit writer only after the run output path exists; Step 0 sessions created earlier are not audited.
-          const auditWriter = new ToolAuditWriter(outputTarget.toolAuditPath);
-          auditWriterHolder.current = auditWriter;
+          auditWriter = new ToolAuditWriter(outputTarget.toolAuditPath);
         }
       });
 
-      if (!isDryRun) {
-        await clientManager.start();
-      }
-
       // Translate process signals into a shared AbortSignal so the orchestrator can stop cooperatively.
+      // handleSigint/handleSigterm and controller are defined here (before try) so finally can reference them,
+      // but process.on() registration happens inside try after start() so cleanup is symmetric.
       const controller = new AbortController();
       const handleSigint = (): void => {
         controller.abort("SIGINT");
@@ -188,16 +181,22 @@ export function createLocalReviewRunApp(
         controller.abort("SIGTERM");
       };
 
-      process.on("SIGINT", handleSigint);
-      process.on("SIGTERM", handleSigterm);
+      // clientStarted tracks whether start() resolved so finally only calls stop() when a resource was acquired.
+      let clientStarted = false;
 
       try {
+        if (!isDryRun) {
+          await clientManager.start();
+          clientStarted = true;
+        }
+        process.on("SIGINT", handleSigint);
+        process.on("SIGTERM", handleSigterm);
         return await orchestrator.run(request, { signal: controller.signal });
       } finally {
         // Remove handlers before stop() to prevent double-fire from SIGTERM during SDK teardown.
         process.off("SIGINT", handleSigint);
         process.off("SIGTERM", handleSigterm);
-        if (!isDryRun) {
+        if (clientStarted) {
           await stopClientManagerWithTimeout(clientManager, gracefulShutdownTimeoutMs);
         }
       }
