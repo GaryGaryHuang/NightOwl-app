@@ -20,7 +20,7 @@ export interface JudgeServiceOptions {
  * Run the dedicated completion-check session for section steps and normalize its Y/N response.
  */
 export class JudgeService {
-  readonly systemMessage = [
+  readonly #systemMessage = [
     "You are a completion checker. Evaluate whether the content in <section> satisfies the requirements explicitly listed in <criteria>.",
     "",
     "General Rules:",
@@ -45,43 +45,39 @@ export class JudgeService {
   }
 
   async evaluate(input: JudgeEvaluationInput): Promise<JudgeEvaluationResult> {
+    let session;
+
     try {
-      let session;
-
-      try {
-        session = await this.#judgeSessionFactory.createSession({
-          model: "gpt-5-mini",
-          systemMessage: this.systemMessage
-        });
-      } catch {
-        throw new Error("judge startup failed");
-      }
-
-      let response: string | undefined;
-
-      try {
-        response = await session.sendAndWait(
-          buildJudgePrompt(input),
-          180_000
-        );
-      } catch {
-        throw new Error("judge timeout");
-      }
-
-      // Keep the acceptance check intentionally narrow: only y/yes counts as pass.
-      const normalized = response?.trim().toLowerCase();
-
-      if (normalized === "y" || normalized === "yes") {
-        return { passed: true };
-      }
-
-      return {
-        passed: false,
-        cause: "judge rejected"
-      };
-    } catch (error) {
-      throw error;
+      session = await this.#judgeSessionFactory.createSession({
+        model: "gpt-5-mini",
+        systemMessage: this.#systemMessage
+      });
+    } catch {
+      throw new Error("judge startup failed");
     }
+
+    let response: string | undefined;
+
+    try {
+      response = await session.sendAndWait(
+        buildJudgePrompt(input),
+        180_000
+      );
+    } catch {
+      throw new Error("judge timeout");
+    }
+
+    // Keep the acceptance check intentionally narrow: only y/yes counts as pass.
+    const normalized = response?.trim().toLowerCase();
+
+    if (normalized === "y" || normalized === "yes") {
+      return { passed: true };
+    }
+
+    return {
+      passed: false,
+      cause: "judge rejected"
+    };
   }
 }
 

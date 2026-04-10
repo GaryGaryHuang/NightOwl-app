@@ -48,7 +48,23 @@ test("JudgeService passes through section content and criteria, and accepts yes-
       "createSession",
       {
         model: "gpt-5-mini",
-        systemMessage: service.systemMessage
+        systemMessage: [
+          "You are a completion checker. Evaluate whether the content in <section> satisfies the requirements explicitly listed in <criteria>.",
+          "",
+          "General Rules:",
+          "- Check the requirements in <criteria> one by one.",
+          "- Judge only against the requirements explicitly stated in <criteria>. Do not add stricter standards of your own.",
+          "- Treat a field as valid if it is present and provides a meaningful response to the required item. Concise answers are acceptable if they directly satisfy the requirement.",
+          "- If a requirement explicitly allows a negative, none, or not-applicable style answer (e.g., \"無\", \"無外部相依\"), treat that response as valid.",
+          "- A field fails only if it is missing, blank, clearly unreplaced placeholder text (e.g., \"[the file's primary role]\"), or does not answer the required item at all.",
+          "- Minor formatting variations (e.g., bullet style, heading level, whitespace) do not constitute a failure as long as the required content is present and meaningful.",
+          "- Do not use outside knowledge. Judge only from <section> and <criteria>.",
+          "- If any requirement is not met or cannot be verified from <section>, output N.",
+          "",
+          "Output Y only if every requirement is satisfied.",
+          "Output N otherwise.",
+          "Output only Y or N — no other text or explanation."
+        ].join("\n")
       }
     ],
     [
@@ -79,6 +95,7 @@ test("JudgeService rejects all non-yes responses", async () => {
   const responses = ["N", "   ", "maybe"];
 
   for (const response of responses) {
+    const disconnectCalls: string[] = [];
     const service = new JudgeService({
       judgeSessionFactory: {
         async createSession() {
@@ -90,7 +107,9 @@ test("JudgeService rejects all non-yes responses", async () => {
                 }
               };
             },
-            async disconnect() {}
+            async disconnect() {
+              disconnectCalls.push("disconnect");
+            }
           });
         }
       }
@@ -105,6 +124,7 @@ test("JudgeService rejects all non-yes responses", async () => {
 
     assert.equal(result.passed, false);
     assert.equal(result.cause, "judge rejected");
+    assert.deepEqual(disconnectCalls, ["disconnect"]);
   }
 });
 
@@ -130,6 +150,7 @@ test("JudgeService wraps judge startup failure with step and file context", asyn
 });
 
 test("JudgeService wraps judge timeout failure with step and file context", async () => {
+  const disconnectCalls: string[] = [];
   const service = new JudgeService({
     judgeSessionFactory: {
       async createSession() {
@@ -137,7 +158,9 @@ test("JudgeService wraps judge timeout failure with step and file context", asyn
           async sendAndWait() {
             throw new Error("judge timeout");
           },
-          async disconnect() {}
+          async disconnect() {
+            disconnectCalls.push("disconnect");
+          }
         });
       }
     }
@@ -153,9 +176,11 @@ test("JudgeService wraps judge timeout failure with step and file context", asyn
       }),
     /judge timeout/u
   );
+  assert.deepEqual(disconnectCalls, ["disconnect"]);
 });
 
 test("JudgeService phase 1 path does not require session.abort support", async () => {
+  const disconnectCalls: string[] = [];
   const service = new JudgeService({
     judgeSessionFactory: {
       async createSession() {
@@ -167,7 +192,9 @@ test("JudgeService phase 1 path does not require session.abort support", async (
               }
             };
           },
-          async disconnect() {}
+          async disconnect() {
+            disconnectCalls.push("disconnect");
+          }
         });
       }
     }
@@ -181,4 +208,5 @@ test("JudgeService phase 1 path does not require session.abort support", async (
   });
 
   assert.equal(result.passed, true);
+  assert.deepEqual(disconnectCalls, ["disconnect"]);
 });
