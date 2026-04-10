@@ -5,7 +5,7 @@ export declare function runTestTierCommand(options?: {
     command: string,
     args: string[],
     options: { cwd: string; stdio: string }
-  ) => { status: number | null };
+  ) => { status: number | null; error?: Error };
   execPath?: string;
   cwd?: string;
   logger?: { log(message: string): void; error(message: string): void };

@@ -14,7 +14,7 @@ const repoRoot = path.resolve(path.dirname(currentFilePath), "..");
 
 export function runTestTierCommand({
   args = process.argv.slice(2),
-  loadManifest = loadVerifiedTestTierManifest,
+  loadManifest,
   spawn = spawnSync,
   execPath = process.execPath,
   cwd = repoRoot,
@@ -29,9 +29,11 @@ export function runTestTierCommand({
     return 1;
   }
 
+  const resolvedLoadManifest = loadManifest ?? (() => loadVerifiedTestTierManifest({ logger }));
+
   let manifest;
   try {
-    manifest = loadManifest();
+    manifest = resolvedLoadManifest();
   } catch (error) {
     if (error instanceof ManifestVerificationError) {
       return 1;

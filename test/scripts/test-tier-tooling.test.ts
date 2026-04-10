@@ -109,3 +109,26 @@ test("runTestTierCommand spawns the manifest-defined source test files for the r
     stdio: "inherit"
   });
 });
+
+test("runTestTierCommand returns exit code 1 and logs the error when spawn fails to start", () => {
+  const loggedErrors: unknown[] = [];
+  const spawnError = new Error("spawn ENOENT");
+
+  const exitCode = runTestTierCommand({
+    args: ["unit"],
+    loadManifest: () => ({
+      unit: ["test/core/example.test.ts"],
+      integration: [],
+      e2e: []
+    }),
+    spawn: () => ({ status: null, error: spawnError }),
+    logger: {
+      log() {},
+      error(message) { loggedErrors.push(message); }
+    }
+  });
+
+  assert.equal(exitCode, 1);
+  assert.equal(loggedErrors.length, 1);
+  assert.equal(loggedErrors[0], spawnError);
+});
