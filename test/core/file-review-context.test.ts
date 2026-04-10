@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FileReviewContext } from "../../src/core/file-review-context.ts";
+import { FileReviewContext, type Finding } from "../../src/core/file-review-context.ts";
 
 test("FileReviewContext preserves immutable execution metadata and starts with no sections", () => {
   const context = new FileReviewContext({
@@ -60,7 +60,7 @@ test("FileReviewContext accepts declared post-findings sections while keeping ab
   assert.equal(context.getSection("overview"), undefined);
 });
 
-test("FileReviewContext rejects undeclared section identifiers on both write and read", () => {
+test("FileReviewContext rejects undeclared section identifiers at compile time", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
       noteFilePath: "/workspace/.nightowl/review/run/files/src__app.ts.md",
@@ -69,14 +69,12 @@ test("FileReviewContext rejects undeclared section identifiers on both write and
     headRef: "feature-branch"
   });
 
-  assert.throws(
-    () => context.setSection("not-a-declared-section", "unexpected"),
-    /declared section|undeclared section/u
-  );
-  assert.throws(
-    () => context.getSection("not-a-declared-section"),
-    /declared section|undeclared section/u
-  );
+  // setSection and getSection accept ReviewSectionKey, not string.
+  // Passing an untyped string is a compile-time error; no runtime guard exists in the core path.
+  // @ts-expect-error
+  context.setSection("not-a-declared-section", "unexpected");
+  // @ts-expect-error
+  context.getSection("not-a-declared-section");
 });
 
 test("FileReviewContext stores mutable Overview state while keeping snapshot access isolated", () => {
@@ -135,8 +133,7 @@ test("FileReviewContext stores structured findings state separately from section
     headRef: "feature-branch"
   });
 
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "問題標題",
@@ -147,8 +144,7 @@ test("FileReviewContext stores structured findings state separately from section
         suggestion: "應補上 guard",
         confidence: 85
       }
-    ]
-  });
+    ]);
 
   assert.equal(context.getSection("overview"), undefined);
   assert.deepEqual(context.getStructuredState(), {
@@ -168,7 +164,7 @@ test("FileReviewContext stores structured findings state separately from section
 });
 
 // getStructuredState() must return a defensive copy; mutating the snapshot
-// must not corrupt the stored findings, and updateStructuredState with [] must
+// must not corrupt the stored findings, and setFindings with [] must
 // fully replace any previous findings.
 test("FileReviewContext replaces structured findings state without leaking snapshot mutation", () => {
   const context = new FileReviewContext({
@@ -179,8 +175,7 @@ test("FileReviewContext replaces structured findings state without leaking snaps
     headRef: "feature-branch"
   });
 
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "nice",
         title: "低優先改善",
@@ -191,8 +186,7 @@ test("FileReviewContext replaces structured findings state without leaking snaps
         suggestion: "補上整理",
         confidence: 91
       }
-    ]
-  });
+    ]);
 
   const snapshot = context.getStructuredState();
   if (!snapshot.findings?.[0]?.traceability || snapshot.findings[0].traceability.kind !== "diff-hunk") {
@@ -225,12 +219,11 @@ test("FileReviewContext replaces structured findings state without leaking snaps
     ]
   });
 
-  context.updateStructuredState({ findings: [] });
+  context.setFindings([]);
 
   assert.deepEqual(context.getStructuredState(), { findings: [] });
 
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "從空 findings 補回正式結果",
@@ -241,8 +234,7 @@ test("FileReviewContext replaces structured findings state without leaking snaps
         suggestion: "補上 final guard",
         confidence: 92
       }
-    ]
-  });
+    ]);
 
   assert.deepEqual(context.getStructuredState(), {
     findings: [
@@ -273,8 +265,8 @@ test("FileReviewContext throws a readable error when a formal finding is missing
   // so we can test the runtime guard that rejects findings without traceability.
   assert.throws(
     () =>
-      context.updateStructuredState({
-        findings: [
+      context.setFindings(
+        [
           {
             type: "must",
             title: "缺少 traceability 的不合法 finding",
@@ -284,8 +276,8 @@ test("FileReviewContext throws a readable error when a formal finding is missing
             suggestion: "補上 traceability",
             confidence: 85
           }
-        ] as unknown as NonNullable<ReturnType<FileReviewContext["getStructuredState"]>["findings"]>
-      }),
+        ] as unknown as Finding[]
+      ),
     /Formal finding "缺少 traceability 的不合法 finding" is missing required traceability\./u
   );
 });

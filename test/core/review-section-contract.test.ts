@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  assertReviewSectionKey,
   buildReviewSectionContract,
   getReviewSectionDefinitionsForSlot,
-  REVIEW_SECTION_DEFINITIONS
+  REVIEW_SECTION_DEFINITIONS,
+  type ReviewSectionDefinition
 } from "../../src/core/review-section-contract.ts";
 
 test("review section contract declares the current SOP section outputs and render slots explicitly", () => {
@@ -93,10 +95,10 @@ test("buildReviewSectionContract rejects invalid render slots deterministically"
         {
           key: "overview",
           stepId: "step1-overview",
-          renderSlot: "between-findings" as never,
+          renderSlot: "between-findings",
           order: 1
         }
-      ]),
+      ] as unknown as ReviewSectionDefinition[]),
     /invalid render slot: between-findings/u
   );
 });
@@ -111,7 +113,7 @@ test("buildReviewSectionContract rejects missing key and stepId deterministicall
           renderSlot: "pre-findings",
           order: 1
         }
-      ]),
+      ] as unknown as ReviewSectionDefinition[]),
     /missing key/u
   );
 
@@ -124,7 +126,7 @@ test("buildReviewSectionContract rejects missing key and stepId deterministicall
           renderSlot: "pre-findings",
           order: 1
         }
-      ]),
+      ] as unknown as ReviewSectionDefinition[]),
     /missing stepId/u
   );
 });
@@ -146,5 +148,22 @@ test("buildReviewSectionContract produces contract.definitions sorted by slot th
       { key: "dependencies-boundaries", renderSlot: "pre-findings", order: 2 },
       { key: "summary", renderSlot: "post-findings", order: 1 }
     ]
+  );
+});
+
+test("assertReviewSectionKey does not throw for a declared section key", () => {
+  assert.doesNotThrow(() => assertReviewSectionKey("overview"));
+  assert.doesNotThrow(() => assertReviewSectionKey("summary"));
+  assert.doesNotThrow(() => assertReviewSectionKey("dependencies-boundaries"));
+});
+
+test("assertReviewSectionKey throws for an undeclared string", () => {
+  assert.throws(
+    () => assertReviewSectionKey("not-a-declared-section"),
+    /undeclared section/u
+  );
+  assert.throws(
+    () => assertReviewSectionKey(""),
+    /undeclared section/u
   );
 });

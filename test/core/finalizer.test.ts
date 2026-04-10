@@ -207,8 +207,7 @@ test("ReviewNoteFinalizer renders Strategy & What-if Scenarios after Knowledge &
 test("ReviewNoteFinalizer renders Findings after Strategy & What-if Scenarios without confidence", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContextWithAllPreFindings();
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "問題標題",
@@ -220,7 +219,7 @@ test("ReviewNoteFinalizer renders Findings after Strategy & What-if Scenarios wi
         confidence: 88
       }
     ]
-  });
+  );
 
   const rendered = finalizer.render(context);
 
@@ -249,7 +248,7 @@ test("ReviewNoteFinalizer renders empty Findings as `- 無`", () => {
   context.setSection("dependencies-boundaries", SIMPLE_DEPENDENCIES_SECTION);
   context.setSection("knowledge-source-of-truth", SIMPLE_KNOWLEDGE_SECTION);
   context.setSection("strategy-what-if-scenarios", SIMPLE_STRATEGY_SECTION);
-  context.updateStructuredState({ findings: [] });
+  context.setFindings([]);
 
   const rendered = finalizer.render(context);
 
@@ -270,8 +269,7 @@ test("ReviewNoteFinalizer does not render Findings before structured findings st
 test("ReviewNoteFinalizer renders Summary after Findings without changing Findings content", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContextWithAllPreFindings();
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "最終問題",
@@ -283,7 +281,7 @@ test("ReviewNoteFinalizer renders Summary after Findings without changing Findin
         confidence: 91
       }
     ]
-  });
+  );
   context.setSection("summary", SUMMARY_MEDIUM);
 
   const rendered = finalizer.render(context);
@@ -303,7 +301,7 @@ test("ReviewNoteFinalizer preserves empty Findings before Summary", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext();
   context.setSection("strategy-what-if-scenarios", SIMPLE_STRATEGY_SECTION);
-  context.updateStructuredState({ findings: [] });
+  context.setFindings([]);
   context.setSection("summary", SUMMARY_NONE);
 
   const rendered = finalizer.render(context);
@@ -379,8 +377,7 @@ test("ReviewNoteFinalizer renders warning block on top of Step 6 findings snapsh
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext();
   context.setSection("strategy-what-if-scenarios", SIMPLE_STRATEGY_SECTION);
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "最終問題",
@@ -392,7 +389,7 @@ test("ReviewNoteFinalizer renders warning block on top of Step 6 findings snapsh
         confidence: 91
       }
     ]
-  });
+  );
   context.markInterrupted("step7-summary", "judge rejected");
 
   const rendered = finalizer.render(context);
@@ -408,8 +405,7 @@ test("ReviewNoteFinalizer renders warning block on top of Step 6 findings snapsh
 test("ReviewNoteFinalizer prepends statistics line before grouped findings", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext("");
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "nice",
         title: "A",
@@ -441,7 +437,7 @@ test("ReviewNoteFinalizer prepends statistics line before grouped findings", () 
         confidence: 82
       }
     ]
-  });
+  );
 
   const rendered = finalizer.render(context);
 
@@ -458,8 +454,7 @@ test("ReviewNoteFinalizer prepends statistics line before grouped findings", () 
 test("ReviewNoteFinalizer groups all must findings before all nice findings preserving intra-group order", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext("");
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "X",
@@ -481,7 +476,7 @@ test("ReviewNoteFinalizer groups all must findings before all nice findings pres
         confidence: 88
       }
     ]
-  });
+  );
 
   const rendered = finalizer.render(context);
 
@@ -495,8 +490,7 @@ test("ReviewNoteFinalizer groups all must findings before all nice findings pres
 test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must prefix", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext("");
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "nice",
         title: "P",
@@ -518,7 +512,7 @@ test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must p
         confidence: 83
       }
     ]
-  });
+  );
 
   const rendered = finalizer.render(context);
 
@@ -532,7 +526,7 @@ test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must p
 test("ReviewNoteFinalizer renders empty findings as a single - 無 marker", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext("");
-  context.updateStructuredState({ findings: [] });
+  context.setFindings([]);
 
   const rendered = finalizer.render(context);
 
@@ -543,8 +537,7 @@ test("ReviewNoteFinalizer renders empty findings as a single - 無 marker", () =
 test("ReviewNoteFinalizer throws for an unknown FindingTraceability kind", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext();
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "test finding",
@@ -556,7 +549,7 @@ test("ReviewNoteFinalizer throws for an unknown FindingTraceability kind", () =>
         confidence: 90
       }
     ]
-  });
+  );
 
   assert.throws(
     () => finalizer.render(context),

@@ -101,8 +101,7 @@ test("Step6CognitiveSimulationStep uses the canonical finalizer projection for <
 function createContextWithStep5Findings(): FileReviewContext {
   const context = createBaseContext();
 
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "既有問題",
@@ -114,14 +113,14 @@ function createContextWithStep5Findings(): FileReviewContext {
         confidence: 88
       }
     ]
-  });
+  );
 
   return context;
 }
 
 function createContextWithStep5EmptyFindings(): FileReviewContext {
   const context = createBaseContext();
-  context.updateStructuredState({ findings: [] });
+  context.setFindings([]);
   return context;
 }
 

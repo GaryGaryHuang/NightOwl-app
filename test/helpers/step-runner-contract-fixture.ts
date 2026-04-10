@@ -2,6 +2,7 @@ import {
   type FileReviewContextInput,
   FileReviewContext
 } from "../../src/core/file-review-context.ts";
+import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
 import type { StepExecutionPlan, StepReviewSessionFactoryLike, StepResolveServices } from "../../src/core/step-runner.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 
@@ -22,7 +23,7 @@ export function createStepRunnerContext(
   });
 }
 
-export function makeSectionResolve(sectionKey: string): StepExecutionPlan["resolve"] {
+export function makeSectionResolve(sectionKey: ReviewSectionKey): StepExecutionPlan["resolve"] {
   return async (response, _services) => {
     return (targetContext) => {
       targetContext.setSection(sectionKey, response);

@@ -339,9 +339,7 @@ export function buildSuccessfulStepResult(
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {
-        targetContext.updateStructuredState({
-          findings: options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath)
-        });
+        targetContext.setFindings(options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath));
       }
     };
   }
@@ -350,9 +348,7 @@ export function buildSuccessfulStepResult(
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {
-        targetContext.updateStructuredState({
-          findings: options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath)
-        });
+        targetContext.setFindings(options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath));
       }
     };
   }

@@ -468,8 +468,7 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
             };
           }
 
-          context.updateStructuredState({
-            findings: [
+          context.setFindings([
               {
                 type: "must",
                 title: "問題標題",
@@ -480,13 +479,12 @@ test("ReviewOrchestrator preserves an already-published full Step 7 snapshot whe
                 suggestion: "補上 guard",
                 confidence: 88
               }
-            ]
-          });
+            ]);
 
           return {
             stepId: step.stepId,
             applyTo(targetContext: FileReviewContext) {
-              targetContext.updateStructuredState(context.getStructuredState());
+              targetContext.setFindings(context.getStructuredState().findings ?? []);
             }
           };
         }

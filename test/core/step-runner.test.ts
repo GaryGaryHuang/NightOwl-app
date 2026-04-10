@@ -120,7 +120,7 @@ function createStructuredTestStep(input: {
           });
 
           return (context: import("../../src/core/file-review-context.ts").FileReviewContext) => {
-            context.updateStructuredState({ findings: payload.findings });
+            context.setFindings(payload.findings);
           };
         })
       };
@@ -950,8 +950,7 @@ test("StepRunner retries the whole Step 5 structured step when deterministic val
 test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with final findings", async () => {
   const context = createStepRunnerContext();
   seedStep4Context(context);
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "初版 findings",
@@ -962,8 +961,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
         suggestion: "初版建議",
         confidence: 88
       }
-    ]
-  });
+    ]);
 
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
@@ -1032,8 +1030,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
 test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with empty final findings", async () => {
   const context = createStepRunnerContext();
   seedStep4Context(context);
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "初版 findings",
@@ -1044,8 +1041,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
         suggestion: "初版建議",
         confidence: 88
       }
-    ]
-  });
+    ]);
 
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
@@ -1073,7 +1069,7 @@ test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 
 test("StepRunner applies Step 6 structured output by replacing empty Step 5 findings with final findings", async () => {
   const context = createStepRunnerContext();
   seedStep4Context(context);
-  context.updateStructuredState({ findings: [] });
+  context.setFindings([]);
 
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
@@ -1127,8 +1123,7 @@ test("StepRunner applies Step 6 structured output by replacing empty Step 5 find
 test("StepRunner retries the whole Step 6 structured step when deterministic validation fails first without mutating Step 5 findings", async () => {
   const context = createStepRunnerContext();
   seedStep4Context(context);
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "初版 findings",
@@ -1139,8 +1134,7 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
         suggestion: "初版建議",
         confidence: 88
       }
-    ]
-  });
+    ]);
   const prompts: string[] = [];
   let reviewAttempts = 0;
 
@@ -1222,8 +1216,7 @@ test("StepRunner retries the whole Step 6 structured step when deterministic val
 test("StepRunner applies Step 7 section output under summary without changing findings", async () => {
   const context = createStepRunnerContext();
   seedStep4Context(context);
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "最終 findings",
@@ -1234,8 +1227,7 @@ test("StepRunner applies Step 7 section output under summary without changing fi
         suggestion: "最終建議",
         confidence: 91
       }
-    ]
-  });
+    ]);
 
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
@@ -1309,8 +1301,7 @@ test("StepRunner rebuilds Step 7 current review from the last successful Step 6 
   const prompts: string[] = [];
   const context = createStepRunnerContext();
   seedStep4Context(context);
-  context.updateStructuredState({
-    findings: [
+  context.setFindings([
       {
         type: "must",
         title: "最終 findings",
@@ -1321,8 +1312,7 @@ test("StepRunner rebuilds Step 7 current review from the last successful Step 6 
         suggestion: "最終建議",
         confidence: 91
       }
-    ]
-  });
+    ]);
 
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({

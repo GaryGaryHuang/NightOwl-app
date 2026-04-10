@@ -121,7 +121,7 @@ test("Step7SummaryStep carries explicit empty findings state in current review",
 
 function createContextWithFindings(findings: Finding[]): FileReviewContext {
   const context = createBaseContext();
-  context.updateStructuredState({ findings });
+  context.setFindings(findings);
   return context;
 }
 
