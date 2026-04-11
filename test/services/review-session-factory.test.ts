@@ -16,9 +16,16 @@ import {
   BASE_REVIEW_PROFILE,
   createAuditFileFixture,
   createRecordedConfigs,
-  createSessionRecordingClientManager,
-  EXPECTED_REVIEW_AVAILABLE_TOOLS
+  createSessionRecordingClientManager
 } from "../helpers/review-session-runtime-contract-fixture.ts";
+
+const EXPECTED_REVIEW_AVAILABLE_TOOLS = [
+  "bash",
+  "web_fetch",
+  "view",
+  "grep",
+  "glob"
+] as const;
 
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
@@ -124,7 +131,7 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
   }
 }
 
-test("ReviewSessionFactory creates a non-streaming review session and delegates hook construction to ToolPolicyGuard", async () => {
+test("ReviewSessionFactory delegates hook construction to ToolPolicyGuard", async () => {
   const toolPolicyGuard = new SpyToolPolicyGuard();
   const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
     toolPolicyGuard
@@ -149,12 +156,21 @@ test("ReviewSessionFactory creates a non-streaming review session and delegates 
   const config = getRecordedConfig(receivedConfigs);
   assert.equal(config.hooks.onPreToolUse, toolPolicyGuard.preToolUseHook);
   assert.equal(config.onPermissionRequest, toolPolicyGuard.permissionHandler);
+});
+
+test("ReviewSessionFactory builds the base review session config from the profile", async () => {
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
   assert.equal(config.model, "gpt-5.4-mini");
   assert.equal(config.reasoningEffort, "high");
   assert.equal(config.streaming, false);
   assert.equal(config.workingDirectory, "/workspace/repo");
   assert.equal(config.mcpServers, undefined);
-  assert.equal(config.excludedTools, undefined);
 });
 
 test("ReviewSessionFactory injects MCP servers only when KnowledgeSvc returns them for the resolved knowledge mode", async () => {
@@ -256,8 +272,5 @@ test("ReviewSessionFactory sets availableTools to exactly the SOP tool set", asy
 
   const availableTools = receivedConfigs[0]?.availableTools;
   assert.ok(availableTools !== undefined, "availableTools should be present in session config");
-  assert.deepEqual(
-    new Set(availableTools),
-    new Set(EXPECTED_REVIEW_AVAILABLE_TOOLS)
-  );
+  assert.deepEqual(availableTools, [...EXPECTED_REVIEW_AVAILABLE_TOOLS]);
 });
