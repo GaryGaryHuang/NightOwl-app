@@ -36,14 +36,37 @@ function assertDeniedCommands(
   }
 }
 
-test("tool policy shell policy denies dangerous flags and out-of-boundary path arguments", () => {
-  assertDeniedCommands([
-    "cat /etc/passwd | head -5",
-    "git log --oneline | sort --output=result.txt",
-    "cat ../secret.txt",
-    "nl /etc/passwd",
-    "diff /etc/hosts src/app.ts"
-  ]);
+const OUT_OF_BOUNDARY_PATH_COMMANDS = [
+  "cat /etc/passwd | head -5",
+  "cat ../secret.txt",
+  "nl /etc/passwd",
+  "diff /etc/hosts src/app.ts"
+] as const;
+
+const DANGEROUS_FLAG_COMMANDS = [
+  "git log --oneline | sort --output=result.txt",
+  "git show -exec sh {} +"
+] as const;
+
+const SUBCOMMAND_EXECUTION_COMMANDS = [
+  "find . -exec sh {} +",
+  "find . -name '*.ts' -exec cat {} +",
+  "find . -execdir sh {} +",
+  "git log --oneline | find . -exec cat {} +",
+  "git status && find . -exec sh {} +"
+] as const;
+
+const SAFE_FIND_INSPECTION_COMMANDS = [
+  "find . -name '*.ts' -type f",
+  "find . -executable -type f"
+] as const;
+
+test("tool policy shell policy denies out-of-boundary path arguments", () => {
+  assertDeniedCommands(OUT_OF_BOUNDARY_PATH_COMMANDS);
+});
+
+test("tool policy shell policy denies dangerous write and subcommand flags", () => {
+  assertDeniedCommands(DANGEROUS_FLAG_COMMANDS);
 });
 
 test("tool policy shell policy resolves repo-relative path arguments against the effective cwd", () => {
@@ -81,18 +104,10 @@ test("tool policy shell policy propagates cd-derived cwd and enforces cd path bo
   ]);
 });
 
-test("tool policy shell policy blocks subcommand execution forms while allowing safe find usage", () => {
-  assertDeniedCommands([
-    "find . -exec sh {} +",
-    "find . -name '*.ts' -exec cat {} +",
-    "find . -execdir sh {} +",
-    "git log --oneline | find . -exec cat {} +",
-    "git status && find . -exec sh {} +",
-    "git show -exec sh {} +"
-  ]);
+test("tool policy shell policy blocks find subcommand execution forms", () => {
+  assertDeniedCommands(SUBCOMMAND_EXECUTION_COMMANDS);
+});
 
-  assertAllowedCommands([
-    "find . -name '*.ts' -type f",
-    "find . -executable -type f"
-  ]);
+test("tool policy shell policy allows safe find inspection predicates", () => {
+  assertAllowedCommands(SAFE_FIND_INSPECTION_COMMANDS);
 });
