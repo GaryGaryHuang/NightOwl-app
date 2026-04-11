@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,12 +23,7 @@ test("build emits the published CLI artifact with rewritten JavaScript imports",
   const fixture = createBuildFixture();
 
   try {
-    const buildResult = spawnSync("npm", ["run", "build"], {
-      cwd: fixture.appCopyDir,
-      encoding: "utf8"
-    });
-
-    assert.equal(buildResult.status, 0, buildResult.stderr || buildResult.stdout);
+    runBuild(fixture);
 
     const builtCliPath = path.join(fixture.appCopyDir, "dist", "bin", "review.js");
     assert.ok(existsSync(builtCliPath), "dist/bin/review.js should exist after build");
@@ -35,6 +31,11 @@ test("build emits the published CLI artifact with rewritten JavaScript imports",
     const builtCliSource = readFileSync(builtCliPath, "utf8");
     assert.match(builtCliSource, /^#!\/usr\/bin\/env node$/mu);
     assert.match(builtCliSource, /from "\.\.\/index\.js"/u);
+    assert.equal(
+      statSync(builtCliPath).mode & 0o111,
+      0o111,
+      "dist/bin/review.js should be executable after build"
+    );
   } finally {
     fixture.cleanup();
   }
@@ -44,11 +45,7 @@ test("build removes stale dist artifacts before compiler emit", () => {
   const fixture = createBuildFixture();
 
   try {
-    const firstBuild = spawnSync("npm", ["run", "build"], {
-      cwd: fixture.appCopyDir,
-      encoding: "utf8"
-    });
-    assert.equal(firstBuild.status, 0, firstBuild.stderr || firstBuild.stdout);
+    runBuild(fixture);
 
     const staleArtifactPath = path.join(
       fixture.appCopyDir,
@@ -58,11 +55,7 @@ test("build removes stale dist artifacts before compiler emit", () => {
     writeFileSync(staleArtifactPath, "export const stale = true;\n");
     assert.ok(existsSync(staleArtifactPath), "stale artifact setup should exist");
 
-    const secondBuild = spawnSync("npm", ["run", "build"], {
-      cwd: fixture.appCopyDir,
-      encoding: "utf8"
-    });
-    assert.equal(secondBuild.status, 0, secondBuild.stderr || secondBuild.stdout);
+    runBuild(fixture);
     assert.equal(
       existsSync(staleArtifactPath),
       false,
@@ -72,6 +65,15 @@ test("build removes stale dist artifacts before compiler emit", () => {
     fixture.cleanup();
   }
 });
+
+function runBuild(fixture: { appCopyDir: string }): void {
+  const buildResult = spawnSync("npm", ["run", "build"], {
+    cwd: fixture.appCopyDir,
+    encoding: "utf8"
+  });
+
+  assert.equal(buildResult.status, 0, buildResult.stderr || buildResult.stdout);
+}
 
 function createBuildFixture(): {
   appCopyDir: string;

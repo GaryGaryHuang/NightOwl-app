@@ -8,6 +8,23 @@ import {
 } from "../../scripts/verify-test-tier-manifest.mjs";
 import { runTestTierCommand } from "../../scripts/test-tier-runner.mjs";
 
+interface TestTierManifest extends Record<string, string[]> {
+  unit: string[];
+  integration: string[];
+  e2e: string[];
+}
+
+function createManifest(
+  overrides: Partial<TestTierManifest> = {}
+): TestTierManifest {
+  return {
+    unit: [],
+    integration: [],
+    e2e: [],
+    ...overrides
+  };
+}
+
 // Parity checks (missingFromManifest / staleInManifest) are intentionally
 // suppressed when schema validation fails: the manifest paths are untrusted at
 // that point, so running disk comparison would produce misleading noise rather
@@ -29,11 +46,9 @@ test("evaluateTestTierManifest suppresses parity noise when manifest schema is i
 
 test("evaluateTestTierManifest still reports parity drift when manifest shape is canonical", () => {
   const result = evaluateTestTierManifest({
-    manifest: {
-      unit: ["test/core/example.test.ts"],
-      integration: [],
-      e2e: []
-    },
+    manifest: createManifest({
+      unit: ["test/core/example.test.ts"]
+    }),
     diskFiles: [
       "test/core/example.test.ts",
       "test/core/missing-from-manifest.test.ts"
@@ -77,10 +92,8 @@ test("runTestTierCommand spawns the manifest-defined source test files for the r
 
   const exitCode = runTestTierCommand({
     args: ["integration"],
-    loadManifest: () => ({
-      unit: [],
-      integration: ["test/app/review-app.test.ts"],
-      e2e: []
+    loadManifest: () => createManifest({
+      integration: ["test/app/review-app.test.ts"]
     }),
     // All external dependencies are injected so the test can assert the exact
     // spawn contract without executing a real node subprocess.
@@ -117,10 +130,8 @@ test("runTestTierCommand returns exit code 1 and logs the error when spawn fails
 
   const exitCode = runTestTierCommand({
     args: ["unit"],
-    loadManifest: () => ({
-      unit: ["test/core/example.test.ts"],
-      integration: [],
-      e2e: []
+    loadManifest: () => createManifest({
+      unit: ["test/core/example.test.ts"]
     }),
     spawn: () => ({ status: null, error: spawnError }),
     logger: {
