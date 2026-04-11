@@ -6,6 +6,17 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { ReviewSourceProviderError } from "../../src/providers/review-source-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
+function runWithSuppressedStderr(callback: () => void): void {
+  const originalWrite = process.stderr.write;
+  process.stderr.write = (() => true) as typeof process.stderr.write;
+
+  try {
+    callback();
+  } finally {
+    process.stderr.write = originalWrite;
+  }
+}
+
 // --- unit tests (stubbed GitRunner, no real I/O) ---
 
 test("LocalGitProvider (unit) resolveRepoRoot returns runner output unchanged", () => {
@@ -216,13 +227,15 @@ test("LocalGitProvider wraps git failures in ReviewSourceProviderError with oper
   try {
     const provider = new LocalGitProvider();
 
-    assert.throws(
-      () => provider.getChangedFiles(fixture.repoDir, "missing-base", "feature-branch"),
-      (error: unknown) =>
-        error instanceof ReviewSourceProviderError &&
-        error.operation === "getChangedFiles" &&
-        error.cause instanceof Error
-    );
+    runWithSuppressedStderr(() => {
+      assert.throws(
+        () => provider.getChangedFiles(fixture.repoDir, "missing-base", "feature-branch"),
+        (error: unknown) =>
+          error instanceof ReviewSourceProviderError &&
+          error.operation === "getChangedFiles" &&
+          error.cause instanceof Error
+      );
+    });
   } finally {
     fixture.cleanup();
   }
