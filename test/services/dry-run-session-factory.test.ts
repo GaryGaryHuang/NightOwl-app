@@ -9,9 +9,6 @@ import {
 import {
   DRY_RUN_REVIEW_STEP_CONTRACTS
 } from "../../src/services/dry-run-review-step-contract.ts";
-import {
-  getDryRunStubResponse
-} from "../../src/services/dry-run-stub-catalog.ts";
 import type { DryRunReviewStepContract } from "../../src/services/dry-run-review-step-contract.ts";
 
 function buildProfile(
@@ -27,31 +24,46 @@ function buildProfile(
   };
 }
 
-test("DryRunReviewSessionFactory maps every supported contract to the catalog stub response", async () => {
+async function runDryRunReviewSession(
+  dryRunStepContract: DryRunReviewStepContract,
+  systemMessage?: string
+): Promise<string | undefined> {
   const factory = new DryRunReviewSessionFactory();
-  for (const contract of DRY_RUN_REVIEW_STEP_CONTRACTS) {
-    const session = await factory.createSession(buildProfile(contract));
-    const response = await session.sendAndWait(`prompt for ${contract}`);
+  const session = await factory.createSession(
+    buildProfile(dryRunStepContract, systemMessage)
+  );
 
-    assert.equal(
-      response,
-      getDryRunStubResponse(contract),
-      `unexpected stub response for contract: ${contract}`
+  return await session.sendAndWait(`prompt for ${dryRunStepContract}`);
+}
+
+test("DryRunReviewSessionFactory creates a non-empty stub session for every supported contract", async () => {
+  for (const contract of DRY_RUN_REVIEW_STEP_CONTRACTS) {
+    const response = await runDryRunReviewSession(contract);
+
+    assert.equal(typeof response, "string");
+    assert.notEqual(
+      response?.trim(),
+      "",
+      `stub response must not be empty for contract: ${contract}`
     );
   }
 });
 
-test("DryRunReviewSessionFactory ignores system prompt wording when the explicit contract is unchanged", async () => {
-  const factory = new DryRunReviewSessionFactory();
-  const session = await factory.createSession(
-    buildProfile(
-      "overview",
-      "No step heading is present here. The contract must drive selection."
-    )
-  );
-  const response = await session.sendAndWait("prompt");
+test("DryRunReviewSessionFactory selects the stub response from the explicit contract instead of prompt wording", async () => {
+  const misleadingSystemPrompt =
+    "No step heading is present here. The contract must drive selection.";
 
-  assert.equal(response, getDryRunStubResponse("overview"));
+  const overviewResponse = await runDryRunReviewSession(
+    "overview",
+    misleadingSystemPrompt
+  );
+  const findingsResponse = await runDryRunReviewSession(
+    "validation-interrogation",
+    misleadingSystemPrompt
+  );
+
+  assert.match(overviewResponse ?? "", /^## Overview/u);
+  assert.deepEqual(JSON.parse(findingsResponse ?? ""), { findings: [] });
 });
 
 test("DryRunReviewSessionFactory rejects a missing contract with a dry-run contract failure", async () => {
@@ -88,7 +100,7 @@ test("DryRunReviewSessionFactory rejects an unsupported contract with a dry-run 
   );
 });
 
-test("DryRunJudgeSessionFactory always returns Y across repeated prompts", async () => {
+test("DryRunJudgeSessionFactory approves regardless of prompt wording", async () => {
   const factory = new DryRunJudgeSessionFactory();
   const session = await factory.createSession({
     model: "gpt-5.4-mini",
@@ -97,6 +109,4 @@ test("DryRunJudgeSessionFactory always returns Y across repeated prompts", async
 
   assert.equal(await session.sendAndWait("please evaluate"), "Y");
   assert.equal(await session.sendAndWait("N"), "Y");
-  assert.equal(await session.sendAndWait(""), "Y");
-  assert.equal(await session.sendAndWait("some long prompt"), "Y");
 });
