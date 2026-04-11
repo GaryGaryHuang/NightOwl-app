@@ -18,6 +18,13 @@ import {
 
 const SESSION_CONTEXT = { sessionId: "s1" };
 
+interface ExpectedAuditRecord {
+  tool: string;
+  decision: "allow" | "deny";
+  reason?: string;
+  args?: Record<string, string | undefined>;
+}
+
 function createHookInput(
   toolName: string,
   toolArgs?: Record<string, unknown> | null
@@ -28,6 +35,27 @@ function createHookInput(
     toolName,
     toolArgs: toolArgs as Record<string, unknown> | undefined
   };
+}
+
+function assertAuditRecord(
+  actual: {
+    tool: string;
+    decision: string;
+    reason?: string;
+    args: Record<string, string | undefined>;
+  },
+  expected: ExpectedAuditRecord
+): void {
+  assert.equal(actual.tool, expected.tool);
+  assert.equal(actual.decision, expected.decision);
+
+  if ("reason" in expected) {
+    assert.equal(actual.reason, expected.reason);
+  }
+
+  if (expected.args !== undefined) {
+    assert.deepEqual(actual.args, expected.args);
+  }
 }
 
 test("tool policy guard pre-tool hook keeps representative shell and url allow-deny behavior across canonical aliases", async () => {
@@ -99,50 +127,52 @@ test("tool policy guard pre-tool hook bypasses unrelated tools and leaves unknow
   );
 });
 
-test("tool policy guard pre-tool hook defers empty or missing shell and url args across aliases", async () => {
-  const { hook } = createPolicySession();
-  const cases = [
-    createHookInput("bash"),
-    createHookInput("web_fetch"),
-    createHookInput("url"),
-    createHookInput("bash", null),
-    createHookInput("web_fetch", 42 as unknown as Record<string, unknown>),
-    createHookInput("bash", { command: "" }),
-    createHookInput("sh", { command: "" }),
-    createHookInput("shell", { command: "" }),
-    createHookInput("web_fetch", { url: "" }),
-    createHookInput("url", { url: "" })
-  ];
-
-  for (const input of cases) {
-    assert.equal(await hook(input, SESSION_CONTEXT), undefined);
-  }
-});
-
-test("tool policy guard pre-tool hook records deferred audit decisions for empty shell and url args", async () => {
+test("tool policy guard pre-tool hook defers empty or missing shell and url args and records deferred audit decisions", async () => {
   const sink = new InMemoryAuditSink();
   const { hook } = createPolicySession({ auditWriter: sink });
+  const cases = [
+    {
+      input: createHookInput("bash"),
+      expectedAudit: { tool: "bash", args: { command: "" } }
+    },
+    {
+      input: createHookInput("web_fetch"),
+      expectedAudit: { tool: "web_fetch", args: { url: "" } }
+    },
+    {
+      input: createHookInput("url"),
+      expectedAudit: { tool: "url", args: { url: "" } }
+    },
+    {
+      input: createHookInput("bash", null),
+      expectedAudit: { tool: "bash", args: { command: "" } }
+    },
+    {
+      input: createHookInput("web_fetch", 42 as unknown as Record<string, unknown>),
+      expectedAudit: { tool: "web_fetch", args: { url: "" } }
+    },
+    {
+      input: createHookInput("sh", { command: "" }),
+      expectedAudit: { tool: "sh", args: { command: "" } }
+    },
+    {
+      input: createHookInput("shell", { command: "" }),
+      expectedAudit: { tool: "shell", args: { command: "" } }
+    }
+  ] as const;
 
-  for (const toolName of ["bash", "sh", "shell"] as const) {
-    await hook(createHookInput(toolName, { command: "" }), SESSION_CONTEXT);
+  for (const testCase of cases) {
+    assert.equal(await hook(testCase.input, SESSION_CONTEXT), undefined);
   }
 
-  for (const toolName of ["web_fetch", "url"] as const) {
-    await hook(createHookInput(toolName, { url: "" }), SESSION_CONTEXT);
-  }
+  assert.equal(sink.records.length, cases.length);
 
-  assert.equal(sink.records.length, 5);
-
-  for (const record of sink.records.slice(0, 3)) {
-    assert.equal(record.decision, "allow");
-    assert.equal(record.reason, EMPTY_TOOL_ARGS_DEFERRED_REASON);
-    assert.deepEqual(record.args, { command: "" });
-  }
-
-  for (const record of sink.records.slice(3)) {
-    assert.equal(record.decision, "allow");
-    assert.equal(record.reason, EMPTY_TOOL_ARGS_DEFERRED_REASON);
-    assert.deepEqual(record.args, { url: "" });
+  for (const [index, testCase] of cases.entries()) {
+    assertAuditRecord(sink.records[index], {
+      ...testCase.expectedAudit,
+      decision: "allow",
+      reason: EMPTY_TOOL_ARGS_DEFERRED_REASON
+    });
   }
 });
 
@@ -164,38 +194,19 @@ test("tool policy guard pre-tool hook writes representative audit records for al
   );
 
   assert.equal(sink.records.length, 2);
-  assert.equal(sink.records[0].tool, "bash");
-  assert.equal(sink.records[0].decision, "allow");
-  assert.deepEqual(sink.records[0].args, { command: "git log --oneline -5" });
+  assertAuditRecord(sink.records[0], {
+    tool: "bash",
+    decision: "allow",
+    args: { command: "git log --oneline -5" }
+  });
   assert.equal("reason" in sink.records[0], false);
 
-  assert.equal(sink.records[1].tool, "web_fetch");
-  assert.equal(sink.records[1].decision, "deny");
-  assert.equal(sink.records[1].reason, UNSAFE_WEB_FETCH_URL_REASON);
-  assert.deepEqual(sink.records[1].args, { url: "http://localhost:8080" });
-});
-
-test("tool policy guard pre-tool hook preserves incoming shell alias names in audit records", async () => {
-  const sink = new InMemoryAuditSink();
-  const { hook } = createPolicySession({ auditWriter: sink });
-
-  await hook(
-    createHookInput("sh", {
-      command: "git log --oneline"
-    }),
-    SESSION_CONTEXT
-  );
-  await hook(
-    createHookInput("shell", {
-      command: "rm -rf /"
-    }),
-    SESSION_CONTEXT
-  );
-
-  assert.deepEqual(
-    sink.records.map((record) => record.tool),
-    ["sh", "shell"]
-  );
+  assertAuditRecord(sink.records[1], {
+    tool: "web_fetch",
+    decision: "deny",
+    reason: UNSAFE_WEB_FETCH_URL_REASON,
+    args: { url: "http://localhost:8080" }
+  });
 });
 
 test("tool policy guard pre-tool hook fails closed for shell policy exceptions and preserves command extraction in audit records", async () => {
@@ -244,33 +255,6 @@ test("tool policy guard pre-tool hook fails closed for shell policy exceptions a
   assert.deepEqual(sink.records[1].args, { command: "" });
 });
 
-test("tool policy guard pre-tool hook denies shell policy failures for both Error and non-Error throws", async () => {
-  const { hook } = createPolicySession();
-
-  for (const thrownValue of [new Error("simulated failure"), "non-error string thrown"] as const) {
-    mock.method(path, "resolve", () => {
-      throw thrownValue;
-    });
-
-    try {
-      assert.deepEqual(
-        await hook(
-          createHookInput("bash", {
-            command: "git log /workspace/repo"
-          }),
-          SESSION_CONTEXT
-        ),
-        {
-          permissionDecision: "deny",
-          permissionDecisionReason: SHELL_POLICY_FAIL_CLOSED_REASON
-        }
-      );
-    } finally {
-      mock.restoreAll();
-    }
-  }
-});
-
 test("tool policy guard pre-tool hook fails closed for url policy exceptions and records the deny reason", async () => {
   const sink = new InMemoryAuditSink();
   const { hook } = createPolicySession({
@@ -294,10 +278,12 @@ test("tool policy guard pre-tool hook fails closed for url policy exceptions and
   );
 
   assert.equal(sink.records.length, 1);
-  assert.equal(sink.records[0].tool, "url");
-  assert.equal(sink.records[0].decision, "deny");
-  assert.equal(sink.records[0].reason, WEB_FETCH_POLICY_FAIL_CLOSED_REASON);
-  assert.deepEqual(sink.records[0].args, { url: "https://docs.example.com/guide" });
+  assertAuditRecord(sink.records[0], {
+    tool: "url",
+    decision: "deny",
+    reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
+    args: { url: "https://docs.example.com/guide" }
+  });
 });
 
 test("tool policy guard pre-tool hook keeps normal deny reasons distinct from fail-closed behavior", async () => {

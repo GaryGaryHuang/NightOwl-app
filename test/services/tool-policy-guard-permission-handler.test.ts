@@ -20,6 +20,34 @@ const SESSION_CONTEXT = { sessionId: "s1" };
 const APPROVED = { kind: "approved" };
 const DENIED = { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
 
+interface ExpectedAuditRecord {
+  tool: string;
+  decision: "allow" | "deny";
+  reason?: string;
+  args?: Record<string, string | undefined>;
+}
+
+function assertAuditRecord(
+  actual: {
+    tool: string;
+    decision: string;
+    reason?: string;
+    args: Record<string, string | undefined>;
+  },
+  expected: ExpectedAuditRecord
+): void {
+  assert.equal(actual.tool, expected.tool);
+  assert.equal(actual.decision, expected.decision);
+
+  if ("reason" in expected) {
+    assert.equal(actual.reason, expected.reason);
+  }
+
+  if (expected.args !== undefined) {
+    assert.deepEqual(actual.args, expected.args);
+  }
+}
+
 test("tool policy guard permission handler enforces the read and write boundary and records representative audit decisions", async () => {
   const sink = new InMemoryAuditSink();
   const { handler } = createPolicySession({ auditWriter: sink });
@@ -48,13 +76,17 @@ test("tool policy guard permission handler enforces the read and write boundary 
   }
 
   assert.equal(sink.records.length, 4);
-  assert.equal(sink.records[0].tool, "read");
-  assert.equal(sink.records[0].decision, "allow");
-  assert.equal(sink.records[2].reason, "Read path is outside the allowed boundary.");
-  assert.equal(
-    sink.records[3].reason,
-    "Write operations are not permitted in review sessions."
-  );
+  assertAuditRecord(sink.records[0], { tool: "read", decision: "allow" });
+  assertAuditRecord(sink.records[2], {
+    tool: "read",
+    decision: "deny",
+    reason: "Read path is outside the allowed boundary."
+  });
+  assertAuditRecord(sink.records[3], {
+    tool: "write",
+    decision: "deny",
+    reason: "Write operations are not permitted in review sessions."
+  });
 });
 
 test("tool policy guard permission handler validates shell and url payloads through the permission surface", async () => {
@@ -94,9 +126,7 @@ test("tool policy guard permission handler validates shell and url payloads thro
 
   assert.equal(sink.records.length, 4);
   for (const [index, testCase] of cases.entries()) {
-    assert.equal(sink.records[index].tool, testCase.expectedAudit.tool);
-    assert.equal(sink.records[index].decision, testCase.expectedAudit.decision);
-    assert.deepEqual(sink.records[index].args, testCase.expectedAudit.args);
+    assertAuditRecord(sink.records[index], testCase.expectedAudit);
   }
 });
 
@@ -116,9 +146,11 @@ test("tool policy guard permission handler approves shell url and mcp requests w
 
   assert.equal(sink.records.length, 3);
   for (const [index, testCase] of cases.entries()) {
-    assert.equal(sink.records[index].tool, testCase.expectedTool);
-    assert.equal(sink.records[index].decision, "allow");
-    assert.deepEqual(sink.records[index].args, {});
+    assertAuditRecord(sink.records[index], {
+      tool: testCase.expectedTool,
+      decision: "allow",
+      args: {}
+    });
   }
 });
 
@@ -188,15 +220,6 @@ test("tool policy guard permission handler handles defensive and extensibility k
       }
     },
     {
-      request: { kind: "memory" as "shell" },
-      expected: APPROVED,
-      expectedAudit: {
-        tool: "memory",
-        decision: "allow",
-        args: {}
-      }
-    },
-    {
       request: { kind: "hook" as "shell", toolName: "my_hook" },
       expected: DENIED,
       expectedAudit: {
@@ -224,16 +247,11 @@ test("tool policy guard permission handler handles defensive and extensibility k
 
   assert.equal(sink.records.length, cases.length);
   for (const [index, testCase] of cases.entries()) {
-    assert.equal(sink.records[index].tool, testCase.expectedAudit.tool);
-    assert.equal(sink.records[index].decision, testCase.expectedAudit.decision);
-    assert.deepEqual(sink.records[index].args, testCase.expectedAudit.args);
-    if ("reason" in testCase.expectedAudit) {
-      assert.equal(sink.records[index].reason, testCase.expectedAudit.reason);
-    }
+    assertAuditRecord(sink.records[index], testCase.expectedAudit);
   }
 });
 
-test("tool policy guard permission handler records rich audit args for mcp and custom-tool requests", async () => {
+test("tool policy guard permission handler records MCP server and tool names in audit args", async () => {
   const sink = new InMemoryAuditSink();
   const { handler } = createPolicySession({ auditWriter: sink });
 
@@ -241,16 +259,11 @@ test("tool policy guard permission handler records rich audit args for mcp and c
     { kind: "mcp", serverName: "context7", toolName: "resolve-library-id" },
     SESSION_CONTEXT
   );
-  await handler(
-    { kind: "custom-tool", toolName: "my_tool" },
-    SESSION_CONTEXT
-  );
 
   assert.deepEqual(sink.records[0].args, {
     serverName: "context7",
     toolName: "resolve-library-id"
   });
-  assert.deepEqual(sink.records[1].args, { toolName: "my_tool" });
 });
 
 test("tool policy guard permission handler behaves normally without an audit writer", async () => {

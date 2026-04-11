@@ -38,7 +38,6 @@
     "test/services/judge-session-factory.test.ts",
     "test/services/knowledge.test.ts",
     "test/services/session-executor.test.ts",
-    "test/services/tool-audit-writer.test.ts",
     "test/services/tool-policy-shell-policy-commands.test.ts",
     "test/services/tool-policy-shell-policy-composition.test.ts",
     "test/services/tool-policy-shell-policy-paths.test.ts",
@@ -70,6 +69,7 @@
     "test/providers/local-workspace-provider.test.ts",
     "test/scripts/build-script.test.ts",
     "test/services/review-session-factory.test.ts",
+    "test/services/tool-audit-writer.test.ts",
     "test/services/tool-policy-guard-permission-handler.test.ts",
     "test/services/tool-policy-guard-pre-tool-hook.test.ts"
   ],
