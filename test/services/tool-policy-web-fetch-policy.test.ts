@@ -13,37 +13,62 @@ import {
 
 async function assertDeniedUrls(
   policy: ToolPolicyWebFetchPolicy,
-  urls: string[],
-  reason: string
+  urls: readonly string[],
+  reason: string,
+  label = "url"
 ): Promise<void> {
   for (const url of urls) {
     assert.deepEqual(await policy.evaluate(url), {
       permissionDecision: "deny",
       permissionDecisionReason: reason
-    });
+    }, `${label}: ${url}`);
   }
 }
+
+async function assertAllowedUrls(
+  policy: ToolPolicyWebFetchPolicy,
+  urls: readonly string[],
+  label = "url"
+): Promise<void> {
+  for (const url of urls) {
+    assert.equal(await policy.evaluate(url), undefined, `${label}: ${url}`);
+  }
+}
+
+const UNSAFE_URL_GATE_CASES = [
+  {
+    label: "relative malformed and non-https URLs",
+    urls: [
+      "/internal/path",
+      "https://",
+      "http://docs.example.com/guide",
+      "http://example.com/spec",
+      "file:///etc/passwd"
+    ]
+  },
+  {
+    label: "local hosts and unsafe IP literals",
+    urls: [
+      "https://localhost:3000",
+      "https://192.168.1.10/admin",
+      "https://198.51.100.10/reference",
+      "https://100.64.0.1/reference",
+      "https://198.18.0.10/reference",
+      "https://[::1]/admin",
+      "https://[::]/admin",
+      "https://[::ffff:127.0.0.1]/admin"
+    ]
+  }
+] as const;
 
 test("tool policy web-fetch policy enforces the public https URL gate", async () => {
   const policy = createWebFetchPolicy();
 
   assert.equal(await policy.evaluate("https://docs.example.com/guide"), undefined);
 
-  await assertDeniedUrls(policy, [
-    "/internal/path",
-    "http://docs.example.com/guide",
-    "http://example.com/spec",
-    "https://localhost:3000",
-    "https://192.168.1.10/admin",
-    "https://198.51.100.10/reference",
-    "https://100.64.0.1/reference",
-    "https://198.18.0.10/reference",
-    "https://[::1]/admin",
-    "https://[::]/admin",
-    "https://",
-    "file:///etc/passwd",
-    "https://[::ffff:127.0.0.1]/admin"
-  ], UNSAFE_WEB_FETCH_URL_REASON);
+  for (const group of UNSAFE_URL_GATE_CASES) {
+    await assertDeniedUrls(policy, group.urls, UNSAFE_WEB_FETCH_URL_REASON, group.label);
+  }
 });
 
 test("tool policy web-fetch policy applies hostname DNS classification only to hostname URLs", async () => {
@@ -74,6 +99,7 @@ test("tool policy web-fetch policy applies hostname DNS classification only to h
 test("tool policy web-fetch policy enforces exact-host and wildcard allowlist semantics", async () => {
   const cases = [
     {
+      label: "exact host with canonical URL spellings",
       policy: createWebFetchPolicy({
         webFetchAllowedHosts: ["docs.example.com"]
       }),
@@ -85,6 +111,7 @@ test("tool policy web-fetch policy enforces exact-host and wildcard allowlist se
       deniedUrls: ["https://react.dev/reference"]
     },
     {
+      label: "wildcard and exact host allowlist",
       policy: createWebFetchPolicy({
         webFetchAllowedHosts: ["react.dev", "*.example.com"]
       }),
@@ -96,6 +123,7 @@ test("tool policy web-fetch policy enforces exact-host and wildcard allowlist se
       deniedUrls: ["https://vuejs.org/guide"]
     },
     {
+      label: "uppercase configured allowlist hosts",
       policy: new ToolPolicyWebFetchPolicy({
         webFetchAllowedHosts: ["DOCS.EXAMPLE.COM", "*.EXAMPLE.COM"],
         hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
@@ -109,67 +137,60 @@ test("tool policy web-fetch policy enforces exact-host and wildcard allowlist se
   ];
 
   for (const testCase of cases) {
-    for (const url of testCase.allowedUrls) {
-      assert.equal(await testCase.policy.evaluate(url), undefined);
-    }
-
+    await assertAllowedUrls(testCase.policy, testCase.allowedUrls, testCase.label);
     await assertDeniedUrls(
       testCase.policy,
       testCase.deniedUrls,
-      CONFIGURED_WEB_FETCH_HOST_REASON
+      CONFIGURED_WEB_FETCH_HOST_REASON,
+      testCase.label
     );
   }
 });
 
 // Denylist takes precedence over the allowlist: a host that matches both
 // must still be denied. The denylist-only mode (no allowlist) also works.
-test("tool policy web-fetch policy enforces denylist precedence and denylist-only mode", async () => {
+test("tool policy web-fetch policy lets denylist entries override allowlist matches", async () => {
   const allowAndDeny = createWebFetchPolicy({
     webFetchAllowedHosts: ["*.example.com"],
     webFetchDeniedHosts: ["internal.example.com", "*.secret.example.com"]
   });
 
-  assert.deepEqual(await allowAndDeny.evaluate("https://internal.example.com/admin"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-  });
-  assert.deepEqual(
-    await allowAndDeny.evaluate("https://api.secret.example.com/data"),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-    }
+  await assertDeniedUrls(
+    allowAndDeny,
+    [
+      "https://internal.example.com/admin",
+      "https://api.secret.example.com/data"
+    ],
+    CONFIGURED_WEB_FETCH_HOST_REASON,
+    "denylist precedence"
   );
-  assert.equal(await allowAndDeny.evaluate("https://docs.example.com/guide"), undefined);
+  await assertAllowedUrls(
+    allowAndDeny,
+    ["https://docs.example.com/guide"],
+    "denylist precedence"
+  );
+});
 
+test("tool policy web-fetch policy supports denylist-only host filtering with normalized wildcard entries", async () => {
   const denyOnly = createWebFetchPolicy({
-    webFetchDeniedHosts: ["evil.com", "*.evil.org"]
+    webFetchDeniedHosts: ["evil.com", "*.EVIL.ORG"]
   });
 
-  assert.deepEqual(await denyOnly.evaluate("https://evil.com/payload"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-  });
-  assert.deepEqual(await denyOnly.evaluate("https://sub.evil.org/payload"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-  });
-  assert.equal(await denyOnly.evaluate("https://docs.example.com/guide"), undefined);
+  await assertDeniedUrls(
+    denyOnly,
+    [
+      "https://evil.com/payload",
+      "https://sub.evil.org/payload"
+    ],
+    CONFIGURED_WEB_FETCH_HOST_REASON,
+    "denylist-only"
+  );
+  await assertAllowedUrls(
+    denyOnly,
+    ["https://docs.example.com/guide"],
+    "denylist-only"
+  );
 });
-
-test("tool policy web-fetch policy does not require redirect dependencies for evaluation", async () => {
-  const policy = createWebFetchPolicy({
-    webFetchAllowedHosts: ["docs.example.com"]
-  });
-
-  assert.equal(await policy.evaluate("https://docs.example.com/guide"), undefined);
-  assert.deepEqual(await policy.evaluate("https://reference.example.net/start"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-  });
-});
-
-
 
 // The canonical hostname (lowercased, trailing dot stripped) is passed to
 // the classifier so that variant spellings map to a single classify call.
@@ -252,18 +273,4 @@ test("tool policy web-fetch policy preserves default IP literal behavior when no
     permissionDecision: "deny",
     permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
   });
-});
-
-test("tool policy web-fetch policy canonicalizes uppercase wildcard denied-host entries at construction time", async () => {
-  const policy = new ToolPolicyWebFetchPolicy({
-    webFetchDeniedHosts: ["*.EVIL.ORG"],
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
-  });
-  assert.deepEqual(
-    await policy.evaluate("https://sub.evil.org/payload"),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-    }
-  );
 });
