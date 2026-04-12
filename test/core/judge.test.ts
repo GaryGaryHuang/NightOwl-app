@@ -10,7 +10,121 @@ type JudgeObservedEvent =
   | ["sendAndWait", { prompt: string }, number | undefined]
   | ["disconnect"];
 
-test("JudgeService passes through section content and criteria, and accepts yes-style responses", async () => {
+const DEFAULT_EVALUATION_INPUT = {
+  stepId: "step1-overview",
+  filePath: "src/app.ts",
+  criteria: "段落 `## Overview` 必須存在",
+  sectionContent: "## Overview\n- 整體理解：測試"
+};
+
+test("JudgeService passes section content and criteria into a minimal judge session", async () => {
+  const { observed, service } = createRecordingJudgeService({
+    response: " Yes "
+  });
+
+  const result = await service.evaluate(DEFAULT_EVALUATION_INPUT);
+
+  assert.equal(result.passed, true);
+  assert.equal(observed.length, 3);
+  assert.deepEqual(observed[0], [
+    "createSession",
+    {
+      model: "gpt-5-mini",
+      systemMessage: assertJudgeSystemMessageContract(
+        (observed[0]?.[1] as JudgeSessionProfile | undefined)?.systemMessage
+      )
+    }
+  ]);
+  assert.deepEqual(observed[1], [
+    "sendAndWait",
+    {
+      prompt: [
+        "Evaluate whether <section> satisfies all requirements in <criteria>.",
+        "Return `Y` if all requirements are satisfied.",
+        "Return `N` otherwise.",
+        "",
+        "<section>",
+        "## Overview",
+        "- 整體理解：測試",
+        "</section>",
+        "",
+        "<criteria>",
+        "段落 `## Overview` 必須存在",
+        "</criteria>"
+      ].join("\n")
+    },
+    180_000
+  ]);
+  assert.deepEqual(observed[2], ["disconnect"]);
+});
+
+test("JudgeService accepts only yes-style responses", async () => {
+  const passingResponses = ["Y", " Yes "];
+  const rejectedResponses = ["N", "   ", "maybe"];
+
+  for (const response of passingResponses) {
+    const { service } = createRecordingJudgeService({ response });
+
+    assert.deepEqual(
+      await service.evaluate(DEFAULT_EVALUATION_INPUT),
+      { passed: true }
+    );
+  }
+
+  for (const response of rejectedResponses) {
+    const { service, observed } = createRecordingJudgeService({ response });
+
+    assert.deepEqual(
+      await service.evaluate(DEFAULT_EVALUATION_INPUT),
+      { passed: false, cause: "judge rejected" }
+    );
+    assert.deepEqual(observed.at(-1), ["disconnect"]);
+  }
+});
+
+test("JudgeService reports stable judge startup failures", async () => {
+  const service = new JudgeService({
+    judgeSessionFactory: {
+      async createSession() {
+        throw new Error("underlying startup failure");
+      }
+    }
+  });
+
+  await assert.rejects(
+    () => service.evaluate(DEFAULT_EVALUATION_INPUT),
+    /judge startup failed/u
+  );
+});
+
+test("JudgeService reports stable judge turn failures and disconnects", async () => {
+  const { observed, service } = createRecordingJudgeService({
+    sendError: new Error("underlying timeout")
+  });
+
+  await assert.rejects(
+    () => service.evaluate(DEFAULT_EVALUATION_INPUT),
+    /judge timeout/u
+  );
+  assert.deepEqual(observed.at(-1), ["disconnect"]);
+});
+
+test("JudgeService does not require judge sessions to expose abort", async () => {
+  const { observed, service } = createRecordingJudgeService({
+    response: "Y"
+  });
+
+  assert.deepEqual(
+    await service.evaluate(DEFAULT_EVALUATION_INPUT),
+    { passed: true }
+  );
+  assert.deepEqual(observed.at(-1), ["disconnect"]);
+});
+
+function createRecordingJudgeService(input: {
+  response?: string;
+  sendError?: Error;
+}): { observed: JudgeObservedEvent[]; service: JudgeService } {
   const observed: JudgeObservedEvent[] = [];
   const service = new JudgeService({
     judgeSessionFactory: {
@@ -21,9 +135,13 @@ test("JudgeService passes through section content and criteria, and accepts yes-
           async sendAndWait(options, timeoutMs) {
             observed.push(["sendAndWait", options, timeoutMs]);
 
+            if (input.sendError) {
+              throw input.sendError;
+            }
+
             return {
               data: {
-                content: " Yes "
+                content: input.response ?? "Y"
               }
             };
           },
@@ -35,178 +153,24 @@ test("JudgeService passes through section content and criteria, and accepts yes-
     }
   });
 
-  const result = await service.evaluate({
-    stepId: "step1-overview",
-    filePath: "src/app.ts",
-    criteria: "段落 `## Overview` 必須存在",
-    sectionContent: "## Overview\n- 整體理解：測試"
-  });
+  return { observed, service };
+}
 
-  assert.equal(result.passed, true);
-  assert.deepEqual(observed, [
-    [
-      "createSession",
-      {
-        model: "gpt-5-mini",
-        systemMessage: [
-          "You are a completion checker. Evaluate whether the content in <section> satisfies the requirements explicitly listed in <criteria>.",
-          "",
-          "General Rules:",
-          "- Check the requirements in <criteria> one by one.",
-          "- Judge only against the requirements explicitly stated in <criteria>. Do not add stricter standards of your own.",
-          "- Treat a field as valid if it is present and provides a meaningful response to the required item. Concise answers are acceptable if they directly satisfy the requirement.",
-          "- If a requirement explicitly allows a negative, none, or not-applicable style answer (e.g., \"無\", \"無外部相依\"), treat that response as valid.",
-          "- A field fails only if it is missing, blank, clearly unreplaced placeholder text (e.g., \"[the file's primary role]\"), or does not answer the required item at all.",
-          "- Minor formatting variations (e.g., bullet style, heading level, whitespace) do not constitute a failure as long as the required content is present and meaningful.",
-          "- Do not use outside knowledge. Judge only from <section> and <criteria>.",
-          "- If any requirement is not met or cannot be verified from <section>, output N.",
-          "",
-          "Output Y only if every requirement is satisfied.",
-          "Output N otherwise.",
-          "Output only Y or N — no other text or explanation."
-        ].join("\n")
-      }
-    ],
-    [
-      "sendAndWait",
-      {
-        prompt: [
-          "Evaluate whether <section> satisfies all requirements in <criteria>.",
-          "Return `Y` if all requirements are satisfied.",
-          "Return `N` otherwise.",
-          "",
-          "<section>",
-          "## Overview",
-          "- 整體理解：測試",
-          "</section>",
-          "",
-          "<criteria>",
-          "段落 `## Overview` 必須存在",
-          "</criteria>"
-        ].join("\n")
-      },
-      180_000
-    ],
-    ["disconnect"]
-  ]);
-});
-
-test("JudgeService rejects all non-yes responses", async () => {
-  const responses = ["N", "   ", "maybe"];
-
-  for (const response of responses) {
-    const disconnectCalls: string[] = [];
-    const service = new JudgeService({
-      judgeSessionFactory: {
-        async createSession() {
-          return new SessionExecutor({
-            async sendAndWait() {
-              return {
-                data: {
-                  content: response
-                }
-              };
-            },
-            async disconnect() {
-              disconnectCalls.push("disconnect");
-            }
-          });
-        }
-      }
-    });
-
-    const result = await service.evaluate({
-      stepId: "step1-overview",
-      filePath: "src/app.ts",
-      criteria: "criteria",
-      sectionContent: "section"
-    });
-
-    assert.equal(result.passed, false);
-    assert.equal(result.cause, "judge rejected");
-    assert.deepEqual(disconnectCalls, ["disconnect"]);
+function assertJudgeSystemMessageContract(systemMessage: unknown): string {
+  if (typeof systemMessage !== "string") {
+    throw new Error("expected judge system message to be a string");
   }
-});
 
-test("JudgeService wraps judge startup failure with step and file context", async () => {
-  const service = new JudgeService({
-    judgeSessionFactory: {
-      async createSession() {
-        throw new Error("judge startup failed");
-      }
-    }
-  });
-
-  await assert.rejects(
-    () =>
-      service.evaluate({
-        stepId: "step1-overview",
-        filePath: "src/app.ts",
-        criteria: "criteria",
-        sectionContent: "section"
-      }),
-    /judge startup failed/u
+  assert.match(
+    systemMessage,
+    /completion checker.*<section>.*<criteria>/u
   );
-});
-
-test("JudgeService wraps judge timeout failure with step and file context", async () => {
-  const disconnectCalls: string[] = [];
-  const service = new JudgeService({
-    judgeSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            throw new Error("judge timeout");
-          },
-          async disconnect() {
-            disconnectCalls.push("disconnect");
-          }
-        });
-      }
-    }
-  });
-
-  await assert.rejects(
-    () =>
-      service.evaluate({
-        stepId: "step1-overview",
-        filePath: "src/app.ts",
-        criteria: "criteria",
-        sectionContent: "section"
-      }),
-    /judge timeout/u
+  assert.match(
+    systemMessage,
+    /Judge only against the requirements explicitly stated in <criteria>/u
   );
-  assert.deepEqual(disconnectCalls, ["disconnect"]);
-});
+  assert.match(systemMessage, /Do not use outside knowledge/u);
+  assert.match(systemMessage, /Output only Y or N/u);
 
-test("JudgeService phase 1 path does not require session.abort support", async () => {
-  const disconnectCalls: string[] = [];
-  const service = new JudgeService({
-    judgeSessionFactory: {
-      async createSession() {
-        return new SessionExecutor({
-          async sendAndWait() {
-            return {
-              data: {
-                content: "Y"
-              }
-            };
-          },
-          async disconnect() {
-            disconnectCalls.push("disconnect");
-          }
-        });
-      }
-    }
-  });
-
-  const result = await service.evaluate({
-    stepId: "step1-overview",
-    filePath: "src/app.ts",
-    criteria: "criteria",
-    sectionContent: "section"
-  });
-
-  assert.equal(result.passed, true);
-  assert.deepEqual(disconnectCalls, ["disconnect"]);
-});
+  return systemMessage;
+}

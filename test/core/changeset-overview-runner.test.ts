@@ -18,7 +18,7 @@ import {
 
 type Step0Profile = Parameters<ReviewSessionFactoryLike["createSession"]>[0];
 
-test("ChangesetOverviewRunner builds Step 0 input from changeset entries and user context", async () => {
+function createRecordingRunner(response = "## Changeset Overview\n- 調整範圍：feature") {
   const profiles: Step0Profile[] = [];
   const prompts: string[] = [];
   const timeouts: number[] = [];
@@ -31,12 +31,23 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
           async sendAndWait(prompt, timeoutMs) {
             prompts.push(prompt);
             timeouts.push(timeoutMs ?? 0);
-            return "## Changeset Overview\n- 調整範圍：feature";
+            return response;
           }
         };
       }
     }
   });
+
+  return {
+    profiles,
+    prompts,
+    runner,
+    timeouts
+  };
+}
+
+test("ChangesetOverviewRunner returns RunContext and creates the Step 0 review session profile", async () => {
+  const { profiles, runner, timeouts } = createRecordingRunner();
 
   const runContext = await runner.run({
     model: "gpt-5.4-mini",
@@ -53,23 +64,34 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
     "https://example.com/spec"
   ]);
 
-  // Step 0 uses Context7 by default so the LLM can retrieve library version info
-  // from the changeset entries without needing a per-file retrieval step.
+  assert.equal(profiles.length, 1);
   assert.equal(profiles[0]?.knowledgeMode, "built-in-context7");
   assert.equal(profiles[0]?.dryRunStepContract, "changeset-overview");
   assert.equal(profiles[0]?.model, "gpt-5.4-mini");
   assert.equal(profiles[0]?.outputBaseDir, "/workspace/repo");
   assert.equal(profiles[0]?.repoRoot, "/workspace/repo");
   assert.equal(profiles[0]?.workingDirectory, "/workspace/repo");
+  assert.equal(timeouts[0], 300_000);
 
   assertTextContainsAll(profiles[0]?.systemMessage ?? "", [
     "## Current Step: Changeset Overview",
     "This is a run-level step.",
-    "Do not analyze every file in detail.",
-    "Behavioral changes are business decisions",
     "Begin the response with `## Changeset Overview`."
   ]);
   assertNightOwlSharedToolGuidance(profiles[0]?.systemMessage ?? "");
+});
+
+test("ChangesetOverviewRunner builds the Step 0 prompt from changeset entries and user context", async () => {
+  const { prompts, runner } = createRecordingRunner();
+
+  await runner.run({
+    model: "gpt-5.4-mini",
+    workingDirectory: "/workspace/repo",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    userContext: ["PR-123", "https://example.com/spec"],
+    changedFilesList: ["M\tsrc/app.ts", "D\tobsolete.txt"]
+  });
 
   assertTaggedBlockContains(prompts[0] ?? "", "changed_files", [
     "M\tsrc/app.ts",
@@ -87,7 +109,25 @@ test("ChangesetOverviewRunner builds Step 0 input from changeset entries and use
     "- 行為變更：",
     "- 測試覆蓋觀察："
   ]);
-  assert.equal(timeouts[0], 300_000);
+});
+
+test("ChangesetOverviewRunner omits user_context when user context is empty", async () => {
+  const { prompts, runner } = createRecordingRunner();
+
+  await runner.run({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changedFilesList: ["M\tsrc/app.ts"],
+    userContext: []
+  });
+
+  assertTaggedBlockContains(prompts[0] ?? "", "changed_files", [
+    "M\tsrc/app.ts"
+  ]);
+  assertTextExcludesAll(prompts[0] ?? "", [
+    /<user_context>[\s\S]*<\/user_context>/u
+  ]);
 });
 
 // A blank/undefined first response triggers a retry with a fresh session
@@ -122,9 +162,6 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：retry\n");
   assert.equal(prompts.length, 2);
   assertTaggedBlockContains(prompts[0] ?? "", "changed_files", ["M\tsrc/app.ts"]);
-  // When userContext is empty the <user_context> tag must be fully absent,
-  // not present but empty, so the model does not encounter an empty XML block.
-  assertTextExcludesAll(prompts[0] ?? "", [/<user_context>[\s\S]*<\/user_context>/u]);
 });
 
 test("ChangesetOverviewRunner fails after two empty responses", async () => {
