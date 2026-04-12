@@ -3,6 +3,32 @@ import test from "node:test";
 
 import { resolveMcpServersFromConfigObject } from "../../src/providers/review-config-mcp-parser.ts";
 
+function assertMcpConfigError(input: {
+  config: Record<string, unknown>;
+  fieldOrValue?: string;
+  serverName?: string;
+}): void {
+  assert.throws(
+    () => resolveMcpServersFromConfigObject(input.config),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+
+      if (input.serverName) {
+        assert.match(err.message, new RegExp(`mcpServers\\.${input.serverName}:`, "u"));
+      } else {
+        assert.ok(err.message.includes("mcpServers"));
+        assert.ok(!err.message.startsWith("mcpServers."));
+      }
+
+      if (input.fieldOrValue) {
+        assert.ok(err.message.includes(input.fieldOrValue));
+      }
+
+      return true;
+    }
+  );
+}
+
 test("resolveMcpServersFromConfigObject preserves current local and remote MCP parsing behavior", () => {
   const config = {
     mcpServers: {
@@ -122,363 +148,121 @@ test("resolveMcpServersFromConfigObject preserves context7 override and omission
 });
 
 test("resolveMcpServersFromConfigObject rejects invalid local MCP shapes with enriched error context", () => {
-  // missing command → field: command
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("command"));
-      return true;
-    }
-  );
+  const cases: Array<{ definition: Record<string, unknown>; fieldOrValue: string }> = [
+    { definition: { type: "local" }, fieldOrValue: "command" },
+    { definition: { type: "local", command: "" }, fieldOrValue: "command" },
+    { definition: { type: "local", command: "   " }, fieldOrValue: "command" },
+    {
+      definition: { type: "local", command: "npx", args: "--bad" },
+      fieldOrValue: "args"
+    },
+    {
+      definition: { type: "local", command: "npx", env: ["not-a-record"] },
+      fieldOrValue: "env"
+    },
+    {
+      definition: { type: "local", command: "npx", tools: "single-string" },
+      fieldOrValue: "tools"
+    },
+    { definition: { type: "local", command: "npx", cwd: "" }, fieldOrValue: "cwd" },
+    { definition: { type: "local", command: "npx", cwd: 123 }, fieldOrValue: "cwd" },
+    {
+      definition: { type: "local", command: "npx", timeout: "15000" },
+      fieldOrValue: "timeout"
+    },
+    { definition: { type: "local", command: "npx", timeout: 1.5 }, fieldOrValue: "timeout" },
+    { definition: { type: "local", command: "npx", timeout: 0 }, fieldOrValue: "timeout" },
+    { definition: { type: "local", command: "npx", timeout: -1000 }, fieldOrValue: "timeout" }
+  ];
 
-  // empty command → field: command
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("command"));
-      return true;
-    }
-  );
-
-  // blank command → field: command
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "   " } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("command"));
-      return true;
-    }
-  );
-
-  // invalid args type → field: args
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", args: "--bad" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("args"));
-      return true;
-    }
-  );
-
-  // invalid env type (array instead of record) → field: env
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", env: ["not-a-record"] } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("env"));
-      return true;
-    }
-  );
-
-  // invalid tools type (string instead of array) → field: tools
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", tools: "single-string" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("tools"));
-      return true;
-    }
-  );
-
-  // empty cwd → field: cwd
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", cwd: "" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("cwd"));
-      return true;
-    }
-  );
-
-  // non-string cwd → field: cwd
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", cwd: 123 } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("cwd"));
-      return true;
-    }
-  );
-
-  // string timeout → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", timeout: "15000" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
-
-  // float timeout → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", timeout: 1.5 } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
-
-  // zero timeout → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", timeout: 0 } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
-
-  // negative timeout → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "local", command: "npx", timeout: -1000 } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
+  for (const { definition, fieldOrValue } of cases) {
+    assertMcpConfigError({
+      config: { mcpServers: { demo: definition } },
+      fieldOrValue,
+      serverName: "demo"
+    });
+  }
 });
 
 test("resolveMcpServersFromConfigObject rejects invalid remote MCP shapes with enriched error context", () => {
-  // unknown type → type value in message
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "remote", command: "npx" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("remote"));
-      return true;
+  const cases: Array<{ definition: Record<string, unknown>; fieldOrValue: string }> = [
+    { definition: { type: "remote", command: "npx" }, fieldOrValue: "remote" },
+    { definition: { type: "http", tools: ["*"] }, fieldOrValue: "url" },
+    { definition: { type: "http", url: "" }, fieldOrValue: "url" },
+    { definition: { type: "http", url: "not a url" }, fieldOrValue: "url" },
+    {
+      definition: { type: "http", url: "ftp://mcp.example.com/v1" },
+      fieldOrValue: "url"
+    },
+    {
+      definition: {
+        type: "http",
+        url: "https://mcp.example.com/v1",
+        headers: ["Bearer tok"]
+      },
+      fieldOrValue: "headers"
+    },
+    {
+      definition: {
+        type: "http",
+        url: "https://mcp.example.com/v1",
+        headers: { Authorization: 123 }
+      },
+      fieldOrValue: "headers"
+    },
+    {
+      definition: { type: "http", url: "https://mcp.example.com/v1", timeout: "30000" },
+      fieldOrValue: "timeout"
+    },
+    {
+      definition: { type: "http", url: "https://mcp.example.com/v1", timeout: 1.5 },
+      fieldOrValue: "timeout"
+    },
+    {
+      definition: { type: "http", url: "https://mcp.example.com/v1", timeout: 0 },
+      fieldOrValue: "timeout"
+    },
+    {
+      definition: { type: "http", url: "https://mcp.example.com/v1", timeout: -1000 },
+      fieldOrValue: "timeout"
     }
-  );
+  ];
 
-  // missing url → field: url
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", tools: ["*"] } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("url"));
-      return true;
-    }
-  );
-
-  // empty url → field: url
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("url"));
-      return true;
-    }
-  );
-
-  // invalid url → field: url
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "not a url" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("url"));
-      return true;
-    }
-  );
-
-  // non-http protocol → field: url
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "ftp://mcp.example.com/v1" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("url"));
-      return true;
-    }
-  );
-
-  // invalid headers (array) → field: headers
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "https://mcp.example.com/v1", headers: ["Bearer tok"] } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("headers"));
-      return true;
-    }
-  );
-
-  // invalid headers value type → field: headers
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "https://mcp.example.com/v1", headers: { Authorization: 123 } } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("headers"));
-      return true;
-    }
-  );
-
-  // string timeout → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "https://mcp.example.com/v1", timeout: "30000" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
-
-  // float timeout → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "https://mcp.example.com/v1", timeout: 1.5 } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
-
-  // zero timeout → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "https://mcp.example.com/v1", timeout: 0 } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
-
-  // negative timeout → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: { type: "http", url: "https://mcp.example.com/v1", timeout: -1000 } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
+  for (const { definition, fieldOrValue } of cases) {
+    assertMcpConfigError({
+      config: { mcpServers: { demo: definition } },
+      fieldOrValue,
+      serverName: "demo"
+    });
+  }
 });
 
-test("resolveMcpServersFromConfigObject rejects invalid context7 override shapes with enriched error context", () => {
-  // wrong type value
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { context7: { type: "sse", tools: ["resolve-library-id"] } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.context7:/u);
-      assert.ok(err.message.includes("type"));
-      return true;
-    }
-  );
+test("resolveMcpServersFromConfigObject rejects invalid context7 override boundaries with enriched error context", () => {
+  const cases: Array<{ definition: Record<string, unknown>; fieldOrValue: string }> = [
+    { definition: { type: "sse", tools: ["resolve-library-id"] }, fieldOrValue: "type" },
+    { definition: { headers: { Authorization: "Bearer repo-token" } }, fieldOrValue: "headers" },
+    { definition: { url: "https://context7.example.com/mcp" }, fieldOrValue: "url" },
+    { definition: { command: "npx" }, fieldOrValue: "command" },
+    { definition: { authToken: "secret" }, fieldOrValue: "authToken" },
+    { definition: { tools: ["valid", 123] }, fieldOrValue: "tools" },
+    { definition: { timeout: "20000" }, fieldOrValue: "timeout" }
+  ];
 
-  // unknown field: headers → rejected by allowlist, names the field
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { context7: { headers: { Authorization: "Bearer repo-token" } } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.context7:/u);
-      assert.ok(err.message.includes("headers"));
-      return true;
-    }
-  );
-
-  // unknown field: url → rejected by allowlist, names the field
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { context7: { url: "https://context7.example.com/mcp" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.context7:/u);
-      assert.ok(err.message.includes("url"));
-      return true;
-    }
-  );
-
-  // unknown field: command → rejected by allowlist, names the field
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { context7: { command: "npx" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.context7:/u);
-      assert.ok(err.message.includes("command"));
-      return true;
-    }
-  );
-});
-
-test("resolveMcpServersFromConfigObject rejects context7 allowlist boundary with enriched error context", () => {
-  // unknown field: authToken → rejected by allowlist, names the field
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { context7: { authToken: "secret" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.context7:/u);
-      assert.ok(err.message.includes("authToken"));
-      return true;
-    }
-  );
-
-  // invalid tools value → field: tools
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { context7: { tools: ["valid", 123] } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.context7:/u);
-      assert.ok(err.message.includes("tools"));
-      return true;
-    }
-  );
-
-  // invalid timeout value → field: timeout
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { context7: { timeout: "20000" } } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.context7:/u);
-      assert.ok(err.message.includes("timeout"));
-      return true;
-    }
-  );
+  for (const { definition, fieldOrValue } of cases) {
+    assertMcpConfigError({
+      config: { mcpServers: { context7: definition } },
+      fieldOrValue,
+      serverName: "context7"
+    });
+  }
 });
 
 test("resolveMcpServersFromConfigObject rejects shape-level errors with appropriate context", () => {
-  // mcpServers not a plain object → pre-loop, no server name
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: "not-an-object" }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.ok(err.message.includes("mcpServers"));
-      assert.ok(!err.message.startsWith("mcpServers."));
-      return true;
-    }
-  );
-
-  // entry definition not a plain object → includes server name
-  assert.throws(
-    () => resolveMcpServersFromConfigObject({ mcpServers: { demo: "invalid" } }),
-    (err: unknown) => {
-      assert.ok(err instanceof Error);
-      assert.match(err.message, /mcpServers\.demo:/u);
-      return true;
-    }
-  );
+  assertMcpConfigError({
+    config: { mcpServers: "not-an-object" }
+  });
+  assertMcpConfigError({
+    config: { mcpServers: { demo: "invalid" } },
+    serverName: "demo"
+  });
 });
-

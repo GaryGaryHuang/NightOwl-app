@@ -6,6 +6,27 @@ import {
   resolveWebFetchDeniedHostsFromConfigObject
 } from "../../src/providers/review-config-web-fetch-host-parser.ts";
 
+const INVALID_HOST_ENTRIES: unknown[] = [
+  123,
+  "   ",
+  "https://docs.example.com",
+  "docs.example.com:8443",
+  "docs.example.com/guide",
+  "192.168.1.10",
+  "*",
+  "*.",
+  "*.*.example.com",
+  "example.*",
+  "foo*bar.com",
+  "*example.com"
+];
+
+const INVALID_ALLOWLIST_ONLY_HOST_ENTRIES = [
+  "*.example.com:8443",
+  "*.example.com/guide",
+  "*.192.168.1.10"
+];
+
 test("web-fetch host parser normalizes exact and wildcard host entries", () => {
   assert.deepEqual(
     resolveWebFetchAllowedHostsFromConfigObject({
@@ -48,51 +69,11 @@ test("web-fetch host parser rejects invalid allowlist entries with the stable er
     {
       webFetchAllowedHosts: "docs.example.com"
     },
-    {
-      webFetchAllowedHosts: [123]
-    },
-    {
-      webFetchAllowedHosts: ["   "]
-    },
-    {
-      webFetchAllowedHosts: ["https://docs.example.com"]
-    },
-    {
-      webFetchAllowedHosts: ["docs.example.com:8443"]
-    },
-    {
-      webFetchAllowedHosts: ["docs.example.com/guide"]
-    },
-    {
-      webFetchAllowedHosts: ["192.168.1.10"]
-    },
-    {
-      webFetchAllowedHosts: ["*"]
-    },
-    {
-      webFetchAllowedHosts: ["*."]
-    },
-    {
-      webFetchAllowedHosts: ["*.*.example.com"]
-    },
-    {
-      webFetchAllowedHosts: ["example.*"]
-    },
-    {
-      webFetchAllowedHosts: ["foo*bar.com"]
-    },
-    {
-      webFetchAllowedHosts: ["*example.com"]
-    },
-    {
-      webFetchAllowedHosts: ["*.example.com:8443"]
-    },
-    {
-      webFetchAllowedHosts: ["*.example.com/guide"]
-    },
-    {
-      webFetchAllowedHosts: ["*.192.168.1.10"]
-    }
+    ...[...INVALID_HOST_ENTRIES, ...INVALID_ALLOWLIST_ONLY_HOST_ENTRIES].map(
+      (entry) => ({
+        webFetchAllowedHosts: [entry]
+      })
+    )
   ];
 
   for (const config of invalidAllowlistConfigs) {
@@ -108,42 +89,9 @@ test("web-fetch host parser rejects invalid denylist entries with the stable err
     {
       webFetchDeniedHosts: "evil.com"
     },
-    {
-      webFetchDeniedHosts: [123]
-    },
-    {
-      webFetchDeniedHosts: ["   "]
-    },
-    {
-      webFetchDeniedHosts: ["https://internal.example.com"]
-    },
-    {
-      webFetchDeniedHosts: ["internal.example.com:8443"]
-    },
-    {
-      webFetchDeniedHosts: ["internal.example.com/admin"]
-    },
-    {
-      webFetchDeniedHosts: ["192.168.1.10"]
-    },
-    {
-      webFetchDeniedHosts: ["*"]
-    },
-    {
-      webFetchDeniedHosts: ["*."]
-    },
-    {
-      webFetchDeniedHosts: ["*.*.example.com"]
-    },
-    {
-      webFetchDeniedHosts: ["example.*"]
-    },
-    {
-      webFetchDeniedHosts: ["foo*bar.com"]
-    },
-    {
-      webFetchDeniedHosts: ["*example.com"]
-    }
+    ...INVALID_HOST_ENTRIES.map((entry) => ({
+      webFetchDeniedHosts: [entry]
+    }))
   ];
 
   for (const config of invalidDenylistConfigs) {
