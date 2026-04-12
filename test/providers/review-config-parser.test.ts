@@ -47,3 +47,44 @@ test("parseReviewConfig preserves run-level defaults and omission semantics", ()
   assert.equal("webFetchDeniedHosts" in config, false);
 });
 
+test("parseReviewConfig rejects invalid run-level config fields", () => {
+  const invalidConfigs: Array<Record<string, unknown>> = [
+    {
+      maxConcurrentFiles: 0
+    },
+    {
+      maxConcurrentFiles: -1
+    },
+    {
+      maxConcurrentFiles: 2.5
+    },
+    {
+      maxConcurrentFiles: "2"
+    },
+    {
+      confidenceThresholds: []
+    },
+    {
+      confidenceThresholds: {
+        musst: 70
+      }
+    },
+    {
+      confidenceThresholds: {
+        must: 101
+      }
+    },
+    {
+      confidenceThresholds: {
+        nice: "85"
+      }
+    }
+  ];
+
+  for (const config of invalidConfigs) {
+    assert.throws(
+      () => parseReviewConfig(JSON.stringify(config)),
+      /invalid review config/u
+    );
+  }
+});

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { ReviewConfigProviderError } from "../../src/providers/review-config-provider.ts";
 import {
   buildExpectedReviewConfig,
   createReviewConfigProviderFixture
 } from "../helpers/review-config-provider-contract-fixture.ts";
 
-test("LocalReviewConfigProvider preserves baseline web_fetch behavior when webFetchAllowedHosts is absent", () => {
+test("LocalReviewConfigProvider loads web_fetch host policy from repo-local config", () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
@@ -15,7 +16,9 @@ test("LocalReviewConfigProvider preserves baseline web_fetch behavior when webFe
       confidenceThresholds: {
         must: 70,
         nice: 85
-      }
+      },
+      webFetchAllowedHosts: [" Docs.Example.Com. ", "*.Example.Com. "],
+      webFetchDeniedHosts: [" Internal.Example.Com. ", "*.Secret.Example.Com. "]
     });
 
     assert.deepEqual(
@@ -25,7 +28,9 @@ test("LocalReviewConfigProvider preserves baseline web_fetch behavior when webFe
         confidenceThresholds: {
           must: 70,
           nice: 85
-        }
+        },
+        webFetchAllowedHosts: ["docs.example.com", "*.example.com"],
+        webFetchDeniedHosts: ["internal.example.com", "*.secret.example.com"]
       })
     );
   } finally {
@@ -33,243 +38,21 @@ test("LocalReviewConfigProvider preserves baseline web_fetch behavior when webFe
   }
 });
 
-test("LocalReviewConfigProvider accepts valid wildcard entries alongside exact-host entries", () => {
-  const configFixture = createReviewConfigProviderFixture();
-
-  try {
-    // Only the `*.` prefix pattern is valid: the wildcard must appear at the
-    // start followed immediately by a dot and at least one domain label.
-    // Mixed case and surrounding whitespace are normalised as with exact hosts.
-    configFixture.writeReviewConfig({
-      webFetchAllowedHosts: ["docs.example.com", "*.example.com"]
-    });
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        webFetchAllowedHosts: ["docs.example.com", "*.example.com"]
-      })
-    );
-
-    configFixture.writeReviewConfig({
-      webFetchAllowedHosts: ["*.example.com"]
-    });
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        webFetchAllowedHosts: ["*.example.com"]
-      })
-    );
-
-    configFixture.writeReviewConfig({
-      webFetchAllowedHosts: [" *.Example.Com. "]
-    });
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        webFetchAllowedHosts: ["*.example.com"]
-      })
-    );
-  } finally {
-    configFixture.cleanup();
-  }
-});
-
-// "before Step 0" in the test name signals that validation is eager: the
-// provider must reject these values when loadReviewConfig() is called, not
-// lazily when a web_fetch tool call is evaluated at runtime.
-test("LocalReviewConfigProvider rejects invalid wildcard patterns before Step 0", () => {
-  const configFixture = createReviewConfigProviderFixture();
-
-  try {
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["*"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["*."] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["*.*.example.com"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["example.*"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["foo*bar.com"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["*example.com"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["*.example.com:8443"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["*.example.com/guide"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["*.192.168.1.10"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-  } finally {
-    configFixture.cleanup();
-  }
-});
-
-test("LocalReviewConfigProvider rejects invalid exact-host webFetchAllowedHosts entries before Step 0", () => {
-  const configFixture = createReviewConfigProviderFixture();
-
-  try {
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: "docs.example.com" });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: [123] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["   "] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["https://docs.example.com"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["docs.example.com:8443"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["docs.example.com/guide"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchAllowedHosts: ["192.168.1.10"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-  } finally {
-    configFixture.cleanup();
-  }
-});
-
-test("LocalReviewConfigProvider resolves webFetchDeniedHosts: missing returns no denylist, valid entries normalised, coexists with other fields", () => {
+test("LocalReviewConfigProvider rejects invalid repo-local web_fetch host config before Step 0", () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
     configFixture.writeReviewConfig({
-      maxConcurrentFiles: 2,
-      webFetchAllowedHosts: ["docs.example.com"]
+      webFetchAllowedHosts: ["https://docs.example.com"]
     });
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        maxConcurrentFiles: 2,
-        webFetchAllowedHosts: ["docs.example.com"]
-      })
-    );
 
-    configFixture.writeReviewConfig({
-      webFetchDeniedHosts: [" Internal.Example.Com. "]
-    });
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        webFetchDeniedHosts: ["internal.example.com"]
-      })
-    );
-
-    configFixture.writeReviewConfig({
-      webFetchDeniedHosts: [" *.Internal.Example.Com. "]
-    });
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        webFetchDeniedHosts: ["*.internal.example.com"]
-      })
-    );
-
-    configFixture.writeReviewConfig({
-      maxConcurrentFiles: 2,
-      webFetchAllowedHosts: ["*.example.com"],
-      webFetchDeniedHosts: ["internal.example.com"]
-    });
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        maxConcurrentFiles: 2,
-        webFetchAllowedHosts: ["*.example.com"],
-        webFetchDeniedHosts: ["internal.example.com"]
-      })
-    );
-  } finally {
-    configFixture.cleanup();
-  }
-});
-
-test("LocalReviewConfigProvider rejects invalid webFetchDeniedHosts config before Step 0", () => {
-  const configFixture = createReviewConfigProviderFixture();
-
-  try {
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: "evil.com" });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: [123] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["   "] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["https://internal.example.com"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["internal.example.com:8443"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["internal.example.com/admin"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["192.168.1.10"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["*"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["*."] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["*.*.example.com"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["example.*"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["foo*bar.com"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["*example.com"] });
-    assert.throws(() => configFixture.loadReviewConfig(), /invalid review config/u);
-  } finally {
-    configFixture.cleanup();
-  }
-});
-
-test("LocalReviewConfigProvider accepts empty webFetchDeniedHosts array and produces empty denylist", () => {
-  const configFixture = createReviewConfigProviderFixture();
-
-  try {
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: [] });
-
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        webFetchDeniedHosts: []
-      })
-    );
-  } finally {
-    configFixture.cleanup();
-  }
-});
-
-test("LocalReviewConfigProvider resolves denylist-only config without error when webFetchAllowedHosts is absent", () => {
-  const configFixture = createReviewConfigProviderFixture();
-
-  try {
-    configFixture.writeReviewConfig({ webFetchDeniedHosts: ["evil.com"] });
-
-    assert.deepEqual(
-      configFixture.loadReviewConfig(),
-      buildExpectedReviewConfig({
-        webFetchDeniedHosts: ["evil.com"]
-      })
+    assert.throws(
+      () => configFixture.loadReviewConfig(),
+      (error: unknown) =>
+        error instanceof ReviewConfigProviderError &&
+        error.message.includes("invalid review config") &&
+        typeof error.configPath === "string" &&
+        error.configPath.endsWith(".nightowl/reviewconfig.json")
     );
   } finally {
     configFixture.cleanup();
