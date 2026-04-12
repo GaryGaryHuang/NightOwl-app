@@ -10,7 +10,7 @@ import {
   createSuccessfulFile
 } from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
-test("ReviewIndexFinalizer renders the exact review index contract with rebased risk labels", () => {
+test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links", () => {
   const finalizer = new ReviewIndexFinalizer();
 
   const rendered = finalizer.render({
@@ -19,9 +19,9 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["README.md", "/workspace/.nightowl/review/feature-branch_03131430/files/README.md.md"],
-      ["src/app.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__app.ts.md"],
-      ["packages/app/index.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/app__index.ts.md"]
+      plannedNote("README.md", "README.md.md"),
+      plannedNote("src/app.ts", "src__app.ts.md"),
+      plannedNote("packages/app/index.ts", "app__index.ts.md")
     ]),
     successfulFiles: [createSuccessfulFile("README.md", [])],
     skippedFiles: [
@@ -45,15 +45,7 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
   assert.match(rendered, /- Planned files: 3/u);
   assert.match(rendered, /- Successful files: 1/u);
   assert.match(rendered, /- Skipped files: 2/u);
-  assert.match(
-    rendered,
-    /## Run Artifacts[\s\S]*- \[changeset-overview\.md\]\(\.\/changeset-overview\.md\)[\s\S]*- \[summary\.md\]\(\.\/summary\.md\)[\s\S]*- \[skipped\.md\]\(\.\/skipped\.md\)/u
-  );
-  assert.match(
-    rendered,
-    /## File Notes[\s\S]*- \[None\] \[`README\.md`\]\(\.\/files\/README\.md\.md\)[\s\S]*- \[Skipped\] \[`src\/app\.ts`\]\(\.\/files\/src__app\.ts\.md\)[\s\S]*- \[Skipped\] \[`packages\/app\/index\.ts`\]\(\.\/files\/app__index\.ts\.md\)/u
-  );
-
+  assertRunArtifacts(rendered);
   assertTextContainsInOrder(rendered, [
     "- Repo root: `/workspace/repo`",
     "- Base ref: `main`",
@@ -65,7 +57,10 @@ test("ReviewIndexFinalizer renders the exact review index contract with rebased 
     "- [changeset-overview.md](./changeset-overview.md)",
     "- [summary.md](./summary.md)",
     "- [skipped.md](./skipped.md)",
-    "## File Notes"
+    "## File Notes",
+    "- [None] [`README.md`](./files/README.md.md)",
+    "- [Skipped] [`src/app.ts`](./files/src__app.ts.md)",
+    "- [Skipped] [`packages/app/index.ts`](./files/app__index.ts.md)"
   ]);
 });
 
@@ -85,10 +80,7 @@ test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs"
   assert.match(rendered, /- Planned files: 0/u);
   assert.match(rendered, /- Successful files: 0/u);
   assert.match(rendered, /- Skipped files: 0/u);
-  assert.match(
-    rendered,
-    /## Run Artifacts[\s\S]*- \[changeset-overview\.md\]\(\.\/changeset-overview\.md\)[\s\S]*- \[summary\.md\]\(\.\/summary\.md\)[\s\S]*- \[skipped\.md\]\(\.\/skipped\.md\)/u
-  );
+  assertRunArtifacts(rendered);
   assert.match(rendered, /## File Notes\n- 無/u);
 });
 
@@ -110,14 +102,8 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
       toolAuditPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\tool-audit.jsonl`
     }),
     plannedNotes: createPlannedNotes([
-      [
-        "src/api/index.ts",
-        String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\files\src__api__index.ts.md`
-      ],
-      [
-        "tests/api/index.ts",
-        String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\files\tests__api__index.ts.md`
-      ]
+      windowsPlannedNote("src/api/index.ts", "src__api__index.ts.md"),
+      windowsPlannedNote("tests/api/index.ts", "tests__api__index.ts.md")
     ]),
     successfulFiles: [
       createSuccessfulFile("src/api/index.ts", []),
@@ -143,8 +129,8 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["foo bar.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/foo bar.ts.md"],
-      ["foo#bar).ts", "/workspace/.nightowl/review/feature-branch_03131430/files/foo#bar).ts.md"]
+      plannedNote("foo bar.ts", "foo bar.ts.md"),
+      plannedNote("foo#bar).ts", "foo#bar).ts.md")
     ]),
     successfulFiles: [
       createSuccessfulFile("foo bar.ts", []),
@@ -168,11 +154,11 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["none.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/none.ts.md"],
-      ["low.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/low.ts.md"],
-      ["medium.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/medium.ts.md"],
-      ["high.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/high.ts.md"],
-      ["skipped.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/skipped.ts.md"]
+      plannedNote("none.ts"),
+      plannedNote("low.ts"),
+      plannedNote("medium.ts"),
+      plannedNote("high.ts"),
+      plannedNote("skipped.ts")
     ]),
     successfulFiles: [
       createSuccessfulFile("none.ts", []),
@@ -189,21 +175,13 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
     ]
   });
 
-  const highIdx = rendered.indexOf("- [High] [`high.ts`]");
-  const mediumIdx = rendered.indexOf("- [Medium] [`medium.ts`]");
-  const lowIdx = rendered.indexOf("- [Low] [`low.ts`]");
-  const noneIdx = rendered.indexOf("- [None] [`none.ts`]");
-  const skippedIdx = rendered.indexOf("- [Skipped] [`skipped.ts`]");
-
-  assert.ok(highIdx > 0, "high.ts should appear with [High] prefix");
-  assert.ok(mediumIdx > 0, "medium.ts should appear with [Medium] prefix");
-  assert.ok(lowIdx > 0, "low.ts should appear with [Low] prefix");
-  assert.ok(noneIdx > 0, "none.ts should appear with [None] prefix");
-  assert.ok(skippedIdx > 0, "skipped.ts should appear with [Skipped] prefix");
-  assert.ok(highIdx < mediumIdx, "[High] file should come before [Medium] file");
-  assert.ok(mediumIdx < lowIdx, "[Medium] file should come before [Low] file");
-  assert.ok(lowIdx < noneIdx, "[Low] file should come before [None] file");
-  assert.ok(noneIdx < skippedIdx, "[None] file should come before [Skipped] file");
+  assertTextContainsInOrder(rendered, [
+    "- [High] [`high.ts`]",
+    "- [Medium] [`medium.ts`]",
+    "- [Low] [`low.ts`]",
+    "- [None] [`none.ts`]",
+    "- [Skipped] [`skipped.ts`]"
+  ]);
 });
 
 test("ReviewIndexFinalizer preserves planned order within the same risk level", () => {
@@ -215,9 +193,9 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["a.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/a.ts.md"],
-      ["b.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/b.ts.md"],
-      ["c.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/c.ts.md"]
+      plannedNote("a.ts"),
+      plannedNote("b.ts"),
+      plannedNote("c.ts")
     ]),
     successfulFiles: [
       createSuccessfulFile("a.ts", []),
@@ -227,11 +205,11 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
     skippedFiles: []
   });
 
-  const aIdx = rendered.indexOf("- [None] [`a.ts`]");
-  const bIdx = rendered.indexOf("- [None] [`b.ts`]");
-  const cIdx = rendered.indexOf("- [None] [`c.ts`]");
-
-  assert.ok(aIdx < bIdx && bIdx < cIdx, "same-risk files should preserve planned order a, b, c");
+  assertTextContainsInOrder(rendered, [
+    "- [None] [`a.ts`]",
+    "- [None] [`b.ts`]",
+    "- [None] [`c.ts`]"
+  ]);
 });
 
 test("ReviewIndexFinalizer throws with identifying message when a planned file is absent from both outcome sets", () => {
@@ -245,10 +223,7 @@ test("ReviewIndexFinalizer throws with identifying message when a planned file i
         headRef: "feature-branch",
         outputTarget: createOutputTarget(),
         plannedNotes: createPlannedNotes([
-          [
-            "src/missing.ts",
-            "/workspace/.nightowl/review/feature-branch_03131430/files/src__missing.ts.md"
-          ]
+          plannedNote("src/missing.ts", "src__missing.ts.md")
         ]),
         successfulFiles: [],
         skippedFiles: []
@@ -273,7 +248,7 @@ test("ReviewIndexFinalizer labels a file present in both outcome sets as its ris
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      ["src/both.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__both.ts.md"]
+      plannedNote("src/both.ts", "src__both.ts.md")
     ]),
     successfulFiles: [createSuccessfulFile("src/both.ts", [])],
     skippedFiles: [createSkippedFile("src/both.ts", "step1-overview", "judge rejected")]
@@ -292,4 +267,33 @@ function assertTextContainsInOrder(text: string, fragments: string[]): void {
     assert.ok(index >= 0, `expected fragment in order: ${fragment}`);
     cursor = index + fragment.length;
   }
+}
+
+function assertRunArtifacts(rendered: string): void {
+  assertTextContainsInOrder(rendered, [
+    "## Run Artifacts",
+    "- [changeset-overview.md](./changeset-overview.md)",
+    "- [summary.md](./summary.md)",
+    "- [skipped.md](./skipped.md)"
+  ]);
+}
+
+function plannedNote(
+  filePath: string,
+  noteName = `${filePath}.md`
+): [filePath: string, noteFilePath: string] {
+  return [
+    filePath,
+    `/workspace/.nightowl/review/feature-branch_03131430/files/${noteName}`
+  ];
+}
+
+function windowsPlannedNote(
+  filePath: string,
+  noteName: string
+): [filePath: string, noteFilePath: string] {
+  return [
+    filePath,
+    `C:\\workspace\\.nightowl\\review\\feature-branch_03131430\\files\\${noteName}`
+  ];
 }

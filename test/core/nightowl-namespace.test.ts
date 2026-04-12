@@ -10,109 +10,120 @@ import {
   reviewOutputRoot
 } from "../../src/core/nightowl-namespace.ts";
 
-// --- path helpers ---
+test("NightOwl namespace helpers resolve the canonical repo-local paths", () => {
+  const repoRoot = "/workspace/repo";
+  const cases: Array<{
+    resolvePath(repoRoot: string): string;
+    expected: string;
+  }> = [
+    {
+      resolvePath: nightowlRoot,
+      expected: "/workspace/repo/.nightowl"
+    },
+    {
+      resolvePath: reviewConfigPath,
+      expected: "/workspace/repo/.nightowl/reviewconfig.json"
+    },
+    {
+      resolvePath: reviewIgnorePath,
+      expected: "/workspace/repo/.nightowl/reviewignore"
+    },
+    {
+      resolvePath: reviewOutputRoot,
+      expected: "/workspace/repo/.nightowl/review"
+    }
+  ];
 
-test("nightowlRoot returns repo_root/.nightowl", () => {
-  assert.equal(nightowlRoot("/workspace/repo"), "/workspace/repo/.nightowl");
+  for (const { resolvePath, expected } of cases) {
+    assert.equal(resolvePath(repoRoot), expected);
+  }
 });
 
-test("reviewConfigPath returns repo_root/.nightowl/reviewconfig.json", () => {
-  assert.equal(
-    reviewConfigPath("/workspace/repo"),
-    "/workspace/repo/.nightowl/reviewconfig.json"
-  );
+test("isNightOwlNamespacePath classifies repo-relative namespace paths", () => {
+  const cases: Array<{
+    filePath: string;
+    expected: boolean;
+  }> = [
+    {
+      filePath: ".nightowl",
+      expected: true
+    },
+    {
+      filePath: ".nightowl/reviewconfig.json",
+      expected: true
+    },
+    {
+      filePath: ".nightowl/review/main_0408/files/src__foo.ts.md",
+      expected: true
+    },
+    {
+      filePath: ".nightowl\\reviewconfig.json",
+      expected: true
+    },
+    {
+      filePath: "src/app.ts",
+      expected: false
+    },
+    {
+      filePath: ".nightowlrc",
+      expected: false
+    },
+    {
+      filePath: "",
+      expected: false
+    }
+  ];
+
+  for (const { filePath, expected } of cases) {
+    assert.equal(isNightOwlNamespacePath(filePath), expected);
+  }
 });
 
-test("reviewIgnorePath returns repo_root/.nightowl/reviewignore", () => {
-  assert.equal(
-    reviewIgnorePath("/workspace/repo"),
-    "/workspace/repo/.nightowl/reviewignore"
-  );
-});
+test("isAllowedReviewReadPath enforces the repo-source and review-output read boundary", () => {
+  const repoRoot = "/workspace/repo";
+  const cases: Array<{
+    requestedPath: string;
+    expected: boolean;
+  }> = [
+    {
+      requestedPath: "/workspace/repo",
+      expected: true
+    },
+    {
+      requestedPath: "/workspace/repo/src/app.ts",
+      expected: true
+    },
+    {
+      requestedPath: "/workspace/repo/.nightowl/review",
+      expected: true
+    },
+    {
+      requestedPath: "/workspace/repo/.nightowl/review/session1/file.md",
+      expected: true
+    },
+    {
+      requestedPath: "/workspace/repo/.nightowl",
+      expected: false
+    },
+    {
+      requestedPath: "/workspace/repo/.nightowl/reviewconfig.json",
+      expected: false
+    },
+    {
+      requestedPath: "/workspace/repo/.nightowl/reviewignore",
+      expected: false
+    },
+    {
+      requestedPath: "/etc/passwd",
+      expected: false
+    },
+    {
+      requestedPath: "/workspace/repo-other/src/app.ts",
+      expected: false
+    }
+  ];
 
-test("reviewOutputRoot returns repo_root/.nightowl/review", () => {
-  assert.equal(
-    reviewOutputRoot("/workspace/repo"),
-    "/workspace/repo/.nightowl/review"
-  );
-});
-
-// --- isNightOwlNamespacePath ---
-
-test("isNightOwlNamespacePath returns true for the namespace directory itself", () => {
-  assert.equal(isNightOwlNamespacePath(".nightowl"), true);
-});
-
-test("isNightOwlNamespacePath returns true for a direct child of the namespace directory", () => {
-  assert.equal(isNightOwlNamespacePath(".nightowl/reviewconfig.json"), true);
-});
-
-test("isNightOwlNamespacePath returns true for a deeply nested path under the namespace directory", () => {
-  assert.equal(
-    isNightOwlNamespacePath(".nightowl/review/main_0408/files/src__foo.ts.md"),
-    true
-  );
-});
-
-test("isNightOwlNamespacePath returns false for a source file outside the namespace", () => {
-  assert.equal(isNightOwlNamespacePath("src/app.ts"), false);
-});
-
-test("isNightOwlNamespacePath returns false for a path that starts with .nightowl but is not under it", () => {
-  assert.equal(isNightOwlNamespacePath(".nightowlrc"), false);
-});
-
-test("isNightOwlNamespacePath returns false for an empty string", () => {
-  assert.equal(isNightOwlNamespacePath(""), false);
-});
-
-test("isNightOwlNamespacePath normalizes Windows backslashes before comparison", () => {
-  assert.equal(isNightOwlNamespacePath(".nightowl\\reviewconfig.json"), true);
-});
-
-// --- isAllowedReviewReadPath ---
-
-test("isAllowedReviewReadPath allows repo root itself", () => {
-  assert.equal(isAllowedReviewReadPath("/workspace/repo", "/workspace/repo"), true);
-});
-
-test("isAllowedReviewReadPath allows a file inside repo source tree", () => {
-  assert.equal(isAllowedReviewReadPath("/workspace/repo/src/app.ts", "/workspace/repo"), true);
-});
-
-test("isAllowedReviewReadPath allows review output root itself", () => {
-  assert.equal(isAllowedReviewReadPath("/workspace/repo/.nightowl/review", "/workspace/repo"), true);
-});
-
-test("isAllowedReviewReadPath allows a file inside review output", () => {
-  assert.equal(
-    isAllowedReviewReadPath("/workspace/repo/.nightowl/review/session1/file.md", "/workspace/repo"),
-    true
-  );
-});
-
-test("isAllowedReviewReadPath denies the .nightowl root itself", () => {
-  assert.equal(isAllowedReviewReadPath("/workspace/repo/.nightowl", "/workspace/repo"), false);
-});
-
-test("isAllowedReviewReadPath denies reviewconfig.json under .nightowl", () => {
-  assert.equal(
-    isAllowedReviewReadPath("/workspace/repo/.nightowl/reviewconfig.json", "/workspace/repo"),
-    false
-  );
-});
-
-test("isAllowedReviewReadPath denies reviewignore under .nightowl", () => {
-  assert.equal(
-    isAllowedReviewReadPath("/workspace/repo/.nightowl/reviewignore", "/workspace/repo"),
-    false
-  );
-});
-
-test("isAllowedReviewReadPath denies a path entirely outside repo root", () => {
-  assert.equal(isAllowedReviewReadPath("/etc/passwd", "/workspace/repo"), false);
-});
-
-test("isAllowedReviewReadPath denies a sibling directory that shares the repo root prefix", () => {
-  assert.equal(isAllowedReviewReadPath("/workspace/repo-other/src/app.ts", "/workspace/repo"), false);
+  for (const { requestedPath, expected } of cases) {
+    assert.equal(isAllowedReviewReadPath(requestedPath, repoRoot), expected);
+  }
 });

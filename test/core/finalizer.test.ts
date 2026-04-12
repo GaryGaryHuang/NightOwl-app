@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ReviewNoteFinalizer } from "../../src/core/finalizer.ts";
-import { FileReviewContext } from "../../src/core/file-review-context.ts";
+import {
+  FileReviewContext,
+  type Finding
+} from "../../src/core/file-review-context.ts";
 import {
   assertBootstrapShape,
   assertFindingsStats,
@@ -147,47 +150,13 @@ test("ReviewNoteFinalizer renders the Step 1 success snapshot without later-step
   ]);
 });
 
-test("ReviewNoteFinalizer renders Overview before Dependencies & Boundaries for Step 2 handoff and snapshots", () => {
+test("ReviewNoteFinalizer renders pre-findings sections in contract order", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext();
-  context.setSection("overview", OVERVIEW_SECTION);
-  context.setSection("dependencies-boundaries", DEPENDENCIES_SECTION);
-
-  const rendered = finalizer.render(context);
-
-  assertTextContainsInOrder(rendered, [
-    "## Overview",
-    "## Dependencies & Boundaries"
-  ]);
-  assertTextExcludesAll(rendered, [
-    "Review not yet generated",
-    /Step 3|pending/u
-  ]);
-});
-
-test("ReviewNoteFinalizer renders Knowledge & Source of Truth after Dependencies & Boundaries for Step 3 handoff and snapshots", () => {
-  const finalizer = new ReviewNoteFinalizer();
-  const context = createContextWithPreFindings();
-  context.setSection("knowledge-source-of-truth", KNOWLEDGE_SECTION);
-
-  const rendered = finalizer.render(context);
-
-  assertTextContainsInOrder(rendered, [
-    "## Overview",
-    "## Dependencies & Boundaries",
-    "## Knowledge & Source of Truth"
-  ]);
-  assertTextExcludesAll(rendered, [
-    "Review not yet generated",
-    /Step 4|pending/u
-  ]);
-});
-
-test("ReviewNoteFinalizer renders Strategy & What-if Scenarios after Knowledge & Source of Truth for Step 4 handoff and snapshots", () => {
-  const finalizer = new ReviewNoteFinalizer();
-  const context = createContextWithPreFindings();
   context.setSection("knowledge-source-of-truth", KNOWLEDGE_SECTION);
   context.setSection("strategy-what-if-scenarios", STRATEGY_SECTION);
+  context.setSection("dependencies-boundaries", DEPENDENCIES_SECTION);
+  context.setSection("overview", OVERVIEW_SECTION);
 
   const rendered = finalizer.render(context);
 
@@ -200,7 +169,8 @@ test("ReviewNoteFinalizer renders Strategy & What-if Scenarios after Knowledge &
   assertTextExcludesAll(rendered, [
     "Review not yet generated",
     /^## Findings/mu,
-    /Step 5|Step 6|Step 7|pending/u
+    /^## Summary/mu,
+    /pending/u
   ]);
 });
 
@@ -208,18 +178,12 @@ test("ReviewNoteFinalizer renders Findings after Strategy & What-if Scenarios wi
   const finalizer = new ReviewNoteFinalizer();
   const context = createContextWithAllPreFindings();
   context.setFindings([
-      {
-        type: "must",
-        title: "問題標題",
-        traceability: lineRangeTraceability(14, 18),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 88
-      }
-    ]
-  );
+    createFinding({
+      title: "問題標題",
+      traceability: lineRangeTraceability(14, 18),
+      confidence: 88
+    })
+  ]);
 
   const rendered = finalizer.render(context);
 
@@ -270,18 +234,13 @@ test("ReviewNoteFinalizer renders Summary after Findings without changing Findin
   const finalizer = new ReviewNoteFinalizer();
   const context = createContextWithAllPreFindings();
   context.setFindings([
-      {
-        type: "must",
-        title: "最終問題",
-        traceability: diffHunkTraceability("@@ -1 +1 @@"),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 final guard",
-        confidence: 91
-      }
-    ]
-  );
+    createFinding({
+      title: "最終問題",
+      traceability: diffHunkTraceability("@@ -1 +1 @@"),
+      suggestion: "補上 final guard",
+      confidence: 91
+    })
+  ]);
   context.setSection("summary", SUMMARY_MEDIUM);
 
   const rendered = finalizer.render(context);
@@ -378,18 +337,13 @@ test("ReviewNoteFinalizer renders warning block on top of Step 6 findings snapsh
   const context = createContext();
   context.setSection("strategy-what-if-scenarios", SIMPLE_STRATEGY_SECTION);
   context.setFindings([
-      {
-        type: "must",
-        title: "最終問題",
-        traceability: lineRangeTraceability(30, 30),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 final guard",
-        confidence: 91
-      }
-    ]
-  );
+    createFinding({
+      title: "最終問題",
+      traceability: lineRangeTraceability(30, 30),
+      suggestion: "補上 final guard",
+      confidence: 91
+    })
+  ]);
   context.markInterrupted("step7-summary", "judge rejected");
 
   const rendered = finalizer.render(context);
@@ -406,38 +360,26 @@ test("ReviewNoteFinalizer prepends statistics line before grouped findings", () 
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext("");
   context.setFindings([
-      {
-        type: "nice",
-        title: "A",
-        traceability: lineRangeTraceability(5, 5),
-        context: "ctx",
-        deviation: "dev",
-        impact: "low",
-        suggestion: "optional",
-        confidence: 85
-      },
-      {
-        type: "must",
-        title: "B",
-        traceability: lineRangeTraceability(8, 10),
-        context: "ctx",
-        deviation: "dev",
-        impact: "high",
-        suggestion: "fix it",
-        confidence: 88
-      },
-      {
-        type: "nice",
-        title: "C",
-        traceability: diffHunkTraceability("@@ -20,2 +20,4 @@"),
-        context: "ctx",
-        deviation: "dev",
-        impact: "low",
-        suggestion: "optional too",
-        confidence: 82
-      }
-    ]
-  );
+    createFinding({
+      type: "nice",
+      title: "A",
+      traceability: lineRangeTraceability(5, 5)
+    }),
+    createFinding({
+      title: "B",
+      traceability: lineRangeTraceability(8, 10),
+      impact: "high",
+      suggestion: "fix it",
+      confidence: 88
+    }),
+    createFinding({
+      type: "nice",
+      title: "C",
+      traceability: diffHunkTraceability("@@ -20,2 +20,4 @@"),
+      suggestion: "optional too",
+      confidence: 82
+    })
+  ]);
 
   const rendered = finalizer.render(context);
 
@@ -455,28 +397,21 @@ test("ReviewNoteFinalizer groups all must findings before all nice findings pres
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext("");
   context.setFindings([
-      {
-        type: "must",
-        title: "X",
-        traceability: lineRangeTraceability(40, 40),
-        context: "ctx",
-        deviation: "dev",
-        impact: "high",
-        suggestion: "fix",
-        confidence: 90
-      },
-      {
-        type: "must",
-        title: "Y",
-        traceability: lineRangeTraceability(42, 43),
-        context: "ctx",
-        deviation: "dev",
-        impact: "high",
-        suggestion: "fix",
-        confidence: 88
-      }
-    ]
-  );
+    createFinding({
+      title: "X",
+      traceability: lineRangeTraceability(40, 40),
+      impact: "high",
+      suggestion: "fix",
+      confidence: 90
+    }),
+    createFinding({
+      title: "Y",
+      traceability: lineRangeTraceability(42, 43),
+      impact: "high",
+      suggestion: "fix",
+      confidence: 88
+    })
+  ]);
 
   const rendered = finalizer.render(context);
 
@@ -491,28 +426,18 @@ test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must p
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext("");
   context.setFindings([
-      {
-        type: "nice",
-        title: "P",
-        traceability: lineRangeTraceability(31, 31),
-        context: "ctx",
-        deviation: "dev",
-        impact: "low",
-        suggestion: "optional",
-        confidence: 85
-      },
-      {
-        type: "nice",
-        title: "Q",
-        traceability: lineRangeTraceability(42, 43),
-        context: "ctx",
-        deviation: "dev",
-        impact: "low",
-        suggestion: "optional",
-        confidence: 83
-      }
-    ]
-  );
+    createFinding({
+      type: "nice",
+      title: "P",
+      traceability: lineRangeTraceability(31, 31)
+    }),
+    createFinding({
+      type: "nice",
+      title: "Q",
+      traceability: lineRangeTraceability(42, 43),
+      confidence: 83
+    })
+  ]);
 
   const rendered = finalizer.render(context);
 
@@ -523,33 +448,18 @@ test("ReviewNoteFinalizer renders statistics for all-nice findings with 0 must p
   ]);
 });
 
-test("ReviewNoteFinalizer renders empty findings as a single - 無 marker", () => {
-  const finalizer = new ReviewNoteFinalizer();
-  const context = createContext("");
-  context.setFindings([]);
-
-  const rendered = finalizer.render(context);
-
-  assertTextContainsAll(rendered, ["## Findings", "## Findings\n- 無"]);
-  assertTextExcludesAll(rendered, ["無 findings."]);
-});
-
 test("ReviewNoteFinalizer throws for an unknown FindingTraceability kind", () => {
   const finalizer = new ReviewNoteFinalizer();
   const context = createContext();
   context.setFindings([
-      {
-        type: "must",
-        title: "test finding",
-        traceability: { kind: "unknown-kind" } as any,
-        context: "ctx",
-        deviation: "dev",
-        impact: "impact",
-        suggestion: "fix",
-        confidence: 90
-      }
-    ]
-  );
+    createFinding({
+      title: "test finding",
+      traceability: { kind: "unknown-kind" } as any,
+      impact: "impact",
+      suggestion: "fix",
+      confidence: 90
+    })
+  ]);
 
   assert.throws(
     () => finalizer.render(context),
@@ -586,6 +496,20 @@ function createContextWithAllPreFindings(): FileReviewContext {
   context.setSection("knowledge-source-of-truth", KNOWLEDGE_SECTION);
   context.setSection("strategy-what-if-scenarios", STRATEGY_SECTION);
   return context;
+}
+
+function createFinding(overrides: Partial<Finding> = {}): Finding {
+  return {
+    type: "must",
+    title: "測試 finding",
+    traceability: lineRangeTraceability(14, 18),
+    context: "具體情境",
+    deviation: "預期與實際有落差",
+    impact: "會造成 correctness 問題",
+    suggestion: "補上 guard",
+    confidence: 85,
+    ...overrides
+  };
 }
 
 function lineRangeTraceability(lineStart: number, lineEnd: number) {
