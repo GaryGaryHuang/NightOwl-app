@@ -6,75 +6,88 @@ import test from "node:test";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { ReviewFileFilterError } from "../../src/providers/review-file-filter.ts";
-import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 
-test("LocalReviewFileFilter filters changed files with canonical .nightowl/reviewignore rules", () => {
+interface ReviewFileFilterFixture {
+  fixture: ReviewRepoFixture;
+  changedFiles(): string[];
+  filterChangedFiles(): string[];
+  cleanup(): void;
+}
+
+function createReviewFileFilterFixture(): ReviewFileFilterFixture {
   const fixture = createReviewRepoFixture();
+  const sourceProvider = new LocalGitProvider();
+  const reviewFileFilter = new LocalReviewFileFilter();
 
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const changedFiles = sourceProvider.getChangedFiles(
+  const changedFiles = (): string[] =>
+    sourceProvider.getChangedFiles(
       fixture.repoDir,
       "main",
       "feature-branch"
     );
 
+  return {
+    fixture,
+    changedFiles,
+    filterChangedFiles() {
+      return reviewFileFilter.filterReviewableFiles(
+        fixture.repoDir,
+        changedFiles()
+      );
+    },
+    cleanup() {
+      fixture.cleanup();
+    }
+  };
+}
+
+test("LocalReviewFileFilter filters changed files with canonical .nightowl/reviewignore rules", () => {
+  const filterFixture = createReviewFileFilterFixture();
+
+  try {
+    filterFixture.fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+
     assert.deepEqual(
-      reviewFileFilter.filterReviewableFiles(fixture.repoDir, changedFiles),
+      filterFixture.filterChangedFiles(),
       ["packages/app/index.ts", "src/app.ts"]
     );
   } finally {
-    fixture.cleanup();
+    filterFixture.cleanup();
   }
 });
 
 test("LocalReviewFileFilter ignores legacy reviewignore locations when canonical .nightowl/reviewignore is absent", () => {
-  const fixture = createReviewRepoFixture();
+  const filterFixture = createReviewFileFilterFixture();
 
   try {
-    fixture.writeFile(".reviewignore", "dist/**\n");
-    fixture.writeFile(".nightowl/.reviewignore", "packages/**\n");
-
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const changedFiles = sourceProvider.getChangedFiles(
-      fixture.repoDir,
-      "main",
-      "feature-branch"
-    );
+    filterFixture.fixture.writeFile(".reviewignore", "dist/**\n");
+    filterFixture.fixture.writeFile(".nightowl/.reviewignore", "packages/**\n");
+    const changedFiles = filterFixture.changedFiles();
 
     assert.deepEqual(
-      reviewFileFilter.filterReviewableFiles(fixture.repoDir, changedFiles),
+      filterFixture.filterChangedFiles(),
       changedFiles
     );
   } finally {
-    fixture.cleanup();
+    filterFixture.cleanup();
   }
 });
 
-test("LocalReviewFileFilter excludes .nightowl namespace files from the reviewable file list", () => {
-  const fixture = createReviewRepoFixture();
+test("LocalReviewFileFilter always excludes .nightowl namespace files from reviewable files", () => {
+  const filterFixture = createReviewFileFilterFixture();
 
   try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile(".nightowl/reviewconfig.json", "{}\n");
-    fixture.writeFile(".nightowl/notes.md", "user-owned note\n");
-    fixture.commitAll("add NightOwl managed files");
+    filterFixture.fixture.writeFile(
+      ".nightowl/reviewignore",
+      "dist/**\n!.nightowl/reviewconfig.json\n"
+    );
+    filterFixture.fixture.writeFile(".nightowl/reviewconfig.json", "{}\n");
+    filterFixture.fixture.writeFile(".nightowl/notes.md", "user-owned note\n");
+    filterFixture.fixture.commitAll("add NightOwl managed files");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const changedFiles = sourceProvider.getChangedFiles(
-      fixture.repoDir,
-      "main",
-      "feature-branch"
-    );
-    const filteredFiles = reviewFileFilter.filterReviewableFiles(
-      fixture.repoDir,
-      changedFiles
-    );
+    const changedFiles = filterFixture.changedFiles();
+    const filteredFiles = filterFixture.filterChangedFiles();
 
     assert.equal(changedFiles.includes(".nightowl/reviewignore"), true);
     assert.equal(changedFiles.includes(".nightowl/reviewconfig.json"), true);
@@ -84,7 +97,7 @@ test("LocalReviewFileFilter excludes .nightowl namespace files from the reviewab
     assert.equal(filteredFiles.includes(".nightowl/notes.md"), false);
     assert.deepEqual(filteredFiles, ["packages/app/index.ts", "src/app.ts"]);
   } finally {
-    fixture.cleanup();
+    filterFixture.cleanup();
   }
 });
 
@@ -100,34 +113,6 @@ test("LocalReviewFileFilter preserves input order for surviving files", () => {
     ]),
     ["src/z.ts", "src/a.ts", "docs/spec.md"]
   );
-});
-
-test("LocalReviewFileFilter does not allow reviewignore negation to re-include .nightowl paths", () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "!.nightowl/reviewconfig.json\n");
-    fixture.writeFile(".nightowl/reviewconfig.json", "{}\n");
-    fixture.commitAll("add nightowl config");
-
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const changedFiles = sourceProvider.getChangedFiles(
-      fixture.repoDir,
-      "main",
-      "feature-branch"
-    );
-
-    assert.equal(changedFiles.includes(".nightowl/reviewconfig.json"), true);
-    assert.equal(
-      reviewFileFilter
-        .filterReviewableFiles(fixture.repoDir, changedFiles)
-        .includes(".nightowl/reviewconfig.json"),
-      false
-    );
-  } finally {
-    fixture.cleanup();
-  }
 });
 
 test("LocalReviewFileFilter wraps reviewignore read failures in ReviewFileFilterError with cause", () => {

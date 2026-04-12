@@ -6,147 +6,110 @@ import { LocalSuccessfulSnapshotOutputHealthAssessor } from "../../src/providers
 import { ReviewOutputBoundaryError } from "../../src/providers/review-output-sink.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note write failures as single-file output faults when the shared files path remains healthy", () => {
+type WorkspaceFixture = ReturnType<typeof createWorkspaceProviderFixture>;
+
+interface SnapshotHealthAssessorFixture {
+  fixture: WorkspaceFixture;
+  noteFilePath: string;
+  assess(error: unknown): ReturnType<LocalSuccessfulSnapshotOutputHealthAssessor["assess"]>;
+  cleanup(): void;
+}
+
+function createSnapshotHealthAssessorFixture(): SnapshotHealthAssessorFixture {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
-  const error = Object.assign(new Error("name too long"), {
-    code: "ENAMETOOLONG",
-    path: noteFilePath
-  });
+  const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
 
-  try {
-    fixture.provider.initializeRun(fixture.outputTarget);
-    const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
+  fixture.provider.initializeRun(fixture.outputTarget);
 
-    assert.deepEqual(
-      assessor.assess({
+  return {
+    fixture,
+    noteFilePath,
+    assess(error: unknown) {
+      return assessor.assess({
         outputTarget: fixture.outputTarget,
         noteFilePath,
         error
-      }),
+      });
+    },
+    cleanup() {
+      fixture.cleanup();
+    }
+  };
+}
+
+test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note write failures as single-file output faults when the shared files path remains healthy", () => {
+  const assessorFixture = createSnapshotHealthAssessorFixture();
+
+  try {
+    assert.deepEqual(
+      assessorFixture.assess(Object.assign(new Error("name too long"), {
+        code: "ENAMETOOLONG",
+        path: assessorFixture.noteFilePath
+      })),
       { faultScope: "single-file-output-fault" }
     );
   } finally {
-    fixture.cleanup();
+    assessorFixture.cleanup();
   }
 });
 
 test("LocalSuccessfulSnapshotOutputHealthAssessor classifies disk-capacity write failures as shared output target faults", () => {
-  const fixture = createWorkspaceProviderFixture();
-  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
-  const error = Object.assign(new Error("disk full"), {
-    code: "ENOSPC",
-    path: noteFilePath
-  });
+  const assessorFixture = createSnapshotHealthAssessorFixture();
 
   try {
-    fixture.provider.initializeRun(fixture.outputTarget);
-    const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
-
     assert.deepEqual(
-      assessor.assess({
-        outputTarget: fixture.outputTarget,
-        noteFilePath,
-        error
-      }),
+      assessorFixture.assess(Object.assign(new Error("disk full"), {
+        code: "ENOSPC",
+        path: assessorFixture.noteFilePath
+      })),
       { faultScope: "shared-output-target-fault" }
     );
   } finally {
-    fixture.cleanup();
+    assessorFixture.cleanup();
   }
 });
 
 test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output target fault when classification is inconclusive", () => {
-  const fixture = createWorkspaceProviderFixture();
-  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
+  const assessorFixture = createSnapshotHealthAssessorFixture();
 
   try {
-    fixture.provider.initializeRun(fixture.outputTarget);
-    const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
+    const inconclusiveErrors = [
+      new Error("note write failed"),
+      new ReviewOutputBoundaryError("publishFileReview", "note write failed", {
+        outputPath: assessorFixture.noteFilePath
+      })
+    ];
 
-    assert.deepEqual(
-      assessor.assess({
-        outputTarget: fixture.outputTarget,
-        noteFilePath,
-        error: new Error("note write failed")
-      }),
-      { faultScope: "shared-output-target-fault" }
-    );
+    for (const error of inconclusiveErrors) {
+      assert.deepEqual(
+        assessorFixture.assess(error),
+        { faultScope: "shared-output-target-fault" }
+      );
+    }
   } finally {
-    fixture.cleanup();
+    assessorFixture.cleanup();
   }
 });
 
 test("LocalSuccessfulSnapshotOutputHealthAssessor treats shared files-path corruption as a shared output target fault", () => {
-  const fixture = createWorkspaceProviderFixture();
-  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
-  const error = Object.assign(new Error("path collision"), {
-    code: "EEXIST",
-    path: fixture.outputTarget.filesPath
-  });
+  const assessorFixture = createSnapshotHealthAssessorFixture();
 
   try {
-    fixture.provider.initializeRun(fixture.outputTarget);
-    rmSync(fixture.outputTarget.filesPath, { recursive: true, force: true });
-    writeFileSync(fixture.outputTarget.filesPath, "not-a-directory");
-    const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
+    rmSync(assessorFixture.fixture.outputTarget.filesPath, {
+      recursive: true,
+      force: true
+    });
+    writeFileSync(assessorFixture.fixture.outputTarget.filesPath, "not-a-directory");
 
     assert.deepEqual(
-      assessor.assess({
-        outputTarget: fixture.outputTarget,
-        noteFilePath,
-        error
-      }),
+      assessorFixture.assess(Object.assign(new Error("path collision"), {
+        code: "EEXIST",
+        path: assessorFixture.fixture.outputTarget.filesPath
+      })),
       { faultScope: "shared-output-target-fault" }
     );
   } finally {
-    fixture.cleanup();
-  }
-});
-
-test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output target fault when ReviewOutputBoundaryError has no preserved cause", () => {
-  const fixture = createWorkspaceProviderFixture();
-  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
-
-  try {
-    fixture.provider.initializeRun(fixture.outputTarget);
-    const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
-
-    assert.deepEqual(
-      assessor.assess({
-        outputTarget: fixture.outputTarget,
-        noteFilePath,
-        error: new ReviewOutputBoundaryError("publishFileReview", "note write failed", {
-          outputPath: noteFilePath
-        })
-      }),
-      { faultScope: "shared-output-target-fault" }
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-// iserrnoexception-predicate-correctness spec: regression anchor confirming that a plain Error
-// (no code property) is classified as shared-output-target-fault after the predicate fix.
-// isErrnoException is module-private; behaviour is verified through the public assess() interface.
-test("isErrnoException predicate correctness: assess() classifies plain Error with no code as shared-output-target-fault", () => {
-  const fixture = createWorkspaceProviderFixture();
-  const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
-
-  try {
-    fixture.provider.initializeRun(fixture.outputTarget);
-    const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
-
-    assert.deepEqual(
-      assessor.assess({
-        outputTarget: fixture.outputTarget,
-        noteFilePath,
-        error: new Error("something failed")
-      }),
-      { faultScope: "shared-output-target-fault" }
-    );
-  } finally {
-    fixture.cleanup();
+    assessorFixture.cleanup();
   }
 });

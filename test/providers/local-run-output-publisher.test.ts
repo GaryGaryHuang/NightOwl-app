@@ -6,6 +6,9 @@ import test from "node:test";
 import { ReviewOutputBoundaryError } from "../../src/providers/review-output-sink.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
+type WorkspaceFixture = ReturnType<typeof createWorkspaceProviderFixture>;
+type RunScopedPublisher = ReturnType<WorkspaceFixture["provider"]["initializeRun"]>;
+
 test("run-scoped output publisher publishes file review content to the target note path", () => {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
@@ -52,7 +55,7 @@ test("run-scoped output publisher appends deterministic skipped-file records to 
   }
 });
 
-test("run-scoped output publisher preserves intact skipped.md lines without an orchestration queue", async () => {
+test("run-scoped output publisher preserves intact skipped.md lines across multiple appends", async () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
@@ -85,93 +88,63 @@ test("run-scoped output publisher preserves intact skipped.md lines without an o
   }
 });
 
-test("run-scoped output publisher publishes run summary content to summary.md", () => {
+test("run-scoped output publisher publishes run-level artifact content to the configured paths", () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
     const publisher = fixture.provider.initializeRun(fixture.outputTarget);
-    publisher.publishRunSummary({
-      content: [
-        "# Review Summary",
-        "",
-        "- Planned files: 1",
-        "- Successful files: 1",
-        "- Skipped files: 0"
-      ].join("\n")
-    });
+    const cases: Array<{
+      publish(publisher: RunScopedPublisher, content: string): void;
+      outputPath: string;
+      content: string;
+    }> = [
+      {
+        publish(targetPublisher, content) {
+          targetPublisher.publishRunSummary({ content });
+        },
+        outputPath: fixture.outputTarget.summaryPath,
+        content: [
+          "# Review Summary",
+          "",
+          "- Planned files: 1",
+          "- Successful files: 1",
+          "- Skipped files: 0"
+        ].join("\n")
+      },
+      {
+        publish(targetPublisher, content) {
+          targetPublisher.publishReviewIndex({ content });
+        },
+        outputPath: fixture.outputTarget.indexPath,
+        content: [
+          "# Review Index",
+          "",
+          "- Planned files: 1",
+          "",
+          "## Run Artifacts",
+          "- [summary.md](./summary.md)"
+        ].join("\n")
+      },
+      {
+        publish(targetPublisher, content) {
+          targetPublisher.publishRunManifest({ content });
+        },
+        outputPath: fixture.outputTarget.manifestPath,
+        content: '{\n  "schemaVersion": 1\n}'
+      },
+      {
+        publish(targetPublisher, content) {
+          targetPublisher.publishChangesetOverview({ content });
+        },
+        outputPath: fixture.outputTarget.changesetOverviewPath,
+        content: "## Changeset Overview\n\n- Modified `src/app.ts`\n"
+      }
+    ];
 
-    assert.equal(
-      fixture.readFile(fixture.outputTarget.summaryPath),
-      ["# Review Summary", "", "- Planned files: 1", "- Successful files: 1", "- Skipped files: 0"].join("\n")
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("run-scoped output publisher publishes review index content to index.md", () => {
-  const fixture = createWorkspaceProviderFixture();
-
-  try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
-    publisher.publishReviewIndex({
-      content: [
-        "# Review Index",
-        "",
-        "- Planned files: 1",
-        "",
-        "## Run Artifacts",
-        "- [summary.md](./summary.md)"
-      ].join("\n")
-    });
-
-    assert.equal(
-      fixture.readFile(fixture.outputTarget.indexPath),
-      [
-        "# Review Index",
-        "",
-        "- Planned files: 1",
-        "",
-        "## Run Artifacts",
-        "- [summary.md](./summary.md)"
-      ].join("\n")
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("run-scoped output publisher publishes run manifest content to manifest.json", () => {
-  const fixture = createWorkspaceProviderFixture();
-
-  try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
-    publisher.publishRunManifest({
-      content: '{\n  "schemaVersion": 1\n}'
-    });
-
-    assert.equal(
-      fixture.readFile(fixture.outputTarget.manifestPath),
-      '{\n  "schemaVersion": 1\n}'
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("run-scoped output publisher publishes changeset overview content to changeset-overview.md", () => {
-  const fixture = createWorkspaceProviderFixture();
-
-  try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
-    publisher.publishChangesetOverview({
-      content: "## Changeset Overview\n\n- Modified `src/app.ts`\n"
-    });
-
-    assert.equal(
-      fixture.readFile(fixture.outputTarget.changesetOverviewPath),
-      "## Changeset Overview\n\n- Modified `src/app.ts`\n"
-    );
+    for (const { publish, outputPath, content } of cases) {
+      publish(publisher, content);
+      assert.equal(fixture.readFile(outputPath), content);
+    }
   } finally {
     fixture.cleanup();
   }

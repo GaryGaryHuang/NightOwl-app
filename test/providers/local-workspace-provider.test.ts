@@ -40,7 +40,7 @@ test("LocalWorkspaceProvider initializes the run directories, skipped.md, and yi
   }
 });
 
-test("LocalWorkspaceProvider writes changeset overview to the correct path under basePath", () => {
+test("LocalWorkspaceProvider keeps changeset overview lazy under the run basePath", () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
