@@ -11,19 +11,13 @@ import {
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
 } from "../../src/services/tool-policy-guard.ts";
 import {
+  assertAuditRecord,
   createPolicySession,
   FakeHostnameClassifier,
   InMemoryAuditSink
 } from "../helpers/tool-policy-fixture.ts";
 
 const SESSION_CONTEXT = { sessionId: "s1" };
-
-interface ExpectedAuditRecord {
-  tool: string;
-  decision: "allow" | "deny";
-  reason?: string;
-  args?: Record<string, string | undefined>;
-}
 
 function createHookInput(
   toolName: string,
@@ -35,27 +29,6 @@ function createHookInput(
     toolName,
     toolArgs: toolArgs as Record<string, unknown> | undefined
   };
-}
-
-function assertAuditRecord(
-  actual: {
-    tool: string;
-    decision: string;
-    reason?: string;
-    args: Record<string, string | undefined>;
-  },
-  expected: ExpectedAuditRecord
-): void {
-  assert.equal(actual.tool, expected.tool);
-  assert.equal(actual.decision, expected.decision);
-
-  if ("reason" in expected) {
-    assert.equal(actual.reason, expected.reason);
-  }
-
-  if (expected.args !== undefined) {
-    assert.deepEqual(actual.args, expected.args);
-  }
 }
 
 test("tool policy guard pre-tool hook keeps representative shell and url allow-deny behavior across canonical aliases", async () => {

@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../../src/services/tool-policy-guard.ts";
 import { ToolPolicyWebFetchPolicy } from "../../src/services/tool-policy-web-fetch-policy.ts";
@@ -10,6 +12,34 @@ import type {
 export const BASE_PROFILE: Pick<ReviewSessionProfile, "repoRoot"> = {
   repoRoot: "/workspace/repo"
 };
+
+export interface ExpectedAuditRecord {
+  tool: string;
+  decision: "allow" | "deny";
+  reason?: string;
+  args?: Record<string, string | undefined>;
+}
+
+export function assertAuditRecord(
+  actual: {
+    tool: string;
+    decision: string;
+    reason?: string;
+    args: Record<string, string | undefined>;
+  },
+  expected: ExpectedAuditRecord
+): void {
+  assert.equal(actual.tool, expected.tool);
+  assert.equal(actual.decision, expected.decision);
+
+  if ("reason" in expected) {
+    assert.equal(actual.reason, expected.reason);
+  }
+
+  if (expected.args !== undefined) {
+    assert.deepEqual(actual.args, expected.args);
+  }
+}
 
 // Returns both the guard instance and its derived hook/handler so tests can
 // either invoke the hook directly (simulating the SDK onPreToolUse callback)
@@ -112,4 +142,3 @@ export class InMemoryAuditSink implements ToolAuditSink {
     this.records.push(record);
   }
 }
-

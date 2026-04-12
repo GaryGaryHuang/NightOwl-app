@@ -11,6 +11,7 @@ import {
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
 } from "../../src/services/tool-policy-guard.ts";
 import {
+  assertAuditRecord,
   createPolicySession,
   FakeHostnameClassifier,
   InMemoryAuditSink
@@ -19,34 +20,6 @@ import {
 const SESSION_CONTEXT = { sessionId: "s1" };
 const APPROVED = { kind: "approved" };
 const DENIED = { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
-
-interface ExpectedAuditRecord {
-  tool: string;
-  decision: "allow" | "deny";
-  reason?: string;
-  args?: Record<string, string | undefined>;
-}
-
-function assertAuditRecord(
-  actual: {
-    tool: string;
-    decision: string;
-    reason?: string;
-    args: Record<string, string | undefined>;
-  },
-  expected: ExpectedAuditRecord
-): void {
-  assert.equal(actual.tool, expected.tool);
-  assert.equal(actual.decision, expected.decision);
-
-  if ("reason" in expected) {
-    assert.equal(actual.reason, expected.reason);
-  }
-
-  if (expected.args !== undefined) {
-    assert.deepEqual(actual.args, expected.args);
-  }
-}
 
 test("tool policy guard permission handler enforces the read and write boundary and records representative audit decisions", async () => {
   const sink = new InMemoryAuditSink();
