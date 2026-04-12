@@ -25,6 +25,7 @@
     "test/core/steps/step7-summary.test.ts",
     "test/core/structured-output-validator.test.ts",
     "test/providers/local-git-provider-unit.test.ts",
+    "test/providers/review-config-field-resolvers.test.ts",
     "test/providers/review-config-mcp-parser.test.ts",
     "test/providers/review-config-parser.test.ts",
     "test/providers/review-config-web-fetch-host-parser.test.ts",
