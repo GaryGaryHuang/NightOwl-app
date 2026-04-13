@@ -1,20 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RunSummaryFinalizer } from "../../src/core/run-summary-finalizer.ts";
+import {
+  RunSummaryFinalizer,
+  type RunSummaryRenderInput
+} from "../../src/core/run-summary-finalizer.ts";
 import {
   createFinding,
   createSkippedFile,
   createSuccessfulFile
 } from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
-test("RunSummaryFinalizer renders the exact aggregate summary contract with rebased derived risk levels", () => {
-  const finalizer = new RunSummaryFinalizer();
-
-  const rendered = finalizer.render({
+function renderSummary(overrides: Partial<RunSummaryRenderInput> = {}): string {
+  return new RunSummaryFinalizer().render({
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
+    plannedFileCount: 0,
+    successfulFiles: [],
+    skippedFiles: [],
+    ...overrides
+  });
+}
+
+test("RunSummaryFinalizer renders the exact aggregate summary contract with rebased derived risk levels", () => {
+  const rendered = renderSummary({
     plannedFileCount: 3,
     successfulFiles: [
       createSuccessfulFile("src/a.ts", [
@@ -53,7 +63,6 @@ test("RunSummaryFinalizer renders the exact aggregate summary contract with reba
     rendered,
     /## Skipped Files[\s\S]*- `src\/b\.ts` — step5-validation-interrogation — deterministic validation failed/u
   );
-
   assertTextContainsInOrder(rendered, [
     "- Repo root: `/workspace/repo`",
     "- Base ref: `main`",
@@ -69,16 +78,7 @@ test("RunSummaryFinalizer renders the exact aggregate summary contract with reba
 });
 
 test("RunSummaryFinalizer renders explicit empty sections for zero-file runs", () => {
-  const finalizer = new RunSummaryFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    plannedFileCount: 0,
-    successfulFiles: [],
-    skippedFiles: []
-  });
+  const rendered = renderSummary();
 
   assert.match(rendered, /- Planned files: 0/u);
   assert.match(rendered, /- Successful files: 0/u);
@@ -89,14 +89,8 @@ test("RunSummaryFinalizer renders explicit empty sections for zero-file runs", (
 });
 
 test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate output", () => {
-  const finalizer = new RunSummaryFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
+  const rendered = renderSummary({
     plannedFileCount: 2,
-    successfulFiles: [],
     skippedFiles: [
       createSkippedFile("src/a.ts", "step1-overview", "judge rejected"),
       createSkippedFile(
@@ -123,12 +117,7 @@ test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate outpu
 });
 
 test("RunSummaryFinalizer excludes skipped files from final findings totals", () => {
-  const finalizer = new RunSummaryFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
+  const rendered = renderSummary({
     plannedFileCount: 2,
     successfulFiles: [createSuccessfulFile("src/a.ts", [createFinding("nice", 91)])],
     skippedFiles: [createSkippedFile(
@@ -143,20 +132,14 @@ test("RunSummaryFinalizer excludes skipped files from final findings totals", ()
 });
 
 test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, Low, and None counts", () => {
-  const finalizer = new RunSummaryFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
+  const rendered = renderSummary({
     plannedFileCount: 4,
     successfulFiles: [
       createSuccessfulFile("high.ts", [createFinding("must", 90, { title: "High issue" })]),
       createSuccessfulFile("medium.ts", [createFinding("must", 89, { title: "Medium issue" })]),
       createSuccessfulFile("low.ts", [createFinding("nice", 88, { title: "Low issue" })]),
       createSuccessfulFile("none.ts", [])
-    ],
-    skippedFiles: []
+    ]
   });
 
   assert.match(rendered, /^## Risk Distribution$/mu);
@@ -166,13 +149,8 @@ test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, L
   assert.match(rendered, /- None: 1/u);
 });
 
-test("RunSummaryFinalizer sorts successful files by High to Medium to Low to None with planned-order tie-breaking", () => {
-  const finalizer = new RunSummaryFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
+test("RunSummaryFinalizer sorts successful files by risk level with planned-order tie-breaking", () => {
+  const rendered = renderSummary({
     plannedFileCount: 5,
     successfulFiles: [
       createSuccessfulFile("a.ts", []),
@@ -180,65 +158,33 @@ test("RunSummaryFinalizer sorts successful files by High to Medium to Low to Non
       createSuccessfulFile("c.ts", [createFinding("must", 80, { title: "Medium issue" })]),
       createSuccessfulFile("d.ts", [createFinding("must", 90, { title: "High issue" })]),
       createSuccessfulFile("e.ts", [])
-    ],
-    skippedFiles: []
+    ]
   });
 
-  const dIdx = rendered.indexOf("- [High] `d.ts`");
-  const cIdx = rendered.indexOf("- [Medium] `c.ts`");
-  const bIdx = rendered.indexOf("- [Low] `b.ts`");
-  const aIdx = rendered.indexOf("- [None] `a.ts`");
-  const eIdx = rendered.indexOf("- [None] `e.ts`");
-
-  assert.ok(dIdx > 0, "d.ts should appear with [High] prefix");
-  assert.ok(cIdx > 0, "c.ts should appear with [Medium] prefix");
-  assert.ok(bIdx > 0, "b.ts should appear with [Low] prefix");
-  assert.ok(aIdx > 0, "a.ts should appear with [None] prefix");
-  assert.ok(eIdx > 0, "e.ts should appear with [None] prefix");
-  assert.ok(dIdx < cIdx, "High risk d.ts should come before Medium risk c.ts");
-  assert.ok(cIdx < bIdx, "Medium risk c.ts should come before Low risk b.ts");
-  assert.ok(bIdx < aIdx, "Low risk b.ts should come before None risk a.ts");
-  assert.ok(aIdx < eIdx, "a.ts should come before e.ts within the None bucket");
+  assertTextContainsInOrder(rendered, [
+    "- [High] `d.ts` — must=1, nice=0",
+    "- [Medium] `c.ts` — must=1, nice=0",
+    "- [Low] `b.ts` — must=0, nice=1",
+    "- [None] `a.ts` — must=0, nice=0",
+    "- [None] `e.ts` — must=0, nice=0"
+  ]);
 });
 
 test("RunSummaryFinalizer preserves planned order for same-risk-level successful files", () => {
-  const finalizer = new RunSummaryFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
+  const rendered = renderSummary({
     plannedFileCount: 3,
     successfulFiles: [
       createSuccessfulFile("a.ts", [createFinding("nice", 85, { title: "Nice suggestion" })]),
       createSuccessfulFile("b.ts", [createFinding("nice", 83, { title: "Another nice" })]),
       createSuccessfulFile("c.ts", [createFinding("nice", 81, { title: "Yet another nice" })])
-    ],
-    skippedFiles: []
+    ]
   });
 
-  const aIdx = rendered.indexOf("- [Low] `a.ts`");
-  const bIdx = rendered.indexOf("- [Low] `b.ts`");
-  const cIdx = rendered.indexOf("- [Low] `c.ts`");
-
-  assert.ok(aIdx < bIdx && bIdx < cIdx, "same-risk files should preserve planned order a, b, c");
-});
-
-test("RunSummaryFinalizer renders each successful file with a rebased risk level prefix", () => {
-  const finalizer = new RunSummaryFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    plannedFileCount: 1,
-    successfulFiles: [
-      createSuccessfulFile("src/app.ts", [createFinding("nice", 85, { title: "Nice suggestion" })])
-    ],
-    skippedFiles: []
-  });
-
-  assert.match(rendered, /- \[Low\] `src\/app\.ts` — must=0, nice=1/u);
+  assertTextContainsInOrder(rendered, [
+    "- [Low] `a.ts`",
+    "- [Low] `b.ts`",
+    "- [Low] `c.ts`"
+  ]);
 });
 
 function assertTextContainsInOrder(text: string, fragments: string[]): void {

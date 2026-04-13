@@ -7,6 +7,7 @@ import {
 } from "../../src/core/run-manifest-finalizer.ts";
 import type {
   ManifestSchema,
+  RunManifestRenderInput,
   SuccessfulFileEntry
 } from "../../src/core/run-manifest-finalizer.ts";
 import {
@@ -17,14 +18,25 @@ import {
   createSuccessfulFile
 } from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
-test("RunManifestFinalizer renders the exact deterministic manifest contract for a mixed-result run", () => {
-  const finalizer = new RunManifestFinalizer();
-
-  const rendered = finalizer.render({
+function renderManifest(
+  overrides: Partial<RunManifestRenderInput> = {}
+): ManifestSchema {
+  const rendered = new RunManifestFinalizer().render({
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
     outputTarget: createOutputTarget(),
+    plannedNotes: [],
+    successfulFiles: [],
+    skippedFiles: [],
+    ...overrides
+  });
+
+  return JSON.parse(rendered) as ManifestSchema;
+}
+
+test("RunManifestFinalizer renders the exact deterministic manifest contract for a mixed-result run", () => {
+  const parsed = renderManifest({
     plannedNotes: createPlannedNotes([
       ["src/a.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__a.ts.md"],
       ["src/b.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__b.ts.md"]
@@ -43,8 +55,6 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
       )
     ]
   });
-
-  const parsed = JSON.parse(rendered) as ManifestSchema;
 
   assert.deepEqual(Object.keys(parsed), [
     "schemaVersion",
@@ -106,13 +116,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
 });
 
 test("RunManifestFinalizer preserves planned file order and reuses collision-resolved note paths", () => {
-  const finalizer = new RunManifestFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    outputTarget: createOutputTarget(),
+  const parsed = renderManifest({
     plannedNotes: createPlannedNotes([
       ["src/api/index.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__api__index.ts.md"],
       ["tests/api/index.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/tests__api__index.ts.md"],
@@ -124,10 +128,10 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
         createFinding("must", 91, { title: "High issue" })
       ])
     ],
-    skippedFiles: [createSkippedFile("tests/api/index.ts", "step1-overview", "judge rejected")]
+    skippedFiles: [
+      createSkippedFile("tests/api/index.ts", "step1-overview", "judge rejected")
+    ]
   });
-
-  const parsed = JSON.parse(rendered) as ManifestSchema;
 
   assert.deepEqual(
     parsed.files.map((entry) => entry.filePath),
@@ -147,60 +151,19 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
 });
 
 test("RunManifestFinalizer renders an empty files array for zero-file runs", () => {
-  const finalizer = new RunManifestFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    outputTarget: createOutputTarget(),
-    plannedNotes: [],
-    successfulFiles: [],
-    skippedFiles: []
-  });
-
-  const parsed = JSON.parse(rendered) as ManifestSchema;
-  assert.deepEqual(parsed.files, []);
-});
-
-test("RunManifestFinalizer includes toolAuditPath in artifacts at the correct path", () => {
-  const finalizer = new RunManifestFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    outputTarget: createOutputTarget(),
-    plannedNotes: [],
-    successfulFiles: [],
-    skippedFiles: []
-  });
-
-  const parsed = JSON.parse(rendered) as ManifestSchema;
-  assert.equal(
-    parsed.artifacts.toolAuditPath,
-    "/workspace/.nightowl/review/feature-branch_03131430/tool-audit.jsonl"
-  );
+  assert.deepEqual(renderManifest().files, []);
 });
 
 test("RunManifestFinalizer throws with an identifying message when a planned file is absent from both outcome sets", () => {
-  const finalizer = new RunManifestFinalizer();
-
   assert.throws(
     () =>
-      finalizer.render({
-        repoRoot: "/workspace/repo",
-        baseRef: "main",
-        headRef: "feature-branch",
-        outputTarget: createOutputTarget(),
+      renderManifest({
         plannedNotes: createPlannedNotes([
           [
             "src/missing.ts",
             "/workspace/.nightowl/review/feature-branch_03131430/files/src__missing.ts.md"
           ]
-        ]),
-        successfulFiles: [],
-        skippedFiles: []
+        ])
       }),
     (error: unknown) => {
       assert.ok(error instanceof Error);
