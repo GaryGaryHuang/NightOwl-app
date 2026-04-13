@@ -3,12 +3,9 @@ import test from "node:test";
 
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
-import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
-import { StepRunner } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
-import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import {
   type StepId,
@@ -21,9 +18,7 @@ import {
   buildStandardStep5JsonResponse,
   buildStandardStep6JsonResponse,
   buildStandardStep7SummaryResponse,
-  buildStrategyResponse,
-  detectStepId,
-  extractDiffPath
+  buildStrategyResponse
 } from "../helpers/orchestrator-fixture.ts";
 
 const buildStepResponse = createStepResponseRouter({
@@ -129,44 +124,22 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
       repoDir: fixture.repoDir
     });
     const failedFile = reviewableFiles[1];
-    const stepEvents: Array<[string, string]> = [];
-    const reviewAttempts = new Map();
+    const observedStepEvents: Array<[StepId, string]> = [];
     const orchestrator = new ReviewOrchestrator({
       sourceProvider,
       reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
-
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                const key = `${stepId}:${filePath}`;
-                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
-
-                reviewAttempts.set(key, attempt);
-                stepEvents.push([stepId, filePath]);
-
-                if (
-                  stepId === "step4-strategy-what-if-scenarios" &&
-                  filePath === failedFile
-                ) {
-                  return { data: { content: "   " } };
-                }
-
-                return { data: { content: buildStepResponse(stepId, filePath) } };
-              },
-              async disconnect() {}
-            });
+      stepRunner: createObservedStepRunner({
+        observedDisconnects: [],
+        observedProfiles: [],
+        observedPrompts: [],
+        observedStepEvents,
+        buildStepResponse(stepId, filePath) {
+          if (stepId === "step4-strategy-what-if-scenarios" && filePath === failedFile) {
+            return "   ";
           }
-        },
-        structuredOutputValidator: new StructuredOutputValidator(),
-        judgeService: {
-          async evaluate() {
-            return { passed: true };
-          }
+
+          return buildStepResponse(stepId, filePath);
         }
       }),
       changesetOverviewRunner: {
@@ -192,12 +165,12 @@ test("ReviewOrchestrator preserves the Step 3 snapshot when Step 4 exhausts, ski
     assert.equal(result.plannedFileCount, reviewableFiles.length);
 
     assert.equal(
-      reviewAttempts.get(`step5-validation-interrogation:${failedFile}`),
-      undefined
+      observedStepEvents.some(([s, f]) => s === "step5-validation-interrogation" && f === failedFile),
+      false
     );
     assert.equal(
-      reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`),
-      undefined
+      observedStepEvents.some(([s, f]) => s === "step6-cognitive-simulation" && f === failedFile),
+      false
     );
 
     const plannedNotes = loadPlannedNoteContents(
@@ -231,7 +204,7 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
-    const reviewAttempts = new Map();
+    const observedStepEvents: Array<[StepId, string]> = [];
     const judgeAttempts = new Map();
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
@@ -245,32 +218,22 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
       sourceProvider,
       reviewFileFilter,
       outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
+      stepRunner: createObservedStepRunner({
+        observedDisconnects: [],
+        observedProfiles: [],
+        observedPrompts: [],
+        observedStepEvents,
+        buildStepResponse(stepId, filePath) {
+          if (stepId === "step4-strategy-what-if-scenarios") {
+            const attempt = observedStepEvents.filter(
+              ([s, f]) => s === stepId && f === filePath
+            ).length;
 
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                const key = `${stepId}:${filePath}`;
-                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
-
-                reviewAttempts.set(key, attempt);
-                return {
-                  data: {
-                    content:
-                      stepId === "step4-strategy-what-if-scenarios"
-                        ? buildStrategyResponse(filePath, { label: `${filePath} attempt ${attempt}` })
-                        : buildStepResponse(stepId, filePath)
-                  }
-                };
-              },
-              async disconnect() {}
-            });
+            return buildStrategyResponse(filePath, { label: `${filePath} attempt ${attempt}` });
           }
+
+          return buildStepResponse(stepId, filePath);
         },
-        structuredOutputValidator: new StructuredOutputValidator(),
         judgeService: {
           async evaluate(input) {
             const key = `${input.stepId}:${input.filePath}`;
@@ -316,7 +279,10 @@ test("ReviewOrchestrator retries Step 4 after judge rejection and still finishes
     );
     const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile)!;
 
-    assert.equal(reviewAttempts.get(`step4-strategy-what-if-scenarios:${retryFile}`), 2);
+    const step4Attempts = observedStepEvents.filter(
+      ([s, f]) => s === "step4-strategy-what-if-scenarios" && f === retryFile
+    ).length;
+    assert.equal(step4Attempts, 2);
     assert.equal(judgeAttempts.get(`step4-strategy-what-if-scenarios:${retryFile}`), 2);
     assert.match(retriedNote.content, /attempt 2/u);
     assert.doesNotMatch(retriedNote.content, /attempt 1/u);
