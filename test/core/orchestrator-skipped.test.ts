@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
+import { ReviewOrchestrator, type ReviewOrchestratorOptions } from "../../src/core/orchestrator.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
@@ -11,11 +11,50 @@ import { StepRunner } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
+import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
-import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildSimulationStep5JsonResponse, buildSimulationStep6JsonResponse, buildStrategyResponse, buildSummaryResponse, detectStepId, escapeRegExp, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
+import {
+  buildSimulationStep5JsonResponse,
+  buildSimulationStep6JsonResponse,
+  buildSummaryResponse,
+  detectStepId,
+  escapeRegExp
+} from "../helpers/orchestrator-fixture.ts";
 import { createStepResponseRouter } from "../helpers/orchestrator-step-contract-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
+
+const BASE_REF = "main";
+const HEAD_REF = "feature-branch";
+const RUN_TIMESTAMP = "03131430";
+const REQUEST = {
+  baseRef: BASE_REF,
+  headRef: HEAD_REF,
+  repoPath: "./packages/app",
+  userContext: [],
+  dryRun: false
+};
+
+type SkippableStepId =
+  | "step1-overview"
+  | "step2-dependencies-boundaries"
+  | "step4-strategy-what-if-scenarios"
+  | "step5-validation-interrogation"
+  | "step6-cognitive-simulation"
+  | "step7-summary";
+
+type SkipCause =
+  | "judge rejected"
+  | "judge timeout"
+  | "deterministic validation failed";
+
+interface ReviewHarness {
+  fixture: ReviewRepoFixture;
+  repoRoot: string;
+  reviewableFiles: string[];
+  reviewFileFilter: LocalReviewFileFilter;
+  sourceProvider: LocalGitProvider;
+}
 
 test("ReviewOrchestrator skips a file after Step 1 exhaustion, publishes a bootstrap warning snapshot, records skipped.md, and continues later files", async () => {
   await assertSkipScenario({
@@ -108,185 +147,224 @@ test("ReviewOrchestrator skips a file after Step 7 exhaustion, preserves the Ste
 });
 
 test("ReviewOrchestrator can complete a run with both successful and skipped files without introducing aggregate output artifacts", async () => {
-  const fixture = createReviewRepoFixture();
+  await withReviewHarness(
+    { commitMessage: "add third changed file for mixed-result run" },
+    async (harness) => {
+      const failedFile = harness.reviewableFiles[1];
+      const laterFile = harness.reviewableFiles[2];
 
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for mixed-result run");
+      const result = await runOrchestrator(harness, {
+        stepRunner: createSkipAwareRunner({
+          failedFile,
+          failingStepId: "step6-cognitive-simulation",
+          failingStepCause: "deterministic validation failed"
+        })
+      });
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
-    const outputBaseDir = realpathSync(fixture.repoDir);
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: createSkipAwareRunner({
-        failedFile,
-        failingStepId: "step6-cognitive-simulation",
-        failingStepCause: "deterministic validation failed"
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
+      const plannedNotes = planNoteFiles(result.outputTarget.filesPath, harness.reviewableFiles);
+      const firstSuccessful = readFileSync(plannedNotes[0].noteFilePath, "utf8");
+      const failedSkipped = readNoteForFile(plannedNotes, failedFile);
+      const laterSuccessful = readNoteForFile(plannedNotes, laterFile);
+      const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
 
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
+      assert.equal(result.plannedFileCount, harness.reviewableFiles.length);
+      assert.match(firstSuccessful, /^## Summary/mu);
+      assert.match(laterSuccessful, /^## Summary/mu);
+      assert.match(failedSkipped, /> \[!WARNING\] Review Interrupted/u);
+      assert.match(skippedLog, new RegExp(`- \`${escapeRegExp(failedFile)}\``, "u"));
+      assert.doesNotMatch(skippedLog, /aggregate|summary\.md|index\.md/u);
+    }
+  );
+});
 
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const firstSuccessful = readFileSync(plannedNotes[0].noteFilePath, "utf8");
-    const failedSkipped = readFileSync(
-      plannedNotes.find(({ filePath }) => filePath === failedFile)!.noteFilePath,
-      "utf8"
-    );
-    const laterSuccessful = readFileSync(
-      plannedNotes.find(({ filePath }) => filePath === laterFile)!.noteFilePath,
-      "utf8"
-    );
-    const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
+test("ReviewOrchestrator skips a file when getDiff fails with stepId diff-loading and original error as reason, while other files complete normally", async () => {
+  await withReviewHarness(
+    { commitMessage: "add third changed file for getDiff skip" },
+    async (harness) => {
+      const failedFile = harness.reviewableFiles[1];
+      const laterFile = harness.reviewableFiles[2];
+      const result = await runOrchestrator(harness, {
+        sourceProvider: createDiffFailingSourceProvider(
+          harness.sourceProvider,
+          failedFile,
+          "fatal: bad revision 'xyz'"
+        ),
+        stepRunner: createNeverFailingSkipAwareRunner()
+      });
 
-    assert.equal(result.plannedFileCount, reviewableFiles.length);
-    assert.match(firstSuccessful, /^## Summary/mu);
-    assert.match(laterSuccessful, /^## Summary/mu);
-    assert.match(failedSkipped, /> \[!WARNING\] Review Interrupted/u);
-    assert.match(skippedLog, new RegExp(`- \`${escapeRegExp(failedFile)}\``, "u"));
-    assert.doesNotMatch(skippedLog, /aggregate|summary\.md|index\.md/u);
-  } finally {
-    fixture.cleanup();
-  }
+      const plannedNotes = planNoteFiles(result.outputTarget.filesPath, harness.reviewableFiles);
+      const failedNote = readNoteForFile(plannedNotes, failedFile);
+      const laterNote = readNoteForFile(plannedNotes, laterFile);
+      const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
+
+      assert.equal(result.skippedFileCount, 1);
+      assert.equal(result.successfulFileCount, harness.reviewableFiles.length - 1);
+      assert.match(failedNote, /> \[!WARNING\] Review Interrupted/u);
+      assert.match(failedNote, /diff-loading/u);
+      assert.match(failedNote, /fatal: bad revision 'xyz'/u);
+      assert.match(skippedLog, /diff-loading/u);
+      assert.match(skippedLog, /fatal: bad revision 'xyz'/u);
+      assert.doesNotMatch(skippedLog, /step1-overview/u);
+      assert.match(laterNote, /^## Summary/mu);
+    }
+  );
+});
+
+test("ReviewOrchestrator escalates to run abort when getDiff skip path encounters output publish error", async () => {
+  await withReviewHarness(
+    { commitMessage: "add third changed file for getDiff output error" },
+    async (harness) => {
+      const failedFile = harness.reviewableFiles[1];
+      const failedNotePath = notePathFor(harness, failedFile);
+      let publishFileReviewCallCount = 0;
+
+      await assert.rejects(
+        () =>
+          runOrchestrator(harness, {
+            sourceProvider: createDiffFailingSourceProvider(
+              harness.sourceProvider,
+              failedFile,
+              "git diff failed"
+            ),
+            outputSink: defineOutputSinkDouble({
+              initializeRun() {
+                return this;
+              },
+              publishChangesetOverview() {},
+              publishFileReview(fileResult) {
+                publishFileReviewCallCount += 1;
+
+                if (
+                  fileResult.noteFilePath === failedNotePath &&
+                  publishFileReviewCallCount > harness.reviewableFiles.length
+                ) {
+                  throw new Error("disk write failed");
+                }
+              },
+              publishSkippedFile() {},
+              publishRunSummary() {},
+              publishReviewIndex() {},
+              publishRunManifest() {}
+            }),
+            stepRunner: createNeverFailingSkipAwareRunner()
+          }),
+        /disk write failed/u
+      );
+    }
+  );
 });
 
 async function assertSkipScenario(input: {
   title: string;
-  failingStepId:
-    | "step1-overview"
-    | "step2-dependencies-boundaries"
-    | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation"
-    | "step6-cognitive-simulation"
-    | "step7-summary";
-  failingStepCause:
-    | "judge rejected"
-    | "judge timeout"
-    | "deterministic validation failed";
+  failingStepId: SkippableStepId;
+  failingStepCause: SkipCause;
   expectedFailedSnapshotPatterns: RegExp[];
   expectedFailedSnapshotAbsentPatterns: RegExp[];
 }): Promise<void> {
+  await withReviewHarness(
+    { commitMessage: `add third changed file for ${input.title}` },
+    async (harness) => {
+      const failedFile = harness.reviewableFiles[1];
+      const laterFile = harness.reviewableFiles[2];
+
+      const result = await runOrchestrator(harness, {
+        stepRunner: createSkipAwareRunner({
+          failedFile,
+          failingStepId: input.failingStepId,
+          failingStepCause: input.failingStepCause
+        })
+      });
+
+      const plannedNotes = planNoteFiles(result.outputTarget.filesPath, harness.reviewableFiles);
+      const failedNote = readNoteForFile(plannedNotes, failedFile);
+      const laterNote = readNoteForFile(plannedNotes, laterFile);
+      const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
+
+      for (const pattern of input.expectedFailedSnapshotPatterns) {
+        assert.match(failedNote, pattern);
+      }
+
+      for (const pattern of input.expectedFailedSnapshotAbsentPatterns) {
+        assert.doesNotMatch(failedNote, pattern);
+      }
+
+      assert.match(
+        skippedLog,
+        new RegExp(
+          `- \`${escapeRegExp(failedFile)}\` — ${escapeRegExp(input.failingStepId)} — ${escapeRegExp(input.failingStepCause)}`,
+          "u"
+        )
+      );
+      assert.match(laterNote, /^## Summary/mu);
+      assert.doesNotMatch(failedNote, /provisional step|attempt 1|attempt 2/u);
+    }
+  );
+}
+
+async function withReviewHarness(
+  input: { commitMessage: string },
+  run: (harness: ReviewHarness) => Promise<void>
+): Promise<void> {
   const fixture = createReviewRepoFixture();
 
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll(`add third changed file for ${input.title}`);
+    fixture.commitAll(input.commitMessage);
 
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
+    const repoRoot = sourceProvider.resolveRepoRoot(fixture.repoDir);
     const reviewableFiles = reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      sourceProvider.getChangedFiles(repoRoot, BASE_REF, HEAD_REF)
     );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
+
+    await run({
+      fixture,
+      repoRoot,
+      reviewableFiles,
       reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: createSkipAwareRunner({
-        failedFile,
-        failingStepId: input.failingStepId,
-        failingStepCause: input.failingStepCause
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      sourceProvider
     });
-
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
-
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const failedNote = readFileSync(
-      plannedNotes.find(({ filePath }) => filePath === failedFile)!.noteFilePath,
-      "utf8"
-    );
-    const laterNote = readFileSync(
-      plannedNotes.find(({ filePath }) => filePath === laterFile)!.noteFilePath,
-      "utf8"
-    );
-    const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
-
-    for (const pattern of input.expectedFailedSnapshotPatterns) {
-      assert.match(failedNote, pattern);
-    }
-
-    for (const pattern of input.expectedFailedSnapshotAbsentPatterns) {
-      assert.doesNotMatch(failedNote, pattern);
-    }
-
-    assert.match(
-      skippedLog,
-      new RegExp(
-        `- \`${escapeRegExp(failedFile)}\` — ${escapeRegExp(input.failingStepId)} — ${escapeRegExp(input.failingStepCause)}`,
-        "u"
-      )
-    );
-    assert.match(laterNote, /^## Summary/mu);
-    assert.doesNotMatch(failedNote, /provisional step|attempt 1|attempt 2/u);
   } finally {
     fixture.cleanup();
   }
 }
 
+async function runOrchestrator(
+  harness: ReviewHarness,
+  overrides: {
+    outputSink?: ReviewOrchestratorOptions["outputSink"];
+    sourceProvider?: ReviewSourceProvider;
+    stepRunner: ReviewOrchestratorOptions["stepRunner"];
+  }
+) {
+  const orchestrator = new ReviewOrchestrator({
+    sourceProvider: overrides.sourceProvider ?? harness.sourceProvider,
+    reviewFileFilter: harness.reviewFileFilter,
+    outputSink: overrides.outputSink ?? new LocalWorkspaceProvider(),
+    stepRunner: overrides.stepRunner,
+    changesetOverviewRunner: {
+      async run() {
+        return createRunContext({
+          changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+          userContext: []
+        });
+      }
+    },
+    workingDirectory: harness.fixture.repoDir,
+    timestampProvider: () => RUN_TIMESTAMP
+  });
+
+  return await orchestrator.run(REQUEST);
+}
+
 function createSkipAwareRunner(input: {
   failedFile: string;
-  failingStepId:
-    | "step1-overview"
-    | "step2-dependencies-boundaries"
-    | "step4-strategy-what-if-scenarios"
-    | "step5-validation-interrogation"
-    | "step6-cognitive-simulation"
-    | "step7-summary";
-  failingStepCause:
-    | "judge rejected"
-    | "judge timeout"
-    | "deterministic validation failed";
+  failingStepId: SkippableStepId;
+  failingStepCause: SkipCause;
 }): StepRunner {
-  const reviewAttempts = new Map<string, number>();
-
   return new StepRunner({
     reviewSessionFactory: {
       async createSession(profile) {
@@ -295,20 +373,13 @@ function createSkipAwareRunner(input: {
         return new SessionExecutor({
           async sendAndWait(options) {
             const filePath = extractPromptFilePath(options.prompt);
-            const key = `${stepId}:${filePath}`;
-            const attempt = (reviewAttempts.get(key) ?? 0) + 1;
-            reviewAttempts.set(key, attempt);
 
-            if (filePath === input.failedFile && stepId === input.failingStepId) {
-              if (input.failingStepCause === "deterministic validation failed") {
-                return { data: { content: "{\"findings\":[}" } };
-              }
-
-              return {
-                data: {
-                  content: buildStepResponse(stepId, filePath)
-                }
-              };
+            if (
+              filePath === input.failedFile &&
+              stepId === input.failingStepId &&
+              input.failingStepCause === "deterministic validation failed"
+            ) {
+              return { data: { content: "{\"findings\":[}" } };
             }
 
             return {
@@ -339,195 +410,73 @@ function createSkipAwareRunner(input: {
   });
 }
 
+function createNeverFailingSkipAwareRunner(): StepRunner {
+  return createSkipAwareRunner({
+    failedFile: "__none__",
+    failingStepId: "step1-overview",
+    failingStepCause: "judge rejected"
+  });
+}
+
+function createDiffFailingSourceProvider(
+  sourceProvider: LocalGitProvider,
+  failedFile: string,
+  message: string
+): ReviewSourceProvider {
+  return {
+    resolveRepoRoot(startPath) {
+      return sourceProvider.resolveRepoRoot(startPath);
+    },
+    getChangedFiles(repoRoot, baseRef, headRef) {
+      return sourceProvider.getChangedFiles(repoRoot, baseRef, headRef);
+    },
+    getChangesetEntries(repoRoot, baseRef, headRef) {
+      return sourceProvider.getChangesetEntries(repoRoot, baseRef, headRef);
+    },
+    getDiff(repoRoot, baseRef, headRef, filePath) {
+      if (filePath === failedFile) {
+        throw new Error(message);
+      }
+
+      return sourceProvider.getDiff(repoRoot, baseRef, headRef, filePath);
+    },
+    getCurrentBranch(repoRoot) {
+      return sourceProvider.getCurrentBranch(repoRoot);
+    }
+  };
+}
+
 const buildStepResponse = createStepResponseRouter({
   step5Response: () => buildSimulationStep5JsonResponse(),
   step6Response: () => buildSimulationStep6JsonResponse(),
-  step7Response: (fp) => buildSummaryResponse(fp)
+  step7Response: (filePath) => buildSummaryResponse(filePath)
 });
 
-// ---------------------------------------------------------------------------
-// getDiff failure → skip degradation (diff-loading)
-// ---------------------------------------------------------------------------
+function readNoteForFile(
+  plannedNotes: Array<{ filePath: string; noteFilePath: string }>,
+  filePath: string
+): string {
+  return readFileSync(
+    plannedNotes.find((plannedNote) => plannedNote.filePath === filePath)!.noteFilePath,
+    "utf8"
+  );
+}
 
-test("ReviewOrchestrator skips a file when getDiff fails with stepId diff-loading and original error as reason, while other files complete normally", async () => {
-  const fixture = createReviewRepoFixture();
+function notePathFor(harness: ReviewHarness, filePath: string): string {
+  return planNoteFiles(expectedFilesPath(harness.repoRoot), harness.reviewableFiles).find(
+    (plannedNote) => plannedNote.filePath === filePath
+  )!.noteFilePath;
+}
 
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for getDiff skip");
-
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider: {
-        resolveRepoRoot(startPath) { return sourceProvider.resolveRepoRoot(startPath); },
-        getChangedFiles(r, b, h) { return sourceProvider.getChangedFiles(r, b, h); },
-        getChangesetEntries(r, b, h) { return sourceProvider.getChangesetEntries(r, b, h); },
-        getDiff(r, b, h, filePath) {
-          if (filePath === failedFile) {
-            throw new Error("fatal: bad revision 'xyz'");
-          }
-
-          return sourceProvider.getDiff(r, b, h, filePath);
-        },
-        getCurrentBranch(r) { return sourceProvider.getCurrentBranch(r); }
-      },
-      reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: createSkipAwareRunner({
-        failedFile: "__none__",
-        failingStepId: "step1-overview",
-        failingStepCause: "judge rejected"
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
-
-    assert.equal(result.skippedFileCount, 1);
-    assert.equal(result.successfulFileCount, reviewableFiles.length - 1);
-
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const failedNote = readFileSync(
-      plannedNotes.find(({ filePath }) => filePath === failedFile)!.noteFilePath,
-      "utf8"
-    );
-    const laterNote = readFileSync(
-      plannedNotes.find(({ filePath }) => filePath === laterFile)!.noteFilePath,
-      "utf8"
-    );
-    const skippedLog = readFileSync(result.outputTarget.skippedPath, "utf8");
-
-    // Interrupted snapshot with diff-loading warning
-    assert.match(failedNote, /> \[!WARNING\] Review Interrupted/u);
-    assert.match(failedNote, /diff-loading/u);
-    assert.match(failedNote, /fatal: bad revision 'xyz'/u);
-
-    // Skip record uses "diff-loading", NOT "step1-overview"
-    assert.match(skippedLog, /diff-loading/u);
-    assert.match(skippedLog, /fatal: bad revision 'xyz'/u);
-    assert.doesNotMatch(skippedLog, /step1-overview/u);
-
-    // Later files complete normally
-    assert.match(laterNote, /^## Summary/mu);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("ReviewOrchestrator escalates to run abort when getDiff skip path encounters output publish error", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for getDiff output error");
-
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
-    );
-    const failedNotePath = plannedNotes.find(
-      ({ filePath }) => filePath === failedFile
-    )!.noteFilePath;
-    let publishFileReviewCallCount = 0;
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider: {
-        resolveRepoRoot(startPath) { return sourceProvider.resolveRepoRoot(startPath); },
-        getChangedFiles(r, b, h) { return sourceProvider.getChangedFiles(r, b, h); },
-        getChangesetEntries(r, b, h) { return sourceProvider.getChangesetEntries(r, b, h); },
-        getDiff(r, b, h, filePath) {
-          if (filePath === failedFile) {
-            throw new Error("git diff failed");
-          }
-
-          return sourceProvider.getDiff(r, b, h, filePath);
-        },
-        getCurrentBranch(r) { return sourceProvider.getCurrentBranch(r); }
-      },
-      reviewFileFilter,
-      outputSink: defineOutputSinkDouble({
-        initializeRun() { return this; },
-        publishChangesetOverview() {},
-        publishFileReview(fileResult) {
-          publishFileReviewCallCount += 1;
-
-          // Let bootstrap snapshots pass, but fail the interrupted snapshot for the failed file.
-          if (
-            fileResult.noteFilePath === failedNotePath &&
-            publishFileReviewCallCount > reviewableFiles.length
-          ) {
-            throw new Error("disk write failed");
-          }
-        },
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {}
-      }),
-      stepRunner: createSkipAwareRunner({
-        failedFile: "__none__",
-        failingStepId: "step1-overview",
-        failingStepCause: "judge rejected"
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      /disk write failed/u
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
+function expectedFilesPath(repoRoot: string): string {
+  return path.join(
+    repoRoot,
+    ".nightowl",
+    "review",
+    `feature-branch_${RUN_TIMESTAMP}`,
+    "files"
+  );
+}
 
 function extractPromptFilePath(prompt: string): string {
   const diffMatch = prompt.match(/<diff path="([^"]+)"/u);
