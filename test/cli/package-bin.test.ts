@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -15,6 +15,14 @@ import { fileURLToPath } from "node:url";
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
 const repoRoot = path.resolve(currentDir, "..", "..");
+const EXTERNAL_COMMAND_TIMEOUT_MS = 300_000;
+
+interface PackageBinWorkspace {
+  appCopyDir: string;
+  cacheDir: string;
+  prefixDir: string;
+  tempDir: string;
+}
 
 // Validates the full npm pack → global install path, not just running from
 // source. This catches issues that only surface in a published package: wrong
@@ -26,16 +34,33 @@ test("package exposes an installable review executable", () => {
 
   assert.equal(packageJson.bin.review, "./dist/bin/review.js");
 
-  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-bin-test-"));
-  const appCopyDir = path.join(tempDir, "app");
-  const cacheDir = path.join(tempDir, "cache");
-  const copiedNodeModulesDir = path.join(appCopyDir, "node_modules");
-  const prefixDir = path.join(tempDir, "prefix");
+  const workspace = createPackageBinWorkspace();
+  try {
+    preparePackageCopy(workspace);
+    const tarballPath = packPackage(workspace);
+    installPackage(workspace, tarballPath);
+    assertInstalledBinaryRunsUsageError(workspace);
+  } finally {
+    rmSync(workspace.tempDir, { force: true, recursive: true });
+  }
+});
 
+function createPackageBinWorkspace(): PackageBinWorkspace {
+  const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-bin-test-"));
+
+  return {
+    appCopyDir: path.join(tempDir, "app"),
+    cacheDir: path.join(tempDir, "cache"),
+    prefixDir: path.join(tempDir, "prefix"),
+    tempDir
+  };
+}
+
+function preparePackageCopy(workspace: PackageBinWorkspace): void {
   // Copy source without node_modules / cache / dist so that `npm pack` builds
   // a clean tarball; the rmSync below is a belt-and-suspenders guard in case
   // the filter misses nested paths.
-  cpSync(repoRoot, appCopyDir, {
+  cpSync(repoRoot, workspace.appCopyDir, {
     recursive: true,
     filter(sourcePath) {
       return !(
@@ -45,33 +70,42 @@ test("package exposes an installable review executable", () => {
       );
     }
   });
-  rmSync(path.join(appCopyDir, "dist"), { force: true, recursive: true });
-  cpSync(path.join(repoRoot, "node_modules"), copiedNodeModulesDir, {
+  rmSync(path.join(workspace.appCopyDir, "dist"), {
+    force: true,
     recursive: true
   });
+  cpSync(
+    path.join(repoRoot, "node_modules"),
+    path.join(workspace.appCopyDir, "node_modules"),
+    { recursive: true }
+  );
+}
 
+function packPackage(workspace: PackageBinWorkspace): string {
   const packResult = spawnSync(
     "npm",
-    ["pack", "--json", "--cache", cacheDir],
+    ["pack", "--json", "--cache", workspace.cacheDir],
     {
-      cwd: appCopyDir,
-      encoding: "utf8"
+      cwd: workspace.appCopyDir,
+      encoding: "utf8",
+      timeout: EXTERNAL_COMMAND_TIMEOUT_MS
     }
   );
 
-  assert.equal(
-    packResult.status,
-    0,
-    packResult.stderr || packResult.stdout
-  );
+  assertSpawnSucceeded(packResult, "npm pack");
 
   const packOutput = JSON.parse(packResult.stdout);
   const tarballName = packOutput[0]?.filename;
 
   assert.equal(typeof tarballName, "string");
 
-  const tarballPath = path.join(appCopyDir, tarballName);
+  return path.join(workspace.appCopyDir, tarballName);
+}
 
+function installPackage(
+  workspace: PackageBinWorkspace,
+  tarballPath: string
+): void {
   const installResult = spawnSync(
     "npm",
     [
@@ -79,37 +113,52 @@ test("package exposes an installable review executable", () => {
       "-g",
       tarballPath,
       "--prefix",
-      prefixDir,
+      workspace.prefixDir,
       "--cache",
-      cacheDir
+      workspace.cacheDir
     ],
     {
-      cwd: appCopyDir,
-      encoding: "utf8"
+      cwd: workspace.appCopyDir,
+      encoding: "utf8",
+      timeout: EXTERNAL_COMMAND_TIMEOUT_MS
     }
   );
 
-  assert.equal(
-    installResult.status,
-    0,
-    installResult.stderr || installResult.stdout
-  );
+  assertSpawnSucceeded(installResult, "npm install -g");
+}
 
-  const binaryPath = path.join(prefixDir, "bin", "review");
+function assertInstalledBinaryRunsUsageError(
+  workspace: PackageBinWorkspace
+): void {
+  const binaryPath = path.join(workspace.prefixDir, "bin", "review");
 
   assert.ok(existsSync(binaryPath), "installed review executable should exist");
 
-  try {
-    // Pass only one positional arg to trigger the missing-head_ref usage error;
-    // verifies the installed binary runs and produces the correct error output.
-    const execResult = spawnSync(binaryPath, ["main"], {
-      encoding: "utf8"
-    });
+  // Pass only one positional arg to trigger the missing-head_ref usage error;
+  // verifies the installed binary runs and produces the correct error output.
+  const execResult = spawnSync(binaryPath, ["main"], {
+    encoding: "utf8",
+    timeout: EXTERNAL_COMMAND_TIMEOUT_MS
+  });
 
-    assert.equal(execResult.status, 1, execResult.stderr || execResult.stdout);
-    assert.match(execResult.stderr, /head_ref/u);
-    assert.match(execResult.stderr, /review <base_ref> <head_ref>/u);
-  } finally {
-    rmSync(tarballPath, { force: true });
-  }
-});
+  assert.equal(execResult.status, 1, execResult.stderr || execResult.stdout);
+  assert.match(execResult.stderr, /head_ref/u);
+  assert.match(execResult.stderr, /review <base_ref> <head_ref>/u);
+}
+
+function assertSpawnSucceeded(
+  result: SpawnSyncReturns<string>,
+  commandName: string
+): void {
+  assert.equal(
+    result.status,
+    0,
+    `${commandName} failed:\n${formatSpawnFailure(result)}`
+  );
+}
+
+function formatSpawnFailure(result: SpawnSyncReturns<string>): string {
+  return [result.error?.message, result.stderr, result.stdout]
+    .filter(Boolean)
+    .join("\n");
+}
