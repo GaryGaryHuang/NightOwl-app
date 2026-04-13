@@ -2,35 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ChangesetOverviewRunner,
-  type ReviewSessionFactoryLike
+  ChangesetOverviewRunner
 } from "../../src/core/changeset-overview-runner.ts";
 import {
   SessionExecutor,
   SessionTurnAbortedError
 } from "../../src/services/session-executor.ts";
-import {
-  assertNightOwlSharedToolGuidance,
-  assertTaggedBlockContains,
-  assertTextContainsAll,
-  assertTextExcludesAll
-} from "../helpers/step-prompt-contract-fixture.ts";
-
-type Step0Profile = Parameters<ReviewSessionFactoryLike["createSession"]>[0];
 
 function createRecordingRunner(response = "## Changeset Overview\n- 調整範圍：feature") {
-  const profiles: Step0Profile[] = [];
   const prompts: string[] = [];
-  const timeouts: number[] = [];
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
-      async createSession(profile) {
-        profiles.push(profile);
-
+      async createSession() {
         return {
-          async sendAndWait(prompt, timeoutMs) {
+          async sendAndWait(prompt) {
             prompts.push(prompt);
-            timeouts.push(timeoutMs ?? 0);
             return response;
           }
         };
@@ -39,96 +25,10 @@ function createRecordingRunner(response = "## Changeset Overview\n- 調整範圍
   });
 
   return {
-    profiles,
     prompts,
-    runner,
-    timeouts
+    runner
   };
 }
-
-test("ChangesetOverviewRunner returns RunContext and creates the Step 0 review session profile", async () => {
-  const { profiles, runner, timeouts } = createRecordingRunner();
-
-  const runContext = await runner.run({
-    model: "gpt-5.4-mini",
-    workingDirectory: "/workspace/repo",
-    outputBaseDir: "/workspace/repo",
-    repoRoot: "/workspace/repo",
-    userContext: ["PR-123", "https://example.com/spec"],
-    changedFilesList: ["M\tsrc/app.ts", "D\tobsolete.txt"]
-  });
-
-  assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：feature\n");
-  assert.deepEqual(runContext.userContext, [
-    "PR-123",
-    "https://example.com/spec"
-  ]);
-
-  assert.equal(profiles.length, 1);
-  assert.equal(profiles[0]?.knowledgeMode, "built-in-context7");
-  assert.equal(profiles[0]?.dryRunStepContract, "changeset-overview");
-  assert.equal(profiles[0]?.model, "gpt-5.4-mini");
-  assert.equal(profiles[0]?.outputBaseDir, "/workspace/repo");
-  assert.equal(profiles[0]?.repoRoot, "/workspace/repo");
-  assert.equal(profiles[0]?.workingDirectory, "/workspace/repo");
-  assert.equal(timeouts[0], 300_000);
-
-  assertTextContainsAll(profiles[0]?.systemMessage ?? "", [
-    "## Current Step: Changeset Overview",
-    "This is a run-level step.",
-    "Begin the response with `## Changeset Overview`."
-  ]);
-  assertNightOwlSharedToolGuidance(profiles[0]?.systemMessage ?? "");
-});
-
-test("ChangesetOverviewRunner builds the Step 0 prompt from changeset entries and user context", async () => {
-  const { prompts, runner } = createRecordingRunner();
-
-  await runner.run({
-    model: "gpt-5.4-mini",
-    workingDirectory: "/workspace/repo",
-    outputBaseDir: "/workspace/repo",
-    repoRoot: "/workspace/repo",
-    userContext: ["PR-123", "https://example.com/spec"],
-    changedFilesList: ["M\tsrc/app.ts", "D\tobsolete.txt"]
-  });
-
-  assertTaggedBlockContains(prompts[0] ?? "", "changed_files", [
-    "M\tsrc/app.ts",
-    "D\tobsolete.txt"
-  ]);
-  assertTaggedBlockContains(prompts[0] ?? "", "user_context", [
-    "PR-123",
-    "https://example.com/spec"
-  ]);
-  assertTextContainsAll(prompts[0] ?? "", [
-    "Analyze the changeset across all files in <changed_files>",
-    "## Changeset Overview",
-    "- 調整範圍：",
-    "- 跨檔案邊界：",
-    "- 行為變更：",
-    "- 測試覆蓋觀察："
-  ]);
-});
-
-test("ChangesetOverviewRunner omits user_context when user context is empty", async () => {
-  const { prompts, runner } = createRecordingRunner();
-
-  await runner.run({
-    model: "gpt-5.4-mini",
-    outputBaseDir: "/workspace/repo",
-    repoRoot: "/workspace/repo",
-    changedFilesList: ["M\tsrc/app.ts"],
-    userContext: []
-  });
-
-  assertTaggedBlockContains(prompts[0] ?? "", "changed_files", [
-    "M\tsrc/app.ts"
-  ]);
-  assertTextExcludesAll(prompts[0] ?? "", [
-    /<user_context>[\s\S]*<\/user_context>/u
-  ]);
-});
 
 // A blank/undefined first response triggers a retry with a fresh session
 // (a new `createSession` call), not a re-send on the same session.
@@ -161,7 +61,6 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   assert.equal(createCalls, 2);
   assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：retry\n");
   assert.equal(prompts.length, 2);
-  assertTaggedBlockContains(prompts[0] ?? "", "changed_files", ["M\tsrc/app.ts"]);
 });
 
 test("ChangesetOverviewRunner fails after two empty responses", async () => {

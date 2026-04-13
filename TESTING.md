@@ -89,7 +89,7 @@ Use it only on a machine where GitHub Copilot CLI is installed, authenticated, a
 ### Running a single test file
 
 ```bash
-npm run build && node --test test/core/orchestrator.test.ts
+npm run build && node --test test/core/orchestrator-bounded-concurrency.test.ts
 ```
 
 All primary commands run `npm run build` first. After modifying `src/`, always build before testing.
@@ -124,8 +124,8 @@ The project exclusively uses Node.js built-in test APIs. Do not introduce extern
 ### File naming and structure
 
 - Test files end in `.test.ts` and live under `test/`
-- Directory structure mirrors `src/`: `test/core/orchestrator.test.ts` tests `src/core/orchestrator.ts`
-- When a single source module needs multiple focused test suites, they share a prefix: `orchestrator.test.ts`, `orchestrator-abort.test.ts`, `orchestrator-bounded-concurrency.test.ts`, etc.
+- Directory structure mirrors `src/`: for example, `test/core/orchestrator-bounded-concurrency.test.ts` tests `src/core/orchestrator.ts`
+- When a single source module needs multiple focused test suites, they share a prefix: `orchestrator-abort.test.ts`, `orchestrator-bounded-concurrency.test.ts`, `orchestrator-output-failures.test.ts`, etc.
 - Shared test utilities live in `test/helpers/` — these are fixture modules, not test suites
 
 ---
@@ -170,10 +170,8 @@ Shared fixtures follow the `create*Fixture()` / `build*Response()` naming conven
 |------|---------|
 | `git-fixture.ts` | Create real temporary Git repos (main + feature branch) with `writeFile`, `commitAll`, `cleanup` |
 | `orchestrator-fixture.ts` | Fake LLM responses for each SOP step; `detectStepId` routing by system message |
-| `orchestrator-step-contract-fixture.ts` | Wire step-response router into orchestrator; collect reviewable files and read output |
 | `review-app-fixture.ts` | `buildSessionResponse` routing by system message |
 | `review-session-runtime-contract-fixture.ts` | Recording client manager that captures `SessionConfig`; `createAssistantSession` |
-| `step-prompt-contract-fixture.ts` | Shape assertions for `StepExecutionPlan` (`assertSectionPlanShape`, `assertStructuredPlanShape`) |
 | `step-runner-contract-fixture.ts` | Default `FileReviewContext` builder; `applySection`; `seedStep4Context` for prerequisite state |
 | `finalizer-contract-fixture.ts` | Text assertions: `assertTextContainsAll`, `assertTextExcludesAll`, `assertTextContainsInOrder` |
 | `completed-run-finalizer-contract-fixture.ts` | Factory functions for `Finding`, `SuccessfulFileOutcome`, `SkippedFileOutcome`, `OutputTarget` |

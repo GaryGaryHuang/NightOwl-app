@@ -111,12 +111,12 @@ npm run test:coverage      # Convenience coverage run outside the primary taxono
 Run a single test file (requires build first):
 
 ```bash
-npm run build && node --test test/core/orchestrator.test.ts
+npm run build && node --test test/core/orchestrator-bounded-concurrency.test.ts
 ```
 
 - Primary test commands run `npm run build` first and then execute source test files under `test/`
 - After modifying `src/`, always run `npm run build` first
-- Test structure mirrors `src/`: `test/core/orchestrator.test.ts` corresponds to `src/core/orchestrator.ts`
+- Test structure mirrors `src/`: for example, `test/core/orchestrator-bounded-concurrency.test.ts` corresponds to `src/core/orchestrator.ts`
 - Follow TDD: write or update tests before implementing
 - Uses the Node.js built-in test runner (`node:test`); no external test frameworks
 - Tests inject hand-written fakes and stubs via constructor parameters; no external mocking frameworks
