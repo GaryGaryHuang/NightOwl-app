@@ -121,51 +121,7 @@ const SIGNAL_TEST_REQUEST = {
   dryRun: false
 };
 
-test("createLocalReviewRunApp SIGINT during run propagates ReviewRunInterruptedError to caller", async () => {
-  const stopCalls: string[] = [];
-  let sigintFired = false;
-
-  const app = createSignalTestApp({
-    stopCalls,
-    onStep1() {
-      if (!sigintFired) {
-        sigintFired = true;
-        process.emit("SIGINT", "SIGINT");
-      }
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err instanceof ReviewRunInterruptedError
-  );
-  assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after interruption");
-});
-
-test("createLocalReviewRunApp SIGTERM during run propagates ReviewRunInterruptedError to caller", async () => {
-  const stopCalls: string[] = [];
-  let sigtermFired = false;
-
-  const app = createSignalTestApp({
-    stopCalls,
-    onStep1() {
-      if (!sigtermFired) {
-        sigtermFired = true;
-        process.emit("SIGTERM", "SIGTERM");
-      }
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err instanceof ReviewRunInterruptedError
-  );
-  assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after SIGTERM");
-});
-
-// ─── Signal identity propagation ────────────────────────────────────────────
-
-test("createLocalReviewRunApp SIGINT during run produces ReviewRunInterruptedError with signal === 'SIGINT'", async () => {
+test("createLocalReviewRunApp SIGINT during run propagates ReviewRunInterruptedError with signal identity and calls stop()", async () => {
   const stopCalls: string[] = [];
   let sigintFired = false;
 
@@ -183,9 +139,10 @@ test("createLocalReviewRunApp SIGINT during run produces ReviewRunInterruptedErr
     () => app.run(SIGNAL_TEST_REQUEST),
     (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGINT"
   );
+  assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after interruption");
 });
 
-test("createLocalReviewRunApp SIGTERM during run produces ReviewRunInterruptedError with signal === 'SIGTERM'", async () => {
+test("createLocalReviewRunApp SIGTERM during run propagates ReviewRunInterruptedError with signal identity and calls stop()", async () => {
   const stopCalls: string[] = [];
   let sigtermFired = false;
 
@@ -203,6 +160,7 @@ test("createLocalReviewRunApp SIGTERM during run produces ReviewRunInterruptedEr
     () => app.run(SIGNAL_TEST_REQUEST),
     (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGTERM"
   );
+  assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after SIGTERM");
 });
 
 // ─── First-signal-wins ──────────────────────────────────────────────────────
@@ -344,24 +302,6 @@ test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after an inter
     sigtermBefore,
     "SIGTERM listener should be removed after interruption"
   );
-  assert.deepEqual(stopCalls, ["stop"]);
-});
-
-test("createLocalReviewRunApp calls clientManager.stop() on normal completion", async () => {
-  const stopCalls: string[] = [];
-  const app = createSignalTestApp({ stopCalls });
-
-  await app.run(SIGNAL_TEST_REQUEST);
-
-  assert.deepEqual(stopCalls, ["stop"]);
-});
-
-test("createLocalReviewRunApp calls clientManager.stop() when run throws a non-signal error", async () => {
-  const stopCalls: string[] = [];
-  const app = createSignalTestApp({ stopCalls, step0ShouldThrow: true });
-
-  await assert.rejects(() => app.run(SIGNAL_TEST_REQUEST));
-
   assert.deepEqual(stopCalls, ["stop"]);
 });
 
