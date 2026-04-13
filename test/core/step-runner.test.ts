@@ -1,132 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ReviewNoteFinalizer } from "../../src/core/finalizer.ts";
-import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
-import { Step2DependenciesBoundariesStep } from "../../src/core/steps/step2-dependencies-boundaries.ts";
-import { Step3KnowledgeSourceOfTruthStep } from "../../src/core/steps/step3-knowledge-source-of-truth.ts";
-import { Step4StrategyWhatIfScenariosStep } from "../../src/core/steps/step4-strategy-what-if-scenarios.ts";
-import { Step5ValidationInterrogationStep } from "../../src/core/steps/step5-validation-interrogation.ts";
-import { Step6CognitiveSimulationStep } from "../../src/core/steps/step6-cognitive-simulation.ts";
-import { Step7SummaryStep } from "../../src/core/steps/step7-summary.ts";
-import {
-  type StepExecutionPlan,
-  type StepResolveServices,
-  StepRunner
-} from "../../src/core/step-runner.ts";
-import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
+import { StepRunner } from "../../src/core/step-runner.ts";
 import {
   SessionExecutor,
   SessionTurnAbortedError
 } from "../../src/services/session-executor.ts";
 import {
   createReviewSessionFactory,
+  createSectionTestStep,
+  createStructuredTestStep,
   createStepRunnerContext,
-  diffHunkTraceability,
-  lineRangeTraceability,
-  seedStep4Context
+  DEFAULT_JUDGE_RESOLVE,
+  runDefaultJudgeOverviewStep,
+  runDefaultSectionStep
 } from "../helpers/step-runner-contract-fixture.ts";
-
-// Minimal step-definition factory used by tests that focus on StepRunner
-// behavior (retry, error wrapping) rather than prompt content or judge/validator logic.
-function createSectionTestStep(input: {
-  stepId?: string;
-  sectionKey?: ReviewSectionKey;
-  systemMessage?: string;
-  userMessage?: string;
-  reviewProfile?: StepExecutionPlan["reviewProfile"];
-  resolve?: StepExecutionPlan["resolve"];
-}) {
-  const stepId = input.stepId ?? "step1-overview";
-  const sectionKey = input.sectionKey ?? "overview";
-
-  return {
-    stepId,
-    prepare() {
-      return {
-        stepId,
-        prompt: {
-          systemMessage: input.systemMessage ?? "system prompt",
-          userMessage: input.userMessage ?? "user prompt"
-        },
-        reviewProfile: input.reviewProfile ?? {
-          model: "gpt-5-mini",
-          timeoutMs: 300_000
-        },
-        resolve: input.resolve ?? (async (response: string) => {
-          return (context: import("../../src/core/file-review-context.ts").FileReviewContext) => {
-            context.setSection(sectionKey, response);
-          };
-        })
-      };
-    }
-  };
-}
-
-// Helper resolve that calls judgeService — use in tests that verify judge invocation or retry via judge rejection.
-function makeSectionResolveWithJudge(
-  stepId: string,
-  filePath: string,
-  sectionKey: ReviewSectionKey,
-  criteria: string
-): StepExecutionPlan["resolve"] {
-  return async (response: string, services: StepResolveServices) => {
-    if (!services.judgeService) {
-      throw new Error("judge service is not configured");
-    }
-
-    const judgeResult = await services.judgeService.evaluate({
-      stepId,
-      filePath,
-      criteria,
-      sectionContent: response
-    });
-
-    if (!judgeResult.passed) {
-      throw new Error(judgeResult.cause ?? "judge rejected");
-    }
-
-    return (context: import("../../src/core/file-review-context.ts").FileReviewContext) => {
-      context.setSection(sectionKey, response);
-    };
-  };
-}
-
-function createStructuredTestStep(input: {
-  stepId?: string;
-  userMessage?: string;
-  reviewProfile?: StepExecutionPlan["reviewProfile"];
-  resolve?: StepExecutionPlan["resolve"];
-}) {
-  const stepId = input.stepId ?? "step5-validation-interrogation";
-
-  return {
-    stepId,
-    prepare() {
-      return {
-        stepId,
-        prompt: {
-          systemMessage: "system prompt",
-          userMessage: input.userMessage ?? "user prompt"
-        },
-        reviewProfile: input.reviewProfile ?? {
-          model: "gpt-5-mini",
-          timeoutMs: 300_000
-        },
-        resolve: input.resolve ?? (async (response: string, services: StepResolveServices) => {
-          const payload = services.validator.validate({
-            validatorId: "findings-json",
-            responseText: response
-          });
-
-          return (context: import("../../src/core/file-review-context.ts").FileReviewContext) => {
-            context.setFindings(payload.findings);
-          };
-        })
-      };
-    }
-  };
-}
 
 // The step runner returns a result object; state is not written to the context
 // until the caller invokes result.applyTo(). This separation lets the
@@ -248,7 +136,7 @@ test("StepRunner does not consume retry budget or start judge when a section-ste
     () =>
       runner.run({
         step: createSectionTestStep({
-          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+          resolve: DEFAULT_JUDGE_RESOLVE
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -378,7 +266,7 @@ test("StepRunner retries the whole section-step when judge rejects the first att
 
   const result = await runner.run({
     step: createSectionTestStep({
-      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+      resolve: DEFAULT_JUDGE_RESOLVE
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -414,7 +302,7 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
     () =>
       runner.run({
         step: createSectionTestStep({
-          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+          resolve: DEFAULT_JUDGE_RESOLVE
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -453,7 +341,7 @@ test("StepRunner retries the whole step on judge timeout with fresh review and j
 
   const result = await runner.run({
     step: createSectionTestStep({
-      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+      resolve: DEFAULT_JUDGE_RESOLVE
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -485,7 +373,7 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
     () =>
       runner.run({
         step: createSectionTestStep({
-          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+          resolve: DEFAULT_JUDGE_RESOLVE
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -529,7 +417,7 @@ test("StepRunner retries the whole step when review session startup fails and ev
 
   const result = await runner.run({
     step: createSectionTestStep({
-      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+      resolve: DEFAULT_JUDGE_RESOLVE
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -562,7 +450,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
     () =>
       runner.run({
         step: createSectionTestStep({
-          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
+          resolve: DEFAULT_JUDGE_RESOLVE
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -572,798 +460,6 @@ test("StepRunner reports standardized review startup failure after retry exhaust
   );
 
   assert.equal(createAttempts, 2);
-});
-
-// On retry the prompt is rebuilt from the context's *committed* state (the last
-// successful section), so provisional content from the first attempt never leaks
-// into the retry. prompts[0] === prompts[1] proves this.
-test("StepRunner rebuilds Step 2 current review from the last successful state on retry and does not leak provisional content", async () => {
-  const prompts: string[] = [];
-  const context = createStepRunnerContext();
-  context.setSection(
-    "overview",
-    [
-      "## Overview",
-      "- 整體理解：測試用概覽",
-      "- 行為變更：無行為變更",
-      "- 檔案職責：維護 app value",
-      "- 改動目的：調整常數",
-      "- 影響範圍：src/app.ts",
-      "- 測試覆蓋觀察：未見對應測試異動"
-    ].join("\n")
-  );
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait({ prompt }) {
-        prompts.push(prompt);
-        return [
-          "## Dependencies & Boundaries",
-          "- 相依清單：",
-          "  - 無外部相依",
-          "- 隱含相依：",
-          "  - 無"
-        ].join("\n");
-      }
-    }),
-    judgeService: {
-      async evaluate(input) {
-        if (prompts.length === 1) {
-          assert.doesNotMatch(input.sectionContent, /provisional step 2/u);
-          return { passed: false, cause: "judge rejected" };
-        }
-
-        return { passed: true };
-      }
-    }
-  });
-
-  const result = await runner.run({
-    step: new Step2DependenciesBoundariesStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(prompts.length, 2);
-  assert.equal(prompts[0], prompts[1]);
-  assert.match(prompts[0] ?? "", /<current_review>[\s\S]*## Overview/u);
-  assert.doesNotMatch(prompts[0] ?? "", /Review not yet generated/u);
-  assert.doesNotMatch(prompts[0] ?? "", /provisional step 2/u);
-  assert.equal(context.getSection("dependencies-boundaries"), undefined);
-
-  result.applyTo(context);
-
-  assert.match(context.getSection("dependencies-boundaries") ?? "", /^## Dependencies & Boundaries/u);
-});
-
-test("StepRunner rebuilds Step 3 current review from the last successful Step 2 state on retry and does not leak provisional content", async () => {
-  const prompts: string[] = [];
-  const context = createStepRunnerContext();
-  context.setSection(
-    "overview",
-    [
-      "## Overview",
-      "- 整體理解：測試用概覽",
-      "- 行為變更：無行為變更",
-      "- 檔案職責：維護 app value",
-      "- 改動目的：調整常數",
-      "- 影響範圍：src/app.ts",
-      "- 測試覆蓋觀察：未見對應測試異動"
-    ].join("\n")
-  );
-  context.setSection(
-    "dependencies-boundaries",
-    [
-      "## Dependencies & Boundaries",
-      "- 相依清單：",
-      "  - 無外部相依",
-      "- 隱含相依：",
-      "  - 無"
-    ].join("\n")
-  );
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait({ prompt }) {
-        prompts.push(prompt);
-        return [
-          "## Knowledge & Source of Truth",
-          "- 版本／文件參考：",
-          "  - 無",
-          "- 採用規則與假設：",
-          "  - 依 repo 內設定檔推論版本約束",
-          "- 排除範圍：",
-          "  - 外部官方文件查證不在本次 foundation 範圍內"
-        ].join("\n");
-      }
-    }),
-    judgeService: {
-      async evaluate(input) {
-        if (prompts.length === 1) {
-          assert.doesNotMatch(input.sectionContent, /provisional step 3/u);
-          return { passed: false, cause: "judge rejected" };
-        }
-
-        return { passed: true };
-      }
-    }
-  });
-
-  const result = await runner.run({
-    step: new Step3KnowledgeSourceOfTruthStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(prompts.length, 2);
-  assert.equal(prompts[0], prompts[1]);
-  assert.match(prompts[0] ?? "", /<current_review>[\s\S]*## Dependencies & Boundaries/u);
-  assert.doesNotMatch(prompts[0] ?? "", /Review not yet generated/u);
-  assert.doesNotMatch(prompts[0] ?? "", /provisional step 3/u);
-  assert.equal(context.getSection("knowledge-source-of-truth"), undefined);
-
-  result.applyTo(context);
-
-  assert.match(context.getSection("knowledge-source-of-truth") ?? "", /^## Knowledge & Source of Truth/u);
-});
-
-test("StepRunner rebuilds Step 4 current review from the last successful Step 3 state on retry and does not leak provisional content", async () => {
-  const prompts: string[] = [];
-  const context = createStepRunnerContext();
-  context.setSection(
-    "overview",
-    [
-      "## Overview",
-      "- 整體理解：測試用概覽",
-      "- 行為變更：無行為變更",
-      "- 檔案職責：維護 app value",
-      "- 改動目的：調整常數",
-      "- 影響範圍：src/app.ts",
-      "- 測試覆蓋觀察：未見對應測試異動"
-    ].join("\n")
-  );
-  context.setSection(
-    "dependencies-boundaries",
-    [
-      "## Dependencies & Boundaries",
-      "- 相依清單：",
-      "  - 無外部相依",
-      "- 隱含相依：",
-      "  - 無"
-    ].join("\n")
-  );
-  context.setSection(
-    "knowledge-source-of-truth",
-    [
-      "## Knowledge & Source of Truth",
-      "- 版本／文件參考：",
-      "  - 無",
-      "- 採用規則與假設：",
-      "  - 依 repo 內設定檔推論版本約束",
-      "- 排除範圍：",
-      "  - 外部官方文件查證不在本次 foundation 範圍內"
-    ].join("\n")
-  );
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait({ prompt }) {
-        prompts.push(prompt);
-        return [
-          "## Strategy & What-if Scenarios",
-          "- 高風險區域：",
-          "  - state transition：本次改動調整 value 更新流程",
-          "- What-if 假設情境：",
-          "  - W1: 觸發條件：value 為空；預期正確行為：應維持 fallback；待驗證風險/不確定性：新分支是否略過 fallback；與本次改動的關聯：diff 調整路徑",
-          "  - W2: 觸發條件：依賴回傳異常；預期正確行為：應保留錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示邊界",
-          "  - W3: 觸發條件：多次呼叫；預期正確行為：結果應穩定；待驗證風險/不確定性：狀態是否偏移；與本次改動的關聯：Step 3 已收斂假設"
-        ].join("\n");
-      }
-    }),
-    judgeService: {
-      async evaluate(input) {
-        if (prompts.length === 1) {
-          assert.doesNotMatch(input.sectionContent, /provisional step 4/u);
-          return { passed: false, cause: "judge rejected" };
-        }
-
-        return { passed: true };
-      }
-    }
-  });
-
-  const result = await runner.run({
-    step: new Step4StrategyWhatIfScenariosStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(prompts.length, 2);
-  assert.equal(prompts[0], prompts[1]);
-  assert.match(prompts[0] ?? "", /<current_review>[\s\S]*## Knowledge & Source of Truth/u);
-  assert.doesNotMatch(prompts[0] ?? "", /Review not yet generated/u);
-  assert.doesNotMatch(prompts[0] ?? "", /provisional step 4/u);
-  assert.equal(context.getSection("strategy-what-if-scenarios"), undefined);
-
-  result.applyTo(context);
-
-  assert.match(context.getSection("strategy-what-if-scenarios") ?? "", /^## Strategy & What-if Scenarios/u);
-  assert.doesNotMatch(context.getSection("strategy-what-if-scenarios") ?? "", /^## Findings/mu);
-});
-
-// Steps 5-6 use StructuredOutputValidator (deterministic JSON schema check)
-// instead of JudgeService; judgeCalls === 0 asserts judge is never invoked.
-// The validator also filters out findings below the confidence threshold.
-test("StepRunner validates Step 5 structured output and applies filtered findings without using judge", async () => {
-  const context = createStepRunnerContext();
-  seedStep4Context(context);
-  let judgeCalls = 0;
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait() {
-        return JSON.stringify({
-          findings: [
-            {
-              type: "must",
-              title: "保留 must",
-              traceability: lineRangeTraceability(10, 12),
-              context: "具體情境",
-              deviation: "預期與實際有落差",
-              impact: "會造成 correctness 問題",
-              suggestion: "補上 guard",
-              confidence: 80
-            },
-            {
-              type: "nice",
-              title: "被過濾的 nice",
-              traceability: lineRangeTraceability(20, 20),
-              context: "具體情境",
-              deviation: "可改善",
-              impact: "影響可維護性",
-              suggestion: "補上整理",
-              confidence: 89
-            }
-          ]
-        });
-      }
-    }),
-    judgeService: {
-      async evaluate() {
-        judgeCalls += 1;
-        return { passed: true };
-      }
-    },
-    structuredOutputValidator: new StructuredOutputValidator()
-  });
-
-  const result = await runner.run({
-    step: new Step5ValidationInterrogationStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(judgeCalls, 0);
-  assert.deepEqual(context.getStructuredState(), {});
-
-  result.applyTo(context);
-
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "must",
-        title: "保留 must",
-        traceability: lineRangeTraceability(10, 12),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 80
-      }
-    ]
-  });
-});
-
-// Malformed JSON from the model triggers a deterministic validation failure
-// which retries with the same prompt (both prompts must be identical).
-test("StepRunner retries the whole Step 5 structured step when deterministic validation fails first", async () => {
-  const context = createStepRunnerContext();
-  seedStep4Context(context);
-  const prompts: string[] = [];
-  let reviewAttempts = 0;
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait({ prompt }) {
-        prompts.push(prompt);
-        reviewAttempts += 1;
-
-        if (reviewAttempts === 1) {
-          return "{\"findings\":[}";
-        }
-
-        return JSON.stringify({
-          findings: [
-            {
-              type: "must",
-              title: "成功結果",
-              traceability: lineRangeTraceability(14, 18),
-              context: "具體情境",
-              deviation: "預期與實際有落差",
-              impact: "會造成 correctness 問題",
-              suggestion: "補上 guard",
-              confidence: 85
-            }
-          ]
-        });
-      }
-    }),
-    structuredOutputValidator: new StructuredOutputValidator()
-  });
-
-  const result = await runner.run({
-    step: new Step5ValidationInterrogationStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(reviewAttempts, 2);
-  assert.equal(prompts.length, 2);
-  assert.equal(prompts[0], prompts[1]);
-  assert.deepEqual(context.getStructuredState(), {});
-
-  result.applyTo(context);
-
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "must",
-        title: "成功結果",
-        traceability: lineRangeTraceability(14, 18),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        confidence: 85
-      }
-    ]
-  });
-});
-
-// Step 6 replaces Step 5's findings entirely; the prior non-empty set is
-// discarded after applyTo() is called with the Step 6 result.
-test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with final findings", async () => {
-  const context = createStepRunnerContext();
-  seedStep4Context(context);
-  context.setFindings([
-      {
-        type: "must",
-        title: "初版 findings",
-        traceability: lineRangeTraceability(30, 32),
-        context: "初版情境",
-        deviation: "初版落差",
-        impact: "初版 impact",
-        suggestion: "初版建議",
-        confidence: 88
-      }
-    ]);
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait() {
-        return JSON.stringify({
-          findings: [
-            {
-              type: "must",
-              title: "最終 findings",
-              traceability: diffHunkTraceability("@@ -1 +1 @@"),
-              context: "最終情境",
-              deviation: "最終落差",
-              impact: "最終 impact",
-              suggestion: "最終建議",
-              confidence: 91
-            }
-          ]
-        });
-      }
-    }),
-    structuredOutputValidator: new StructuredOutputValidator()
-  });
-
-  const result = await runner.run({
-    step: new Step6CognitiveSimulationStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "must",
-        title: "初版 findings",
-        traceability: lineRangeTraceability(30, 32),
-        context: "初版情境",
-        deviation: "初版落差",
-        impact: "初版 impact",
-        suggestion: "初版建議",
-        confidence: 88
-      }
-    ]
-  });
-
-  result.applyTo(context);
-
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "must",
-        title: "最終 findings",
-        traceability: diffHunkTraceability("@@ -1 +1 @@"),
-        context: "最終情境",
-        deviation: "最終落差",
-        impact: "最終 impact",
-        suggestion: "最終建議",
-        confidence: 91
-      }
-    ]
-  });
-});
-
-test("StepRunner applies Step 6 structured output by replacing non-empty Step 5 findings with empty final findings", async () => {
-  const context = createStepRunnerContext();
-  seedStep4Context(context);
-  context.setFindings([
-      {
-        type: "must",
-        title: "初版 findings",
-        traceability: lineRangeTraceability(30, 32),
-        context: "初版情境",
-        deviation: "初版落差",
-        impact: "初版 impact",
-        suggestion: "初版建議",
-        confidence: 88
-      }
-    ]);
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait() {
-        return JSON.stringify({ findings: [] });
-      }
-    }),
-    structuredOutputValidator: new StructuredOutputValidator()
-  });
-
-  const result = await runner.run({
-    step: new Step6CognitiveSimulationStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  result.applyTo(context);
-
-  assert.deepEqual(context.getStructuredState(), { findings: [] });
-});
-
-test("StepRunner applies Step 6 structured output by replacing empty Step 5 findings with final findings", async () => {
-  const context = createStepRunnerContext();
-  seedStep4Context(context);
-  context.setFindings([]);
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait() {
-        return JSON.stringify({
-          findings: [
-            {
-              type: "nice",
-              title: "從空 findings 補出的最終問題",
-              traceability: lineRangeTraceability(40, 40),
-              context: "最終情境",
-              deviation: "最終落差",
-              impact: "最終 impact",
-              suggestion: "最終建議",
-              confidence: 93
-            }
-          ]
-        });
-      }
-    }),
-    structuredOutputValidator: new StructuredOutputValidator()
-  });
-
-  const result = await runner.run({
-    step: new Step6CognitiveSimulationStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  result.applyTo(context);
-
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "nice",
-        title: "從空 findings 補出的最終問題",
-        traceability: lineRangeTraceability(40, 40),
-        context: "最終情境",
-        deviation: "最終落差",
-        impact: "最終 impact",
-        suggestion: "最終建議",
-        confidence: 93
-      }
-    ]
-  });
-});
-
-test("StepRunner retries the whole Step 6 structured step when deterministic validation fails first without mutating Step 5 findings", async () => {
-  const context = createStepRunnerContext();
-  seedStep4Context(context);
-  context.setFindings([
-      {
-        type: "must",
-        title: "初版 findings",
-        traceability: lineRangeTraceability(30, 32),
-        context: "初版情境",
-        deviation: "初版落差",
-        impact: "初版 impact",
-        suggestion: "初版建議",
-        confidence: 88
-      }
-    ]);
-  const prompts: string[] = [];
-  let reviewAttempts = 0;
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait({ prompt }) {
-        prompts.push(prompt);
-        reviewAttempts += 1;
-
-        if (reviewAttempts === 1) {
-          return "{\"findings\":[}";
-        }
-
-        return JSON.stringify({
-          findings: [
-            {
-              type: "must",
-              title: "成功結果",
-              traceability: lineRangeTraceability(16, 18),
-              context: "具體情境",
-              deviation: "預期與實際有落差",
-              impact: "會造成 correctness 問題",
-              suggestion: "補上 final guard",
-              confidence: 91
-            }
-          ]
-        });
-      }
-    }),
-    structuredOutputValidator: new StructuredOutputValidator()
-  });
-
-  const result = await runner.run({
-    step: new Step6CognitiveSimulationStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(reviewAttempts, 2);
-  assert.equal(prompts.length, 2);
-  assert.equal(prompts[0], prompts[1]);
-  assert.match(prompts[0] ?? "", /## Findings[\s\S]*初版 findings/u);
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "must",
-        title: "初版 findings",
-        traceability: lineRangeTraceability(30, 32),
-        context: "初版情境",
-        deviation: "初版落差",
-        impact: "初版 impact",
-        suggestion: "初版建議",
-        confidence: 88
-      }
-    ]
-  });
-
-  result.applyTo(context);
-
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "must",
-        title: "成功結果",
-        traceability: lineRangeTraceability(16, 18),
-        context: "具體情境",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 final guard",
-        confidence: 91
-      }
-    ]
-  });
-});
-
-test("StepRunner applies Step 7 section output under summary without changing findings", async () => {
-  const context = createStepRunnerContext();
-  seedStep4Context(context);
-  context.setFindings([
-      {
-        type: "must",
-        title: "最終 findings",
-        traceability: diffHunkTraceability("@@ -1 +1 @@"),
-        context: "最終情境",
-        deviation: "最終落差",
-        impact: "最終 impact",
-        suggestion: "最終建議",
-        confidence: 91
-      }
-    ]);
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait() {
-        return [
-          "## Summary",
-          "### 審查基礎",
-          "- 改動概要：調整主要執行流程。",
-          "- 依據規範：依 repo source-of-truth 與版本假設審查。",
-          "- 審查假設：未擴張到外部知識查證。",
-          "### 行為變更提醒",
-          "- 無",
-          "### 風險評估",
-          "- 整體風險等級：Medium",
-          "- 風險理由：final findings 仍需留意。"
-        ].join("\n");
-      }
-    }),
-    judgeService: {
-      async evaluate() {
-        return { passed: true };
-      }
-    }
-  });
-
-  const result = await runner.run({
-    step: new Step7SummaryStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(context.getSection("summary"), undefined);
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "must",
-        title: "最終 findings",
-        traceability: diffHunkTraceability("@@ -1 +1 @@"),
-        context: "最終情境",
-        deviation: "最終落差",
-        impact: "最終 impact",
-        suggestion: "最終建議",
-        confidence: 91
-      }
-    ]
-  });
-
-  result.applyTo(context);
-
-  assert.match(context.getSection("summary") ?? "", /^## Summary/u);
-  assert.deepEqual(context.getStructuredState(), {
-    findings: [
-      {
-        type: "must",
-        title: "最終 findings",
-        traceability: diffHunkTraceability("@@ -1 +1 @@"),
-        context: "最終情境",
-        deviation: "最終落差",
-        impact: "最終 impact",
-        suggestion: "最終建議",
-        confidence: 91
-      }
-    ]
-  });
-});
-
-test("StepRunner rebuilds Step 7 current review from the last successful Step 6 state on retry and does not leak provisional content", async () => {
-  const prompts: string[] = [];
-  const context = createStepRunnerContext();
-  seedStep4Context(context);
-  context.setFindings([
-      {
-        type: "must",
-        title: "最終 findings",
-        traceability: lineRangeTraceability(1, 1),
-        context: "最終情境",
-        deviation: "最終落差",
-        impact: "最終 impact",
-        suggestion: "最終建議",
-        confidence: 91
-      }
-    ]);
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait({ prompt }) {
-        prompts.push(prompt);
-        return [
-          "## Summary",
-          "### 審查基礎",
-          "- 改動概要：調整主要執行流程。",
-          "- 依據規範：依 repo source-of-truth 與版本假設審查。",
-          "- 審查假設：未擴張到外部知識查證。",
-          "### 行為變更提醒",
-          "- 無",
-          "### 風險評估",
-          "- 整體風險等級：Medium",
-          "- 風險理由：final findings 仍需留意。"
-        ].join("\n");
-      }
-    }),
-    judgeService: {
-      async evaluate(input) {
-        if (prompts.length === 1) {
-          assert.doesNotMatch(input.sectionContent, /provisional step 7/u);
-          return { passed: false, cause: "judge rejected" };
-        }
-
-        return { passed: true };
-      }
-    }
-  });
-
-  const result = await runner.run({
-    step: new Step7SummaryStep({
-      reviewNoteFinalizer: new ReviewNoteFinalizer()
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(prompts.length, 2);
-  assert.equal(prompts[0], prompts[1]);
-  assert.match(prompts[0] ?? "", /<current_review>[\s\S]*## Findings[\s\S]*最終 findings/u);
-  assert.doesNotMatch(prompts[0] ?? "", /<diff/u);
-  assert.doesNotMatch(prompts[0] ?? "", /<changeset_context>/u);
-  assert.doesNotMatch(prompts[0] ?? "", /provisional step 7/u);
-  assert.equal(context.getSection("summary"), undefined);
-
-  result.applyTo(context);
-
-  assert.match(context.getSection("summary") ?? "", /^## Summary/u);
 });
 
 test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause when the first attempt fails", async () => {
@@ -1389,14 +485,7 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
     }
   });
 
-  const result = await runner.run({
-    step: createSectionTestStep({
-      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
+  const result = await runDefaultJudgeOverviewStep(runner, context);
 
   result.applyTo(context);
 
@@ -1423,12 +512,7 @@ test("StepRunner does not invoke onStepRetry when the step succeeds on the first
     }
   });
 
-  const result = await runner.run({
-    step: createSectionTestStep({}),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
+  const result = await runDefaultSectionStep(runner, context);
 
   result.applyTo(context);
 
@@ -1460,14 +544,7 @@ test("StepRunner swallows exceptions thrown by onStepRetry and does not propagat
   });
 
   // Should not throw despite onStepRetry throwing
-  const result = await runner.run({
-    step: createSectionTestStep({
-      resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
-    }),
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
+  const result = await runDefaultJudgeOverviewStep(runner, context);
 
   result.applyTo(context);
 
@@ -1553,14 +630,7 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
 
   await assert.rejects(
     () =>
-      runner.run({
-        step: createSectionTestStep({
-          resolve: makeSectionResolveWithJudge("step1-overview", "src/app.ts", "overview", "must contain overview fields")
-        }),
-        context,
-        outputBaseDir: "/workspace/output",
-        repoRoot: "/workspace/repo"
-      }),
+      runDefaultJudgeOverviewStep(runner, context),
     /Step step1-overview failed for src\/app\.ts: judge rejected/u
   );
 
