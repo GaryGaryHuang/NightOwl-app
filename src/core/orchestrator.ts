@@ -68,11 +68,21 @@ export interface ReviewRunSummary {
   finalizerFailures: FinalizerFailure[];
 }
 
+export interface ReviewPerFileStepsFactoryInput {
+  runContext: RunContext;
+  reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+}
+
+export type ReviewPerFileStepsFactory = (
+  input: ReviewPerFileStepsFactoryInput
+) => StepDefinition[];
+
 export interface ReviewOrchestratorOptions {
   changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
   maxConcurrentFiles?: number;
   onProgressEvent?: RunProgressEventHandler;
   onOutputTargetReady?: (outputTarget: OutputTarget) => void;
+  perFileStepsFactory?: ReviewPerFileStepsFactory;
   reviewFileFilter: ReviewFileFilter;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
@@ -101,6 +111,7 @@ export class ReviewOrchestrator {
   readonly #maxConcurrentFiles: number;
   readonly #onProgressEvent?: RunProgressEventHandler;
   readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
+  readonly #perFileStepsFactory: ReviewPerFileStepsFactory;
 
   constructor(options: ReviewOrchestratorOptions) {
     if (
@@ -131,6 +142,8 @@ export class ReviewOrchestrator {
     this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
     this.#onProgressEvent = options.onProgressEvent;
     this.#onOutputTargetReady = options.onOutputTargetReady;
+    this.#perFileStepsFactory =
+      options.perFileStepsFactory ?? buildDefaultPerFileSteps;
   }
 
   async run(
@@ -260,27 +273,10 @@ export class ReviewOrchestrator {
     throwIfRunAborted();
 
     // Steps 2–7 each receive the progressively rendered note via <current_review> so each step builds on prior output.
-    const steps = [
-      new Step1OverviewStep({ runContext }),
-      new Step2DependenciesBoundariesStep({
-        reviewNoteFinalizer: this.#finalizer
-      }),
-      new Step3KnowledgeSourceOfTruthStep({
-        reviewNoteFinalizer: this.#finalizer
-      }),
-      new Step4StrategyWhatIfScenariosStep({
-        reviewNoteFinalizer: this.#finalizer
-      }),
-      new Step5ValidationInterrogationStep({
-        reviewNoteFinalizer: this.#finalizer
-      }),
-      new Step6CognitiveSimulationStep({
-        reviewNoteFinalizer: this.#finalizer
-      }),
-      new Step7SummaryStep({
-        reviewNoteFinalizer: this.#finalizer
-      })
-    ];
+    const steps = this.#perFileStepsFactory({
+      runContext,
+      reviewNoteFinalizer: this.#finalizer
+    });
     const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
 
     await this.#runPlannedFileWorkers({
@@ -730,6 +726,32 @@ export class ReviewOrchestrator {
   #emitProgressEvent(event: RunProgressEvent): void {
     this.#onProgressEvent?.(event);
   }
+}
+
+function buildDefaultPerFileSteps(
+  input: ReviewPerFileStepsFactoryInput
+): StepDefinition[] {
+  return [
+    new Step1OverviewStep({ runContext: input.runContext }),
+    new Step2DependenciesBoundariesStep({
+      reviewNoteFinalizer: input.reviewNoteFinalizer
+    }),
+    new Step3KnowledgeSourceOfTruthStep({
+      reviewNoteFinalizer: input.reviewNoteFinalizer
+    }),
+    new Step4StrategyWhatIfScenariosStep({
+      reviewNoteFinalizer: input.reviewNoteFinalizer
+    }),
+    new Step5ValidationInterrogationStep({
+      reviewNoteFinalizer: input.reviewNoteFinalizer
+    }),
+    new Step6CognitiveSimulationStep({
+      reviewNoteFinalizer: input.reviewNoteFinalizer
+    }),
+    new Step7SummaryStep({
+      reviewNoteFinalizer: input.reviewNoteFinalizer
+    })
+  ];
 }
 
 interface PlannedFileWorkItem {

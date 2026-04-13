@@ -10,7 +10,8 @@ import type { JudgeSessionProfile } from "./judge-session-factory.ts";
 import { SessionExecutor } from "./session-executor.ts";
 
 export interface DryRunReviewSessionProfile extends ReviewSessionProfile {
-  dryRunStepContract: DryRunReviewStepContract;
+  dryRunResponse?: string;
+  dryRunStepContract?: DryRunReviewStepContract;
 }
 
 function buildStubSessionExecutor(response: string): SessionExecutor {
@@ -34,19 +35,27 @@ export class DryRunReviewSessionFactory {
   async createSession(
     profile: DryRunReviewSessionProfile
   ): Promise<SessionExecutor> {
+    if (profile.dryRunResponse !== undefined) {
+      return buildStubSessionExecutor(profile.dryRunResponse);
+    }
+
     const contract = profile.dryRunStepContract;
 
     if (!contract) {
       throw new Error("dry-run contract failure: missing dryRunStepContract");
     }
 
-    if (!isDryRunReviewStepContract(contract)) {
+    const response = isDryRunReviewStepContract(contract)
+      ? getDryRunStubResponse(contract)
+      : undefined;
+
+    if (response === undefined) {
       throw new Error(
-        `dry-run contract failure: unsupported dryRunStepContract '${contract}'`
+        `dry-run contract failure: unsupported dryRunStepContract '${contract}' without dryRunResponse`
       );
     }
 
-    return buildStubSessionExecutor(getDryRunStubResponse(contract));
+    return buildStubSessionExecutor(response);
   }
 }
 

@@ -15,6 +15,7 @@ export interface ChangesetOverviewRunnerInput {
 
 export interface ReviewSessionFactoryLike {
   createSession(profile: {
+    dryRunResponse?: string;
     dryRunStepContract?: DryRunReviewStepContract;
     knowledgeMode?: ReviewKnowledgeMode;
     model: string;

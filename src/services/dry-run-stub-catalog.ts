@@ -1,4 +1,6 @@
-import type { DryRunReviewStepContract } from "./dry-run-review-step-contract.ts";
+import type {
+  BuiltinDryRunReviewStepContract
+} from "./dry-run-review-step-contract.ts";
 
 const STUB_CHANGESET_OVERVIEW = `## Changeset Overview
 
@@ -86,7 +88,7 @@ const STUB_SUMMARY = `## Summary
 整體風險等級：None
 [dry-run] 此為 dry-run 模式產出，不反映真實風險評估結果。`;
 
-const DRY_RUN_STUB_RESPONSES: Record<DryRunReviewStepContract, string> = {
+const DRY_RUN_STUB_RESPONSES: Record<BuiltinDryRunReviewStepContract, string> = {
   "changeset-overview": STUB_CHANGESET_OVERVIEW,
   overview: STUB_OVERVIEW,
   "dependencies-boundaries": STUB_DEPENDENCIES_BOUNDARIES,
@@ -98,7 +100,7 @@ const DRY_RUN_STUB_RESPONSES: Record<DryRunReviewStepContract, string> = {
 };
 
 export function getDryRunStubResponse(
-  contract: DryRunReviewStepContract
-): string {
-  return DRY_RUN_STUB_RESPONSES[contract];
+  contract: string
+): string | undefined {
+  return DRY_RUN_STUB_RESPONSES[contract as BuiltinDryRunReviewStepContract];
 }

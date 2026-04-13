@@ -30,6 +30,7 @@ export interface StepExecutionPlan {
     userMessage: string;
   };
   reviewProfile: {
+    dryRunResponse?: string;
     dryRunStepContract?: DryRunReviewStepContract;
     knowledgeMode?: ReviewKnowledgeMode;
     model: string;
@@ -53,6 +54,7 @@ export interface StepDefinition {
 
 export interface StepReviewSessionFactoryLike {
   createSession(profile: {
+    dryRunResponse?: string;
     dryRunStepContract?: DryRunReviewStepContract;
     knowledgeMode?: ReviewKnowledgeMode;
     model: string;
@@ -127,6 +129,9 @@ export class StepRunner {
       try {
         const plan = input.step.prepare(input.context);
         const sessionProfile = {
+          ...(plan.reviewProfile.dryRunResponse === undefined
+            ? {}
+            : { dryRunResponse: plan.reviewProfile.dryRunResponse }),
           ...(plan.reviewProfile.dryRunStepContract === undefined
             ? {}
             : { dryRunStepContract: plan.reviewProfile.dryRunStepContract }),

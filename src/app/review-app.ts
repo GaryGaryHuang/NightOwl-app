@@ -7,6 +7,7 @@ import {
 } from "../core/changeset-overview-runner.ts";
 import {
   ReviewOrchestrator,
+  type ReviewPerFileStepsFactory,
   type ReviewRunSummary
 } from "../core/orchestrator.ts";
 import { JudgeService } from "../core/judge.ts";
@@ -67,6 +68,7 @@ export interface CreateLocalReviewRunAppOptions {
   webFetchHostnameClassifier?: WebFetchHostnameClassifier;
   webFetchHostnameClassificationTimeoutMs?: number;
   onProgressEvent?: RunProgressEventHandler;
+  perFileStepsFactory?: ReviewPerFileStepsFactory;
 }
 
 export interface ReviewApp {
@@ -164,6 +166,7 @@ export function createLocalReviewRunApp(
         workingDirectory: options.workingDirectory,
         timestampProvider: options.timestampProvider,
         maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
+        perFileStepsFactory: options.perFileStepsFactory,
         onProgressEvent: options.onProgressEvent,
         onOutputTargetReady: (outputTarget) => {
           // Wire the audit writer only after the run output path exists; Step 0 sessions created earlier are not audited.
