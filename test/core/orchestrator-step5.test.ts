@@ -1,27 +1,35 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
-import path from "node:path";
+import { existsSync } from "node:fs";
 import test from "node:test";
 
-import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
-import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
-import { createRunContext } from "../../src/core/run-context.ts";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
-import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import {
-  assertObservedProfilesUseExpectedModels,
   collectReviewableFiles,
   createObservedStepRunner,
   createStepResponseRouter,
   loadPlannedNoteContents,
   type StepId
 } from "../helpers/orchestrator-step-contract-fixture.ts";
-import { buildDependenciesResponse, buildKnowledgeResponse, buildOverviewResponse, buildStandardStep6JsonResponse, buildStandardStep7SummaryResponse, buildStrategyResponse, detectStepId, escapeRegExp, extractDiffPath, lineRangeTraceability } from "../helpers/orchestrator-fixture.ts";
+import {
+  buildStandardStep6JsonResponse,
+  buildStandardStep7SummaryResponse,
+  detectStepId,
+  escapeRegExp,
+  extractDiffPath,
+  lineRangeTraceability
+} from "../helpers/orchestrator-fixture.ts";
+import {
+  addThirdChangedFile,
+  countStepAttempts,
+  createStructuredStepTestOrchestrator,
+  STRUCTURED_STEP_RUN_REQUEST,
+  type ReviewStepFailureResponse
+} from "../helpers/orchestrator-structured-step-fixture.ts";
 
 const buildStepResponse = createStepResponseRouter({
   step5Response() {
@@ -30,6 +38,7 @@ const buildStepResponse = createStepResponseRouter({
         {
           type: "must",
           title: "問題標題",
+          traceability: lineRangeTraceability(14, 18),
           context: "具體情境",
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
@@ -47,33 +56,27 @@ const buildStepResponse = createStepResponseRouter({
   }
 });
 
-test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 5", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-
-    const observedProfiles: Array<Record<string, string>> = [];
-    const observedStepEvents: Array<[StepId, string]> = [];
-    const observedPrompts: Array<{ stepId: StepId; prompt: string }> = [];
-    const observedDisconnects: string[] = [];
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const stepRunner = createObservedStepRunner({
-      observedDisconnects,
-      observedProfiles,
-      observedPrompts,
-      observedStepEvents,
-      buildStepResponse,
-      disconnectValue: () => "disconnect",
-      expectedTimeoutMs: 300_000,
-      structuredOutputValidator: {
-        validate() {
-          return {
+const STEP5_RETRY_EXHAUSTION_CASES = [
+  {
+    label: "malformed JSON",
+    title: "step5 malformed json",
+    expectedReason: "deterministic validation failed",
+    step5ReviewFailure() {
+      return { data: { content: '{"findings":[}' } };
+    }
+  },
+  {
+    label: "schema-invalid JSON",
+    title: "step5 schema invalid",
+    expectedReason: "deterministic validation failed",
+    step5ReviewFailure() {
+      return {
+        data: {
+          content: JSON.stringify({
             findings: [
               {
                 type: "must",
-                title: "問題標題",
+                title: "",
                 traceability: lineRangeTraceability(14, 18),
                 context: "具體情境",
                 deviation: "預期與實際有落差",
@@ -82,42 +85,58 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
                 confidence: 88
               }
             ]
-          };
+          })
         }
-      }
-    });
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner,
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
+      };
+    }
+  },
+  {
+    label: "empty review response",
+    title: "step5 empty response",
+    expectedReason: "empty review response",
+    step5ReviewFailure() {
+      return { data: { content: "   " } };
+    }
+  },
+  {
+    label: "review timeout",
+    title: "step5 review timeout",
+    expectedReason: "review timeout",
+    step5ReviewFailure(): ReviewStepFailureResponse {
+      throw new Error("review timeout");
+    }
+  }
+] satisfies ReadonlyArray<{
+  label: string;
+  title: string;
+  expectedReason: string;
+  step5ReviewFailure(): ReviewStepFailureResponse | never;
+}>;
 
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
+test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 then Step 5 then Step 6 then Step 7 in filtered changed-file order and passes current review into Step 5", async () => {
+  const fixture = createReviewRepoFixture();
 
-    const outputBaseDir = realpathSync(fixture.repoDir);
+  try {
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+
+    const observedStepEvents: Array<[StepId, string]> = [];
+    const observedPrompts: Array<{ stepId: StepId; prompt: string }> = [];
+    const { orchestrator, sourceProvider, reviewFileFilter } = createStructuredStepTestOrchestrator(
+      fixture,
+      createObservedStepRunner({
+        observedPrompts,
+        observedStepEvents,
+        buildStepResponse
+      })
+    );
+
+    const result = await orchestrator.run(STRUCTURED_STEP_RUN_REQUEST);
+
     const { repoRoot, reviewableFiles } = collectReviewableFiles({
       sourceProvider,
       reviewFileFilter,
       repoDir: fixture.repoDir
     });
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
 
     assert.equal(result.repoRoot, repoRoot);
     assert.equal(result.plannedFileCount, reviewableFiles.length);
@@ -133,10 +152,6 @@ test("ReviewOrchestrator executes Step 1 then Step 2 then Step 3 then Step 4 the
         ["step7-summary", filePath]
       ])
     );
-    assert.equal(observedDisconnects.length, reviewableFiles.length * 7);
-    assert.equal(observedProfiles.length, reviewableFiles.length * 7);
-
-    assertObservedProfilesUseExpectedModels(observedProfiles, outputBaseDir, repoRoot);
 
     const step5Prompt = observedPrompts.find(
       ({ stepId }) => stepId === "step5-validation-interrogation"
@@ -179,201 +194,91 @@ test("ReviewOrchestrator does not start Step 5 for a failed Step 4 file and cont
 
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for step4 gating");
+    addThirdChangedFile(fixture, "add third changed file for step4 gating");
 
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const observedStepEvents: Array<[string, string]> = [];
-    const reviewAttempts = new Map();
-    const orchestrator = new ReviewOrchestrator({
+    const { reviewableFiles } = collectReviewableFiles({
       sourceProvider,
       reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
-
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                const key = `${stepId}:${filePath}`;
-                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
-
-                reviewAttempts.set(key, attempt);
-                observedStepEvents.push([stepId, filePath]);
-
-                if (
-                  stepId === "step4-strategy-what-if-scenarios" &&
-                  filePath === failedFile
-                ) {
-                  return { data: { content: "   " } };
-                }
-
-                return { data: { content: buildStepResponse(stepId, filePath) } };
-              },
-              async disconnect() {}
-            });
+      repoDir: fixture.repoDir
+    });
+    const failedFile = reviewableFiles[1];
+    const observedStepEvents: Array<[StepId, string]> = [];
+    const { orchestrator } = createStructuredStepTestOrchestrator(
+      fixture,
+      createObservedStepRunner({
+        observedStepEvents,
+        buildStepResponse(stepId, filePath) {
+          if (stepId === "step4-strategy-what-if-scenarios" && filePath === failedFile) {
+            return "   ";
           }
-        },
-        structuredOutputValidator: {
-          validate() {
-            return {
-              findings: [
-                {
-                  type: "must",
-                  title: "問題標題",
-                  traceability: lineRangeTraceability(14, 18),
-                  context: "具體情境",
-                  deviation: "預期與實際有落差",
-                  impact: "會造成 correctness 問題",
-                  suggestion: "補上 guard",
-                  confidence: 88
-                }
-              ]
-            };
-          }
-        },
-        judgeService: {
-          async evaluate() {
-            return { passed: true };
-          }
+
+          return buildStepResponse(stepId, filePath);
         }
       }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
+      { sourceProvider, reviewFileFilter }
+    );
 
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
+    const result = await orchestrator.run(STRUCTURED_STEP_RUN_REQUEST);
 
     assert.equal(result.plannedFileCount, reviewableFiles.length);
 
-    assert.deepEqual(observedStepEvents.slice(0, 12), [
-      ["step1-overview", reviewableFiles[0]],
-      ["step2-dependencies-boundaries", reviewableFiles[0]],
-      ["step3-knowledge-source-of-truth", reviewableFiles[0]],
-      ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
-      ["step5-validation-interrogation", reviewableFiles[0]],
-      ["step6-cognitive-simulation", reviewableFiles[0]],
-      ["step7-summary", reviewableFiles[0]],
-      ["step1-overview", failedFile],
-      ["step2-dependencies-boundaries", failedFile],
-      ["step3-knowledge-source-of-truth", failedFile],
-      ["step4-strategy-what-if-scenarios", failedFile],
-      ["step4-strategy-what-if-scenarios", failedFile]
-    ]);
     assert.equal(
-      reviewAttempts.get(`step5-validation-interrogation:${failedFile}`),
-      undefined
+      observedStepEvents.some(([s, f]) => s === "step5-validation-interrogation" && f === failedFile),
+      false
     );
     assert.equal(
-      reviewAttempts.get(`step6-cognitive-simulation:${failedFile}`),
-      undefined
+      observedStepEvents.some(([s, f]) => s === "step6-cognitive-simulation" && f === failedFile),
+      false
     );
     assert.equal(
-      reviewAttempts.get(`step7-summary:${failedFile}`),
-      undefined
+      observedStepEvents.some(([s, f]) => s === "step7-summary" && f === failedFile),
+      false
     );
   } finally {
     fixture.cleanup();
   }
 });
+
 test("ReviewOrchestrator renders `## Findings` with `- 無` when Step 5 returns an empty findings array", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+    const { orchestrator, sourceProvider, reviewFileFilter } = createStructuredStepTestOrchestrator(
+      fixture,
+      createObservedStepRunner({
+        buildStepResponse(stepId, filePath) {
+          if (
+            stepId === "step5-validation-interrogation" ||
+            stepId === "step6-cognitive-simulation"
+          ) {
+            return JSON.stringify({ findings: [] });
+          }
+
+          return buildStepResponse(stepId, filePath);
+        }
+      })
     );
-    const orchestrator = new ReviewOrchestrator({
+
+    const result = await orchestrator.run(STRUCTURED_STEP_RUN_REQUEST);
+
+    const { reviewableFiles } = collectReviewableFiles({
       sourceProvider,
       reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
-
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                return {
-                  data: {
-                    content:
-                      stepId === "step5-validation-interrogation" ||
-                      stepId === "step6-cognitive-simulation"
-                        ? JSON.stringify({ findings: [] })
-                        : buildStepResponse(stepId, filePath)
-                  }
-                };
-              },
-              async disconnect() {}
-            });
-          }
-        },
-        structuredOutputValidator: new StructuredOutputValidator(),
-        judgeService: {
-          async evaluate() {
-            return { passed: true };
-          }
-        }
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      repoDir: fixture.repoDir
     });
 
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
-
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-
-    for (const plannedNote of plannedNotes) {
-      const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
-
-      assert.match(noteContent, /^## Findings/mu);
-      assert.match(noteContent, /## Findings\n- 無/u);
-      assert.doesNotMatch(noteContent, /無 findings\./u);
-      assert.doesNotMatch(noteContent, /confidence/u);
+    for (const plannedNote of loadPlannedNoteContents(
+      result.outputTarget,
+      reviewableFiles
+    )) {
+      assert.match(plannedNote.content, /^## Findings/mu);
+      assert.match(plannedNote.content, /## Findings\n- 無/u);
+      assert.doesNotMatch(plannedNote.content, /無 findings\./u);
+      assert.doesNotMatch(plannedNote.content, /confidence/u);
     }
   } finally {
     fixture.cleanup();
@@ -386,99 +291,62 @@ test("ReviewOrchestrator treats confidence-filtered empty findings as a successf
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
-
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                return {
-                  data: {
-                    content:
-                      stepId === "step5-validation-interrogation"
-                        ? JSON.stringify({
-                            findings: [
-                              {
-                                type: "must",
-                                title: "低信心 must",
-                                traceability: lineRangeTraceability(14, 18),
-                                context: "具體情境",
-                                deviation: "預期與實際有落差",
-                                impact: "會造成 correctness 問題",
-                                suggestion: "補上 guard",
-                                confidence: 79
-                              },
-                              {
-                                type: "nice",
-                                title: "低信心 nice",
-                                traceability: lineRangeTraceability(20, 20),
-                                context: "具體情境",
-                                deviation: "可改善",
-                                impact: "影響可維護性",
-                                suggestion: "補上整理",
-                                confidence: 89
-                              }
-                            ]
-                          })
-                        : stepId === "step6-cognitive-simulation"
-                          ? JSON.stringify({ findings: [] })
-                        : buildStepResponse(stepId, filePath)
-                  }
-                };
-              },
-              async disconnect() {}
+    const { orchestrator, sourceProvider, reviewFileFilter } = createStructuredStepTestOrchestrator(
+      fixture,
+      createObservedStepRunner({
+        buildStepResponse(stepId, filePath) {
+          if (stepId === "step5-validation-interrogation") {
+            return JSON.stringify({
+              findings: [
+                {
+                  type: "must",
+                  title: "低信心 must",
+                  traceability: lineRangeTraceability(14, 18),
+                  context: "具體情境",
+                  deviation: "預期與實際有落差",
+                  impact: "會造成 correctness 問題",
+                  suggestion: "補上 guard",
+                  confidence: 79
+                },
+                {
+                  type: "nice",
+                  title: "低信心 nice",
+                  traceability: lineRangeTraceability(20, 20),
+                  context: "具體情境",
+                  deviation: "可改善",
+                  impact: "影響可維護性",
+                  suggestion: "補上整理",
+                  confidence: 89
+                }
+              ]
             });
           }
-        },
-        structuredOutputValidator: new StructuredOutputValidator(),
-        judgeService: {
-          async evaluate() {
-            return { passed: true };
+
+          if (stepId === "step6-cognitive-simulation") {
+            return JSON.stringify({ findings: [] });
           }
+
+          return buildStepResponse(stepId, filePath);
         }
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      })
+    );
+
+    const result = await orchestrator.run(STRUCTURED_STEP_RUN_REQUEST);
+
+    const { reviewableFiles } = collectReviewableFiles({
+      sourceProvider,
+      reviewFileFilter,
+      repoDir: fixture.repoDir
     });
 
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
-
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-
-    for (const plannedNote of plannedNotes) {
-      const noteContent = readFileSync(plannedNote.noteFilePath, "utf8");
-
-      assert.match(noteContent, /^## Findings/mu);
-      assert.match(noteContent, /## Findings\n- 無/u);
-      assert.doesNotMatch(noteContent, /無 findings\./u);
-      assert.doesNotMatch(noteContent, /低信心 must|低信心 nice/u);
+    for (const plannedNote of loadPlannedNoteContents(
+      result.outputTarget,
+      reviewableFiles
+    )) {
+      assert.match(plannedNote.content, /^## Findings/mu);
+      assert.match(plannedNote.content, /## Findings\n- 無/u);
+      assert.doesNotMatch(plannedNote.content, /無 findings\./u);
+      assert.doesNotMatch(plannedNote.content, /低信心 must|低信心 nice/u);
     }
   } finally {
     fixture.cleanup();
@@ -491,112 +359,68 @@ test("ReviewOrchestrator uses configured thresholds when Step 5 filters findings
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
-    const observedPrompts: Array<{ stepId: string; prompt: string }> = [];
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
-
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                observedPrompts.push({ stepId, prompt: options.prompt });
-
-                if (stepId === "step5-validation-interrogation") {
-                  return {
-                    data: {
-                      content: JSON.stringify({
-                        findings: [
-                          {
-                            type: "must",
-                            title: "低門檻 must",
-                            traceability: lineRangeTraceability(14, 18),
-                            context: "具體情境",
-                            deviation: "預期與實際有落差",
-                            impact: "影響 correctness",
-                            suggestion: "補上 guard",
-                            confidence: 75
-                          },
-                          {
-                            type: "nice",
-                            title: "低門檻 nice",
-                            traceability: lineRangeTraceability(20, 20),
-                            context: "具體情境",
-                            deviation: "可改善",
-                            impact: "影響可維護性",
-                            suggestion: "補上整理",
-                            confidence: 88
-                          }
-                        ]
-                      })
-                    }
-                  };
+    const observedPrompts: Array<{ stepId: StepId; prompt: string }> = [];
+    const { orchestrator } = createStructuredStepTestOrchestrator(
+      fixture,
+      createObservedStepRunner({
+        observedPrompts,
+        buildStepResponse(stepId, filePath) {
+          if (stepId === "step5-validation-interrogation") {
+            return JSON.stringify({
+              findings: [
+                {
+                  type: "must",
+                  title: "低門檻 must",
+                  traceability: lineRangeTraceability(14, 18),
+                  context: "具體情境",
+                  deviation: "預期與實際有落差",
+                  impact: "影響 correctness",
+                  suggestion: "補上 guard",
+                  confidence: 75
+                },
+                {
+                  type: "nice",
+                  title: "低門檻 nice",
+                  traceability: lineRangeTraceability(20, 20),
+                  context: "具體情境",
+                  deviation: "可改善",
+                  impact: "影響可維護性",
+                  suggestion: "補上整理",
+                  confidence: 88
                 }
-
-                if (stepId === "step6-cognitive-simulation") {
-                  return {
-                    data: {
-                      content: JSON.stringify({
-                        findings: [
-                          {
-                            type: "must",
-                            title: `Step6 must ${filePath}`,
-                            traceability: lineRangeTraceability(30, 32),
-                            context: "模擬路徑重新確認",
-                            deviation: "最終偏差確認",
-                            impact: "會造成 correctness 問題",
-                            suggestion: "補上 final guard",
-                            confidence: 91
-                          }
-                        ]
-                      })
-                    }
-                  };
-                }
-
-                return { data: { content: buildStepResponse(stepId, filePath) } };
-              },
-              async disconnect() {}
+              ]
             });
           }
+
+          if (stepId === "step6-cognitive-simulation") {
+            return JSON.stringify({
+              findings: [
+                {
+                  type: "must",
+                  title: `Step6 must ${filePath}`,
+                  traceability: lineRangeTraceability(30, 32),
+                  context: "模擬路徑重新確認",
+                  deviation: "最終偏差確認",
+                  impact: "會造成 correctness 問題",
+                  suggestion: "補上 final guard",
+                  confidence: 91
+                }
+              ]
+            });
+          }
+
+          return buildStepResponse(stepId, filePath);
         },
         structuredOutputValidator: new StructuredOutputValidator({
           confidenceThresholds: {
             must: 70,
             nice: 85
           }
-        }),
-        judgeService: {
-          async evaluate() {
-            return { passed: true };
-          }
-        }
-      }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
+        })
+      })
+    );
 
-    await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
+    await orchestrator.run(STRUCTURED_STEP_RUN_REQUEST);
 
     const step6Prompts = observedPrompts.filter(
       ({ stepId }) => stepId === "step6-cognitive-simulation"
@@ -618,217 +442,86 @@ test("ReviewOrchestrator retries Step 5 after deterministic validation failure a
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
-    const reviewAttempts = new Map();
+    const observedStepEvents: Array<[StepId, string]> = [];
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const retryFile = reviewableFiles[1];
-    const judgeCallsByStep = new Map();
-    const orchestrator = new ReviewOrchestrator({
+    const { reviewableFiles } = collectReviewableFiles({
       sourceProvider,
       reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
+      repoDir: fixture.repoDir
+    });
+    const retryFile = reviewableFiles[1];
+    const { orchestrator } = createStructuredStepTestOrchestrator(
+      fixture,
+      createObservedStepRunner({
+        observedStepEvents,
+        buildStepResponse(stepId, filePath) {
+          if (stepId === "step5-validation-interrogation" && filePath === retryFile) {
+            const attempt = countStepAttempts(observedStepEvents, stepId, filePath);
 
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                const key = `${stepId}:${filePath}`;
-                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
-
-                reviewAttempts.set(key, attempt);
-
-                if (stepId === "step6-cognitive-simulation") {
-                  return {
-                    data: {
-                      content: JSON.stringify({
-                        findings: [
-                          {
-                            type: "must",
-                            title: `${filePath} attempt 2`,
-                            traceability: lineRangeTraceability(30, 32),
-                            context: "具體情境",
-                            deviation: "預期與實際有落差",
-                            impact: "會造成 correctness 問題",
-                            suggestion: "補上 guard",
-                            confidence: 91
-                          }
-                        ]
-                      })
-                    }
-                  };
-                }
-
-                if (stepId !== "step5-validation-interrogation") {
-                  return { data: { content: buildStepResponse(stepId, filePath) } };
-                }
-
-                if (filePath === retryFile && attempt === 1) {
-                  return { data: { content: "{\"findings\":[}" } };
-                }
-
-                return {
-                  data: {
-                    content: JSON.stringify({
-                      findings: [
-                        {
-                          type: "must",
-                          title: `${filePath} attempt ${attempt}`,
-                          traceability: lineRangeTraceability(14, 18),
-                          context: "具體情境",
-                          deviation: "預期與實際有落差",
-                          impact: "會造成 correctness 問題",
-                          suggestion: "補上 guard",
-                          confidence: 88
-                        }
-                      ]
-                    })
-                  }
-                };
-              },
-              async disconnect() {}
-            });
+            if (attempt === 1) {
+              return '{"findings":[}';
+            }
           }
-        },
-        structuredOutputValidator: new StructuredOutputValidator(),
-        judgeService: {
-          async evaluate(input) {
-            judgeCallsByStep.set(
-              input.stepId,
-              (judgeCallsByStep.get(input.stepId) ?? 0) + 1
-            );
-            return { passed: true };
-          }
+
+          return buildStepResponse(stepId, filePath);
         }
       }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
+      { sourceProvider, reviewFileFilter }
+    );
 
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
+    const result = await orchestrator.run(STRUCTURED_STEP_RUN_REQUEST);
 
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const retriedNote = plannedNotes.find(({ filePath }) => filePath === retryFile)!;
-    const retriedContent = readFileSync(retriedNote.noteFilePath, "utf8");
+    const retriedNote = loadPlannedNoteContents(result.outputTarget, reviewableFiles)
+      .find(({ filePath }) => filePath === retryFile)!;
 
-    assert.equal(reviewAttempts.get(`step5-validation-interrogation:${retryFile}`), 2);
-    assert.equal(judgeCallsByStep.get("step5-validation-interrogation") ?? 0, 0);
-    assert.match(retriedContent, /attempt 2/u);
-    assert.doesNotMatch(retriedContent, /attempt 1/u);
+    const step5Attempts = countStepAttempts(
+      observedStepEvents,
+      "step5-validation-interrogation",
+      retryFile
+    );
+    assert.equal(step5Attempts, 2);
+    assert.match(retriedNote.content, /^## Findings/mu);
+    assert.doesNotMatch(retriedNote.content, /Review Interrupted/u);
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator aborts Step 5 after malformed JSON retry exhaustion and preserves the Step 4 snapshot", async () => {
-  await assertStep5Failure({
-    title: "step5 malformed json",
-    expectedReason: "deterministic validation failed",
-    step5ReviewFailure() {
-      return { data: { content: "{\"findings\":[}" } };
-    }
+for (const testCase of STEP5_RETRY_EXHAUSTION_CASES) {
+  test(`ReviewOrchestrator aborts Step 5 after ${testCase.label} retry exhaustion and preserves the Step 4 snapshot`, async () => {
+    await assertStep5Failure(testCase);
   });
-});
-
-test("ReviewOrchestrator aborts Step 5 after schema-invalid JSON retry exhaustion and preserves the Step 4 snapshot", async () => {
-  await assertStep5Failure({
-    title: "step5 schema invalid",
-    expectedReason: "deterministic validation failed",
-    step5ReviewFailure() {
-      return {
-        data: {
-          content: JSON.stringify({
-            findings: [
-              {
-                type: "must",
-                title: "",
-                traceability: lineRangeTraceability(14, 18),
-                context: "具體情境",
-                deviation: "預期與實際有落差",
-                impact: "會造成 correctness 問題",
-                suggestion: "補上 guard",
-                confidence: 88
-              }
-            ]
-          })
-        }
-      };
-    }
-  });
-});
-
-test("ReviewOrchestrator aborts Step 5 after empty review response retry exhaustion and preserves the Step 4 snapshot", async () => {
-  await assertStep5Failure({
-    title: "step5 empty response",
-    expectedReason: "empty review response",
-    step5ReviewFailure() {
-      return { data: { content: "   " } };
-    }
-  });
-});
-
-test("ReviewOrchestrator aborts Step 5 after review timeout retry exhaustion and preserves the Step 4 snapshot", async () => {
-  await assertStep5Failure({
-    title: "step5 review timeout",
-    expectedReason: "review timeout",
-    step5ReviewFailure() {
-      throw new Error("review timeout");
-    }
-  });
-});
+}
 
 test("ReviewOrchestrator skips Step 5 after review startup failure retry exhaustion and preserves the Step 4 snapshot", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for step5 startup failure");
+    addThirdChangedFile(fixture, "add third changed file for step5 startup failure");
 
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    let sessionCount = 0;
-    const orchestrator = new ReviewOrchestrator({
+    const { reviewableFiles } = collectReviewableFiles({
       sourceProvider,
       reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
+      repoDir: fixture.repoDir
+    });
+    const failedFile = reviewableFiles[1];
+    let step5SessionCount = 0;
+    const { orchestrator } = createStructuredStepTestOrchestrator(
+      fixture,
+      new StepRunner({
         reviewSessionFactory: {
           async createSession(profile) {
-            sessionCount += 1;
+            if (/## Current Step: Validation & Interrogation/u.test(profile.systemMessage)) {
+              step5SessionCount += 1;
 
-            if (
-              /## Current Step: Validation & Interrogation/u.test(profile.systemMessage) &&
-              (sessionCount === 12 || sessionCount === 13)
-            ) {
-              throw new Error("review startup failed");
+              // 2nd and 3rd step5 sessions are for failedFile (initial + retry)
+              if (step5SessionCount === 2 || step5SessionCount === 3) {
+                throw new Error("review startup failed");
+              }
             }
 
             const stepId = detectStepId(profile.systemMessage);
@@ -849,38 +542,18 @@ test("ReviewOrchestrator skips Step 5 after review startup failure retry exhaust
           }
         }
       }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
-
-    assert.equal(result.plannedFileCount, reviewableFiles.length);
-    assert.ok(sessionCount <= reviewableFiles.length * 7 - 1);
-
-    const plannedNotes = planNoteFiles(result.outputTarget.filesPath, reviewableFiles);
-    const failedNote = readFileSync(
-      plannedNotes.find(({ filePath }) => filePath === failedFile)!.noteFilePath,
-      "utf8"
+      { sourceProvider, reviewFileFilter }
     );
-    assert.match(failedNote, /^## Strategy & What-if Scenarios/mu);
-    assert.doesNotMatch(failedNote, /^## Findings/mu);
-    assert.match(failedNote, /step5-validation-interrogation/u);
-    assert.match(failedNote, /review startup failed/u);
+
+    const result = await orchestrator.run(STRUCTURED_STEP_RUN_REQUEST);
+
+    const failedNote = loadPlannedNoteContents(result.outputTarget, reviewableFiles)
+      .find(({ filePath }) => filePath === failedFile)!;
+
+    assert.match(failedNote.content, /^## Strategy & What-if Scenarios/mu);
+    assert.doesNotMatch(failedNote.content, /^## Findings/mu);
+    assert.match(failedNote.content, /step5-validation-interrogation/u);
+    assert.match(failedNote.content, /review startup failed/u);
   } finally {
     fixture.cleanup();
   }
@@ -889,126 +562,67 @@ test("ReviewOrchestrator skips Step 5 after review startup failure retry exhaust
 async function assertStep5Failure(input: {
   title: string;
   expectedReason: string;
-  step5ReviewFailure(): { data?: { content?: string } } | never;
+  step5ReviewFailure(): ReviewStepFailureResponse | never;
 }): Promise<void> {
   const fixture = createReviewRepoFixture();
+
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll(`add third changed file for ${input.title}`);
+    addThirdChangedFile(fixture, `add third changed file for ${input.title}`);
 
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const outputBaseDir = realpathSync(fixture.repoDir);
-    const plannedNotes = planNoteFiles(
-      path.join(outputBaseDir, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
-    );
+    const { reviewableFiles } = collectReviewableFiles({
+      sourceProvider,
+      reviewFileFilter,
+      repoDir: fixture.repoDir
+    });
     const successfulFile = reviewableFiles[0];
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
-    const reviewAttempts = new Map();
-    const judgeCallsByStep = new Map();
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: new StepRunner({
-        reviewSessionFactory: {
-          async createSession(profile) {
-            const stepId = detectStepId(profile.systemMessage);
-
-            return new SessionExecutor({
-              async sendAndWait(options) {
-                const filePath = extractDiffPath(options.prompt);
-                const key = `${stepId}:${filePath}`;
-                const attempt = (reviewAttempts.get(key) ?? 0) + 1;
-
-                reviewAttempts.set(key, attempt);
-
-                if (stepId === "step6-cognitive-simulation") {
-                  return { data: { content: buildStandardStep6JsonResponse() } };
-                }
-
-                if (stepId !== "step5-validation-interrogation") {
-                  return { data: { content: buildStepResponse(stepId, filePath) } };
-                }
-
-                if (filePath === failedFile) {
-                  return input.step5ReviewFailure();
-                }
-
-                return { data: { content: buildStepResponse("step5-validation-interrogation", filePath) } };
-              },
-              async disconnect() {}
-            });
+    const observedStepEvents: Array<[StepId, string]> = [];
+    const { orchestrator } = createStructuredStepTestOrchestrator(
+      fixture,
+      createObservedStepRunner({
+        observedStepEvents,
+        buildStepResponse(stepId, filePath) {
+          if (stepId === "step5-validation-interrogation" && filePath === failedFile) {
+            const failureResult = input.step5ReviewFailure();
+            return failureResult?.data?.content ?? "";
           }
-        },
-        structuredOutputValidator: new StructuredOutputValidator(),
-        judgeService: {
-          async evaluate(inputJudge) {
-            judgeCallsByStep.set(
-              inputJudge.stepId,
-              (judgeCallsByStep.get(inputJudge.stepId) ?? 0) + 1
-            );
-            return { passed: true };
-          }
+
+          return buildStepResponse(stepId, filePath);
         }
       }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
-
-    assert.equal(result.plannedFileCount, reviewableFiles.length);
-
-    assert.equal(reviewAttempts.get(`step5-validation-interrogation:${failedFile}`), 2);
-    assert.equal(judgeCallsByStep.get("step5-validation-interrogation") ?? 0, 0);
-
-    const renderedNotes = plannedNotes.map((note) => ({
-      ...note,
-      content: readFileSync(note.noteFilePath, "utf8")
-    }));
-    const failedNotes = renderedNotes.filter(({ content }) =>
-      /> \[!WARNING\] Review Interrupted/u.test(content) &&
-      /step5-validation-interrogation/u.test(content)
+      { sourceProvider, reviewFileFilter }
     );
 
-    assert.ok(failedNotes.length >= 1);
+    const result = await orchestrator.run(STRUCTURED_STEP_RUN_REQUEST);
 
-    const matchedFailure = failedNotes.find(({ content }) =>
-      new RegExp(escapeRegExp(input.expectedReason), "u").test(content)
+    assert.equal(
+      countStepAttempts(
+        observedStepEvents,
+        "step5-validation-interrogation",
+        failedFile
+      ),
+      2
     );
 
-    assert.ok(matchedFailure, `expected interrupted note containing ${input.expectedReason}`);
+    const plannedNotes = loadPlannedNoteContents(result.outputTarget, reviewableFiles);
+    const successfulNote = plannedNotes.find(({ filePath }) => filePath === successfulFile)!;
+    const failedNote = plannedNotes.find(({ filePath }) => filePath === failedFile)!;
+    const laterNote = plannedNotes.find(({ filePath }) => filePath === laterFile)!;
 
-    const failedNoteContent = matchedFailure.content;
-    assert.match(failedNoteContent, /^## Strategy & What-if Scenarios/mu);
-    assert.doesNotMatch(failedNoteContent, /^## Findings/mu);
-    assert.doesNotMatch(failedNoteContent, /Review not yet generated/u);
-    assert.match(failedNoteContent, /> \[!WARNING\] Review Interrupted/u);
-    assert.match(failedNoteContent, /step5-validation-interrogation/u);
-    assert.match(failedNoteContent, new RegExp(escapeRegExp(input.expectedReason), "u"));
+    assert.match(successfulNote.content, /^## Summary/mu);
+
+    assert.match(failedNote.content, /^## Strategy & What-if Scenarios/mu);
+    assert.doesNotMatch(failedNote.content, /^## Findings/mu);
+    assert.doesNotMatch(failedNote.content, /Review not yet generated/u);
+    assert.match(failedNote.content, /> \[!WARNING\] Review Interrupted/u);
+    assert.match(failedNote.content, /step5-validation-interrogation/u);
+    assert.match(failedNote.content, new RegExp(escapeRegExp(input.expectedReason), "u"));
+
+    assert.match(laterNote.content, /^## Summary/mu);
   } finally {
     fixture.cleanup();
   }

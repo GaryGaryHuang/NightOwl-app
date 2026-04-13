@@ -139,10 +139,10 @@ export function createStepResponseRouter(input: {
  */
 export function createObservedStepRunner(input: {
   buildStepResponse: (stepId: StepId, filePath: string) => string;
-  observedDisconnects: string[];
-  observedProfiles: Array<Record<string, string>>;
-  observedPrompts: Array<{ stepId: StepId; prompt: string }>;
-  observedStepEvents: Array<[StepId, string]>;
+  observedDisconnects?: string[];
+  observedProfiles?: Array<Record<string, string>>;
+  observedPrompts?: Array<{ stepId: StepId; prompt: string }>;
+  observedStepEvents?: Array<[StepId, string]>;
   disconnectValue?: (stepId: StepId) => string;
   expectedTimeoutMs?: number;
   structuredOutputValidator?: InstanceType<typeof StructuredOutputValidator> | {
@@ -164,15 +164,15 @@ export function createObservedStepRunner(input: {
   return new StepRunner({
     reviewSessionFactory: {
       async createSession(profile) {
-        input.observedProfiles.push(profile as Record<string, string>);
+        input.observedProfiles?.push(profile as Record<string, string>);
         const stepId = detectStepId(profile.systemMessage);
 
         return new SessionExecutor({
           async sendAndWait(options, timeoutMs) {
             const filePath = extractDiffPath(options.prompt);
 
-            input.observedPrompts.push({ stepId, prompt: options.prompt });
-            input.observedStepEvents.push([stepId, filePath]);
+            input.observedPrompts?.push({ stepId, prompt: options.prompt });
+            input.observedStepEvents?.push([stepId, filePath]);
 
             if (input.expectedTimeoutMs !== undefined && timeoutMs !== input.expectedTimeoutMs) {
               throw new Error(`unexpected timeout: ${timeoutMs}`);
@@ -185,7 +185,7 @@ export function createObservedStepRunner(input: {
             };
           },
           async disconnect() {
-            input.observedDisconnects.push(
+            input.observedDisconnects?.push(
               input.disconnectValue?.(stepId) ?? stepId
             );
           }
