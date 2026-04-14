@@ -297,7 +297,7 @@ export async function assertPromptRebuildOnRetry(input: {
   const context = createStepRunnerContext();
 
   for (const key of input.seedSections) {
-    context.setSection(key as ReviewSectionKey, SECTION_SEEDS[key]);
+    context.setSection(key, SECTION_SEEDS[key]);
   }
 
   const runner = new StepRunner({

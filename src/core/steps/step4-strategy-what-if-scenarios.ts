@@ -1,6 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
-import { STRATEGY_WHAT_IF_SCENARIOS_SECTION } from "../review-section-contract.ts";
+import { STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
 
 // Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
@@ -156,7 +156,7 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
         }
 
         return (targetContext: FileReviewContext) => {
-          targetContext.setSection(STRATEGY_WHAT_IF_SCENARIOS_SECTION.key, response);
+          targetContext.setSection(STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY, response);
         };
       }
     };

@@ -3,7 +3,6 @@ import type {
   Finding,
   FindingTraceability
 } from "./file-review-context.ts";
-import { getReviewSectionDefinitionsForSlot } from "./review-section-contract.ts";
 
 /**
  * Render the canonical in-memory file state into the Markdown review note shape.
@@ -12,19 +11,34 @@ export class ReviewNoteFinalizer {
   render(
     context: Pick<
       FileReviewContext,
-      "filePath" | "getSection" | "getStructuredState" | "getInterruption"
+      "filePath" | "getSectionEntries" | "getFindingsInsertionIndex" | "getStructuredState" | "getInterruption"
     >
   ): string {
-    const preFindingsSections = getReviewSectionDefinitionsForSlot("pre-findings")
-      .map((definition) => context.getSection(definition.key)?.trim())
-      .filter((section): section is string => Boolean(section));
+    const allEntries = context.getSectionEntries();
+    const findingsInsertionIndex = context.getFindingsInsertionIndex();
     const findingsSection = renderFindingsSection(
       context.getStructuredState().findings
     );
-    const postFindingsSections = getReviewSectionDefinitionsForSlot("post-findings")
-      .map((definition) => context.getSection(definition.key)?.trim())
-      .filter((section): section is string => Boolean(section));
     const warningBlock = renderInterruptionWarning(context.getInterruption());
+
+    let preFindingsSections: string[];
+    let postFindingsSections: string[];
+
+    if (findingsInsertionIndex !== undefined) {
+      preFindingsSections = allEntries
+        .slice(0, findingsInsertionIndex)
+        .map(([, content]) => content.trim())
+        .filter(Boolean);
+      postFindingsSections = allEntries
+        .slice(findingsInsertionIndex)
+        .map(([, content]) => content.trim())
+        .filter(Boolean);
+    } else {
+      preFindingsSections = allEntries
+        .map(([, content]) => content.trim())
+        .filter(Boolean);
+      postFindingsSections = [];
+    }
 
     // Bootstrap snapshots are intentionally minimal until the first real section lands.
     if (

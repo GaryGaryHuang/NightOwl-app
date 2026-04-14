@@ -57,9 +57,10 @@ export class FileReviewContext {
   readonly diffContent: string;
   readonly baseRef: string;
   readonly headRef: string;
-  readonly #sections = new Map<ReviewSectionKey, string>();
+  readonly #sections = new Map<string, string>();
   readonly #structuredState: ReviewStructuredState = {};
   #interruption?: ReviewInterruption;
+  #findingsInsertionIndex?: number;
 
   constructor(input: FileReviewContextInput) {
     this.filePath = input.filePath;
@@ -77,13 +78,18 @@ export class FileReviewContext {
     return this.#sections.get(sectionKey);
   }
 
-  getSectionEntries(): Array<[ReviewSectionKey, string]> {
+  getSectionEntries(): Array<[string, string]> {
     return [...this.#sections.entries()];
   }
 
   // Findings are replaced wholesale, not merged, because Step 6 produces the complete final set.
   setFindings(findings: Finding[]): void {
     this.#structuredState.findings = findings.map(cloneFinding);
+    this.#findingsInsertionIndex ??= this.#sections.size;
+  }
+
+  getFindingsInsertionIndex(): number | undefined {
+    return this.#findingsInsertionIndex;
   }
 
   getStructuredState(): ReviewStructuredState {

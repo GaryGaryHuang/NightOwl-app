@@ -1,6 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizer.ts";
-import { DEPENDENCIES_BOUNDARIES_SECTION } from "../review-section-contract.ts";
+import { DEPENDENCIES_BOUNDARIES_SECTION_KEY } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
 
 // Keep in sync with the identical COMMON_SYSTEM_MESSAGE in all step files and changeset-overview-runner.ts.
@@ -143,7 +143,7 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
         }
 
         return (targetContext: FileReviewContext) => {
-          targetContext.setSection(DEPENDENCIES_BOUNDARIES_SECTION.key, response);
+          targetContext.setSection(DEPENDENCIES_BOUNDARIES_SECTION_KEY, response);
         };
       }
     };

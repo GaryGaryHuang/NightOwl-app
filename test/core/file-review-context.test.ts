@@ -26,6 +26,69 @@ test("FileReviewContext preserves execution metadata and starts empty", () => {
   assert.deepEqual(context.getSectionEntries(), []);
   assert.deepEqual(context.getStructuredState(), {});
   assert.equal(context.getInterruption(), undefined);
+  assert.equal(context.getFindingsInsertionIndex(), undefined);
+});
+
+test("FileReviewContext accepts custom section keys", () => {
+  const context = createContext();
+
+  context.setSection("custom-analysis", "custom content");
+  assert.equal(context.getSection("custom-analysis"), "custom content");
+  assert.deepEqual(context.getSectionEntries(), [["custom-analysis", "custom content"]]);
+});
+
+test("FileReviewContext getSection returns undefined for unwritten custom key", () => {
+  const context = createContext();
+
+  assert.equal(context.getSection("never-written"), undefined);
+});
+
+test("FileReviewContext setSection overwrites same key preserving insertion position", () => {
+  const context = createContext();
+
+  context.setSection("overview", "first");
+  context.setSection("deps", "second");
+  context.setSection("overview", "overwritten");
+
+  assert.equal(context.getSection("overview"), "overwritten");
+  const entries = context.getSectionEntries();
+  assert.deepEqual(entries, [
+    ["overview", "overwritten"],
+    ["deps", "second"]
+  ]);
+});
+
+test("FileReviewContext records findingsInsertionIndex on first setFindings call", () => {
+  const context = createContext();
+
+  context.setSection("overview", "o");
+  context.setSection("deps", "d");
+  context.setSection("knowledge", "k");
+  context.setSection("strategy", "s");
+
+  context.setFindings([]);
+  assert.equal(context.getFindingsInsertionIndex(), 4);
+});
+
+test("FileReviewContext findingsInsertionIndex unchanged on second setFindings call", () => {
+  const context = createContext();
+
+  context.setSection("overview", "o");
+  context.setSection("deps", "d");
+
+  context.setFindings([]);
+  assert.equal(context.getFindingsInsertionIndex(), 2);
+
+  context.setSection("summary", "s");
+  context.setFindings([]);
+  assert.equal(context.getFindingsInsertionIndex(), 2);
+});
+
+test("FileReviewContext getFindingsInsertionIndex returns undefined when setFindings never called", () => {
+  const context = createContext();
+
+  context.setSection("overview", "o");
+  assert.equal(context.getFindingsInsertionIndex(), undefined);
 });
 
 test("FileReviewContext stores interruption state separately and returns defensive copies", () => {

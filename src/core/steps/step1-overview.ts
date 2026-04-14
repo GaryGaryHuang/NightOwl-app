@@ -1,5 +1,5 @@
 import type { FileReviewContext } from "../file-review-context.ts";
-import { OVERVIEW_SECTION } from "../review-section-contract.ts";
+import { OVERVIEW_SECTION_KEY } from "../review-section-contract.ts";
 import type { RunContext } from "../run-context.ts";
 import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
 
@@ -141,7 +141,7 @@ export class Step1OverviewStep implements StepDefinition {
         }
 
         return (targetContext: FileReviewContext) => {
-          targetContext.setSection(OVERVIEW_SECTION.key, response);
+          targetContext.setSection(OVERVIEW_SECTION_KEY, response);
         };
       }
     };
