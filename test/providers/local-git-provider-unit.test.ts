@@ -7,42 +7,42 @@ import {
   type ReviewSourceProviderOperation
 } from "../../src/providers/review-source-provider.ts";
 
-test("LocalGitProvider (unit) normalizes list-style git output", () => {
-  const provider = new LocalGitProvider(() => "src/a.ts\nsrc/b.ts\n");
+test("LocalGitProvider (unit) normalizes list-style git output", async () => {
+  const provider = new LocalGitProvider(async () => "src/a.ts\nsrc/b.ts\n");
 
   assert.deepEqual(
-    provider.getChangedFiles("/repo", "main", "feature"),
+    await provider.getChangedFiles("/repo", "main", "feature"),
     ["src/a.ts", "src/b.ts"]
   );
 
   const changesetProvider = new LocalGitProvider(
-    () => "M\tsrc/a.ts\nD\tsrc/old.ts\n"
+    async () => "M\tsrc/a.ts\nD\tsrc/old.ts\n"
   );
 
   assert.deepEqual(
-    changesetProvider.getChangesetEntries("/repo", "main", "feature"),
+    await changesetProvider.getChangesetEntries("/repo", "main", "feature"),
     ["M\tsrc/a.ts", "D\tsrc/old.ts"]
   );
 });
 
-test("LocalGitProvider (unit) normalizes empty git output", () => {
-  const provider = new LocalGitProvider(() => "");
+test("LocalGitProvider (unit) normalizes empty git output", async () => {
+  const provider = new LocalGitProvider(async () => "");
 
-  assert.deepEqual(provider.getChangedFiles("/repo", "main", "feature"), []);
-  assert.deepEqual(provider.getChangesetEntries("/repo", "main", "feature"), []);
-  assert.equal(provider.getDiff("/repo", "main", "feature", "src/a.ts"), "");
-  assert.equal(provider.getCurrentBranch("/repo"), undefined);
+  assert.deepEqual(await provider.getChangedFiles("/repo", "main", "feature"), []);
+  assert.deepEqual(await provider.getChangesetEntries("/repo", "main", "feature"), []);
+  assert.equal(await provider.getDiff("/repo", "main", "feature", "src/a.ts"), "");
+  assert.equal(await provider.getCurrentBranch("/repo"), undefined);
 });
 
-test("LocalGitProvider (unit) returns scalar git output unchanged", () => {
+test("LocalGitProvider (unit) returns scalar git output unchanged", async () => {
   const diffOutput = "diff --git a/src/a.ts b/src/a.ts\n+added line";
 
   assert.equal(
-    new LocalGitProvider(() => "/repo").resolveRepoRoot("/any/start"),
+    await new LocalGitProvider(async () => "/repo").resolveRepoRoot("/any/start"),
     "/repo"
   );
   assert.equal(
-    new LocalGitProvider(() => diffOutput).getDiff(
+    await new LocalGitProvider(async () => diffOutput).getDiff(
       "/repo",
       "main",
       "feature",
@@ -51,55 +51,55 @@ test("LocalGitProvider (unit) returns scalar git output unchanged", () => {
     diffOutput
   );
   assert.equal(
-    new LocalGitProvider(() => "feature-branch").getCurrentBranch("/repo"),
+    await new LocalGitProvider(async () => "feature-branch").getCurrentBranch("/repo"),
     "feature-branch"
   );
 });
 
-test("LocalGitProvider (unit) wraps runner failures with operation context", () => {
+test("LocalGitProvider (unit) wraps runner failures with operation context", async () => {
   const cases: Array<{
     operation: ReviewSourceProviderOperation;
-    run(provider: LocalGitProvider): void;
+    run(provider: LocalGitProvider): Promise<unknown>;
   }> = [
     {
       operation: "resolveRepoRoot",
       run(provider) {
-        provider.resolveRepoRoot("/repo");
+        return provider.resolveRepoRoot("/repo");
       }
     },
     {
       operation: "getChangedFiles",
       run(provider) {
-        provider.getChangedFiles("/repo", "main", "feature");
+        return provider.getChangedFiles("/repo", "main", "feature");
       }
     },
     {
       operation: "getChangesetEntries",
       run(provider) {
-        provider.getChangesetEntries("/repo", "main", "feature");
+        return provider.getChangesetEntries("/repo", "main", "feature");
       }
     },
     {
       operation: "getDiff",
       run(provider) {
-        provider.getDiff("/repo", "main", "feature", "src/a.ts");
+        return provider.getDiff("/repo", "main", "feature", "src/a.ts");
       }
     },
     {
       operation: "getCurrentBranch",
       run(provider) {
-        provider.getCurrentBranch("/repo");
+        return provider.getCurrentBranch("/repo");
       }
     }
   ];
 
   for (const { operation, run } of cases) {
     const cause = new Error("git failed");
-    const provider = new LocalGitProvider(() => {
+    const provider = new LocalGitProvider(async () => {
       throw cause;
     });
 
-    assert.throws(
+    await assert.rejects(
       () => run(provider),
       (error: unknown) =>
         error instanceof ReviewSourceProviderError &&

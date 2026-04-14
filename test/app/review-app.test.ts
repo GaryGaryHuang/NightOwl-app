@@ -52,16 +52,16 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           initializeRunCalls += 1;
           return this;
         },
-        publishFileReview() {},
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       })
     });
 
@@ -136,16 +136,16 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           initializeRunCalls += 1;
           return this;
         },
-        publishFileReview() {},
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       })
     });
 
@@ -242,7 +242,7 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
         }
       },
       reviewConfigProvider: {
-        loadReviewConfig() {
+        async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
             confidenceThresholds: {
@@ -254,17 +254,17 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           return this;
         },
-        publishFileReview() {},
-        publishSkippedFile(skipRecord) {
+        async publishFileReview() {},
+        async publishSkippedFile(skipRecord) {
           skippedRecords.push(skipRecord);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       })
     });
 
@@ -402,7 +402,7 @@ async function assertStep0McpStartupFailureAborts(input: {
         }
       },
       reviewConfigProvider: {
-        loadReviewConfig() {
+        async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
             confidenceThresholds: { must: 80, nice: 90 },
@@ -493,7 +493,7 @@ async function assertPerFileMcpStartupFailureSkipsOneFile(input: {
         }
       },
       reviewConfigProvider: {
-        loadReviewConfig() {
+        async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
             confidenceThresholds: { must: 80, nice: 90 },
@@ -504,17 +504,17 @@ async function assertPerFileMcpStartupFailureSkipsOneFile(input: {
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           return this;
         },
-        publishFileReview() {},
-        publishSkippedFile(skipRecord) {
+        async publishFileReview() {},
+        async publishSkippedFile(skipRecord) {
           skippedRecords.push(skipRecord);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       })
     });
 
@@ -630,15 +630,15 @@ test("createLocalReviewRunApp does not call clientManager.start() in dry-run mod
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           return this;
         },
-        publishFileReview() {},
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       })
     });
 
@@ -675,15 +675,15 @@ test("createLocalReviewRunApp completes dry-run flow and result has dryRun: true
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           return this;
         },
-        publishFileReview() {},
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       })
     });
 
@@ -733,15 +733,15 @@ test("createLocalReviewRunApp passes context7ApiKey option to the session config
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           return this;
         },
-        publishFileReview() {},
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       })
     });
 

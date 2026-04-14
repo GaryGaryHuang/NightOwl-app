@@ -171,7 +171,7 @@ async function runDryRunWithCustomStepTopology(
     timestampProvider: () => "03300941",
     perFileStepsFactory: createCustomPerFileStepsFactory(stepIds, executionLog),
     reviewConfigProvider: {
-      loadReviewConfig() {
+      async loadReviewConfig() {
         return {
           maxConcurrentFiles: 1,
           confidenceThresholds: {

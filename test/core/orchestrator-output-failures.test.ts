@@ -39,20 +39,20 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           throw new Error("initialize failed");
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -109,7 +109,7 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
     const orchestrator = new ReviewOrchestrator({
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: {
-        filterReviewableFiles() {
+        async filterReviewableFiles() {
           throw new ReviewFileFilterError(
             "filterReviewableFiles",
             "Review file filter failed during filterReviewableFiles.",
@@ -118,20 +118,20 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -185,9 +185,9 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const plannedNotes = planNoteFiles(
       path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
@@ -198,7 +198,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     const stepEvents: StepEvent[] = [];
     const failedNotePath = plannedNotes[1].noteFilePath;
     const successfulSnapshotOutputHealthAssessor = {
-      assess() {
+      async assess() {
         return { faultScope: "single-file-output-fault" as const };
       }
     };
@@ -206,11 +206,11 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
 
           if (fileResult.noteFilePath === failedNotePath) {
@@ -219,13 +219,13 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: {
@@ -292,9 +292,9 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
@@ -312,7 +312,7 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     const outputCalls: OutputCall[] = [];
     const writtenNotes = new Map<string, string>();
     const successfulSnapshotOutputHealthAssessor = {
-      assess() {
+      async assess() {
         return { faultScope: "single-file-output-fault" as const };
       }
     };
@@ -320,11 +320,11 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
 
           if (
@@ -337,13 +337,13 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -401,9 +401,9 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
@@ -418,7 +418,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     const writtenNotes = new Map<string, string>();
     const stepEvents: StepEvent[] = [];
     const successfulSnapshotOutputHealthAssessor = {
-      assess() {
+      async assess() {
         return { faultScope: "shared-output-target-fault" as const };
       }
     };
@@ -426,11 +426,11 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
 
           if (
@@ -443,13 +443,13 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -507,9 +507,9 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
@@ -523,7 +523,7 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     const outputCalls: OutputCall[] = [];
     const stepEvents: StepEvent[] = [];
     const successfulSnapshotOutputHealthAssessor = {
-      assess() {
+      async assess() {
         throw new Error("classification unavailable");
       }
     };
@@ -531,11 +531,11 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
 
           if (
@@ -546,13 +546,13 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
             throw new Error("note write failed");
           }
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -606,9 +606,9 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
@@ -623,7 +623,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     const stepEvents: StepEvent[] = [];
     const writtenNotes = new Map<string, string>();
     const successfulSnapshotOutputHealthAssessor = {
-      assess() {
+      async assess() {
         return { faultScope: "single-file-output-fault" as const };
       }
     };
@@ -631,11 +631,11 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
 
           if (
@@ -655,13 +655,13 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -717,9 +717,9 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
@@ -734,7 +734,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     const stepEvents: StepEvent[] = [];
     const writtenNotes = new Map<string, string>();
     const successfulSnapshotOutputHealthAssessor = {
-      assess() {
+      async assess() {
         return { faultScope: "single-file-output-fault" as const };
       }
     };
@@ -742,11 +742,11 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
 
@@ -758,17 +758,17 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
             throw new Error("note write failed");
           }
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
 
           if (skipRecord.filePath === failedFile) {
             throw new Error("skipped log write failed");
           }
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -826,9 +826,9 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
@@ -844,7 +844,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     const outputCalls: OutputCall[] = [];
     const stepEvents: StepEvent[] = [];
     const successfulSnapshotOutputHealthAssessor = {
-      assess() {
+      async assess() {
         return { faultScope: "single-file-output-fault" as const };
       }
     };
@@ -852,11 +852,11 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
 
           if (
@@ -869,13 +869,13 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -934,9 +934,9 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const stepEvents: StepEvent[] = [];
     const outputCalls: OutputCall[] = [];
@@ -944,20 +944,20 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -1020,9 +1020,9 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
@@ -1040,11 +1040,11 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
 
           if (
@@ -1056,13 +1056,13 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
 
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       stepRunner: createStepFailureRunner({
         stepEvents,
@@ -1126,9 +1126,9 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
     const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
+      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
     );
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
@@ -1146,25 +1146,25 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
       sourceProvider,
       reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
           return this;
         },
-        publishFileReview(fileResult) {
+        async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
           writtenNotes.set(fileResult.noteFilePath, fileResult.content);
         },
-        publishSkippedFile(skipRecord) {
+        async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
 
           if (skipRecord.filePath === failedFile) {
             throw new Error("skipped log write failed");
           }
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       stepRunner: createStepFailureRunner({
         stepEvents,

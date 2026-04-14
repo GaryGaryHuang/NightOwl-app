@@ -26,20 +26,20 @@ test("ReviewOrchestrator does not initialize local output when Step 0 fails", as
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           calls.push("initializeRun");
           return this;
         },
-        publishFileReview() {
+        async publishFileReview() {
           calls.push("publishFileReview");
         },
-        publishSkippedFile() {
+        async publishSkippedFile() {
           calls.push("publishSkippedFile");
         },
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       stepRunner: {
         async run() {
@@ -85,19 +85,19 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: defineOutputSinkDouble({
-        initializeRun(outputTarget) {
+        async initializeRun(outputTarget) {
           callOrder.push("initializeRun");
           callbackOutputTarget = outputTarget;
           return this;
         },
-        publishFileReview() {
+        async publishFileReview() {
           callOrder.push("publishFileReview");
         },
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       stepRunner: {
         async run(input) {
@@ -190,18 +190,18 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           callOrder.push("initializeRun");
           return this;
         },
-        publishFileReview() {
+        async publishFileReview() {
           callOrder.push("publishFileReview");
         },
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {
           callOrder.push("publishChangesetOverview");
         }
       }),
@@ -261,18 +261,18 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           calls.push("initializeRun");
           return this;
         },
-        publishFileReview() {
+        async publishFileReview() {
           calls.push("publishFileReview");
         },
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {
           calls.push("publishChangesetOverview");
           throw new Error("changeset overview write failed");
         }

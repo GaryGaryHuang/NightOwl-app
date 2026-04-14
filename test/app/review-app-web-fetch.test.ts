@@ -72,7 +72,7 @@ async function runPipelineAndGetPreToolUse(
       }
     },
     reviewConfigProvider: {
-      loadReviewConfig() {
+      async loadReviewConfig() {
         return {
           maxConcurrentFiles: 1,
           confidenceThresholds: { must: 80, nice: 90 },
@@ -82,15 +82,15 @@ async function runPipelineAndGetPreToolUse(
       }
     },
     outputSink: defineOutputSinkDouble({
-      initializeRun() {
+      async initializeRun() {
         return this;
       },
-      publishFileReview() {},
-      publishSkippedFile() {},
-      publishRunSummary() {},
-      publishReviewIndex() {},
-      publishRunManifest() {},
-      publishChangesetOverview() {}
+      async publishFileReview() {},
+      async publishSkippedFile() {},
+      async publishRunSummary() {},
+      async publishReviewIndex() {},
+      async publishRunManifest() {},
+      async publishChangesetOverview() {}
     })
   });
 

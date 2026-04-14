@@ -52,37 +52,37 @@ function createSignalTestApp(options: {
       }
     },
     sourceProvider: {
-      resolveRepoRoot(startPath: string) {
+      async resolveRepoRoot(startPath: string) {
         return startPath;
       },
-      getChangesetEntries() {
+      async getChangesetEntries() {
         return TEST_FILES;
       },
-      getCurrentBranch() {
+      async getCurrentBranch() {
         return "feature-branch";
       },
-      getChangedFiles() {
+      async getChangedFiles() {
         return TEST_FILES;
       },
-      getDiff() {
+      async getDiff() {
         return "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n";
       }
     },
     reviewFileFilter: {
-      filterReviewableFiles(_repoRoot: string, files: string[]) {
+      async filterReviewableFiles(_repoRoot: string, files: string[]) {
         return files;
       }
     },
     outputSink: defineOutputSinkDouble({
-      initializeRun() {
+      async initializeRun() {
         return this;
       },
-      publishFileReview() {},
-      publishSkippedFile() {},
-      publishRunSummary() {},
-      publishReviewIndex() {},
-      publishRunManifest() {},
-      publishChangesetOverview() {}
+      async publishFileReview() {},
+      async publishSkippedFile() {},
+      async publishRunSummary() {},
+      async publishReviewIndex() {},
+      async publishRunManifest() {},
+      async publishChangesetOverview() {}
     }),
     changesetOverviewRunner: {
       async run() {
@@ -526,7 +526,7 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
         }
       },
       reviewConfigProvider: {
-        loadReviewConfig() {
+        async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
             confidenceThresholds: { must: 80, nice: 90 },

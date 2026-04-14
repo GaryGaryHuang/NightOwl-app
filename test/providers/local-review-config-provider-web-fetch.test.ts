@@ -7,7 +7,7 @@ import {
   createReviewConfigProviderFixture
 } from "../helpers/review-config-provider-contract-fixture.ts";
 
-test("LocalReviewConfigProvider loads web_fetch host policy from repo-local config", () => {
+test("LocalReviewConfigProvider loads web_fetch host policy from repo-local config", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
@@ -22,7 +22,7 @@ test("LocalReviewConfigProvider loads web_fetch host policy from repo-local conf
     });
 
     assert.deepEqual(
-      configFixture.loadReviewConfig(),
+      await configFixture.loadReviewConfig(),
       buildExpectedReviewConfig({
         maxConcurrentFiles: 2,
         confidenceThresholds: {
@@ -38,7 +38,7 @@ test("LocalReviewConfigProvider loads web_fetch host policy from repo-local conf
   }
 });
 
-test("LocalReviewConfigProvider rejects invalid repo-local web_fetch host config before Step 0", () => {
+test("LocalReviewConfigProvider rejects invalid repo-local web_fetch host config before Step 0", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
@@ -46,8 +46,8 @@ test("LocalReviewConfigProvider rejects invalid repo-local web_fetch host config
       webFetchAllowedHosts: ["https://docs.example.com"]
     });
 
-    assert.throws(
-      () => configFixture.loadReviewConfig(),
+    await assert.rejects(
+      async () => await configFixture.loadReviewConfig(),
       (error: unknown) =>
         error instanceof ReviewConfigProviderError &&
         error.message.includes("invalid review config") &&

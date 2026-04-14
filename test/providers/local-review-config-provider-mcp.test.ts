@@ -7,7 +7,7 @@ import {
   createReviewConfigProviderFixture
 } from "../helpers/review-config-provider-contract-fixture.ts";
 
-test("LocalReviewConfigProvider loads supported MCP transport variants from repo-local config", () => {
+test("LocalReviewConfigProvider loads supported MCP transport variants from repo-local config", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
@@ -50,7 +50,7 @@ test("LocalReviewConfigProvider loads supported MCP transport variants from repo
     });
 
     assert.deepEqual(
-      configFixture.loadReviewConfig(),
+      await configFixture.loadReviewConfig(),
       buildExpectedReviewConfig({
         maxConcurrentFiles: 3,
         confidenceThresholds: { must: 70, nice: 85 },
@@ -94,7 +94,7 @@ test("LocalReviewConfigProvider loads supported MCP transport variants from repo
   }
 });
 
-test("LocalReviewConfigProvider rejects invalid repo-local MCP config before Step 0", () => {
+test("LocalReviewConfigProvider rejects invalid repo-local MCP config before Step 0", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
@@ -106,8 +106,8 @@ test("LocalReviewConfigProvider rejects invalid repo-local MCP config before Ste
       }
     });
 
-    assert.throws(
-      () => configFixture.loadReviewConfig(),
+    await assert.rejects(
+      async () => await configFixture.loadReviewConfig(),
       (error: unknown) =>
         error instanceof ReviewConfigProviderError &&
         error.message.includes("invalid review config") &&

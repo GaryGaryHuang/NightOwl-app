@@ -6,24 +6,22 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { ReviewSourceProviderError } from "../../src/providers/review-source-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 
-function runWithSuppressedStderr(callback: () => void): void {
+function runWithSuppressedStderr(callback: () => Promise<void>): Promise<void> {
   const originalWrite = process.stderr.write;
   process.stderr.write = (() => true) as typeof process.stderr.write;
 
-  try {
-    callback();
-  } finally {
+  return callback().finally(() => {
     process.stderr.write = originalWrite;
-  }
+  });
 }
 
-test("LocalGitProvider resolves repository metadata from a real Git repository", () => {
+test("LocalGitProvider resolves repository metadata from a real Git repository", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     const provider = new LocalGitProvider();
-    const repoRoot = provider.resolveRepoRoot(fixture.appDir);
-    const branchName = provider.getCurrentBranch(fixture.repoDir);
+    const repoRoot = await provider.resolveRepoRoot(fixture.appDir);
+    const branchName = await provider.getCurrentBranch(fixture.repoDir);
 
     assert.equal(repoRoot, realpathSync(fixture.repoDir));
     assert.equal(branchName, "feature-branch");
@@ -32,12 +30,12 @@ test("LocalGitProvider resolves repository metadata from a real Git repository",
   }
 });
 
-test("LocalGitProvider returns reviewable files and Step 0 changeset entries with deleted-file semantics", () => {
+test("LocalGitProvider returns reviewable files and Step 0 changeset entries with deleted-file semantics", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     const provider = new LocalGitProvider();
-    const changedFiles = provider.getChangedFiles(
+    const changedFiles = await provider.getChangedFiles(
       fixture.repoDir,
       "main",
       "feature-branch"
@@ -49,7 +47,7 @@ test("LocalGitProvider returns reviewable files and Step 0 changeset entries wit
       "src/app.ts"
     ]);
 
-    const changesetEntries = provider.getChangesetEntries(
+    const changesetEntries = await provider.getChangesetEntries(
       fixture.repoDir,
       "main",
       "feature-branch"
@@ -66,12 +64,12 @@ test("LocalGitProvider returns reviewable files and Step 0 changeset entries wit
   }
 });
 
-test("LocalGitProvider returns a single-file diff from a real Git repository", () => {
+test("LocalGitProvider returns a single-file diff from a real Git repository", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     const provider = new LocalGitProvider();
-    const diff = provider.getDiff(
+    const diff = await provider.getDiff(
       fixture.repoDir,
       "main",
       "feature-branch",
@@ -86,14 +84,14 @@ test("LocalGitProvider returns a single-file diff from a real Git repository", (
   }
 });
 
-test("LocalGitProvider wraps git failures in ReviewSourceProviderError with operation and cause", () => {
+test("LocalGitProvider wraps git failures in ReviewSourceProviderError with operation and cause", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     const provider = new LocalGitProvider();
 
-    runWithSuppressedStderr(() => {
-      assert.throws(
+    await runWithSuppressedStderr(async () => {
+      await assert.rejects(
         () => provider.getChangedFiles(fixture.repoDir, "missing-base", "feature-branch"),
         (error: unknown) =>
           error instanceof ReviewSourceProviderError &&

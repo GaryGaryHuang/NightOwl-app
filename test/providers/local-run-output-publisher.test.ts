@@ -7,15 +7,15 @@ import { ReviewOutputBoundaryError } from "../../src/providers/review-output-sin
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
 type WorkspaceFixture = ReturnType<typeof createWorkspaceProviderFixture>;
-type RunScopedPublisher = ReturnType<WorkspaceFixture["provider"]["initializeRun"]>;
+type RunScopedPublisher = Awaited<ReturnType<WorkspaceFixture["provider"]["initializeRun"]>>;
 
-test("run-scoped output publisher publishes file review content to the target note path", () => {
+test("run-scoped output publisher publishes file review content to the target note path", async () => {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
 
   try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
-    publisher.publishFileReview({
+    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    await publisher.publishFileReview({
       noteFilePath,
       content: "# src/app.ts\n\nPending review.\n"
     });
@@ -26,17 +26,17 @@ test("run-scoped output publisher publishes file review content to the target no
   }
 });
 
-test("run-scoped output publisher appends deterministic skipped-file records to skipped.md", () => {
+test("run-scoped output publisher appends deterministic skipped-file records to skipped.md", async () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
-    publisher.publishSkippedFile({
+    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    await publisher.publishSkippedFile({
       filePath: "src/app.ts",
       stepId: "step5-validation-interrogation",
       reason: "deterministic validation failed"
     });
-    publisher.publishSkippedFile({
+    await publisher.publishSkippedFile({
       filePath: "src/other.ts",
       stepId: "step7-summary",
       reason: "judge rejected"
@@ -59,7 +59,7 @@ test("run-scoped output publisher preserves intact skipped.md lines across multi
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
 
     await Promise.all([
       Promise.resolve().then(() =>
@@ -88,19 +88,19 @@ test("run-scoped output publisher preserves intact skipped.md lines across multi
   }
 });
 
-test("run-scoped output publisher publishes run-level artifact content to the configured paths", () => {
+test("run-scoped output publisher publishes run-level artifact content to the configured paths", async () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
     const cases: Array<{
-      publish(publisher: RunScopedPublisher, content: string): void;
+      publish(publisher: RunScopedPublisher, content: string): Promise<void>;
       outputPath: string;
       content: string;
     }> = [
       {
-        publish(targetPublisher, content) {
-          targetPublisher.publishRunSummary({ content });
+        async publish(targetPublisher, content) {
+          await targetPublisher.publishRunSummary({ content });
         },
         outputPath: fixture.outputTarget.summaryPath,
         content: [
@@ -112,8 +112,8 @@ test("run-scoped output publisher publishes run-level artifact content to the co
         ].join("\n")
       },
       {
-        publish(targetPublisher, content) {
-          targetPublisher.publishReviewIndex({ content });
+        async publish(targetPublisher, content) {
+          await targetPublisher.publishReviewIndex({ content });
         },
         outputPath: fixture.outputTarget.indexPath,
         content: [
@@ -126,15 +126,15 @@ test("run-scoped output publisher publishes run-level artifact content to the co
         ].join("\n")
       },
       {
-        publish(targetPublisher, content) {
-          targetPublisher.publishRunManifest({ content });
+        async publish(targetPublisher, content) {
+          await targetPublisher.publishRunManifest({ content });
         },
         outputPath: fixture.outputTarget.manifestPath,
         content: '{\n  "schemaVersion": 1\n}'
       },
       {
-        publish(targetPublisher, content) {
-          targetPublisher.publishChangesetOverview({ content });
+        async publish(targetPublisher, content) {
+          await targetPublisher.publishChangesetOverview({ content });
         },
         outputPath: fixture.outputTarget.changesetOverviewPath,
         content: "## Changeset Overview\n\n- Modified `src/app.ts`\n"
@@ -142,7 +142,7 @@ test("run-scoped output publisher publishes run-level artifact content to the co
     ];
 
     for (const { publish, outputPath, content } of cases) {
-      publish(publisher, content);
+      await publish(publisher, content);
       assert.equal(fixture.readFile(outputPath), content);
     }
   } finally {
@@ -150,16 +150,16 @@ test("run-scoped output publisher publishes run-level artifact content to the co
   }
 });
 
-test("run-scoped output publishers do not share output state across runs", () => {
+test("run-scoped output publishers do not share output state across runs", async () => {
   const fixtureA = createWorkspaceProviderFixture();
   const fixtureB = createWorkspaceProviderFixture();
 
   try {
-    const publisherA = fixtureA.provider.initializeRun(fixtureA.outputTarget);
-    const publisherB = fixtureB.provider.initializeRun(fixtureB.outputTarget);
+    const publisherA = await fixtureA.provider.initializeRun(fixtureA.outputTarget);
+    const publisherB = await fixtureB.provider.initializeRun(fixtureB.outputTarget);
 
-    publisherA.publishRunSummary({ content: "summary A\n" });
-    publisherB.publishRunSummary({ content: "summary B\n" });
+    await publisherA.publishRunSummary({ content: "summary A\n" });
+    await publisherB.publishRunSummary({ content: "summary B\n" });
 
     assert.equal(fixtureA.readFile(fixtureA.outputTarget.summaryPath), "summary A\n");
     assert.equal(fixtureB.readFile(fixtureB.outputTarget.summaryPath), "summary B\n");
@@ -169,17 +169,17 @@ test("run-scoped output publishers do not share output state across runs", () =>
   }
 });
 
-test("run-scoped output publisher reports typed file-review write failures with stable operation metadata", () => {
+test("run-scoped output publisher reports typed file-review write failures with stable operation metadata", async () => {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
 
   try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
     mkdirSync(path.dirname(noteFilePath), { recursive: true });
     mkdirSync(noteFilePath, { recursive: true });
 
-    assert.throws(
-      () =>
+    await assert.rejects(
+      async () =>
         publisher.publishFileReview({
           noteFilePath,
           content: "# src/app.ts\n"

@@ -493,10 +493,10 @@ async function withReviewHarness(
 
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const repoRoot = await sourceProvider.resolveRepoRoot(fixture.appDir);
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
-      sourceProvider.getChangedFiles(repoRoot, BASE_REF, HEAD_REF)
+      await sourceProvider.getChangedFiles(repoRoot, BASE_REF, HEAD_REF)
     );
 
     await run({
@@ -610,7 +610,7 @@ function createDiffFailingSourceProvider(
     getChangesetEntries(repoRootArg, baseRef, headRef) {
       return sourceProvider.getChangesetEntries(repoRootArg, baseRef, headRef);
     },
-    getDiff(repoRootArg, baseRef, headRef, filePath) {
+    async getDiff(repoRootArg, baseRef, headRef, filePath) {
       if (filePath === failedFile) {
         throw new Error("git diff failed");
       }
@@ -635,7 +635,7 @@ class RecordingOutputSink {
   };
   #manifestPublished = false;
 
-  initializeRun(outputTarget: ReviewOutputTarget): RunOutputPublisher {
+  async initializeRun(outputTarget: ReviewOutputTarget): Promise<RunOutputPublisher> {
     mkdirSync(outputTarget.basePath, { recursive: true });
     mkdirSync(outputTarget.filesPath, { recursive: true });
     writeFileSync(outputTarget.skippedPath, "");
@@ -644,7 +644,7 @@ class RecordingOutputSink {
     return this;
   }
 
-  publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): void {
+  async publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): Promise<void> {
     if (this.#manifestPublished) {
       this.afterManifest.publishFileReview += 1;
     }
@@ -654,7 +654,7 @@ class RecordingOutputSink {
     this.record("publishFileReview", fileResult.noteFilePath);
   }
 
-  publishSkippedFile(skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]): void {
+  async publishSkippedFile(skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]): Promise<void> {
     appendFileSync(
       this.outputTarget.skippedPath,
       `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
@@ -662,7 +662,7 @@ class RecordingOutputSink {
     this.record("publishSkippedFile", skipRecord.filePath);
   }
 
-  publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): void {
+  async publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): Promise<void> {
     if (this.#manifestPublished) {
       this.afterManifest.publishRunSummary += 1;
     }
@@ -671,7 +671,7 @@ class RecordingOutputSink {
     this.record("publishRunSummary", this.outputTarget.summaryPath);
   }
 
-  publishReviewIndex(indexResult: Parameters<RunOutputPublisher["publishReviewIndex"]>[0]): void {
+  async publishReviewIndex(indexResult: Parameters<RunOutputPublisher["publishReviewIndex"]>[0]): Promise<void> {
     if (this.#manifestPublished) {
       this.afterManifest.publishReviewIndex += 1;
     }
@@ -680,13 +680,13 @@ class RecordingOutputSink {
     this.record("publishReviewIndex", this.outputTarget.indexPath);
   }
 
-  publishRunManifest(manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]): void {
+  async publishRunManifest(manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]): Promise<void> {
     writeFileSync(this.outputTarget.manifestPath, manifestResult.content);
     this.#manifestPublished = true;
     this.record("publishRunManifest", this.outputTarget.manifestPath);
   }
 
-  publishChangesetOverview(result: Parameters<RunOutputPublisher["publishChangesetOverview"]>[0]): void {
+  async publishChangesetOverview(result: Parameters<RunOutputPublisher["publishChangesetOverview"]>[0]): Promise<void> {
     writeFileSync(this.outputTarget.changesetOverviewPath, result.content);
     this.record("publishChangesetOverview", this.outputTarget.changesetOverviewPath);
   }
@@ -698,7 +698,7 @@ class RecordingOutputSink {
 }
 
 class CorruptingSummaryOutputSink extends RecordingOutputSink {
-  override publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): void {
+  override async publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): Promise<void> {
     writeArtifact(fileResult.noteFilePath, "# CORRUPTED NOTE\n");
     this.writtenFileReviews.push(fileResult.noteFilePath);
     this.record("publishFileReview", fileResult.noteFilePath);
@@ -706,20 +706,20 @@ class CorruptingSummaryOutputSink extends RecordingOutputSink {
 }
 
 class CorruptingIndexOutputSink extends RecordingOutputSink {
-  override initializeRun(outputTarget: ReviewOutputTarget): RunOutputPublisher {
-    const publisher = super.initializeRun(outputTarget);
+  override async initializeRun(outputTarget: ReviewOutputTarget): Promise<RunOutputPublisher> {
+    const publisher = await super.initializeRun(outputTarget);
     writeFileSync(outputTarget.skippedPath, "# CORRUPTED SKIPPED LOG\n");
     return publisher;
   }
 
-  override publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): void {
+  override async publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): Promise<void> {
     writeArtifact(fileResult.noteFilePath, "# CORRUPTED NOTE\n");
     writeFileSync(path.join(this.outputTarget.filesPath, "EXTRA DISK FILE.md"), "# extra\n");
     this.writtenFileReviews.push(fileResult.noteFilePath);
     this.record("publishFileReview", fileResult.noteFilePath);
   }
 
-  override publishSkippedFile(skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]): void {
+  override async publishSkippedFile(skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]): Promise<void> {
     appendFileSync(
       this.outputTarget.skippedPath,
       `CORRUPTED SKIP: ${skipRecord.filePath} ${skipRecord.stepId} ${skipRecord.reason}\n`
@@ -727,7 +727,7 @@ class CorruptingIndexOutputSink extends RecordingOutputSink {
     this.record("publishSkippedFile", skipRecord.filePath);
   }
 
-  override publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): void {
+  override async publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): Promise<void> {
     writeFileSync(this.outputTarget.summaryPath, "# CORRUPTED SUMMARY\n");
     this.record("publishRunSummary", this.outputTarget.summaryPath);
   }
@@ -741,7 +741,7 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
     this.#failures = failures;
   }
 
-  override publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): void {
+  override async publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): Promise<void> {
     this.record("publishRunSummary", this.outputTarget.summaryPath);
     if (this.#failures.summary) {
       throw new Error(this.#failures.summary);
@@ -750,7 +750,7 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
     writeFileSync(this.outputTarget.summaryPath, summaryResult.content);
   }
 
-  override publishReviewIndex(indexResult: Parameters<RunOutputPublisher["publishReviewIndex"]>[0]): void {
+  override async publishReviewIndex(indexResult: Parameters<RunOutputPublisher["publishReviewIndex"]>[0]): Promise<void> {
     this.record("publishReviewIndex", this.outputTarget.indexPath);
     if (this.#failures.index) {
       throw new Error(this.#failures.index);
@@ -759,7 +759,7 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
     writeFileSync(this.outputTarget.indexPath, indexResult.content);
   }
 
-  override publishRunManifest(manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]): void {
+  override async publishRunManifest(manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]): Promise<void> {
     this.record("publishRunManifest", this.outputTarget.manifestPath);
     if (this.#failures.manifest) {
       throw new Error(this.#failures.manifest);

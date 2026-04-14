@@ -15,12 +15,12 @@ interface SnapshotHealthAssessorFixture {
   cleanup(): void;
 }
 
-function createSnapshotHealthAssessorFixture(): SnapshotHealthAssessorFixture {
+async function createSnapshotHealthAssessorFixture(): Promise<SnapshotHealthAssessorFixture> {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
   const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
 
-  fixture.provider.initializeRun(fixture.outputTarget);
+  await fixture.provider.initializeRun(fixture.outputTarget);
 
   return {
     fixture,
@@ -38,12 +38,12 @@ function createSnapshotHealthAssessorFixture(): SnapshotHealthAssessorFixture {
   };
 }
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note write failures as single-file output faults when the shared files path remains healthy", () => {
-  const assessorFixture = createSnapshotHealthAssessorFixture();
+test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note write failures as single-file output faults when the shared files path remains healthy", async () => {
+  const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
     assert.deepEqual(
-      assessorFixture.assess(Object.assign(new Error("name too long"), {
+      await assessorFixture.assess(Object.assign(new Error("name too long"), {
         code: "ENAMETOOLONG",
         path: assessorFixture.noteFilePath
       })),
@@ -54,12 +54,12 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note 
   }
 });
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor classifies disk-capacity write failures as shared output target faults", () => {
-  const assessorFixture = createSnapshotHealthAssessorFixture();
+test("LocalSuccessfulSnapshotOutputHealthAssessor classifies disk-capacity write failures as shared output target faults", async () => {
+  const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
     assert.deepEqual(
-      assessorFixture.assess(Object.assign(new Error("disk full"), {
+      await assessorFixture.assess(Object.assign(new Error("disk full"), {
         code: "ENOSPC",
         path: assessorFixture.noteFilePath
       })),
@@ -70,8 +70,8 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor classifies disk-capacity write
   }
 });
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output target fault when classification is inconclusive", () => {
-  const assessorFixture = createSnapshotHealthAssessorFixture();
+test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output target fault when classification is inconclusive", async () => {
+  const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
     const inconclusiveErrors = [
@@ -83,7 +83,7 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output ta
 
     for (const error of inconclusiveErrors) {
       assert.deepEqual(
-        assessorFixture.assess(error),
+        await assessorFixture.assess(error),
         { faultScope: "shared-output-target-fault" }
       );
     }
@@ -92,8 +92,8 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output ta
   }
 });
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor treats shared files-path corruption as a shared output target fault", () => {
-  const assessorFixture = createSnapshotHealthAssessorFixture();
+test("LocalSuccessfulSnapshotOutputHealthAssessor treats shared files-path corruption as a shared output target fault", async () => {
+  const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
     rmSync(assessorFixture.fixture.outputTarget.filesPath, {
@@ -103,7 +103,7 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor treats shared files-path corru
     writeFileSync(assessorFixture.fixture.outputTarget.filesPath, "not-a-directory");
 
     assert.deepEqual(
-      assessorFixture.assess(Object.assign(new Error("path collision"), {
+      await assessorFixture.assess(Object.assign(new Error("path collision"), {
         code: "EEXIST",
         path: assessorFixture.fixture.outputTarget.filesPath
       })),

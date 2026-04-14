@@ -10,6 +10,7 @@ import { createRunContext } from "../../src/core/run-context.ts";
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
+import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 import {
   buildFindingsForFile,
@@ -70,11 +71,11 @@ test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan
       let bootstrapPublishCount = 0;
       const outputSink = createWritableOutputSink();
       const basePublishFileReview = outputSink.publishFileReview;
-      outputSink.publishFileReview = (fileResult) => {
+      outputSink.publishFileReview = async (fileResult) => {
         if (isBootstrapSnapshot(fileResult.content)) {
           bootstrapPublishCount += 1;
         }
-        basePublishFileReview(fileResult);
+        await basePublishFileReview(fileResult);
       };
       const result = await runOrchestrator(harness, {
         maxConcurrentFiles: harness.reviewableFiles.length,
@@ -134,6 +135,7 @@ test("ReviewOrchestrator keeps an all-skipped run as a completed run under bound
       const result = await runOrchestrator(harness, {
         maxConcurrentFiles: 2,
         outputSink: createWritableOutputSink(),
+        sourceProvider: withInstantDiff(harness.sourceProvider),
         stepRunner: createConcurrentRunner({
           metrics,
           getBootstrapPublishCount: () => harness.reviewableFiles.length,
@@ -182,7 +184,7 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
       const outputSink = createWritableOutputSink();
       let snapshotFailed = false;
       const basePublishFileReview = outputSink.publishFileReview;
-      outputSink.publishFileReview = (fileResult) => {
+      outputSink.publishFileReview = async (fileResult) => {
         if (
           !snapshotFailed &&
           fileResult.noteFilePath === failedNotePath &&
@@ -191,14 +193,14 @@ test("ReviewOrchestrator downgrades a file to skipped after a concurrent success
           snapshotFailed = true;
           throw new Error("file review write failed");
         }
-        basePublishFileReview(fileResult);
+        await basePublishFileReview(fileResult);
       };
 
       const result = await runOrchestrator(harness, {
         maxConcurrentFiles: 2,
         outputSink,
         successfulSnapshotOutputHealthAssessor: {
-          assess: () => ({ faultScope: "single-file-output-fault" as const })
+          assess: async () => ({ faultScope: "single-file-output-fault" as const })
         },
         stepRunner: createConcurrentRunner({
           metrics: createConcurrencyMetrics(),
@@ -242,7 +244,7 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
       let siblingSkippedRecordCount = 0;
       const basePublishFileReview = outputSink.publishFileReview;
       const basePublishSkippedFile = outputSink.publishSkippedFile;
-      outputSink.publishFileReview = (fileResult) => {
+      outputSink.publishFileReview = async (fileResult) => {
         const isBootstrap = isBootstrapSnapshot(fileResult.content);
         const isInterrupted = isInterruptedSnapshot(fileResult.content);
         if (
@@ -252,19 +254,24 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
           !isInterrupted
         ) {
           snapshotFailed = true;
-          siblingReleased.resolve();
+          // Defer release to a macrotask so that the orchestrator's async
+          // assess() call completes and sets runAbortState.error before the
+          // sibling resumes.  This mirrors the original sync timing where
+          // assess was synchronous and the abort state was set before the
+          // sibling's continuation.
+          setTimeout(() => siblingReleased.resolve(), 0);
           throw new Error("disk full");
         }
         if (!isBootstrap && !isInterrupted && !fileResult.noteFilePath.includes(failedFile)) {
           siblingSuccessfulSnapshotCount += 1;
         }
-        basePublishFileReview(fileResult);
+        await basePublishFileReview(fileResult);
       };
-      outputSink.publishSkippedFile = (skipRecord) => {
+      outputSink.publishSkippedFile = async (skipRecord) => {
         if (skipRecord.filePath !== failedFile) {
           siblingSkippedRecordCount += 1;
         }
-        basePublishSkippedFile(skipRecord);
+        await basePublishSkippedFile(skipRecord);
       };
 
       await assert.rejects(
@@ -272,8 +279,9 @@ test("ReviewOrchestrator suppresses sibling successful snapshots and later dispa
           runOrchestrator(harness, {
             maxConcurrentFiles: 2,
             outputSink,
+            sourceProvider: withInstantDiff(harness.sourceProvider),
             successfulSnapshotOutputHealthAssessor: {
-              assess: () => ({ faultScope: "shared-output-target-fault" as const })
+              assess: async () => ({ faultScope: "shared-output-target-fault" as const })
             },
             stepRunner: createSharedAbortRunner({
               stepEvents,
@@ -306,22 +314,22 @@ test("ReviewOrchestrator suppresses later interrupted snapshots and skipped reco
       let siblingSkippedRecordCount = 0;
       const basePublishFileReview = outputSink.publishFileReview;
       const basePublishSkippedFile = outputSink.publishSkippedFile;
-      outputSink.publishFileReview = (fileResult) => {
+      outputSink.publishFileReview = async (fileResult) => {
         if (
           isInterruptedSnapshot(fileResult.content) &&
           !fileResult.noteFilePath.includes(failedFile)
         ) {
           siblingInterruptedSnapshotCount += 1;
         }
-        basePublishFileReview(fileResult);
+        await basePublishFileReview(fileResult);
       };
-      outputSink.publishSkippedFile = (skipRecord) => {
+      outputSink.publishSkippedFile = async (skipRecord) => {
         if (skipRecord.filePath === failedFile) {
           siblingFailureReleased.resolve();
           throw new Error("skipped log write failed");
         }
         siblingSkippedRecordCount += 1;
-        basePublishSkippedFile(skipRecord);
+        await basePublishSkippedFile(skipRecord);
       };
 
       await assert.rejects(
@@ -329,6 +337,7 @@ test("ReviewOrchestrator suppresses later interrupted snapshots and skipped reco
           runOrchestrator(harness, {
             maxConcurrentFiles: 2,
             outputSink,
+            sourceProvider: withInstantDiff(harness.sourceProvider),
             stepRunner: createSharedAbortRunner({
               stepEvents,
               failByFileAndStep: new Map([
@@ -359,16 +368,16 @@ test("ReviewOrchestrator records finalizerFailure when summary publishing fails 
       const writtenFileReviews: string[] = [];
       let publishRunSummaryCalls = 0;
       const basePublishFileReview = outputSink.publishFileReview;
-      outputSink.publishFileReview = (fileResult) => {
-        basePublishFileReview(fileResult);
+      outputSink.publishFileReview = async (fileResult) => {
+        await basePublishFileReview(fileResult);
         writtenFileReviews.push(fileResult.noteFilePath);
       };
-      outputSink.publishRunSummary = () => {
+      outputSink.publishRunSummary = async () => {
         publishRunSummaryCalls += 1;
         throw new Error("summary write failed");
       };
-      outputSink.publishReviewIndex = () => {};
-      outputSink.publishRunManifest = () => {};
+      outputSink.publishReviewIndex = async () => {};
+      outputSink.publishRunManifest = async () => {};
 
       const result = await runOrchestrator(harness, {
         maxConcurrentFiles: 2,
@@ -415,9 +424,9 @@ async function withReviewHarness(
 
     const sourceProvider = new LocalGitProvider();
     const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = sourceProvider.resolveRepoRoot(fixture.appDir);
-    const changedFiles = sourceProvider.getChangedFiles(repoRoot, BASE_REF, HEAD_REF);
-    const reviewableFiles = reviewFileFilter.filterReviewableFiles(
+    const repoRoot = await sourceProvider.resolveRepoRoot(fixture.appDir);
+    const changedFiles = await sourceProvider.getChangedFiles(repoRoot, BASE_REF, HEAD_REF);
+    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
       repoRoot,
       changedFiles
     );
@@ -440,11 +449,12 @@ async function runOrchestrator(
     maxConcurrentFiles: number;
     outputSink: ConstructorParameters<typeof ReviewOrchestrator>[0]["outputSink"];
     stepRunner: StepRunnerDouble;
+    sourceProvider?: ReviewSourceProvider;
     successfulSnapshotOutputHealthAssessor?: ConstructorParameters<typeof ReviewOrchestrator>[0]["successfulSnapshotOutputHealthAssessor"];
   }
 ) {
   const orchestrator = new ReviewOrchestrator({
-    sourceProvider: harness.sourceProvider,
+    sourceProvider: overrides.sourceProvider ?? harness.sourceProvider,
     reviewFileFilter: harness.reviewFileFilter,
     outputSink: overrides.outputSink,
     ...(overrides.successfulSnapshotOutputHealthAssessor === undefined
@@ -681,4 +691,16 @@ function assertRelativeOrder(content: string, expectedFragments: string[]): void
   for (let index = 1; index < positions.length; index += 1) {
     assert.ok(positions[index - 1] < positions[index]);
   }
+}
+
+function withInstantDiff(provider: LocalGitProvider): ReviewSourceProvider {
+  return {
+    resolveRepoRoot: (s) => provider.resolveRepoRoot(s),
+    getChangedFiles: (r, b, h) => provider.getChangedFiles(r, b, h),
+    getChangesetEntries: (r, b, h) => provider.getChangesetEntries(r, b, h),
+    getCurrentBranch: (r) => provider.getCurrentBranch(r),
+    async getDiff() {
+      return "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n";
+    }
+  };
 }

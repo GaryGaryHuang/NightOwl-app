@@ -7,17 +7,17 @@ import {
   createReviewConfigProviderFixture
 } from "../helpers/review-config-provider-contract-fixture.ts";
 
-test("LocalReviewConfigProvider falls back to the documented default review config when repo-local config is missing", () => {
+test("LocalReviewConfigProvider falls back to the documented default review config when repo-local config is missing", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
-    assert.deepEqual(configFixture.loadReviewConfig(), buildExpectedReviewConfig());
+    assert.deepEqual(await configFixture.loadReviewConfig(), buildExpectedReviewConfig());
   } finally {
     configFixture.cleanup();
   }
 });
 
-test("LocalReviewConfigProvider only reads the canonical .nightowl/reviewconfig.json path", () => {
+test("LocalReviewConfigProvider only reads the canonical .nightowl/reviewconfig.json path", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
@@ -31,7 +31,7 @@ test("LocalReviewConfigProvider only reads the canonical .nightowl/reviewconfig.
       }
     });
 
-    assert.deepEqual(configFixture.loadReviewConfig(), buildExpectedReviewConfig());
+    assert.deepEqual(await configFixture.loadReviewConfig(), buildExpectedReviewConfig());
 
     configFixture.writeReviewConfig({
       maxConcurrentFiles: 2,
@@ -42,7 +42,7 @@ test("LocalReviewConfigProvider only reads the canonical .nightowl/reviewconfig.
     });
 
     assert.deepEqual(
-      configFixture.loadReviewConfig(),
+      await configFixture.loadReviewConfig(),
       buildExpectedReviewConfig({
         maxConcurrentFiles: 2,
         confidenceThresholds: {
@@ -56,13 +56,13 @@ test("LocalReviewConfigProvider only reads the canonical .nightowl/reviewconfig.
   }
 });
 
-test("LocalReviewConfigProvider wraps invalid repo-local config with path-aware error context", () => {
+test("LocalReviewConfigProvider wraps invalid repo-local config with path-aware error context", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
     configFixture.writeRawReviewConfig("{");
 
-    assert.throws(() => configFixture.loadReviewConfig(), (error) => {
+    await assert.rejects(async () => await configFixture.loadReviewConfig(), (error) => {
       assert.ok(error instanceof ReviewConfigProviderError);
       assert.equal(error.operation, "loadReviewConfig");
       assert.match(

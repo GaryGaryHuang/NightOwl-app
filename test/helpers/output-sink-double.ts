@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type {
@@ -17,40 +17,40 @@ export function createWritableOutputSink(): ReviewOutputBootstrapAndPublisher {
   let outputTarget: ReviewOutputTarget;
 
   const sink: ReviewOutputBootstrapAndPublisher = {
-    initializeRun(target: ReviewOutputTarget): RunOutputPublisher {
-      mkdirSync(target.basePath, { recursive: true });
-      mkdirSync(target.filesPath, { recursive: true });
-      writeFileSync(target.skippedPath, "");
+    async initializeRun(target: ReviewOutputTarget): Promise<RunOutputPublisher> {
+      await mkdir(target.basePath, { recursive: true });
+      await mkdir(target.filesPath, { recursive: true });
+      await writeFile(target.skippedPath, "");
       outputTarget = target;
       return sink;
     },
 
-    publishFileReview(fileResult) {
-      mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
-      writeFileSync(fileResult.noteFilePath, fileResult.content);
+    async publishFileReview(fileResult) {
+      await mkdir(path.dirname(fileResult.noteFilePath), { recursive: true });
+      await writeFile(fileResult.noteFilePath, fileResult.content);
     },
 
-    publishSkippedFile(skipRecord) {
-      appendFileSync(
+    async publishSkippedFile(skipRecord) {
+      await appendFile(
         outputTarget.skippedPath,
         `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
       );
     },
 
-    publishRunSummary(summaryResult) {
-      writeFileSync(outputTarget.summaryPath, summaryResult.content);
+    async publishRunSummary(summaryResult) {
+      await writeFile(outputTarget.summaryPath, summaryResult.content);
     },
 
-    publishReviewIndex(indexResult) {
-      writeFileSync(outputTarget.indexPath, indexResult.content);
+    async publishReviewIndex(indexResult) {
+      await writeFile(outputTarget.indexPath, indexResult.content);
     },
 
-    publishRunManifest(manifestResult) {
-      writeFileSync(outputTarget.manifestPath, manifestResult.content);
+    async publishRunManifest(manifestResult) {
+      await writeFile(outputTarget.manifestPath, manifestResult.content);
     },
 
-    publishChangesetOverview(result) {
-      writeFileSync(outputTarget.changesetOverviewPath, result.content);
+    async publishChangesetOverview(result) {
+      await writeFile(outputTarget.changesetOverviewPath, result.content);
     }
   };
 

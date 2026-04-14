@@ -28,29 +28,29 @@ describe("createLocalReviewRunApp progress events", () => {
       workingDirectory: "/workspace/repo",
       timestampProvider: () => "03131430",
       sourceProvider: {
-        resolveRepoRoot() {
+        async resolveRepoRoot() {
           return "/workspace/repo";
         },
-        getChangesetEntries() {
+        async getChangesetEntries() {
           return ["src/app.ts", "packages/app/index.ts"];
         },
-        getCurrentBranch() {
+        async getCurrentBranch() {
           return "feature-branch";
         },
-        getChangedFiles() {
+        async getChangedFiles() {
           return ["src/app.ts", "packages/app/index.ts"];
         },
-        getDiff(_repoRoot, _baseRef, _headRef, filePath) {
+        async getDiff(_repoRoot, _baseRef, _headRef, filePath) {
           return `--- a/${filePath}\n+++ b/${filePath}\n@@ -1 +1 @@\n-old\n+new\n`;
         }
       },
       reviewFileFilter: {
-        filterReviewableFiles(_repoRoot: string, files: string[]) {
+        async filterReviewableFiles(_repoRoot: string, files: string[]) {
           return files;
         }
       },
       reviewConfigProvider: {
-        loadReviewConfig() {
+        async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
             confidenceThresholds: { must: 80, nice: 90 },
@@ -75,15 +75,15 @@ describe("createLocalReviewRunApp progress events", () => {
         }
       },
       outputSink: defineOutputSinkDouble({
-        initializeRun() {
+        async initializeRun() {
           return this;
         },
-        publishFileReview() {},
-        publishSkippedFile() {},
-        publishRunSummary() {},
-        publishReviewIndex() {},
-        publishRunManifest() {},
-        publishChangesetOverview() {}
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
       }),
       stepRunner: {
         async run({ step, context }) {

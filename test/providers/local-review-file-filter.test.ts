@@ -10,8 +10,8 @@ import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-
 
 interface ReviewFileFilterFixture {
   fixture: ReviewRepoFixture;
-  changedFiles(): string[];
-  filterChangedFiles(): string[];
+  changedFiles(): Promise<string[]>;
+  filterChangedFiles(): Promise<string[]>;
   cleanup(): void;
 }
 
@@ -20,7 +20,7 @@ function createReviewFileFilterFixture(): ReviewFileFilterFixture {
   const sourceProvider = new LocalGitProvider();
   const reviewFileFilter = new LocalReviewFileFilter();
 
-  const changedFiles = (): string[] =>
+  const changedFiles = (): Promise<string[]> =>
     sourceProvider.getChangedFiles(
       fixture.repoDir,
       "main",
@@ -30,10 +30,10 @@ function createReviewFileFilterFixture(): ReviewFileFilterFixture {
   return {
     fixture,
     changedFiles,
-    filterChangedFiles() {
+    async filterChangedFiles() {
       return reviewFileFilter.filterReviewableFiles(
         fixture.repoDir,
-        changedFiles()
+        await changedFiles()
       );
     },
     cleanup() {
@@ -42,14 +42,14 @@ function createReviewFileFilterFixture(): ReviewFileFilterFixture {
   };
 }
 
-test("LocalReviewFileFilter filters changed files with canonical .nightowl/reviewignore rules", () => {
+test("LocalReviewFileFilter filters changed files with canonical .nightowl/reviewignore rules", async () => {
   const filterFixture = createReviewFileFilterFixture();
 
   try {
     filterFixture.fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
     assert.deepEqual(
-      filterFixture.filterChangedFiles(),
+      await filterFixture.filterChangedFiles(),
       ["packages/app/index.ts", "src/app.ts"]
     );
   } finally {
@@ -57,16 +57,16 @@ test("LocalReviewFileFilter filters changed files with canonical .nightowl/revie
   }
 });
 
-test("LocalReviewFileFilter ignores legacy reviewignore locations when canonical .nightowl/reviewignore is absent", () => {
+test("LocalReviewFileFilter ignores legacy reviewignore locations when canonical .nightowl/reviewignore is absent", async () => {
   const filterFixture = createReviewFileFilterFixture();
 
   try {
     filterFixture.fixture.writeFile(".reviewignore", "dist/**\n");
     filterFixture.fixture.writeFile(".nightowl/.reviewignore", "packages/**\n");
-    const changedFiles = filterFixture.changedFiles();
+    const changedFiles = await filterFixture.changedFiles();
 
     assert.deepEqual(
-      filterFixture.filterChangedFiles(),
+      await filterFixture.filterChangedFiles(),
       changedFiles
     );
   } finally {
@@ -74,7 +74,7 @@ test("LocalReviewFileFilter ignores legacy reviewignore locations when canonical
   }
 });
 
-test("LocalReviewFileFilter always excludes .nightowl namespace files from reviewable files", () => {
+test("LocalReviewFileFilter always excludes .nightowl namespace files from reviewable files", async () => {
   const filterFixture = createReviewFileFilterFixture();
 
   try {
@@ -86,8 +86,8 @@ test("LocalReviewFileFilter always excludes .nightowl namespace files from revie
     filterFixture.fixture.writeFile(".nightowl/notes.md", "user-owned note\n");
     filterFixture.fixture.commitAll("add NightOwl managed files");
 
-    const changedFiles = filterFixture.changedFiles();
-    const filteredFiles = filterFixture.filterChangedFiles();
+    const changedFiles = await filterFixture.changedFiles();
+    const filteredFiles = await filterFixture.filterChangedFiles();
 
     assert.equal(changedFiles.includes(".nightowl/reviewignore"), true);
     assert.equal(changedFiles.includes(".nightowl/reviewconfig.json"), true);
@@ -101,11 +101,11 @@ test("LocalReviewFileFilter always excludes .nightowl namespace files from revie
   }
 });
 
-test("LocalReviewFileFilter preserves input order for surviving files", () => {
+test("LocalReviewFileFilter preserves input order for surviving files", async () => {
   const reviewFileFilter = new LocalReviewFileFilter();
 
   assert.deepEqual(
-    reviewFileFilter.filterReviewableFiles("/workspace/repo", [
+    await reviewFileFilter.filterReviewableFiles("/workspace/repo", [
       "src/z.ts",
       ".nightowl/reviewconfig.json",
       "src/a.ts",
@@ -115,7 +115,7 @@ test("LocalReviewFileFilter preserves input order for surviving files", () => {
   );
 });
 
-test("LocalReviewFileFilter wraps reviewignore read failures in ReviewFileFilterError with cause", () => {
+test("LocalReviewFileFilter wraps reviewignore read failures in ReviewFileFilterError with cause", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -124,8 +124,8 @@ test("LocalReviewFileFilter wraps reviewignore read failures in ReviewFileFilter
     });
     const reviewFileFilter = new LocalReviewFileFilter();
 
-    assert.throws(
-      () =>
+    await assert.rejects(
+      async () =>
         reviewFileFilter.filterReviewableFiles(fixture.repoDir, [
           "src/app.ts"
         ]),

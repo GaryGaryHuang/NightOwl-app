@@ -309,24 +309,24 @@ test("runCli surfaces a clear runtime error when Step 0 session startup fails", 
   const app = createLocalReviewRunApp({
     workingDirectory: REPO_ROOT,
     sourceProvider: {
-      resolveRepoRoot() {
+      async resolveRepoRoot() {
         return REPO_ROOT;
       },
-      getChangedFiles() {
+      async getChangedFiles() {
         throw new Error("unreachable");
       },
-      getChangesetEntries() {
+      async getChangesetEntries() {
         throw new Error("unreachable");
       },
-      getDiff() {
+      async getDiff() {
         throw new Error("unreachable");
       },
-      getCurrentBranch() {
+      async getCurrentBranch() {
         throw new Error("unreachable");
       }
     },
     reviewFileFilter: {
-      filterReviewableFiles() {
+      async filterReviewableFiles() {
         throw new Error("unreachable");
       }
     },

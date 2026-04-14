@@ -6,11 +6,11 @@ import path from "node:path";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
-test("LocalWorkspaceProvider initializes the run directories, skipped.md, and yields a run-scoped publisher", () => {
+test("LocalWorkspaceProvider initializes the run directories, skipped.md, and yields a run-scoped publisher", async () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
 
     assert.equal(existsSync(fixture.outputTarget.basePath), true);
     assert.equal(existsSync(fixture.outputTarget.filesPath), true);
@@ -40,11 +40,11 @@ test("LocalWorkspaceProvider initializes the run directories, skipped.md, and yi
   }
 });
 
-test("LocalWorkspaceProvider keeps changeset overview lazy under the run basePath", () => {
+test("LocalWorkspaceProvider keeps changeset overview lazy under the run basePath", async () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    fixture.provider.initializeRun(fixture.outputTarget);
+    await fixture.provider.initializeRun(fixture.outputTarget);
 
     assert.equal(existsSync(fixture.outputTarget.changesetOverviewPath), false);
     assert.ok(

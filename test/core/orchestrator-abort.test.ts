@@ -36,32 +36,32 @@ type InterruptSignal = "SIGINT" | "SIGTERM" | undefined;
 
 function createMockSourceProvider(files: string[]): ReviewSourceProvider {
   return {
-    resolveRepoRoot(startPath: string): string {
+    async resolveRepoRoot(startPath: string): Promise<string> {
       return startPath;
     },
-    getChangesetEntries(
+    async getChangesetEntries(
       _repoRoot: string,
       _baseRef: string,
       _headRef: string
-    ): string[] {
+    ): Promise<string[]> {
       return files;
     },
-    getCurrentBranch(_repoRoot: string): string {
+    async getCurrentBranch(_repoRoot: string): Promise<string> {
       return "feature-branch";
     },
-    getChangedFiles(
+    async getChangedFiles(
       _repoRoot: string,
       _baseRef: string,
       _headRef: string
-    ): string[] {
+    ): Promise<string[]> {
       return files;
     },
-    getDiff(
+    async getDiff(
       _repoRoot: string,
       _baseRef: string,
       _headRef: string,
       _filePath: string
-    ): string {
+    ): Promise<string> {
       return "--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new\n";
     }
   };
@@ -69,7 +69,7 @@ function createMockSourceProvider(files: string[]): ReviewSourceProvider {
 
 function createPassthroughReviewFileFilter(): ReviewFileFilter {
   return {
-    filterReviewableFiles(_repoRoot: string, files: string[]): string[] {
+    async filterReviewableFiles(_repoRoot: string, files: string[]): Promise<string[]> {
       return files;
     }
   };
@@ -83,26 +83,26 @@ function createTrackingOutputSink(): TrackingOutputSink {
   const calls: string[] = [];
   return {
     calls,
-    initializeRun(_outputTarget) {
+    async initializeRun(_outputTarget) {
       calls.push("initializeRun");
       return this;
     },
-    publishFileReview(_result) {
+    async publishFileReview(_result) {
       calls.push("publishFileReview");
     },
-    publishSkippedFile(_record) {
+    async publishSkippedFile(_record) {
       calls.push("publishSkippedFile");
     },
-    publishRunSummary(_result) {
+    async publishRunSummary(_result) {
       calls.push("publishRunSummary");
     },
-    publishReviewIndex(_result) {
+    async publishReviewIndex(_result) {
       calls.push("publishReviewIndex");
     },
-    publishRunManifest(_result) {
+    async publishRunManifest(_result) {
       calls.push("publishRunManifest");
     },
-    publishChangesetOverview(_result) {
+    async publishChangesetOverview(_result) {
       calls.push("publishChangesetOverview");
     }
   };
@@ -291,8 +291,8 @@ test("ReviewOrchestrator stops before per-file dispatch when signal aborts durin
   const orchestrator = createBaseOrchestrator({
     outputSink: defineOutputSinkDouble({
       ...sink,
-      initializeRun(outputTarget) {
-        const publisher = sink.initializeRun(outputTarget);
+      async initializeRun(outputTarget) {
+        const publisher = await sink.initializeRun(outputTarget);
         controller.abort("SIGINT");
         return publisher;
       }
@@ -316,8 +316,8 @@ test("ReviewOrchestrator stops before Step 1 when signal aborts during bootstrap
   const orchestrator = createBaseOrchestrator({
     outputSink: defineOutputSinkDouble({
       ...sink,
-      publishFileReview(result) {
-        sink.publishFileReview(result);
+      async publishFileReview(result) {
+        await sink.publishFileReview(result);
         if (!bootstrapAbortFired) {
           bootstrapAbortFired = true;
           controller.abort("SIGINT");
@@ -394,11 +394,11 @@ test("ReviewOrchestrator does not publish a new per-file snapshot after abort si
   const orchestrator = createBaseOrchestrator({
     outputSink: defineOutputSinkDouble({
       ...sink,
-      publishFileReview(result) {
+      async publishFileReview(result) {
         if (abortFired) {
           fileReviewCallsAfterAbort.push(result.noteFilePath);
         }
-        sink.publishFileReview(result);
+        await sink.publishFileReview(result);
       }
     }),
     stepRunner: createStepRunnerDouble(({ step }) => {
