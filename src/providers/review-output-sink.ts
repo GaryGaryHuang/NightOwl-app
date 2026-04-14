@@ -45,25 +45,14 @@ export interface SkipRecord {
   reason: string;
 }
 
-export interface RunSummaryResult {
+export interface ContentResult {
   content: string;
 }
 
-export interface ReviewIndexResult {
-  content: string;
-}
-
-export interface RunManifestResult {
-  content: string;
-}
-
-export interface ChangesetOverviewResult {
-  content: string;
-}
-
-export type SuccessfulSnapshotFaultScope =
-  | "single-file-output-fault"
-  | "shared-output-target-fault";
+export type RunSummaryResult = ContentResult;
+export type ReviewIndexResult = ContentResult;
+export type RunManifestResult = ContentResult;
+export type ChangesetOverviewResult = ContentResult;
 
 export interface RunOutputPublisher {
   publishFileReview(fileResult: FileReviewResult): Promise<void>;
@@ -74,37 +63,6 @@ export interface RunOutputPublisher {
   publishChangesetOverview(result: ChangesetOverviewResult): Promise<void>;
 }
 
-export interface SuccessfulSnapshotFailureInput {
-  outputTarget: ReviewOutputTarget;
-  noteFilePath: string;
-  error: unknown;
-}
-
-export interface SuccessfulSnapshotFailureAssessment {
-  faultScope: SuccessfulSnapshotFaultScope;
-}
-
-export interface SuccessfulSnapshotOutputHealthAssessor {
-  assess(input: SuccessfulSnapshotFailureInput): Promise<SuccessfulSnapshotFailureAssessment>;
-}
-
 export interface ReviewOutputSink {
   initializeRun(outputTarget: ReviewOutputTarget): Promise<RunOutputPublisher>;
-}
-
-export type ReviewOutputBootstrapAndPublisher =
-  ReviewOutputSink & RunOutputPublisher;
-
-export async function resolveSuccessfulSnapshotFailureAssessment(
-  assessor: SuccessfulSnapshotOutputHealthAssessor,
-  input: SuccessfulSnapshotFailureInput
-): Promise<SuccessfulSnapshotFailureAssessment> {
-  try {
-    // Default to the conservative shared-target classification unless the sink can prove a single-file fault.
-    return (
-      (await assessor.assess(input)) ?? { faultScope: "shared-output-target-fault" }
-    );
-  } catch {
-    return { faultScope: "shared-output-target-fault" };
-  }
 }

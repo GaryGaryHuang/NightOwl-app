@@ -42,12 +42,14 @@ import { Step3KnowledgeSourceOfTruthStep } from "./steps/step3-knowledge-source-
 import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boundaries.ts";
 import { Step1OverviewStep } from "./steps/step1-overview.ts";
 import {
-  resolveSuccessfulSnapshotFailureAssessment,
   type ReviewOutputTarget,
   type ReviewOutputSink,
-  type RunOutputPublisher,
-  type SuccessfulSnapshotOutputHealthAssessor
+  type RunOutputPublisher
 } from "../providers/review-output-sink.ts";
+import {
+  resolveSuccessfulSnapshotFailureAssessment,
+  type SuccessfulSnapshotOutputHealthAssessor
+} from "../providers/review-output-health-assessor.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 import { SessionTurnAbortedError } from "../services/session-executor.ts";

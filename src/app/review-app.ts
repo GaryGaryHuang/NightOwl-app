@@ -20,10 +20,8 @@ import { LocalSuccessfulSnapshotOutputHealthAssessor } from "../providers/local-
 import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
 import type { ReviewConfigProvider } from "../providers/review-config-provider.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
-import type {
-  ReviewOutputSink,
-  SuccessfulSnapshotOutputHealthAssessor
-} from "../providers/review-output-sink.ts";
+import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
+import type { SuccessfulSnapshotOutputHealthAssessor } from "../providers/review-output-health-assessor.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
 import { JudgeSessionFactory } from "../services/judge-session-factory.ts";
 import { KnowledgeSvc } from "../services/knowledge.ts";

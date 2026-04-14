@@ -2,10 +2,13 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type {
-  ReviewOutputBootstrapAndPublisher,
+  ReviewOutputSink,
   ReviewOutputTarget,
   RunOutputPublisher
 } from "../../src/providers/review-output-sink.ts";
+
+export type ReviewOutputBootstrapAndPublisher =
+  ReviewOutputSink & RunOutputPublisher;
 
 export function defineOutputSinkDouble(
   sink: ReviewOutputBootstrapAndPublisher

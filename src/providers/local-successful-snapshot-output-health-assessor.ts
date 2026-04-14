@@ -1,12 +1,12 @@
 import { access, stat, constants } from "node:fs/promises";
 import path from "node:path";
 
-import {
-  ReviewOutputBoundaryError,
-  type SuccessfulSnapshotFailureAssessment,
-  type SuccessfulSnapshotFailureInput,
-  type SuccessfulSnapshotOutputHealthAssessor
-} from "./review-output-sink.ts";
+import { ReviewOutputBoundaryError } from "./review-output-sink.ts";
+import type {
+  SuccessfulSnapshotFailureAssessment,
+  SuccessfulSnapshotFailureInput,
+  SuccessfulSnapshotOutputHealthAssessor
+} from "./review-output-health-assessor.ts";
 
 /**
  * Local filesystem heuristic for successful snapshot write failures.

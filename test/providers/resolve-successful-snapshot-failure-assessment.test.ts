@@ -5,7 +5,7 @@ import {
   resolveSuccessfulSnapshotFailureAssessment,
   type SuccessfulSnapshotFailureInput,
   type SuccessfulSnapshotOutputHealthAssessor
-} from "../../src/providers/review-output-sink.ts";
+} from "../../src/providers/review-output-health-assessor.ts";
 
 function createInput(): SuccessfulSnapshotFailureInput {
   return {

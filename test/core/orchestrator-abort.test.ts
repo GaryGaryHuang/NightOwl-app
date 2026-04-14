@@ -9,10 +9,8 @@ import {
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { StepDefinition } from "../../src/core/step-runner.ts";
 import type { ReviewFileFilter } from "../../src/providers/review-file-filter.ts";
-import type {
-  ReviewOutputBootstrapAndPublisher,
-  ReviewOutputSink
-} from "../../src/providers/review-output-sink.ts";
+import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
+import type { ReviewOutputBootstrapAndPublisher } from "../helpers/output-sink-double.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
