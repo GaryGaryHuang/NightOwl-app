@@ -15,5 +15,5 @@ export class ReviewFileFilterError extends Error {
 }
 
 export interface ReviewFileFilter {
-  filterReviewableFiles(repoRoot: string, files: string[]): string[];
+  filterReviewableFiles(repoRoot: string, files: string[]): Promise<string[]>;
 }

@@ -20,14 +20,14 @@ export class ReviewSourceProviderError extends Error {
 }
 
 export interface ReviewSourceProvider {
-  resolveRepoRoot(startPath: string): string;
-  getChangedFiles(repoRoot: string, baseRef: string, headRef: string): string[];
-  getChangesetEntries(repoRoot: string, baseRef: string, headRef: string): string[];
+  resolveRepoRoot(startPath: string): Promise<string>;
+  getChangedFiles(repoRoot: string, baseRef: string, headRef: string): Promise<string[]>;
+  getChangesetEntries(repoRoot: string, baseRef: string, headRef: string): Promise<string[]>;
   getDiff(
     repoRoot: string,
     baseRef: string,
     headRef: string,
     filePath: string
-  ): string;
-  getCurrentBranch(repoRoot: string): string | undefined;
+  ): Promise<string>;
+  getCurrentBranch(repoRoot: string): Promise<string | undefined>;
 }

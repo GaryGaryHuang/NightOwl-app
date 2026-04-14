@@ -28,5 +28,5 @@ export interface ReviewConfig {
 }
 
 export interface ReviewConfigProvider {
-  loadReviewConfig(repoRoot: string): ReviewConfig;
+  loadReviewConfig(repoRoot: string): Promise<ReviewConfig>;
 }
