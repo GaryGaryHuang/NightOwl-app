@@ -3,6 +3,7 @@ import {
 } from "@github/copilot-sdk";
 
 import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
+import type { ReviewSessionFactoryLike } from "../core/session-factory-contracts.ts";
 import {
   type CopilotClientLike,
   SessionExecutor
@@ -12,6 +13,7 @@ import { ToolPolicyGuard } from "./tool-policy-guard.ts";
 import type { ToolAuditSink } from "./tool-audit-writer.ts";
 
 export interface ReviewSessionProfile {
+  stepId?: string;
   knowledgeMode?: ReviewKnowledgeMode;
   model: string;
   outputBaseDir: string;
@@ -44,7 +46,7 @@ export interface ReviewSessionFactoryOptions {
 /**
  * Build review sessions with review-specific tool policy, knowledge injection, and optional audit wiring.
  */
-export class ReviewSessionFactory {
+export class ReviewSessionFactory implements ReviewSessionFactoryLike {
   readonly #clientManager: ReviewSessionFactoryOptions["clientManager"];
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   readonly #toolPolicyGuard: ToolPolicyGuard;

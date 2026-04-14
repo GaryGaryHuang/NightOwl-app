@@ -126,7 +126,6 @@ export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
         )
       },
       reviewProfile: {
-        dryRunStepContract: "knowledge-source-of-truth",
         knowledgeMode: "built-in-context7",
         model: "gpt-5-mini",
         timeoutMs: 300_000

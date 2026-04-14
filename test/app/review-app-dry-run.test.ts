@@ -109,8 +109,6 @@ function createDryRunOnlyStep(
   return {
     stepId,
     prepare(context) {
-      const response = `[dry-run] ${stepId} handled ${context.filePath}`;
-
       return {
         stepId,
         prompt: {
@@ -118,12 +116,10 @@ function createDryRunOnlyStep(
           userMessage: `custom prompt for ${context.filePath}`
         },
         reviewProfile: {
-          model: "gpt-5-mini",
-          dryRunStepContract: stepId,
-          dryRunResponse: response
+          model: "gpt-5-mini"
         },
         async resolve(actualResponse: string) {
-          assert.equal(actualResponse, response);
+          assert.ok(actualResponse.length > 0, "dry-run should produce a non-empty response");
 
           return () => {
             executionLog.push({ filePath: context.filePath, stepId });

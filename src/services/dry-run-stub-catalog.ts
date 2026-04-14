@@ -1,6 +1,5 @@
-import type {
-  BuiltinDryRunReviewStepContract
-} from "./dry-run-review-step-contract.ts";
+export const GENERIC_DRY_RUN_STUB =
+  "[dry-run] No built-in stub template for this step.";
 
 const STUB_CHANGESET_OVERVIEW = `## Changeset Overview
 
@@ -88,19 +87,19 @@ const STUB_SUMMARY = `## Summary
 整體風險等級：None
 [dry-run] 此為 dry-run 模式產出，不反映真實風險評估結果。`;
 
-const DRY_RUN_STUB_RESPONSES: Record<BuiltinDryRunReviewStepContract, string> = {
+const DRY_RUN_STUB_RESPONSES: Record<string, string> = {
   "changeset-overview": STUB_CHANGESET_OVERVIEW,
-  overview: STUB_OVERVIEW,
-  "dependencies-boundaries": STUB_DEPENDENCIES_BOUNDARIES,
-  "knowledge-source-of-truth": STUB_KNOWLEDGE_SOURCE_OF_TRUTH,
-  "strategy-what-if-scenarios": STUB_STRATEGY_WHAT_IF,
-  "validation-interrogation": STUB_VALIDATION_INTERROGATION,
-  "cognitive-simulation": STUB_COGNITIVE_SIMULATION,
-  summary: STUB_SUMMARY
+  "step1-overview": STUB_OVERVIEW,
+  "step2-dependencies-boundaries": STUB_DEPENDENCIES_BOUNDARIES,
+  "step3-knowledge-source-of-truth": STUB_KNOWLEDGE_SOURCE_OF_TRUTH,
+  "step4-strategy-what-if-scenarios": STUB_STRATEGY_WHAT_IF,
+  "step5-validation-interrogation": STUB_VALIDATION_INTERROGATION,
+  "step6-cognitive-simulation": STUB_COGNITIVE_SIMULATION,
+  "step7-summary": STUB_SUMMARY
 };
 
 export function getDryRunStubResponse(
-  contract: string
+  stepId: string
 ): string | undefined {
-  return DRY_RUN_STUB_RESPONSES[contract as BuiltinDryRunReviewStepContract];
+  return DRY_RUN_STUB_RESPONSES[stepId];
 }

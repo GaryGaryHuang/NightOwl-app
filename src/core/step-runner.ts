@@ -1,8 +1,8 @@
 import type { FileReviewContext } from "./file-review-context.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
+import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload } from "./file-review-context.ts";
-import type { DryRunReviewStepContract } from "../services/dry-run-review-step-contract.ts";
 import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
 export interface StepResolveServices {
@@ -30,8 +30,6 @@ export interface StepExecutionPlan {
     userMessage: string;
   };
   reviewProfile: {
-    dryRunResponse?: string;
-    dryRunStepContract?: DryRunReviewStepContract;
     knowledgeMode?: ReviewKnowledgeMode;
     model: string;
     timeoutMs?: number;
@@ -52,25 +50,6 @@ export interface StepDefinition {
   prepare(context: FileReviewContext): StepExecutionPlan;
 }
 
-export interface StepReviewSessionFactoryLike {
-  createSession(profile: {
-    dryRunResponse?: string;
-    dryRunStepContract?: DryRunReviewStepContract;
-    knowledgeMode?: ReviewKnowledgeMode;
-    model: string;
-    outputBaseDir: string;
-    repoRoot: string;
-    systemMessage: string;
-    workingDirectory?: string;
-  }): Promise<{
-    sendAndWait(
-      prompt: string,
-      timeoutMs?: number,
-      signal?: AbortSignal
-    ): Promise<string | undefined>;
-  }>;
-}
-
 export interface RunStepInput {
   step: StepDefinition;
   context: FileReviewContext;
@@ -88,7 +67,7 @@ export interface StepRetryInfo {
 }
 
 export interface StepRunnerOptions {
-  reviewSessionFactory: StepReviewSessionFactoryLike;
+  reviewSessionFactory: ReviewSessionFactoryLike;
   judgeService?: {
     evaluate(input: {
       stepId: string;
@@ -111,7 +90,7 @@ export interface StepRunnerOptions {
  * Execute one SOP step, validate its completion, and return a deferred state update for the orchestrator.
  */
 export class StepRunner {
-  readonly #reviewSessionFactory: StepReviewSessionFactoryLike;
+  readonly #reviewSessionFactory: ReviewSessionFactoryLike;
   readonly #judgeService?: StepRunnerOptions["judgeService"];
   readonly #structuredOutputValidator: NonNullable<StepRunnerOptions["structuredOutputValidator"]>;
   readonly #onStepRetry?: (info: StepRetryInfo) => void;
@@ -129,12 +108,7 @@ export class StepRunner {
       try {
         const plan = input.step.prepare(input.context);
         const sessionProfile = {
-          ...(plan.reviewProfile.dryRunResponse === undefined
-            ? {}
-            : { dryRunResponse: plan.reviewProfile.dryRunResponse }),
-          ...(plan.reviewProfile.dryRunStepContract === undefined
-            ? {}
-            : { dryRunStepContract: plan.reviewProfile.dryRunStepContract }),
+          stepId: plan.stepId,
           knowledgeMode: plan.reviewProfile.knowledgeMode ?? "built-in-context7",
           model: plan.reviewProfile.model,
           outputBaseDir: input.outputBaseDir,

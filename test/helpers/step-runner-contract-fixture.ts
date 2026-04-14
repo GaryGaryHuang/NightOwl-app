@@ -8,10 +8,10 @@ import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts
 import {
   type StepDefinition,
   type StepExecutionPlan,
-  type StepReviewSessionFactoryLike,
   type StepResolveServices,
   StepRunner
 } from "../../src/core/step-runner.ts";
+import type { ReviewSessionFactoryLike } from "../../src/core/session-factory-contracts.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { lineRangeTraceability } from "./orchestrator-fixture.ts";
 
@@ -403,31 +403,31 @@ export function seedStep4Context(context: FileReviewContext): void {
 }
 
 /**
- * Creates a minimal StepReviewSessionFactoryLike that tracks each created
+ * Creates a minimal ReviewSessionFactoryLike that tracks each created
  * session and each sendAndWait call with per-session and per-send counters.
  * Tests use the hook callbacks to assert on call ordering, retry behaviour,
  * and early disconnects without needing a real Copilot connection.
  */
 export function createReviewSessionFactory(input: {
-  onCreateSession?: (profile: Parameters<StepReviewSessionFactoryLike["createSession"]>[0], sessionIndex: number) => void;
+  onCreateSession?: (profile: Parameters<ReviewSessionFactoryLike["createSession"]>[0], sessionIndex: number) => void;
   onSendAndWait: (call: {
-    profile: Parameters<StepReviewSessionFactoryLike["createSession"]>[0];
+    profile: Parameters<ReviewSessionFactoryLike["createSession"]>[0];
     prompt: string;
     timeoutMs?: number;
     sessionIndex: number;
     sendIndex: number;
   }) => string | undefined;
   onDisconnect?: (call: {
-    profile: Parameters<StepReviewSessionFactoryLike["createSession"]>[0];
+    profile: Parameters<ReviewSessionFactoryLike["createSession"]>[0];
     sessionIndex: number;
     sendCount: number;
   }) => void;
   onAbort?: (call: {
-    profile: Parameters<StepReviewSessionFactoryLike["createSession"]>[0];
+    profile: Parameters<ReviewSessionFactoryLike["createSession"]>[0];
     sessionIndex: number;
     sendCount: number;
   }) => void;
-}): StepReviewSessionFactoryLike {
+}): ReviewSessionFactoryLike {
   let sessionIndex = 0;
 
   return {

@@ -34,9 +34,11 @@ import { ToolPolicyGuard } from "../services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../services/tool-audit-writer.ts";
 import type { WebFetchHostnameClassifier } from "../services/web-fetch-hostname-classifier.ts";
 import {
-  DryRunReviewSessionFactory,
+  DryRunReviewSessionFactory
+} from "../services/dry-run-review-session-factory.ts";
+import {
   DryRunJudgeSessionFactory
-} from "../services/dry-run-session-factory.ts";
+} from "../services/dry-run-judge-session-factory.ts";
 import {
   DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS
 } from "../services/copilot-client-shutdown.ts";
