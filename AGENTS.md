@@ -43,7 +43,8 @@ src/
 │   ├── risk-level.ts      Four-tier risk derivation (High/Medium/Low/None)
 │   ├── structured-output-validator.ts  Step 5/6 JSON validation
 │   ├── judge.ts           JudgeService: Step 1–4, 7 completion check
-│   └── changeset-overview-runner.ts   Step 0 execution
+│   ├── changeset-overview-runner.ts   Step 0 execution
+│   └── session-factory-contracts.ts   Unified ReviewSessionFactoryLike interface
 ├── providers/             External I/O adapters
 │   ├── local-git-provider.ts
 │   ├── local-workspace-provider.ts
@@ -53,7 +54,9 @@ src/
     ├── session-executor.ts         Copilot Client lifecycle
     ├── review-session-factory.ts   Review session creation
     ├── judge-session-factory.ts    Judge session creation
-    ├── dry-run-session-factory.ts  Dry-run stub factories (no SDK calls)
+    ├── dry-run-review-session-factory.ts  Dry-run review stub factory (no SDK calls)
+    ├── dry-run-judge-session-factory.ts   Dry-run judge stub factory (no SDK calls)
+    ├── dry-run-stub-catalog.ts     Deterministic stub responses keyed by stepId
     ├── knowledge.ts                KnowledgeSvc: MCP configuration
     ├── tool-policy-guard.ts        Tool permission hook
     ├── tool-audit-writer.ts        JSONL audit log
