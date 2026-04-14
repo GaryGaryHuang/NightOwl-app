@@ -30,6 +30,13 @@ export interface CopilotClientLike {
   createSession(config: SessionConfig): Promise<SessionLike>;
 }
 
+export interface ClientManagerLike {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  forceStop(): Promise<void>;
+  getClient(): CopilotClientLike;
+}
+
 export interface CopilotClientManagerOptions {
   createClient?: () => CopilotClientLike;
 }

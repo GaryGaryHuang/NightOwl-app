@@ -29,7 +29,7 @@ import { JudgeSessionFactory } from "../services/judge-session-factory.ts";
 import { KnowledgeSvc } from "../services/knowledge.ts";
 import {
   CopilotClientManager,
-  type CopilotClientLike
+  type ClientManagerLike
 } from "../services/session-executor.ts";
 import { ReviewSessionFactory } from "../services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../services/tool-policy-guard.ts";
@@ -40,20 +40,15 @@ import {
   DryRunJudgeSessionFactory
 } from "../services/dry-run-session-factory.ts";
 import {
-  DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS,
-  stopClientManagerWithTimeout
+  DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS
 } from "../services/copilot-client-shutdown.ts";
+import { RunLifecycleManager } from "./run-lifecycle-manager.ts";
 
 export const LOCAL_REVIEW_RUN_HEADER = "Review run completed.";
 
 export interface CreateLocalReviewRunAppOptions {
   changesetOverviewRunner?: Pick<ChangesetOverviewRunner, "run">;
-  clientManager?: {
-    start(): Promise<void>;
-    stop(): Promise<void>;
-    forceStop(): Promise<void>;
-    getClient(): CopilotClientLike;
-  };
+  clientManager?: ClientManagerLike;
   context7ApiKey?: string;
   outputSink?: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor?: SuccessfulSnapshotOutputHealthAssessor;
@@ -113,14 +108,13 @@ export function createLocalReviewRunApp(
         : new JudgeSessionFactory({ clientManager });
       const judgeService = new JudgeService({ judgeSessionFactory });
 
-      // auditWriter is a closure-scoped let shared between auditWriterProvider and onOutputTargetReady.
-      // Sessions created before onOutputTargetReady fires (e.g. Step 0) receive no audit writer.
-      let auditWriter: ToolAuditWriter | undefined;
-
       let reviewSessionFactory: Pick<ReviewSessionFactory, "createSession">;
+      let onOutputTargetReady: ((outputTarget: { toolAuditPath: string }) => void) | undefined;
+
       if (isDryRun) {
         reviewSessionFactory = new DryRunReviewSessionFactory();
       } else {
+        const auditWriter = new ToolAuditWriter();
         const knowledgeSvc =
           options.knowledgeSvc ??
           new KnowledgeSvc({
@@ -140,6 +134,9 @@ export function createLocalReviewRunApp(
           toolPolicyGuard,
           auditWriterProvider: () => auditWriter
         });
+        onOutputTargetReady = (outputTarget) => {
+          auditWriter.setPath(outputTarget.toolAuditPath);
+        };
       }
 
       const changesetOverviewRunner =
@@ -168,42 +165,17 @@ export function createLocalReviewRunApp(
         maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
         perFileStepsFactory: options.perFileStepsFactory,
         onProgressEvent: options.onProgressEvent,
-        onOutputTargetReady: (outputTarget) => {
-          // Wire the audit writer only after the run output path exists; Step 0 sessions created earlier are not audited.
-          auditWriter = new ToolAuditWriter(outputTarget.toolAuditPath);
-        }
+        onOutputTargetReady
       });
 
-      // Translate process signals into a shared AbortSignal so the orchestrator can stop cooperatively.
-      // handleSigint/handleSigterm and controller are defined here (before try) so finally can reference them,
-      // but process.on() registration happens inside try after start() so cleanup is symmetric.
-      const controller = new AbortController();
-      const handleSigint = (): void => {
-        controller.abort("SIGINT");
-      };
-      const handleSigterm = (): void => {
-        controller.abort("SIGTERM");
-      };
+      const lifecycleManager = new RunLifecycleManager({
+        clientManager: isDryRun ? undefined : clientManager,
+        gracefulShutdownTimeoutMs
+      });
 
-      // clientStarted tracks whether start() resolved so finally only calls stop() when a resource was acquired.
-      let clientStarted = false;
-
-      try {
-        if (!isDryRun) {
-          await clientManager.start();
-          clientStarted = true;
-        }
-        process.on("SIGINT", handleSigint);
-        process.on("SIGTERM", handleSigterm);
-        return await orchestrator.run(request, { signal: controller.signal });
-      } finally {
-        // Remove handlers before stop() to prevent double-fire from SIGTERM during SDK teardown.
-        process.off("SIGINT", handleSigint);
-        process.off("SIGTERM", handleSigterm);
-        if (clientStarted) {
-          await stopClientManagerWithTimeout(clientManager, gracefulShutdownTimeoutMs);
-        }
-      }
+      return await lifecycleManager.run((signal) =>
+        orchestrator.run(request, { signal })
+      );
     }
   };
 }
