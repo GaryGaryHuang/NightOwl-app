@@ -128,7 +128,7 @@ export class ReviewOrchestrator {
     this.#outputSink = options.outputSink;
     this.#successfulSnapshotOutputHealthAssessor =
       options.successfulSnapshotOutputHealthAssessor ?? {
-        assess() {
+        async assess() {
           return { faultScope: "shared-output-target-fault" as const };
         }
       };
@@ -156,8 +156,8 @@ export class ReviewOrchestrator {
     });
 
     const startPath = path.resolve(this.#workingDirectory, request.repoPath ?? ".");
-    const repoRoot = this.#sourceProvider.resolveRepoRoot(startPath);
-    const changesetEntries = this.#sourceProvider.getChangesetEntries(
+    const repoRoot = await this.#sourceProvider.resolveRepoRoot(startPath);
+    const changesetEntries = await this.#sourceProvider.getChangesetEntries(
       repoRoot,
       request.baseRef,
       request.headRef
@@ -213,13 +213,13 @@ export class ReviewOrchestrator {
     });
     throwIfRunAborted();
 
-    const branchName = this.#sourceProvider.getCurrentBranch(repoRoot);
-    const changedFiles = this.#sourceProvider.getChangedFiles(
+    const branchName = await this.#sourceProvider.getCurrentBranch(repoRoot);
+    const changedFiles = await this.#sourceProvider.getChangedFiles(
       repoRoot,
       request.baseRef,
       request.headRef
     );
-    const reviewableFiles = this.#reviewFileFilter.filterReviewableFiles(
+    const reviewableFiles = await this.#reviewFileFilter.filterReviewableFiles(
       repoRoot,
       changedFiles
     );
@@ -231,10 +231,10 @@ export class ReviewOrchestrator {
     });
     const plannedNoteFiles = planNoteFiles(outputTarget.filesPath, reviewableFiles);
     const providerOutputTarget = toReviewOutputTarget(outputTarget);
-    const outputPublisher = this.#outputSink.initializeRun(providerOutputTarget);
+    const outputPublisher = await this.#outputSink.initializeRun(providerOutputTarget);
     throwIfRunAborted();
 
-    outputPublisher.publishChangesetOverview({ content: runContext.changesetOverview });
+    await outputPublisher.publishChangesetOverview({ content: runContext.changesetOverview });
     throwIfRunAborted();
 
     this.#onOutputTargetReady?.(outputTarget);
@@ -251,7 +251,7 @@ export class ReviewOrchestrator {
     // Publish bootstrap snapshots before any per-file step runs so every file starts from the same skeleton.
     for (const plannedNote of plannedNoteFiles) {
       throwIfRunAborted();
-      outputPublisher.publishFileReview({
+      await outputPublisher.publishFileReview({
         noteFilePath: plannedNote.noteFilePath,
         content: this.#finalizer.render(
           new FileReviewContext({
@@ -308,7 +308,7 @@ export class ReviewOrchestrator {
     const finalizerFailures: FinalizerFailure[] = [];
 
     try {
-      outputPublisher.publishRunSummary({
+      await outputPublisher.publishRunSummary({
         content: this.#runSummaryFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,
@@ -326,7 +326,7 @@ export class ReviewOrchestrator {
     }
 
     try {
-      outputPublisher.publishReviewIndex({
+      await outputPublisher.publishReviewIndex({
         content: this.#reviewIndexFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,
@@ -345,7 +345,7 @@ export class ReviewOrchestrator {
     }
 
     try {
-      outputPublisher.publishRunManifest({
+      await outputPublisher.publishRunManifest({
         content: this.#runManifestFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,
@@ -472,7 +472,7 @@ export class ReviewOrchestrator {
 
     try {
       // Load the file diff once so the per-file state machine can operate on a stable snapshot.
-      diffContent = this.#sourceProvider.getDiff(
+      diffContent = await this.#sourceProvider.getDiff(
         input.repoRoot,
         input.request.baseRef,
         input.request.headRef,
@@ -492,7 +492,7 @@ export class ReviewOrchestrator {
       fileContext.markInterrupted("diff-loading", reason);
 
       try {
-        input.outputPublisher.publishFileReview({
+        await input.outputPublisher.publishFileReview({
           noteFilePath: fileContext.noteFilePath,
           content: this.#finalizer.render(fileContext)
         });
@@ -502,7 +502,7 @@ export class ReviewOrchestrator {
       }
 
       try {
-        input.outputPublisher.publishSkippedFile({
+        await input.outputPublisher.publishSkippedFile({
           filePath: fileContext.filePath,
           stepId: "diff-loading",
           reason
@@ -565,7 +565,7 @@ export class ReviewOrchestrator {
         fileContext.markInterrupted(step.stepId, reason);
 
         try {
-          input.outputPublisher.publishFileReview({
+          await input.outputPublisher.publishFileReview({
             noteFilePath: fileContext.noteFilePath,
             content: this.#finalizer.render(fileContext)
           });
@@ -579,7 +579,7 @@ export class ReviewOrchestrator {
         }
 
         try {
-          input.outputPublisher.publishSkippedFile({
+          await input.outputPublisher.publishSkippedFile({
             filePath: fileContext.filePath,
             stepId: step.stepId,
             reason
@@ -611,13 +611,13 @@ export class ReviewOrchestrator {
       }
 
       try {
-        input.outputPublisher.publishFileReview({
+        await input.outputPublisher.publishFileReview({
           noteFilePath: fileContext.noteFilePath,
           content: this.#finalizer.render(fileContext)
         });
       } catch (outputError) {
         // A snapshot write failure is classified before deciding whether the run should abort or the file should skip.
-        const assessment = resolveSuccessfulSnapshotFailureAssessment(
+        const assessment = await resolveSuccessfulSnapshotFailureAssessment(
           this.#successfulSnapshotOutputHealthAssessor,
           {
             outputTarget: toReviewOutputTarget(input.outputTarget),
@@ -640,7 +640,7 @@ export class ReviewOrchestrator {
         }
 
         try {
-          input.outputPublisher.publishFileReview({
+          await input.outputPublisher.publishFileReview({
             noteFilePath: fileContext.noteFilePath,
             content: this.#finalizer.render(fileContext)
           });
@@ -654,7 +654,7 @@ export class ReviewOrchestrator {
         }
 
         try {
-          input.outputPublisher.publishSkippedFile({
+          await input.outputPublisher.publishSkippedFile({
             filePath: fileContext.filePath,
             stepId: step.stepId,
             reason

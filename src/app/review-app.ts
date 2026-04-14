@@ -96,8 +96,8 @@ export function createLocalReviewRunApp(
         options.workingDirectory,
         request.repoPath ?? "."
       );
-      const repoRoot = sourceProvider.resolveRepoRoot(startPath);
-      const reviewConfig = reviewConfigProvider.loadReviewConfig(repoRoot);
+      const repoRoot = await sourceProvider.resolveRepoRoot(startPath);
+      const reviewConfig = await reviewConfigProvider.loadReviewConfig(repoRoot);
 
       // In dry-run mode substitute stub factories so no Copilot CLI or AI calls are made.
       const isDryRun = request.dryRun === true;
