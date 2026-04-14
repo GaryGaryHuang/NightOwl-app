@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 
 import type { ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
-import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
+import { AuditWriterStateError, ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import {
   createAuditFileFixture,
   createToolAuditRecord
@@ -17,7 +17,7 @@ function readAuditLines(auditContent: string): unknown[] {
     .map((line) => JSON.parse(line));
 }
 
-test("ToolAuditWriter.append() preserves records as newline-delimited JSON in append order", () => {
+test("ToolAuditWriter.append() preserves records as newline-delimited JSON in append order", async () => {
   const auditFixture = createAuditFileFixture();
 
   try {
@@ -43,6 +43,7 @@ test("ToolAuditWriter.append() preserves records as newline-delimited JSON in ap
       writer.append(record);
     }
 
+    await writer.flush();
     const auditRecords = readAuditLines(auditFixture.read()) as Array<{
       ts: string;
       tool: string;
@@ -123,7 +124,7 @@ test("ToolAuditWriter constructed without path enters buffering mode and does no
   }
 });
 
-test("ToolAuditWriter.setPath() flushes buffered records in append order", () => {
+test("ToolAuditWriter.setPath() flushes buffered records in append order", async () => {
   const auditFixture = createAuditFileFixture();
 
   try {
@@ -139,6 +140,8 @@ test("ToolAuditWriter.setPath() flushes buffered records in append order", () =>
 
     writer.setPath(auditFixture.auditPath);
 
+    await writer.flush();
+
     const lines = readAuditLines(auditFixture.read());
     assert.equal(lines.length, 3);
     assert.deepEqual(lines[0], r1);
@@ -149,7 +152,7 @@ test("ToolAuditWriter.setPath() flushes buffered records in append order", () =>
   }
 });
 
-test("ToolAuditWriter.append() after setPath() writes directly to disk", () => {
+test("ToolAuditWriter.append() after setPath() writes directly to disk", async () => {
   const auditFixture = createAuditFileFixture();
 
   try {
@@ -163,6 +166,8 @@ test("ToolAuditWriter.append() after setPath() writes directly to disk", () => {
     const direct = createToolAuditRecord({ tool: "read", args: { path: "/a.ts" } });
     writer.append(direct);
 
+    await writer.flush();
+
     const lines = readAuditLines(auditFixture.read());
     assert.equal(lines.length, 2);
     assert.deepEqual(lines[0], buffered);
@@ -172,7 +177,7 @@ test("ToolAuditWriter.append() after setPath() writes directly to disk", () => {
   }
 });
 
-test("ToolAuditWriter.setPath() throws on second call", () => {
+test("ToolAuditWriter.setPath() throws AuditWriterStateError on second call", () => {
   const auditFixture = createAuditFileFixture();
 
   try {
@@ -181,14 +186,19 @@ test("ToolAuditWriter.setPath() throws on second call", () => {
 
     assert.throws(
       () => writer.setPath(path.join(auditFixture.tempDir, "other.jsonl")),
-      { message: "setPath() can only be called once" }
+      (err: unknown) => {
+        assert.ok(err instanceof AuditWriterStateError);
+        assert.equal(err.name, "AuditWriterStateError");
+        assert.equal(err.message, "setPath() can only be called once");
+        return true;
+      }
     );
   } finally {
     auditFixture.cleanup();
   }
 });
 
-test("ToolAuditWriter.setPath() throws on direct-write mode instance", () => {
+test("ToolAuditWriter.setPath() throws AuditWriterStateError on direct-write mode instance", () => {
   const auditFixture = createAuditFileFixture();
 
   try {
@@ -196,7 +206,12 @@ test("ToolAuditWriter.setPath() throws on direct-write mode instance", () => {
 
     assert.throws(
       () => writer.setPath(path.join(auditFixture.tempDir, "other.jsonl")),
-      { message: "setPath() can only be called once" }
+      (err: unknown) => {
+        assert.ok(err instanceof AuditWriterStateError);
+        assert.equal(err.name, "AuditWriterStateError");
+        assert.equal(err.message, "setPath() can only be called once");
+        return true;
+      }
     );
   } finally {
     auditFixture.cleanup();
