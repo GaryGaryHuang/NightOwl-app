@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -13,87 +13,88 @@ import {
   type SkipRecord,
   type ReviewOutputTarget
 } from "./review-output-sink.ts";
+import { wrapBoundaryError } from "./boundary-error-helper.ts";
+import { AsyncMutex } from "./async-mutex.ts";
 
 /**
  * Run-scoped local artifact publisher bound to one resolved OutputTarget.
  */
 export class LocalRunOutputPublisher implements RunOutputPublisher {
   readonly #outputTarget: ReviewOutputTarget;
+  readonly #skippedMutex = new AsyncMutex();
 
   constructor(outputTarget: ReviewOutputTarget) {
     this.#outputTarget = outputTarget;
   }
 
-  publishFileReview(fileResult: FileReviewResult): void {
-    try {
-      mkdirSync(path.dirname(fileResult.noteFilePath), { recursive: true });
-      writeFileSync(fileResult.noteFilePath, fileResult.content);
-    } catch (error) {
-      throw toOutputBoundaryError("publishFileReview", error, fileResult.noteFilePath);
-    }
+  async publishFileReview(fileResult: FileReviewResult): Promise<void> {
+    return wrapBoundaryError(
+      async () => {
+        await mkdir(path.dirname(fileResult.noteFilePath), { recursive: true });
+        await writeFile(fileResult.noteFilePath, fileResult.content);
+      },
+      (cause) => toOutputBoundaryError("publishFileReview", cause, fileResult.noteFilePath)
+    );
   }
 
-  publishSkippedFile(skipRecord: SkipRecord): void {
-    try {
-      appendFileSync(
-        this.#outputTarget.skippedPath,
-        `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
-      );
-    } catch (error) {
-      throw toOutputBoundaryError(
-        "publishSkippedFile",
-        error,
-        this.#outputTarget.skippedPath
-      );
-    }
+  async publishSkippedFile(skipRecord: SkipRecord): Promise<void> {
+    return this.#skippedMutex.run(() =>
+      wrapBoundaryError(
+        () => appendFile(
+          this.#outputTarget.skippedPath,
+          `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
+        ),
+        (cause) => toOutputBoundaryError(
+          "publishSkippedFile",
+          cause,
+          this.#outputTarget.skippedPath
+        )
+      )
+    );
   }
 
-  publishRunSummary(summaryResult: RunSummaryResult): void {
-    try {
-      writeFileSync(this.#outputTarget.summaryPath, summaryResult.content);
-    } catch (error) {
-      throw toOutputBoundaryError(
+  async publishRunSummary(summaryResult: RunSummaryResult): Promise<void> {
+    return wrapBoundaryError(
+      () => writeFile(this.#outputTarget.summaryPath, summaryResult.content),
+      (cause) => toOutputBoundaryError(
         "publishRunSummary",
-        error,
+        cause,
         this.#outputTarget.summaryPath
-      );
-    }
+      )
+    );
   }
 
-  publishReviewIndex(indexResult: ReviewIndexResult): void {
-    try {
-      writeFileSync(this.#outputTarget.indexPath, indexResult.content);
-    } catch (error) {
-      throw toOutputBoundaryError(
+  async publishReviewIndex(indexResult: ReviewIndexResult): Promise<void> {
+    return wrapBoundaryError(
+      () => writeFile(this.#outputTarget.indexPath, indexResult.content),
+      (cause) => toOutputBoundaryError(
         "publishReviewIndex",
-        error,
+        cause,
         this.#outputTarget.indexPath
-      );
-    }
+      )
+    );
   }
 
-  publishRunManifest(manifestResult: RunManifestResult): void {
-    try {
-      writeFileSync(this.#outputTarget.manifestPath, manifestResult.content);
-    } catch (error) {
-      throw toOutputBoundaryError(
+  async publishRunManifest(manifestResult: RunManifestResult): Promise<void> {
+    return wrapBoundaryError(
+      () => writeFile(this.#outputTarget.manifestPath, manifestResult.content),
+      (cause) => toOutputBoundaryError(
         "publishRunManifest",
-        error,
+        cause,
         this.#outputTarget.manifestPath
-      );
-    }
+      )
+    );
   }
 
-  publishChangesetOverview(result: ChangesetOverviewResult): void {
-    try {
-      writeFileSync(this.#outputTarget.changesetOverviewPath, result.content);
-    } catch (error) {
-      throw toOutputBoundaryError(
+  async publishChangesetOverview(result: ChangesetOverviewResult): Promise<void> {
+    return wrapBoundaryError(
+      () => writeFile(this.#outputTarget.changesetOverviewPath, result.content),
+      (cause) => toOutputBoundaryError(
         "publishChangesetOverview",
-        error,
+        cause,
         this.#outputTarget.changesetOverviewPath
-      );
-    }
+      )
+    );
   }
 }
 

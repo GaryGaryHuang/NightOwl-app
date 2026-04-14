@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { stat, readFile } from "node:fs/promises";
 
 import { reviewConfigPath } from "../core/nightowl-namespace.ts";
 import type {
@@ -10,31 +10,35 @@ import {
   buildDefaultReviewConfig,
   parseReviewConfig
 } from "./review-config-parser.ts";
+import { wrapBoundaryError } from "./boundary-error-helper.ts";
 
 /**
  * Load repo-local review config and normalize the supported overrides.
  */
 export class LocalReviewConfigProvider implements ReviewConfigProvider {
-  loadReviewConfig(repoRoot: string): ReviewConfig {
+  async loadReviewConfig(repoRoot: string): Promise<ReviewConfig> {
     const configPath = reviewConfigPath(repoRoot);
 
-    if (!existsSync(configPath)) {
-      return buildDefaultReviewConfig();
+    try {
+      await stat(configPath);
+    } catch (error: unknown) {
+      if (isEnoent(error)) {
+        return buildDefaultReviewConfig();
+      }
+      throw error;
     }
 
-    try {
-      return parseReviewConfig(readFileSync(configPath, "utf8"));
-    } catch (error) {
-      // Re-throw with the file path so invalid config errors point back to the source file.
-      // The enriched inner error is preserved via `cause` for diagnostic access.
-      throw new ReviewConfigProviderError(
+    return wrapBoundaryError(
+      async () => parseReviewConfig(await readFile(configPath, "utf8")),
+      (cause) => new ReviewConfigProviderError(
         "loadReviewConfig",
         `invalid review config at ${configPath}`,
-        {
-          cause: error,
-          configPath
-        }
-      );
-    }
+        { cause, configPath }
+      )
+    );
   }
+}
+
+function isEnoent(error: unknown): boolean {
+  return error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }

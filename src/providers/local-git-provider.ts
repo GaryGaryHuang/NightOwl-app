@@ -1,15 +1,20 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import {
   ReviewSourceProviderError,
   type ReviewSourceProvider
 } from "./review-source-provider.ts";
+import { wrapBoundaryError } from "./boundary-error-helper.ts";
 
-type GitRunner = (args: string[], cwd: string) => string;
+type GitRunner = (args: string[], cwd: string) => Promise<string>;
 
-function defaultGitRunner(args: string[], cwd: string): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+const execFileAsync = promisify(execFile);
+
+async function defaultGitRunner(args: string[], cwd: string): Promise<string> {
+  const { stdout } = await execFileAsync("git", args, { cwd, encoding: "utf8" });
+  return stdout.trim();
 }
 
 /**
@@ -22,89 +27,90 @@ export class LocalGitProvider implements ReviewSourceProvider {
     this.#runGit = gitRunner;
   }
 
-  resolveRepoRoot(startPath: string): string {
-    try {
-      return this.#runGit(["rev-parse", "--show-toplevel"], path.resolve(startPath));
-    } catch (error) {
-      throw new ReviewSourceProviderError(
+  async resolveRepoRoot(startPath: string): Promise<string> {
+    return wrapBoundaryError(
+      () => this.#runGit(["rev-parse", "--show-toplevel"], path.resolve(startPath)),
+      (cause) => new ReviewSourceProviderError(
         "resolveRepoRoot",
         "Review source provider failed during resolveRepoRoot.",
-        { cause: error }
-      );
-    }
+        { cause }
+      )
+    );
   }
 
-  getChangedFiles(
+  async getChangedFiles(
     repoRoot: string,
     baseRef: string,
     headRef: string
-  ): string[] {
-    try {
-      const output = this.#runGit(
-        ["diff", `${baseRef}...${headRef}`, "--name-only", "--diff-filter=d"],
-        repoRoot
-      );
-      return output ? output.split("\n").filter(Boolean) : [];
-    } catch (error) {
-      throw new ReviewSourceProviderError(
+  ): Promise<string[]> {
+    return wrapBoundaryError(
+      async () => {
+        const output = await this.#runGit(
+          ["diff", `${baseRef}...${headRef}`, "--name-only", "--diff-filter=d"],
+          repoRoot
+        );
+        return output ? output.split("\n").filter(Boolean) : [];
+      },
+      (cause) => new ReviewSourceProviderError(
         "getChangedFiles",
         "Review source provider failed during getChangedFiles.",
-        { cause: error }
-      );
-    }
+        { cause }
+      )
+    );
   }
 
-  getChangesetEntries(
+  async getChangesetEntries(
     repoRoot: string,
     baseRef: string,
     headRef: string
-  ): string[] {
+  ): Promise<string[]> {
     // Step 0 needs name-status output so it can see deleted files as part of the full changeset.
-    try {
-      const output = this.#runGit(
-        ["diff", `${baseRef}...${headRef}`, "--name-status"],
-        repoRoot
-      );
-      return output ? output.split("\n").filter(Boolean) : [];
-    } catch (error) {
-      throw new ReviewSourceProviderError(
+    return wrapBoundaryError(
+      async () => {
+        const output = await this.#runGit(
+          ["diff", `${baseRef}...${headRef}`, "--name-status"],
+          repoRoot
+        );
+        return output ? output.split("\n").filter(Boolean) : [];
+      },
+      (cause) => new ReviewSourceProviderError(
         "getChangesetEntries",
         "Review source provider failed during getChangesetEntries.",
-        { cause: error }
-      );
-    }
+        { cause }
+      )
+    );
   }
 
-  getDiff(
+  async getDiff(
     repoRoot: string,
     baseRef: string,
     headRef: string,
     filePath: string
-  ): string {
-    try {
-      return this.#runGit(
+  ): Promise<string> {
+    return wrapBoundaryError(
+      () => this.#runGit(
         ["diff", `${baseRef}...${headRef}`, "--", filePath],
         repoRoot
-      );
-    } catch (error) {
-      throw new ReviewSourceProviderError(
+      ),
+      (cause) => new ReviewSourceProviderError(
         "getDiff",
         "Review source provider failed during getDiff.",
-        { cause: error }
-      );
-    }
+        { cause }
+      )
+    );
   }
 
-  getCurrentBranch(repoRoot: string): string | undefined {
-    try {
-      const branchName = this.#runGit(["branch", "--show-current"], repoRoot);
-      return branchName || undefined;
-    } catch (error) {
-      throw new ReviewSourceProviderError(
+  async getCurrentBranch(repoRoot: string): Promise<string | undefined> {
+    return wrapBoundaryError(
+      async () => {
+        const branchName = await this.#runGit(["branch", "--show-current"], repoRoot);
+        return branchName || undefined;
+      },
+      (cause) => new ReviewSourceProviderError(
         "getCurrentBranch",
         "Review source provider failed during getCurrentBranch.",
-        { cause: error }
-      );
-    }
+        { cause }
+      )
+    );
   }
 }

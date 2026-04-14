@@ -1,11 +1,11 @@
-import { accessSync, constants, statSync } from "node:fs";
+import { access, stat, constants } from "node:fs/promises";
 import path from "node:path";
 
-import type {
+import {
   ReviewOutputBoundaryError,
-  SuccessfulSnapshotFailureAssessment,
-  SuccessfulSnapshotFailureInput,
-  SuccessfulSnapshotOutputHealthAssessor
+  type SuccessfulSnapshotFailureAssessment,
+  type SuccessfulSnapshotFailureInput,
+  type SuccessfulSnapshotOutputHealthAssessor
 } from "./review-output-sink.ts";
 
 /**
@@ -14,9 +14,9 @@ import type {
 export class LocalSuccessfulSnapshotOutputHealthAssessor
   implements SuccessfulSnapshotOutputHealthAssessor
 {
-  assess(
+  async assess(
     input: SuccessfulSnapshotFailureInput
-  ): SuccessfulSnapshotFailureAssessment {
+  ): Promise<SuccessfulSnapshotFailureAssessment> {
     const underlyingError = unwrapOutputCause(input.error);
     const code =
       isErrnoException(underlyingError) && typeof underlyingError.code === "string"
@@ -43,8 +43,8 @@ export class LocalSuccessfulSnapshotOutputHealthAssessor
     }
 
     try {
-      assertWritableDirectory(input.outputTarget.basePath);
-      assertWritableDirectory(input.outputTarget.filesPath);
+      await assertWritableDirectory(input.outputTarget.basePath);
+      await assertWritableDirectory(input.outputTarget.filesPath);
     } catch {
       return { faultScope: "shared-output-target-fault" };
     }
@@ -81,7 +81,7 @@ function unwrapOutputCause(error: unknown): unknown {
 function isReviewOutputBoundaryError(
   error: unknown
 ): error is ReviewOutputBoundaryError {
-  return error instanceof Error && error.name === "ReviewOutputBoundaryError";
+  return error instanceof ReviewOutputBoundaryError;
 }
 
 function resolveErrnoPath(error: unknown): string | undefined {
@@ -92,12 +92,12 @@ function resolveErrnoPath(error: unknown): string | undefined {
   return path.resolve(error.path);
 }
 
-function assertWritableDirectory(targetPath: string): void {
-  const stat = statSync(targetPath);
+async function assertWritableDirectory(targetPath: string): Promise<void> {
+  const statResult = await stat(targetPath);
 
-  if (!stat.isDirectory()) {
+  if (!statResult.isDirectory()) {
     throw new Error(`${targetPath} is not a directory`);
   }
 
-  accessSync(targetPath, constants.W_OK);
+  await access(targetPath, constants.W_OK);
 }

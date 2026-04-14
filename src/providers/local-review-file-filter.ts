@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { stat, readFile } from "node:fs/promises";
 
 import ignore from "ignore";
 
@@ -10,34 +10,45 @@ import {
   ReviewFileFilterError,
   type ReviewFileFilter
 } from "./review-file-filter.ts";
+import { wrapBoundaryError } from "./boundary-error-helper.ts";
 
 /**
  * Local review file filter backed by canonical `.nightowl/reviewignore` rules.
  */
 export class LocalReviewFileFilter implements ReviewFileFilter {
-  filterReviewableFiles(repoRoot: string, files: string[]): string[] {
+  async filterReviewableFiles(repoRoot: string, files: string[]): Promise<string[]> {
     const reviewIgnoreFilePath = reviewIgnorePath(repoRoot);
     const sourceFiles = files.filter((filePath) => !isNightOwlNamespacePath(filePath));
 
-    if (!existsSync(reviewIgnoreFilePath)) {
-      return [...sourceFiles];
+    try {
+      await stat(reviewIgnoreFilePath);
+    } catch (error: unknown) {
+      if (isEnoent(error)) {
+        return [...sourceFiles];
+      }
+      throw error;
     }
 
-    try {
-      const matcher = ignore().add(readFileSync(reviewIgnoreFilePath, "utf8"));
+    return wrapBoundaryError(
+      async () => {
+        const matcher = ignore().add(await readFile(reviewIgnoreFilePath, "utf8"));
 
-      // `reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
-      return sourceFiles.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
-    } catch (error) {
-      throw new ReviewFileFilterError(
+        // `reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
+        return sourceFiles.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
+      },
+      (cause) => new ReviewFileFilterError(
         "filterReviewableFiles",
         "Review file filter failed during filterReviewableFiles.",
-        { cause: error }
-      );
-    }
+        { cause }
+      )
+    );
   }
 }
 
 function normalizeFilePath(filePath: string): string {
   return filePath.replace(/\\/gu, "/");
+}
+
+function isEnoent(error: unknown): boolean {
+  return error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }
