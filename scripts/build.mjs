@@ -6,40 +6,46 @@ import {
   rmSync
 } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
 const repoRoot = path.resolve(currentDir, "..");
-const distRoot = path.join(repoRoot, "dist");
-const buildConfigPath = path.join(repoRoot, "tsconfig.build.json");
-const builtCliPath = path.join(distRoot, "bin", "review.js");
-const tscCliPath = path.join(repoRoot, "node_modules", "typescript", "bin", "tsc");
 const CLI_SHEBANG = "#!/usr/bin/env node";
 
-cleanDistOutput();
-runTypeScriptBuild();
-assertBuiltCliArtifact();
-chmodSync(builtCliPath, 0o755);
+export function runBuild({
+  projectRoot = repoRoot,
+  execPath = process.execPath
+} = {}) {
+  const distRoot = path.join(projectRoot, "dist");
+  const buildConfigPath = path.join(projectRoot, "tsconfig.build.json");
+  const builtCliPath = path.join(distRoot, "bin", "review.js");
+  const tscCliPath = path.join(projectRoot, "node_modules", "typescript", "bin", "tsc");
 
-function cleanDistOutput() {
+  cleanDistOutput(distRoot);
+  runTypeScriptBuild({ tscCliPath, buildConfigPath, projectRoot, execPath });
+  assertBuiltCliArtifact(builtCliPath);
+  chmodSync(builtCliPath, 0o755);
+}
+
+function cleanDistOutput(distRoot) {
   rmSync(distRoot, { force: true, recursive: true });
 }
 
-function runTypeScriptBuild() {
+function runTypeScriptBuild({ tscCliPath, buildConfigPath, projectRoot, execPath }) {
   if (!existsSync(tscCliPath)) {
     throw new Error(
       "TypeScript compiler not found at node_modules/typescript/bin/tsc. Run npm install before npm run build."
     );
   }
 
-  execFileSync(process.execPath, [tscCliPath, "-p", buildConfigPath], {
-    cwd: repoRoot,
+  execFileSync(execPath, [tscCliPath, "-p", buildConfigPath], {
+    cwd: projectRoot,
     stdio: "inherit"
   });
 }
 
-function assertBuiltCliArtifact() {
+function assertBuiltCliArtifact(builtCliPath) {
   if (!existsSync(builtCliPath)) {
     throw new Error(
       `Build completed without the expected CLI artifact at ${builtCliPath}.`
@@ -54,4 +60,12 @@ function assertBuiltCliArtifact() {
       `Built CLI artifact at ${builtCliPath} is missing the expected shebang ${CLI_SHEBANG}.`
     );
   }
+}
+
+const isDirectInvocation =
+  process.argv[1] !== undefined &&
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+
+if (isDirectInvocation) {
+  runBuild();
 }
