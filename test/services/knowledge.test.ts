@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { KnowledgeSvc } from "../../src/services/knowledge.ts";
+import { KnowledgeConfigError, KnowledgeSvc } from "../../src/services/knowledge.ts";
 import {
   createContext7Override,
   createLocalMcpServer,
@@ -30,8 +30,8 @@ test("KnowledgeSvc disables MCP injection outside built-in-context7 mode regardl
     }
   });
 
-  assert.equal(emptyService.getMcpServers("disabled"), undefined);
-  assert.equal(configuredService.getMcpServers("disabled"), undefined);
+  assert.deepEqual(emptyService.getMcpServers("disabled"), {});
+  assert.deepEqual(configuredService.getMcpServers("disabled"), {});
 });
 
 test("KnowledgeSvc returns the built-in Context7 base and appends non-context7 custom entries", () => {
@@ -210,4 +210,42 @@ test("KnowledgeSvc preserves supported local custom entry fields across local an
 
     assert.deepEqual(merged.demo, testCase.expected, testCase.name);
   }
+});
+
+// --- Early validation (fail-fast at construction time) ---
+
+test("KnowledgeSvc constructor throws KnowledgeConfigError for invalid context7 override shape", () => {
+  assert.throws(
+    () =>
+      new KnowledgeSvc({
+        userMcpServers: {
+          context7: createRemoteMcpServer() as never
+        }
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof KnowledgeConfigError);
+      assert.equal(err.name, "KnowledgeConfigError");
+      assert.match(err.message, /context7 override must use the built-in remote override shape/);
+      return true;
+    }
+  );
+});
+
+test("KnowledgeSvc constructor throws KnowledgeConfigError for invalid custom MCP shape", () => {
+  const invalidConfig = { type: "unknown", command: "nope" } as never;
+
+  assert.throws(
+    () =>
+      new KnowledgeSvc({
+        userMcpServers: {
+          "bad-mcp": invalidConfig
+        }
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof KnowledgeConfigError);
+      assert.equal(err.name, "KnowledgeConfigError");
+      assert.match(err.message, /custom MCP 'bad-mcp' must use a local or remote MCP shape/);
+      return true;
+    }
+  );
 });

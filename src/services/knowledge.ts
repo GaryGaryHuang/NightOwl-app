@@ -15,6 +15,13 @@ import type {
 
 const CONTEXT7_REMOTE_URL = "https://mcp.context7.com/mcp";
 
+export class KnowledgeConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "KnowledgeConfigError";
+  }
+}
+
 export interface KnowledgeSvcOptions {
   context7ApiKey?: string;
   userMcpServers?: ReviewMcpServers;
@@ -22,6 +29,9 @@ export interface KnowledgeSvcOptions {
 
 /**
  * Build the MCP server map for review sessions from the fixed Context7 base plus repo-local overrides.
+ *
+ * User MCP server shapes are validated eagerly at construction time so that
+ * configuration errors surface before the first review session is created.
  */
 export class KnowledgeSvc {
   readonly #context7ApiKey?: string;
@@ -30,13 +40,14 @@ export class KnowledgeSvc {
   constructor(options: KnowledgeSvcOptions = {}) {
     this.#context7ApiKey = options.context7ApiKey;
     this.#userMcpServers = options.userMcpServers ?? {};
+    this.#validateUserMcpServers();
   }
 
   getMcpServers(
     knowledgeMode: ReviewKnowledgeMode
-  ): Record<string, MCPServerConfig> | undefined {
+  ): Record<string, MCPServerConfig> {
     if (knowledgeMode !== "built-in-context7") {
-      return undefined;
+      return {};
     }
 
     const context7: MCPRemoteServerConfig = {
@@ -63,12 +74,11 @@ export class KnowledgeSvc {
 
     for (const [name, config] of Object.entries(this.#userMcpServers)) {
       if (name === "context7") {
-        // Context7 is special: repo-local config may only override the supported fields on the built-in remote shape.
-        if (!isContext7OverrideConfig(config)) {
-          throw new Error("context7 override must use the built-in remote override shape");
-        }
-
-        context7Config = mergeContext7Config(context7Config, config);
+        // Validated in constructor: context7 entry is always a Context7OverrideConfig.
+        context7Config = mergeContext7Config(
+          context7Config,
+          config as ReviewContext7OverrideConfig
+        );
         merged.context7 = context7Config;
       } else if (isRemoteConfig(config)) {
         // Clone remote entries so session setup cannot mutate the parsed repo config object.
@@ -81,18 +91,16 @@ export class KnowledgeSvc {
         };
         merged[name] = remoteConfig;
       } else {
-        if (!isLocalConfig(config)) {
-          throw new Error(`custom MCP '${name}' must use a local or remote MCP shape`);
-        }
-
+        // Validated in constructor: non-context7, non-remote entry is always local.
+        const localConfig = config as ReviewLocalMcpServerConfig;
         const resolvedConfig: MCPLocalServerConfig = {
-          type: config.type,
-          command: config.command,
-          args: config.args === undefined ? [] : [...config.args],
-          tools: config.tools === undefined ? ["*"] : [...config.tools],
-          ...(config.env === undefined ? {} : { env: { ...config.env } }),
-          ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
-          ...(config.timeout === undefined ? {} : { timeout: config.timeout })
+          type: localConfig.type,
+          command: localConfig.command,
+          args: localConfig.args === undefined ? [] : [...localConfig.args],
+          tools: localConfig.tools === undefined ? ["*"] : [...localConfig.tools],
+          ...(localConfig.env === undefined ? {} : { env: { ...localConfig.env } }),
+          ...(localConfig.cwd === undefined ? {} : { cwd: localConfig.cwd }),
+          ...(localConfig.timeout === undefined ? {} : { timeout: localConfig.timeout })
         };
 
         merged[name] = resolvedConfig;
@@ -100,6 +108,22 @@ export class KnowledgeSvc {
     }
 
     return merged;
+  }
+
+  #validateUserMcpServers(): void {
+    for (const [name, config] of Object.entries(this.#userMcpServers)) {
+      if (name === "context7") {
+        if (!isContext7OverrideConfig(config)) {
+          throw new KnowledgeConfigError(
+            "context7 override must use the built-in remote override shape"
+          );
+        }
+      } else if (!isRemoteConfig(config) && !isLocalConfig(config)) {
+        throw new KnowledgeConfigError(
+          `custom MCP '${name}' must use a local or remote MCP shape`
+        );
+      }
+    }
   }
 }
 

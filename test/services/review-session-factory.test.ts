@@ -192,7 +192,7 @@ test("ReviewSessionFactory injects MCP servers only when KnowledgeSvc returns th
     knowledgeSvc: {
       getMcpServers(knowledgeMode) {
         knowledgeModeCalls.push(knowledgeMode);
-        return knowledgeMode === "built-in-context7" ? builtInServers : undefined;
+        return knowledgeMode === "built-in-context7" ? builtInServers : {};
       }
     },
     toolPolicyGuard: new ToolPolicyGuard({})

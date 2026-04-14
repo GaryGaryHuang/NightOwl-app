@@ -97,7 +97,7 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
       profile.knowledgeMode ?? "built-in-context7"
     );
 
-    if (mcpServers) {
+    if (mcpServers && Object.keys(mcpServers).length > 0) {
       sessionConfig.mcpServers = mcpServers;
     }
 
