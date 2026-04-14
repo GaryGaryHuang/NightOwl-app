@@ -133,10 +133,10 @@ describe("createLocalReviewRunApp progress events", () => {
       "progress:src/app.ts:step5-validation-interrogation",
       "progress:src/app.ts:step6-cognitive-simulation",
       "progress:src/app.ts:step7-summary",
-      "completed:src/app.ts:1:0",
+      "completed:src/app.ts",
       "claimed:2:packages/app/index.ts",
       "progress:packages/app/index.ts:step1-overview",
-      "skipped:packages/app/index.ts:step2-dependencies-boundaries:deterministic validation failed:1:1",
+      "skipped:packages/app/index.ts:step2-dependencies-boundaries:deterministic validation failed",
       "finalizing:2:1:1"
     ]);
   });
@@ -158,9 +158,9 @@ function renderProgressEvent(event: RunProgressEvent): string {
     case "file-progressed":
       return `progress:${event.filePath}:${event.stepId}`;
     case "file-completed":
-      return `completed:${event.filePath}:${event.successfulFileCount}:${event.skippedFileCount}`;
+      return `completed:${event.filePath}`;
     case "file-skipped":
-      return `skipped:${event.filePath}:${event.stepId}:${event.reason}:${event.successfulFileCount}:${event.skippedFileCount}`;
+      return `skipped:${event.filePath}:${event.stepId}:${event.reason}`;
     case "run-finalizing":
       return `finalizing:${event.plannedFileCount}:${event.successfulFileCount}:${event.skippedFileCount}`;
   }

@@ -694,8 +694,7 @@ export class ReviewOrchestrator {
 
     this.#emitProgressEvent({
       type: "file-completed",
-      filePath: fileContext.filePath,
-      ...countResolvedOutcomes(input.outcomeSlots)
+      filePath: fileContext.filePath
     });
   }
 
@@ -718,8 +717,7 @@ export class ReviewOrchestrator {
       type: "file-skipped",
       filePath: input.filePath,
       stepId: input.stepId,
-      reason: input.reason,
-      ...countResolvedOutcomes(input.outcomeSlots)
+      reason: input.reason
     });
   }
 
@@ -768,29 +766,6 @@ interface AbortState {
   error?: unknown;
 }
 
-
-function countResolvedOutcomes(outcomeSlots: PlannedOutcomeSlot[]): {
-  successfulFileCount: number;
-  skippedFileCount: number;
-} {
-  let successfulFileCount = 0;
-  let skippedFileCount = 0;
-
-  for (const slot of outcomeSlots) {
-    if (slot?.successful) {
-      successfulFileCount += 1;
-    }
-
-    if (slot?.skipped) {
-      skippedFileCount += 1;
-    }
-  }
-
-  return {
-    successfulFileCount,
-    skippedFileCount
-  };
-}
 
 
 function extractStepFailureReason(input: {

@@ -26,16 +26,12 @@ export type RunProgressEvent =
   | {
       type: "file-completed";
       filePath: string;
-      successfulFileCount: number;
-      skippedFileCount: number;
     }
   | {
       type: "file-skipped";
       filePath: string;
       stepId: string;
       reason: string;
-      successfulFileCount: number;
-      skippedFileCount: number;
     }
   | {
       type: "run-finalizing";

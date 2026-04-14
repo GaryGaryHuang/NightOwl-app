@@ -80,9 +80,7 @@ test("CliProgressReporter keeps only three most-recent active files and counts s
     type: "file-skipped",
     filePath: "src/b.ts",
     stepId: "step2-dependencies-boundaries",
-    reason: "deterministic validation failed",
-    successfulFileCount: 0,
-    skippedFileCount: 1
+    reason: "deterministic validation failed"
   });
 
   const liveLine = stdout.writes.at(-1) ?? "";
@@ -142,9 +140,7 @@ test("CliProgressReporter pins skipped-file events above the TTY live line and k
     type: "file-skipped",
     filePath: "src/app.ts",
     stepId: "step2-dependencies-boundaries",
-    reason: "judge rejected",
-    successfulFileCount: 0,
-    skippedFileCount: 1
+    reason: "judge rejected"
   });
 
   assert.match(
@@ -190,9 +186,7 @@ test("CliProgressReporter falls back to append-only snapshots when stdout is not
     type: "file-skipped",
     filePath: "src/app.ts",
     stepId: "step2-dependencies-boundaries",
-    reason: "judge rejected",
-    successfulFileCount: 0,
-    skippedFileCount: 1
+    reason: "judge rejected"
   });
 
   assert.deepEqual(stdout.writes, []);
@@ -217,9 +211,7 @@ test("CliProgressReporter emits a non-TTY snapshot when a file completes success
   });
   reporter.handleEvent({
     type: "file-completed",
-    filePath: "src/app.ts",
-    successfulFileCount: 1,
-    skippedFileCount: 0
+    filePath: "src/app.ts"
   });
 
   assert.deepEqual(stdout.writes, []);
@@ -313,7 +305,7 @@ test("reduceProgressEvent maps run progress events to state updates and render i
       }
     },
     {
-      name: "file-completed removes active file and stores counters",
+      name: "file-completed removes active file and increments successful count",
       setupState() {
         return reduceProgressEvent(makeEmptyState(), {
           type: "file-claimed",
@@ -323,9 +315,7 @@ test("reduceProgressEvent maps run progress events to state updates and render i
       },
       event: {
         type: "file-completed",
-        filePath: "src/a.ts",
-        successfulFileCount: 1,
-        skippedFileCount: 0
+        filePath: "src/a.ts"
       },
       verify(result) {
         assert.deepEqual(result.instruction, {
@@ -348,9 +338,7 @@ test("reduceProgressEvent maps run progress events to state updates and render i
         type: "file-skipped",
         filePath: "src/b.ts",
         stepId: "step2",
-        reason: "judge rejected",
-        successfulFileCount: 0,
-        skippedFileCount: 1
+        reason: "judge rejected"
       },
       verify(result) {
         assert.equal(
@@ -398,7 +386,7 @@ test("progress state helpers update active and resolved counters", () => {
   const s1 = withActiveFileProgress(s0, "src/a.ts", 1);
   const s2 = withActiveFileProgress(s1, "src/b.ts", 2);
   const s3 = withActiveFileProgress(s2, "src/a.ts", 99);
-  const s4 = withResolvedOutcome(s3, "src/a.ts", 2, 1);
+  const s4 = withResolvedOutcome(s3, "src/a.ts", "completed");
 
   assert.equal(s1.eventSeq, s0.eventSeq + 1);
   assert.equal(s2.eventSeq, s1.eventSeq + 1);
@@ -409,8 +397,8 @@ test("progress state helpers update active and resolved counters", () => {
       (s1.activeFiles.get("src/a.ts")?.lastProgressSeq ?? 0)
   );
   assert.ok(!s4.activeFiles.has("src/a.ts"));
-  assert.equal(s4.successfulFileCount, 2);
-  assert.equal(s4.skippedFileCount, 1);
+  assert.equal(s4.successfulFileCount, 1);
+  assert.equal(s4.skippedFileCount, 0);
 });
 
 test("createProgressSnapshot summarizes active and resolved file counts", () => {

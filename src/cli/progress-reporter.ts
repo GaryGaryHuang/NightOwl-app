@@ -228,12 +228,7 @@ export function reduceProgressEvent(
 
     case "file-completed":
       return {
-        state: withResolvedOutcome(
-          current,
-          event.filePath,
-          event.successfulFileCount,
-          event.skippedFileCount
-        ),
+        state: withResolvedOutcome(current, event.filePath, "completed"),
         instruction: {
           renderProgress: { significant: true }
         }
@@ -241,12 +236,7 @@ export function reduceProgressEvent(
 
     case "file-skipped":
       return {
-        state: withResolvedOutcome(
-          current,
-          event.filePath,
-          event.successfulFileCount,
-          event.skippedFileCount
-        ),
+        state: withResolvedOutcome(current, event.filePath, "skipped"),
         instruction: {
           appendMessage: `Skipped: ${event.filePath} | ${event.stepId} | ${event.reason}`,
           renderProgress: { significant: true }
@@ -294,8 +284,7 @@ export function withActiveFileProgress(
 export function withResolvedOutcome(
   current: CliProgressState,
   filePath: string,
-  successfulFileCount: number,
-  skippedFileCount: number
+  outcome: "completed" | "skipped"
 ): CliProgressState {
   const activeFiles = new Map(current.activeFiles);
   activeFiles.delete(filePath);
@@ -303,8 +292,8 @@ export function withResolvedOutcome(
   return {
     ...current,
     activeFiles,
-    skippedFileCount,
-    successfulFileCount
+    successfulFileCount: current.successfulFileCount + (outcome === "completed" ? 1 : 0),
+    skippedFileCount: current.skippedFileCount + (outcome === "skipped" ? 1 : 0)
   };
 }
 
