@@ -101,14 +101,6 @@ export async function runCli(
 export function createDefaultCliRuntime(
   runtime: CliRuntime = {}
 ): ResolvedCliRuntime {
-  if (
-    runtime.progressReporter &&
-    runtime.stdout &&
-    runtime.progressReporter.stdout !== runtime.stdout
-  ) {
-    throw new Error("CliRuntime stdout and progressReporter must share the same writer.");
-  }
-
   const stdout = runtime.progressReporter?.stdout ?? runtime.stdout ?? createProcessCliStdout();
   const progressReporter = runtime.progressReporter ?? new CliProgressReporter({ stdout });
 

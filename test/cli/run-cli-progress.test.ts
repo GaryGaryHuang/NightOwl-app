@@ -74,31 +74,6 @@ test("runCli finalizes a live TTY progress surface before terminal output", asyn
   }
 });
 
-test("runCli rejects mismatched stdout and progressReporter writers to preserve a single writer boundary", async () => {
-  const stderr: string[] = [];
-
-  const exitCode = await runCli(["main", "feature-branch"], {
-    progressReporter: new CliProgressReporter({ stdout: createFakeStdout() }),
-    stdout: {
-      log() {},
-      write() {
-        return true;
-      }
-    },
-    stderr: {
-      error(message) {
-        stderr.push(String(message));
-      }
-    }
-  });
-
-  assert.equal(exitCode, 1);
-  assert.equal(
-    stderr[0],
-    "CliRuntime stdout and progressReporter must share the same writer."
-  );
-});
-
 async function runCliWithLiveProgress(
   runAfterProgress: () => ReviewRunSummary
 ): Promise<{
