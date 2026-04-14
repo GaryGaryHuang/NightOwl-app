@@ -110,11 +110,12 @@ export function createLocalReviewRunApp(
 
       let reviewSessionFactory: Pick<ReviewSessionFactory, "createSession">;
       let onOutputTargetReady: ((outputTarget: { toolAuditPath: string }) => void) | undefined;
+      let auditWriter: ToolAuditWriter | undefined;
 
       if (isDryRun) {
         reviewSessionFactory = new DryRunReviewSessionFactory();
       } else {
-        const auditWriter = new ToolAuditWriter();
+        auditWriter = new ToolAuditWriter();
         const knowledgeSvc =
           options.knowledgeSvc ??
           new KnowledgeSvc({
@@ -132,10 +133,10 @@ export function createLocalReviewRunApp(
           clientManager,
           knowledgeSvc,
           toolPolicyGuard,
-          auditWriterProvider: () => auditWriter
+          auditWriterProvider: () => auditWriter!
         });
         onOutputTargetReady = (outputTarget) => {
-          auditWriter.setPath(outputTarget.toolAuditPath);
+          auditWriter!.setPath(outputTarget.toolAuditPath);
         };
       }
 
@@ -173,9 +174,15 @@ export function createLocalReviewRunApp(
         gracefulShutdownTimeoutMs
       });
 
-      return await lifecycleManager.run((signal) =>
+      const result = await lifecycleManager.run((signal) =>
         orchestrator.run(request, { signal })
       );
+
+      // Ensure all async audit records are flushed to disk before the process exits.
+      // Individual write failures are still silently ignored per the best-effort contract.
+      await auditWriter?.flush();
+
+      return result;
     }
   };
 }
