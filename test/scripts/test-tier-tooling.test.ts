@@ -124,6 +124,38 @@ test("runTestTierCommand spawns the manifest-defined source test files for the r
   });
 });
 
+test("runTestTierCommand collects files from all tiers when invoked with 'all'", () => {
+  let receivedArgs: string[] | undefined;
+
+  const exitCode = runTestTierCommand({
+    args: ["all"],
+    loadManifest: () => createManifest({
+      unit: ["test/core/alpha.test.ts"],
+      integration: ["test/app/beta.test.ts"],
+      e2e: ["test/cli/gamma.test.ts"]
+    }),
+    spawn: (_command, args) => {
+      receivedArgs = args;
+      return { status: 0 };
+    },
+    execPath: "node",
+    cwd: "/tmp/nightowl-app",
+    logger: {
+      error() {},
+      log() {}
+    }
+  });
+
+  assert.equal(exitCode, 0);
+  // "all" concatenates files in canonical tier order: unit → integration → e2e.
+  assert.deepEqual(receivedArgs, [
+    "--test",
+    "test/core/alpha.test.ts",
+    "test/app/beta.test.ts",
+    "test/cli/gamma.test.ts"
+  ]);
+});
+
 test("runTestTierCommand returns exit code 1 and logs the error when spawn fails to start", () => {
   const loggedErrors: unknown[] = [];
   const spawnError = new Error("spawn ENOENT");

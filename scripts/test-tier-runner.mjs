@@ -7,7 +7,8 @@ import {
   loadVerifiedTestTierManifest
 } from "./verify-test-tier-manifest.mjs";
 
-const VALID_TIERS = new Set(["unit", "integration", "e2e"]);
+const MANIFEST_TIERS = ["unit", "integration", "e2e"];
+const VALID_TIERS = new Set([...MANIFEST_TIERS, "all"]);
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFilePath), "..");
@@ -24,7 +25,7 @@ export function runTestTierCommand({
 
   if (!VALID_TIERS.has(tier)) {
     logger.error(
-      "Usage: node ./scripts/test-tier-runner.mjs <unit|integration|e2e>"
+      "Usage: node ./scripts/test-tier-runner.mjs <unit|integration|e2e|all>"
     );
     return 1;
   }
@@ -42,15 +43,15 @@ export function runTestTierCommand({
     throw error;
   }
 
-  const files = manifest[tier];
-
-  if (!Array.isArray(files)) {
-    logger.error(`Tier "${tier}" is missing or invalid in test/test-tier-manifest.json`);
-    return 1;
-  }
+  const tiers = tier === "all" ? MANIFEST_TIERS : [tier];
+  const files = tiers.flatMap((t) => manifest[t]);
 
   if (files.length === 0) {
-    logger.error(`Tier "${tier}" has no test files configured.`);
+    logger.error(
+      tier === "all"
+        ? "No test files configured in any tier."
+        : `Tier "${tier}" has no test files configured.`
+    );
     return 1;
   }
 
