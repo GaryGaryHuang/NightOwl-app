@@ -19,6 +19,14 @@ import {
   resolveWebFetchDeniedHostsFromConfigObject
 } from "./review-config-web-fetch-host-parser.ts";
 
+const RECOGNIZED_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
+  "maxConcurrentFiles",
+  "confidenceThresholds",
+  "mcpServers",
+  "webFetchAllowedHosts",
+  "webFetchDeniedHosts"
+]);
+
 export function parseReviewConfig(configText: string): ReviewConfig {
   return resolveTopLevelReviewConfig(parseReviewConfigObject(configText));
 }
@@ -52,6 +60,12 @@ export function parseReviewConfigObject(
 export function resolveTopLevelReviewConfig(
   configObject: Record<string, unknown>
 ): ReviewConfig {
+  for (const key of Object.keys(configObject)) {
+    if (!RECOGNIZED_TOP_LEVEL_KEYS.has(key)) {
+      throw new Error(`unknown config key '${key}'`);
+    }
+  }
+
   const webFetchAllowedHosts =
     resolveWebFetchAllowedHostsFromConfigObject(configObject);
   const webFetchDeniedHosts =

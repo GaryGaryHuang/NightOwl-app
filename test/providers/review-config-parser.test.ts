@@ -48,43 +48,65 @@ test("parseReviewConfig preserves run-level defaults and omission semantics", ()
 });
 
 test("parseReviewConfig rejects invalid run-level config fields", () => {
-  const invalidConfigs: Array<Record<string, unknown>> = [
-    {
-      maxConcurrentFiles: 0
-    },
-    {
-      maxConcurrentFiles: -1
-    },
-    {
-      maxConcurrentFiles: 2.5
-    },
-    {
-      maxConcurrentFiles: "2"
-    },
-    {
-      confidenceThresholds: []
-    },
-    {
-      confidenceThresholds: {
-        musst: 70
-      }
-    },
-    {
-      confidenceThresholds: {
-        must: 101
-      }
-    },
-    {
-      confidenceThresholds: {
-        nice: "85"
-      }
-    }
-  ];
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: 0 })),
+    /maxConcurrentFiles/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: -1 })),
+    /maxConcurrentFiles/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: 2.5 })),
+    /maxConcurrentFiles/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: "2" })),
+    /maxConcurrentFiles/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ confidenceThresholds: [] })),
+    /confidenceThresholds/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ confidenceThresholds: { musst: 70 } })),
+    /confidenceThresholds/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ confidenceThresholds: { must: 101 } })),
+    /confidenceThresholds\.must/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ confidenceThresholds: { nice: "85" } })),
+    /confidenceThresholds\.nice/u
+  );
+});
 
-  for (const config of invalidConfigs) {
-    assert.throws(
-      () => parseReviewConfig(JSON.stringify(config)),
-      /invalid review config/u
-    );
-  }
+test("parseReviewConfig rejects unknown top-level keys", () => {
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ mcpServer: {} })),
+    /mcpServer/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: 3, unknownField: true })),
+    /unknownField/u
+  );
+});
+
+test("parseReviewConfig accepts config with all five recognized keys", () => {
+  const config = parseReviewConfig(
+    JSON.stringify({
+      maxConcurrentFiles: 3,
+      confidenceThresholds: { must: 70, nice: 85 },
+      mcpServers: {},
+      webFetchAllowedHosts: ["docs.example.com"],
+      webFetchDeniedHosts: ["evil.com"]
+    })
+  );
+
+  assert.equal(config.maxConcurrentFiles, 3);
+  assert.deepEqual(config.confidenceThresholds, { must: 70, nice: 85 });
+  assert.deepEqual(config.mcpServers, {});
+  assert.deepEqual(config.webFetchAllowedHosts, ["docs.example.com"]);
+  assert.deepEqual(config.webFetchDeniedHosts, ["evil.com"]);
 });
