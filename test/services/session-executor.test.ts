@@ -219,3 +219,71 @@ test("SessionExecutor rejects with SessionTurnAbortedError when the signal is al
   );
   assert.deepEqual(calls, ["disconnect"]);
 });
+
+test("SessionExecutor does not let disconnect failure overwrite the original turn error", async () => {
+  const session = {
+    async sendAndWait() {
+      throw new Error("copilot unavailable");
+    },
+    async disconnect() {
+      throw new Error("disconnect failed");
+    }
+  };
+
+  const executor = new SessionExecutor(session);
+
+  await assert.rejects(
+    () => executor.sendAndWait("analyze this changeset"),
+    /copilot unavailable/u
+  );
+});
+
+test("SessionExecutor does not let disconnect failure overwrite an abort error", async () => {
+  const controller = new AbortController();
+  let resolveSend:
+    | ((value: { data?: { content?: string } } | undefined) => void)
+    | undefined;
+
+  const session = {
+    async sendAndWait() {
+      return await new Promise<{ data?: { content?: string } } | undefined>((resolve) => {
+        resolveSend = resolve;
+      });
+    },
+    async abort() {
+      resolveSend?.(undefined);
+    },
+    async disconnect() {
+      throw new Error("disconnect failed");
+    }
+  };
+
+  const executor = new SessionExecutor(session);
+  const pending = executor.sendAndWait("analyze this changeset", 300_000, controller.signal);
+  controller.abort("SIGINT");
+
+  await assert.rejects(
+    () => pending,
+    (error: unknown) => error instanceof SessionTurnAbortedError
+  );
+});
+
+test("SessionExecutor suppresses disconnect failure on the success path and still returns the result", async () => {
+  const session = {
+    async sendAndWait() {
+      return {
+        data: {
+          content: "## Changeset Overview\n- 調整範圍：test"
+        }
+      };
+    },
+    async disconnect() {
+      throw new Error("disconnect failed");
+    }
+  };
+
+  const executor = new SessionExecutor(session);
+  const response = await executor.sendAndWait("analyze this changeset");
+
+  assert.equal(response, "## Changeset Overview\n- 調整範圍：test");
+});

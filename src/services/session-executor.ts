@@ -81,7 +81,7 @@ export class SessionExecutor {
       signal?.removeEventListener("abort", requestAbort);
       await abortPromise;
       // Each executor is one-shot: release the in-memory session immediately after the exchange.
-      await this.#session.disconnect();
+      await this.#session.disconnect().catch(() => {});
     }
   }
 }
