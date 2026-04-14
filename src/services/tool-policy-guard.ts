@@ -9,7 +9,7 @@ import {
   evaluateReadonlyShellCommand,
   READONLY_BASH_DENY_REASON
 } from "./tool-policy-shell-policy.ts";
-import type { ToolAuditSink } from "./tool-audit-writer.ts";
+import type { ToolAuditRecord, ToolAuditSink } from "./tool-audit-writer.ts";
 import {
   ToolPolicyWebFetchPolicy,
   UNSAFE_WEB_FETCH_URL_REASON,
@@ -59,6 +59,16 @@ export class ToolPolicyGuard {
 
   constructor(options: ToolPolicyGuardOptions) {
     this.#webFetchPolicy = new ToolPolicyWebFetchPolicy(options);
+  }
+
+  #buildAuditEntry(record: HandlerDecisionRecord): ToolAuditRecord {
+    return {
+      ts: new Date().toISOString(),
+      tool: record.tool,
+      decision: record.decision,
+      ...(record.reason !== undefined ? { reason: record.reason } : {}),
+      args: record.args
+    };
   }
 
   // SDK exposes two independent interception paths:
@@ -186,15 +196,9 @@ export class ToolPolicyGuard {
       }
 
       // Post-dispatch: write the single audit record and return the SDK result.
-      // Audit assembly is centralised here so any future field addition only
-      // needs to be made in one place rather than in every kind branch.
-      auditWriter?.append({
-        ts: new Date().toISOString(),
-        tool: record.tool,
-        decision: record.decision,
-        ...(record.reason !== undefined ? { reason: record.reason } : {}),
-        args: record.args
-      });
+      // Audit assembly is centralised in #buildAuditEntry so any future field
+      // addition only needs to be made in one place.
+      auditWriter?.append(this.#buildAuditEntry(record));
 
       return record.decision === "allow"
         ? { kind: "approved" }
@@ -219,36 +223,33 @@ export class ToolPolicyGuard {
               : "";
 
           if (!url) {
-            auditWriter?.append({
-              ts: new Date().toISOString(),
+            auditWriter?.append(this.#buildAuditEntry({
               tool: input.toolName,
               decision: "allow",
               reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
               args: { url: "" }
-            });
+            }));
 
             return;
           }
 
           const decision = await this.#webFetchPolicy.evaluate(url);
 
-          auditWriter?.append({
-            ts: new Date().toISOString(),
+          auditWriter?.append(this.#buildAuditEntry({
             tool: input.toolName,
             decision: decision ? "deny" : "allow",
             ...(decision ? { reason: decision.permissionDecisionReason } : {}),
             args: { url }
-          });
+          }));
 
           return decision;
         } catch {
-          auditWriter?.append({
-            ts: new Date().toISOString(),
+          auditWriter?.append(this.#buildAuditEntry({
             tool: input.toolName,
             decision: "deny",
             reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
             args: { url }
-          });
+          }));
 
           return {
             permissionDecision: "deny",
@@ -272,13 +273,12 @@ export class ToolPolicyGuard {
             : "";
 
         if (!command) {
-          auditWriter?.append({
-            ts: new Date().toISOString(),
+          auditWriter?.append(this.#buildAuditEntry({
             tool: input.toolName,
             decision: "allow",
             reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
             args: { command: "" }
-          });
+          }));
 
           return;
         }
@@ -289,23 +289,21 @@ export class ToolPolicyGuard {
           input.cwd
         );
 
-        auditWriter?.append({
-          ts: new Date().toISOString(),
+        auditWriter?.append(this.#buildAuditEntry({
           tool: input.toolName,
           decision: decision ? "deny" : "allow",
           ...(decision ? { reason: decision.permissionDecisionReason } : {}),
           args: { command }
-        });
+        }));
 
         return decision;
       } catch {
-        auditWriter?.append({
-          ts: new Date().toISOString(),
+        auditWriter?.append(this.#buildAuditEntry({
           tool: input.toolName,
           decision: "deny",
           reason: SHELL_POLICY_FAIL_CLOSED_REASON,
           args: { command }
-        });
+        }));
 
         return {
           permissionDecision: "deny",
