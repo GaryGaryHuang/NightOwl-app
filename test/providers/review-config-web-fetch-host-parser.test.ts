@@ -79,7 +79,7 @@ test("web-fetch host parser rejects invalid allowlist entries with the stable er
   for (const config of invalidAllowlistConfigs) {
     assert.throws(
       () => resolveWebFetchAllowedHostsFromConfigObject(config),
-      /invalid review config/u
+      /webFetchAllowedHosts/u
     );
   }
 });
@@ -97,7 +97,7 @@ test("web-fetch host parser rejects invalid denylist entries with the stable err
   for (const config of invalidDenylistConfigs) {
     assert.throws(
       () => resolveWebFetchDeniedHostsFromConfigObject(config),
-      /invalid review config/u
+      /webFetchDeniedHosts/u
     );
   }
 });

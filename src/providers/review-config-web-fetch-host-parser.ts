@@ -1,6 +1,3 @@
-import {
-  invalidReviewConfigError
-} from "./review-config-parse-helpers.ts";
 import { canonicalizeHostnameForComparison } from "../services/web-fetch-hostname-normalization.ts";
 
 export function resolveWebFetchAllowedHostsFromConfigObject(
@@ -26,29 +23,33 @@ function resolveWebFetchHostsFromConfigObject(
   }
 
   if (!Array.isArray(rawHosts)) {
-    throw invalidReviewConfigError();
+    throw new Error(`'${key}' must be an array`);
   }
 
-  return rawHosts.map((value) => readWebFetchHostEntry(value));
+  return rawHosts.map((value, index) => readWebFetchHostEntry(value, key, index));
 }
 
-function readWebFetchHostEntry(value: unknown): string {
+function readWebFetchHostEntry(
+  value: unknown,
+  key: string,
+  index: number
+): string {
   if (typeof value !== "string") {
-    throw invalidReviewConfigError();
+    throw new Error(`'${key}[${index}]' must be a string`);
   }
 
   const trimmed = value.trim();
 
   if (trimmed.length === 0) {
-    throw invalidReviewConfigError();
+    throw new Error(`'${key}[${index}]' must not be empty`);
   }
 
   if (trimmed.includes("*")) {
-    return readWildcardWebFetchHostEntry(trimmed);
+    return readWildcardWebFetchHostEntry(trimmed, key, index);
   }
 
   if (/[:/?#\[\]]/u.test(trimmed)) {
-    throw invalidReviewConfigError();
+    throw new Error(`'${key}[${index}]' contains invalid characters`);
   }
 
   const canonical = canonicalizeHostnameForComparison(trimmed);
@@ -58,21 +59,25 @@ function readWebFetchHostEntry(value: unknown): string {
     isIpLiteral(canonical) ||
     !HOSTNAME_PATTERN.test(canonical)
   ) {
-    throw invalidReviewConfigError();
+    throw new Error(`'${key}[${index}]' is not a valid hostname`);
   }
 
   return canonical;
 }
 
-function readWildcardWebFetchHostEntry(trimmed: string): string {
+function readWildcardWebFetchHostEntry(
+  trimmed: string,
+  key: string,
+  index: number
+): string {
   if (!trimmed.startsWith("*.")) {
-    throw invalidReviewConfigError();
+    throw new Error(`'${key}[${index}]' wildcard must use '*.domain' format`);
   }
 
   const base = trimmed.slice(2);
 
   if (base.length === 0 || base.includes("*") || /[:/?#\[\]]/u.test(base)) {
-    throw invalidReviewConfigError();
+    throw new Error(`'${key}[${index}]' contains invalid wildcard base`);
   }
 
   const canonicalBase = canonicalizeHostnameForComparison(base);
@@ -82,7 +87,7 @@ function readWildcardWebFetchHostEntry(trimmed: string): string {
     isIpLiteral(canonicalBase) ||
     !HOSTNAME_PATTERN.test(canonicalBase)
   ) {
-    throw invalidReviewConfigError();
+    throw new Error(`'${key}[${index}]' is not a valid wildcard hostname`);
   }
 
   return `*.${canonicalBase}`;
