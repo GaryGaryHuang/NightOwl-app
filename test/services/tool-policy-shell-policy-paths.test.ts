@@ -39,6 +39,7 @@ function assertDeniedCommands(
 const OUT_OF_BOUNDARY_PATH_COMMANDS = [
   "cat /etc/passwd | head -5",
   "cat ../secret.txt",
+  "git -C /tmp diff HEAD~1",
   "nl /etc/passwd",
   "diff /etc/hosts src/app.ts"
 ] as const;
@@ -78,6 +79,19 @@ test("tool policy shell policy resolves repo-relative path arguments against the
   assertDeniedCommands([
     'grep -E "foo|bar" src/file.ts'
   ], "/tmp");
+});
+
+test("tool policy shell policy only allows absolute git -C paths and rejects malformed git -C prefixes", () => {
+  assertAllowedCommands([
+    "git -C /workspace/repo diff HEAD~1",
+    "git -C /workspace/repo grep TODO src/file.ts"
+  ]);
+
+  assertDeniedCommands([
+    "git -C src diff HEAD~1",
+    "git -C diff HEAD~1",
+    "git -C /workspace/repo"
+  ]);
 });
 
 test("tool policy shell policy denies home-relative paths outside the repo boundary", () => {

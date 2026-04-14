@@ -72,7 +72,13 @@ function isAllowedReadonlyBashCommand(
     return false;
   }
 
-  if (/[;`><]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
+  if (/[;`]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
+    return false;
+  }
+
+  const hasTopLevelRedirection = containsTopLevelRedirection(trimmedCommand);
+
+  if (hasTopLevelRedirection !== false) {
     return false;
   }
 
@@ -271,19 +277,73 @@ function isAllowedSingleSegment(
     return false;
   }
 
+  const normalizedSegment = normalizeGitChangeDirectorySegment(
+    trimmed,
+    profile,
+    commandCwd
+  );
+
+  if (!normalizedSegment) {
+    return false;
+  }
+
   if (
     !ALLOWED_BASH_PREFIXES.some((prefix) =>
-      matchesAllowedBashPrefix(trimmed, prefix)
+      matchesAllowedBashPrefix(normalizedSegment.command, prefix)
     )
   ) {
     return false;
   }
 
-  if (containsDangerousFlag(trimmed)) {
+  if (containsDangerousFlag(normalizedSegment.command)) {
     return false;
   }
 
-  return hasOnlyAllowedPathArguments(trimmed, profile, commandCwd);
+  return hasOnlyAllowedPathArguments(
+    normalizedSegment.command,
+    profile,
+    normalizedSegment.baseDirectory
+  );
+}
+
+function normalizeGitChangeDirectorySegment(
+  command: string,
+  profile: Pick<ReviewSessionProfile, "repoRoot">,
+  commandCwd?: string
+): { command: string; baseDirectory?: string } | undefined {
+  const tokens = command.split(/\s+/u).filter(Boolean);
+
+  if (tokens[0] !== "git" || tokens[1] !== "-C") {
+    return {
+      command,
+      baseDirectory: commandCwd
+    };
+  }
+
+  if (tokens.length < 4) {
+    return undefined;
+  }
+
+  const pathToken = tokens[2];
+
+  if (!path.isAbsolute(pathToken)) {
+    return undefined;
+  }
+
+  const baseDirectory =
+    typeof commandCwd === "string" && commandCwd.trim()
+      ? commandCwd
+      : profile.repoRoot;
+  const resolvedPath = resolvePathToken(pathToken, baseDirectory);
+
+  if (!isAllowedReviewReadPath(resolvedPath, profile.repoRoot)) {
+    return undefined;
+  }
+
+  return {
+    command: `git ${tokens.slice(3).join(" ")}`,
+    baseDirectory: resolvedPath
+  };
 }
 
 function matchesAllowedBashPrefix(command: string, prefix: string): boolean {
@@ -349,6 +409,62 @@ function resolvePathToken(token: string, baseDirectory: string): string {
   }
 
   return path.resolve(baseDirectory, token);
+}
+
+function containsTopLevelRedirection(command: string): boolean | undefined {
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaping = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if (inSingleQuote) {
+      if (char === "'") {
+        inSingleQuote = false;
+      }
+
+      continue;
+    }
+
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (char === '"') {
+        inDoubleQuote = false;
+      }
+
+      continue;
+    }
+
+    if (char === "'") {
+      inSingleQuote = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inDoubleQuote = true;
+      continue;
+    }
+
+    if (char === "<" || char === ">") {
+      return true;
+    }
+  }
+
+  if (escaping || inSingleQuote || inDoubleQuote) {
+    return undefined;
+  }
+
+  return false;
 }
 
 function containsDangerousFlag(command: string): boolean {

@@ -31,7 +31,11 @@ const PIPELINE_AND_CHAIN_ALLOWED_COMMANDS = [
   'git diff HEAD~1 | grep "function" | wc -l',
   "git log --oneline  |  head -20",
   "git log|head",
+  "git -C /workspace/repo diff HEAD~1",
+  "git -C /workspace/repo grep TODO src/file.ts",
+  "git -C /workspace/repo show HEAD:src/app.ts | head -20",
   "cd /workspace/repo && git show HEAD:src/app.ts | head -20",
+  "cd /workspace/repo && git -C /workspace/repo/src grep TODO file.ts && cat app.ts",
   "cd /workspace/repo && git rev-parse --abbrev-ref HEAD && git status --short"
 ] as const;
 
@@ -53,7 +57,11 @@ const QUOTED_OR_ESCAPED_DELIMITER_COMMANDS = [
   'git diff HEAD~1 | grep -E "foo|bar" | head -5',
   'grep "foo && bar" src/app.ts',
   "grep 'foo && bar' src/app.ts",
-  String.raw`grep foo\&\&bar src/app.ts`
+  String.raw`grep foo\&\&bar src/app.ts`,
+  'grep "foo > bar" src/app.ts',
+  "grep 'List<Foo>' src/app.ts",
+  String.raw`grep foo\>bar src/app.ts`,
+  String.raw`grep foo\<bar src/app.ts`
 ] as const;
 
 const MALFORMED_QUOTE_OR_ESCAPE_COMMANDS = [
@@ -77,6 +85,8 @@ test("tool policy shell policy rejects empty or unwhitelisted pipeline and chain
 test("tool policy shell policy keeps lexical guards for shell combining syntax and background execution", () => {
   assertDeniedCommands([
     "git log --oneline  |  head -20 > out.txt",
+    'grep "List<Foo>" src/app.ts > out.txt',
+    "cat < /etc/passwd",
     "git status || echo fail",
     "git log || true | head",
     'grep "foo||bar"',

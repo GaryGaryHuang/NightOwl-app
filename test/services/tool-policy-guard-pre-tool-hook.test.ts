@@ -182,6 +182,33 @@ test("tool policy guard pre-tool hook writes representative audit records for al
   });
 });
 
+test("tool policy guard pre-tool hook keeps absolute git -C support and relative git -C denial aligned", async () => {
+  const { hook } = createPolicySession();
+
+  assert.equal(
+    await hook(
+      createHookInput("bash", {
+        command: "git -C /workspace/repo diff HEAD~1"
+      }),
+      SESSION_CONTEXT
+    ),
+    undefined
+  );
+
+  assert.deepEqual(
+    await hook(
+      createHookInput("bash", {
+        command: "git -C src diff HEAD~1"
+      }),
+      SESSION_CONTEXT
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
+    }
+  );
+});
+
 test("tool policy guard pre-tool hook fails closed for shell policy exceptions and preserves command extraction in audit records", async () => {
   const sink = new InMemoryAuditSink();
   const { hook } = createPolicySession({ auditWriter: sink });

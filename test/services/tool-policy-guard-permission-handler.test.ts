@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   CUSTOM_TOOL_DENY_REASON,
   HOOK_DENY_REASON,
+  READONLY_BASH_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
   UNKNOWN_KIND_DENY_REASON,
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
@@ -101,6 +102,31 @@ test("tool policy guard permission handler validates shell and url payloads thro
   for (const [index, testCase] of cases.entries()) {
     assertAuditRecord(sink.records[index], testCase.expectedAudit);
   }
+});
+
+test("tool policy guard permission handler keeps absolute git -C support and relative git -C denial aligned", async () => {
+  const sink = new InMemoryAuditSink();
+  const { handler } = createPolicySession({ auditWriter: sink });
+
+  assert.deepEqual(
+    await handler(
+      { kind: "shell", fullCommandText: "git -C /workspace/repo diff HEAD~1" },
+      SESSION_CONTEXT
+    ),
+    APPROVED
+  );
+
+  assert.deepEqual(
+    await handler(
+      { kind: "shell", fullCommandText: "git -C src diff HEAD~1" },
+      SESSION_CONTEXT
+    ),
+    DENIED
+  );
+
+  assert.equal(sink.records[0].decision, "allow");
+  assert.equal(sink.records[1].decision, "deny");
+  assert.equal(sink.records[1].reason, READONLY_BASH_DENY_REASON);
 });
 
 test("tool policy guard permission handler approves shell url and mcp requests when optional fields are absent", async () => {
