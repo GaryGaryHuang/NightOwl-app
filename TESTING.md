@@ -173,7 +173,7 @@ Shared fixtures follow the `create*Fixture()` / `build*Response()` naming conven
 | `review-app-fixture.ts` | `buildSessionResponse` routing by system message |
 | `review-session-runtime-contract-fixture.ts` | Recording client manager that captures `SessionConfig`; `createAssistantSession` |
 | `step-runner-contract-fixture.ts` | Default `FileReviewContext` builder; `applySection`; `seedStep4Context` for prerequisite state |
-| `finalizer-contract-fixture.ts` | Text assertions: `assertTextContainsAll`, `assertTextExcludesAll`, `assertTextContainsInOrder` |
+| `finalizer-contract-fixture.ts` | Text assertions: `assertTextContainsAll`, `assertTextExcludesAll`, `assertTextContainsInOrder`, `assertBootstrapShape`, `assertFindingsStats`, `assertFindingsTitlesInOrder`, `assertTraceabilityForms`, `assertWarningBlock`, `assertWarningBlockAtEnd` |
 | `completed-run-finalizer-contract-fixture.ts` | Factory functions for `Finding`, `SuccessfulFileOutcome`, `SkippedFileOutcome`, `OutputTarget` |
 | `review-config-provider-contract-fixture.ts` | Wraps git fixture + `LocalReviewConfigProvider` for `repo_root/.nightowl/reviewconfig.json` testing |
 | `workspace-provider-contract-fixture.ts` | Temporary directory `OutputTarget` fixture with `LocalWorkspaceProvider` |
