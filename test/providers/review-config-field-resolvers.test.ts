@@ -46,36 +46,45 @@ test("resolveConfidenceThresholdsFromConfigObject preserves defaults and partial
 });
 
 test("resolveConfidenceThresholdsFromConfigObject rejects invalid config shapes", () => {
-  const invalidConfigs: Array<Record<string, unknown>> = [
-    { confidenceThresholds: "high" },
-    { confidenceThresholds: [80, 90] },
-    { confidenceThresholds: null },
-    { confidenceThresholds: { must: 70, extra: 50 } }
-  ];
-
-  for (const config of invalidConfigs) {
-    assert.throws(
-      () => resolveConfidenceThresholdsFromConfigObject(config),
-      { message: "invalid review config" }
-    );
-  }
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: "high" }),
+    /confidenceThresholds/u
+  );
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: [80, 90] }),
+    /confidenceThresholds/u
+  );
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: null }),
+    /confidenceThresholds/u
+  );
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: { must: 70, extra: 50 } }),
+    /confidenceThresholds.*extra/u
+  );
 });
 
 test("resolveConfidenceThresholdsFromConfigObject rejects out-of-range and non-finite threshold values", () => {
-  const invalidConfigs: Array<Record<string, unknown>> = [
-    { confidenceThresholds: { must: -1 } },
-    { confidenceThresholds: { nice: 101 } },
-    { confidenceThresholds: { must: NaN } },
-    { confidenceThresholds: { nice: Infinity } },
-    { confidenceThresholds: { must: "80" } }
-  ];
-
-  for (const config of invalidConfigs) {
-    assert.throws(
-      () => resolveConfidenceThresholdsFromConfigObject(config),
-      { message: "invalid review config" }
-    );
-  }
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: { must: -1 } }),
+    /confidenceThresholds\.must/u
+  );
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: { nice: 101 } }),
+    /confidenceThresholds\.nice/u
+  );
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: { must: NaN } }),
+    /confidenceThresholds\.must/u
+  );
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: { nice: Infinity } }),
+    /confidenceThresholds\.nice/u
+  );
+  assert.throws(
+    () => resolveConfidenceThresholdsFromConfigObject({ confidenceThresholds: { must: "80" } }),
+    /confidenceThresholds\.must/u
+  );
 });
 
 test("resolveMaxConcurrentFilesFromConfigObject preserves defaults and positive integer overrides", () => {
@@ -123,7 +132,7 @@ test("resolveMaxConcurrentFilesFromConfigObject rejects non-positive, non-intege
   for (const config of invalidConfigs) {
     assert.throws(
       () => resolveMaxConcurrentFilesFromConfigObject(config),
-      { message: "invalid review config" }
+      /maxConcurrentFiles/u
     );
   }
 });

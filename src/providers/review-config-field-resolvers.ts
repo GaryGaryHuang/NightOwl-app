@@ -11,29 +11,30 @@ export function resolveConfidenceThresholdsFromConfigObject(
   }
 
   if (!rawThresholds || typeof rawThresholds !== "object" || Array.isArray(rawThresholds)) {
-    throw new Error("invalid review config");
+    throw new Error("'confidenceThresholds' must be a plain object");
   }
 
   const thresholds = rawThresholds as Record<string, unknown>;
   const keys = Object.keys(thresholds);
+  const unknownKey = keys.find((key) => key !== "must" && key !== "nice");
 
-  if (keys.some((key) => key !== "must" && key !== "nice")) {
-    throw new Error("invalid review config");
+  if (unknownKey !== undefined) {
+    throw new Error(`'confidenceThresholds' contains unknown key '${unknownKey}'`);
   }
 
   return {
     must:
       thresholds.must === undefined
         ? DEFAULT_CONFIDENCE_THRESHOLDS.must
-        : validateThreshold(thresholds.must),
+        : resolveThresholdValue(thresholds.must, "must"),
     nice:
       thresholds.nice === undefined
         ? DEFAULT_CONFIDENCE_THRESHOLDS.nice
-        : validateThreshold(thresholds.nice)
+        : resolveThresholdValue(thresholds.nice, "nice")
   };
 }
 
-function validateThreshold(value: unknown): number {
+function resolveThresholdValue(value: unknown, field: "must" | "nice"): number {
   if (
     typeof value !== "number" ||
     Number.isNaN(value) ||
@@ -41,7 +42,7 @@ function validateThreshold(value: unknown): number {
     value < 0 ||
     value > 100
   ) {
-    throw new Error("invalid review config");
+    throw new Error(`'confidenceThresholds.${field}' must be a number between 0 and 100`);
   }
 
   return value;
@@ -63,7 +64,7 @@ export function resolveMaxConcurrentFilesFromConfigObject(
     !Number.isInteger(rawValue) ||
     rawValue <= 0
   ) {
-    throw new Error("invalid review config");
+    throw new Error("'maxConcurrentFiles' must be a positive integer");
   }
 
   return rawValue;
