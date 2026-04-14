@@ -1,4 +1,4 @@
-import type { JudgeSessionFactory } from "../services/judge-session-factory.ts";
+import type { JudgeSessionFactoryLike } from "./session-factory-contracts.ts";
 
 export interface JudgeEvaluationInput {
   stepId: string;
@@ -13,7 +13,7 @@ export interface JudgeEvaluationResult {
 }
 
 export interface JudgeServiceOptions {
-  judgeSessionFactory: Pick<JudgeSessionFactory, "createSession">;
+  judgeSessionFactory: JudgeSessionFactoryLike;
 }
 
 /**
@@ -38,7 +38,7 @@ export class JudgeService {
     "Output only Y or N — no other text or explanation."
   ].join("\n");
 
-  readonly #judgeSessionFactory: Pick<JudgeSessionFactory, "createSession">;
+  readonly #judgeSessionFactory: JudgeSessionFactoryLike;
 
   constructor(options: JudgeServiceOptions) {
     this.#judgeSessionFactory = options.judgeSessionFactory;

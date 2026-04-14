@@ -1,9 +1,8 @@
 import { approveAll, type SessionConfig } from "@github/copilot-sdk";
 
-import {
-  type CopilotClientLike,
-  SessionExecutor
-} from "./session-executor.ts";
+import type { JudgeSessionFactoryLike } from "../core/session-factory-contracts.ts";
+import type { CopilotClientLike } from "./copilot-client-manager.ts";
+import { SessionExecutor } from "./session-executor.ts";
 
 export interface JudgeSessionProfile {
   model: string;
@@ -19,7 +18,7 @@ export interface JudgeSessionFactoryOptions {
 /**
  * Build isolated judge sessions that are intended to stay text-only and never expose tool access.
  */
-export class JudgeSessionFactory {
+export class JudgeSessionFactory implements JudgeSessionFactoryLike {
   readonly #clientManager: JudgeSessionFactoryOptions["clientManager"];
 
   constructor(options: JudgeSessionFactoryOptions) {

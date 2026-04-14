@@ -31,3 +31,19 @@ export interface ReviewSessionProfileLike {
 export interface ReviewSessionFactoryLike {
   createSession(profile: ReviewSessionProfileLike): Promise<ReviewSessionLike>;
 }
+
+/**
+ * The profile passed to a judge session factory when creating a session.
+ */
+export interface JudgeSessionProfileLike {
+  model: string;
+  systemMessage: string;
+}
+
+/**
+ * Factory contract for creating judge sessions.
+ * Implemented by both the production JudgeSessionFactory and the DryRunJudgeSessionFactory.
+ */
+export interface JudgeSessionFactoryLike {
+  createSession(profile: JudgeSessionProfileLike): Promise<ReviewSessionLike>;
+}

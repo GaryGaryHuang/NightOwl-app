@@ -44,14 +44,15 @@ src/
 │   ├── structured-output-validator.ts  Step 5/6 JSON validation
 │   ├── judge.ts           JudgeService: Step 1–4, 7 completion check
 │   ├── changeset-overview-runner.ts   Step 0 execution
-│   └── session-factory-contracts.ts   Unified ReviewSessionFactoryLike interface
+│   └── session-factory-contracts.ts   Factory contract interfaces (ReviewSessionFactoryLike, JudgeSessionFactoryLike)
 ├── providers/             External I/O adapters
 │   ├── local-git-provider.ts
 │   ├── local-workspace-provider.ts
 │   ├── local-review-config-provider.ts
 │   └── review-*.ts        Interface definitions
 └── services/              SDK session management
-    ├── session-executor.ts         Copilot Client lifecycle
+    ├── copilot-client-manager.ts   Copilot Client process lifecycle
+    ├── session-executor.ts         Session turn execution
     ├── review-session-factory.ts   Review session creation
     ├── judge-session-factory.ts    Judge session creation
     ├── dry-run-review-session-factory.ts  Dry-run review stub factory (no SDK calls)

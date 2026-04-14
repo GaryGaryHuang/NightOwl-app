@@ -28,7 +28,7 @@ import { KnowledgeSvc } from "../services/knowledge.ts";
 import {
   CopilotClientManager,
   type ClientManagerLike
-} from "../services/session-executor.ts";
+} from "../services/copilot-client-manager.ts";
 import { ReviewSessionFactory } from "../services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../services/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../services/tool-audit-writer.ts";

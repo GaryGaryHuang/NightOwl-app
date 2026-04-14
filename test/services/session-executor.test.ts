@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  CopilotClientManager,
+  CopilotClientManager
+} from "../../src/services/copilot-client-manager.ts";
+import {
   SessionExecutor,
   SessionTurnAbortedError
 } from "../../src/services/session-executor.ts";

@@ -10,7 +10,9 @@ import type {
 } from "../../src/core/review-mcp-server-config.ts";
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import type {
-  CopilotClientLike,
+  CopilotClientLike
+} from "../../src/services/copilot-client-manager.ts";
+import type {
   SessionLike
 } from "../../src/services/session-executor.ts";
 import type { ToolAuditRecord } from "../../src/services/tool-audit-writer.ts";

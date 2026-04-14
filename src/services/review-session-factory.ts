@@ -4,10 +4,8 @@ import {
 
 import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
 import type { ReviewSessionFactoryLike } from "../core/session-factory-contracts.ts";
-import {
-  type CopilotClientLike,
-  SessionExecutor
-} from "./session-executor.ts";
+import type { CopilotClientLike } from "./copilot-client-manager.ts";
+import { SessionExecutor } from "./session-executor.ts";
 import type { KnowledgeSvc } from "./knowledge.ts";
 import { ToolPolicyGuard } from "./tool-policy-guard.ts";
 import type { ToolAuditSink } from "./tool-audit-writer.ts";

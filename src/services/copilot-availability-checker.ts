@@ -32,6 +32,11 @@ export interface CopilotAvailabilityCheckerOptions {
   pingMessage?: string;
 }
 
+// Intentionally mirrors the start/stop/getClient structure of CopilotClientManager.
+// The two classes are kept separate because they expose different capability surfaces:
+// CopilotClientManager.getClient() returns createSession(), while this class returns ping().
+// Merging them would require a generic base or builder pattern whose indirection cost
+// outweighs the ~30-line duplication savings. Revisit only if a third client path emerges.
 class CopilotAvailabilityClientManager
   implements CopilotAvailabilityClientManagerLike {
   readonly #createClient: () => CopilotAvailabilityClientLike;
