@@ -19,13 +19,19 @@ import {
   resolveWebFetchDeniedHostsFromConfigObject
 } from "./review-config-web-fetch-host-parser.ts";
 
-const RECOGNIZED_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
-  "maxConcurrentFiles",
-  "confidenceThresholds",
-  "mcpServers",
-  "webFetchAllowedHosts",
-  "webFetchDeniedHosts"
-]);
+// Compile-time exhaustiveness: every key of ReviewConfig must appear here.
+// Adding a field to ReviewConfig without listing it here causes a type error.
+const RECOGNIZED_CONFIG_KEYS: { [K in keyof Required<ReviewConfig>]: true } = {
+  maxConcurrentFiles: true,
+  confidenceThresholds: true,
+  mcpServers: true,
+  webFetchAllowedHosts: true,
+  webFetchDeniedHosts: true
+};
+
+const RECOGNIZED_TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(
+  Object.keys(RECOGNIZED_CONFIG_KEYS)
+);
 
 export function parseReviewConfig(configText: string): ReviewConfig {
   return resolveTopLevelReviewConfig(parseReviewConfigObject(configText));

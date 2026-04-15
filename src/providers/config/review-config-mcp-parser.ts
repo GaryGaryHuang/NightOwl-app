@@ -6,7 +6,9 @@ import {
   isPlainObject,
   readNonBlankString,
   readNonEmptyString,
+  readOptionalField,
   readPositiveInteger,
+  readRequiredField,
   readStringArray,
   readStringRecord
 } from "./review-config-parse-helpers.ts";
@@ -86,23 +88,8 @@ function resolveContext7OverrideEntry(
     }
   }
 
-  let tools: string[] | undefined;
-  if (rawDefinition.tools !== undefined) {
-    try {
-      tools = readStringArray(rawDefinition.tools);
-    } catch {
-      throw new Error("'tools' must be an array of strings");
-    }
-  }
-
-  let timeout: number | undefined;
-  if (rawDefinition.timeout !== undefined) {
-    try {
-      timeout = readPositiveInteger(rawDefinition.timeout);
-    } catch {
-      throw new Error("'timeout' must be a positive integer");
-    }
-  }
+  const tools = readOptionalField(rawDefinition, "tools", readStringArray, "'tools' must be an array of strings");
+  const timeout = readOptionalField(rawDefinition, "timeout", readPositiveInteger, "'timeout' must be a positive integer");
 
   return {
     type: "context7",
@@ -115,12 +102,7 @@ function resolveRemoteMcpEntry(
   rawDefinition: Record<string, unknown>,
   type: "http" | "sse"
 ): ReviewMcpServerConfig {
-  let url: string;
-  try {
-    url = readNonEmptyString(rawDefinition.url);
-  } catch {
-    throw new Error("'url' must be a non-empty string");
-  }
+  const url = readRequiredField(rawDefinition, "url", readNonEmptyString, "'url' must be a non-empty string");
 
   let parsedUrl: URL;
   try {
@@ -133,32 +115,9 @@ function resolveRemoteMcpEntry(
     throw new Error("'url' must use http or https protocol");
   }
 
-  let headers: Record<string, string> | undefined;
-  if (rawDefinition.headers !== undefined) {
-    try {
-      headers = readStringRecord(rawDefinition.headers);
-    } catch {
-      throw new Error("'headers' must be a string record");
-    }
-  }
-
-  let tools: string[] | undefined;
-  if (rawDefinition.tools !== undefined) {
-    try {
-      tools = readStringArray(rawDefinition.tools);
-    } catch {
-      throw new Error("'tools' must be an array of strings");
-    }
-  }
-
-  let timeout: number | undefined;
-  if (rawDefinition.timeout !== undefined) {
-    try {
-      timeout = readPositiveInteger(rawDefinition.timeout);
-    } catch {
-      throw new Error("'timeout' must be a positive integer");
-    }
-  }
+  const headers = readOptionalField(rawDefinition, "headers", readStringRecord, "'headers' must be a string record");
+  const tools = readOptionalField(rawDefinition, "tools", readStringArray, "'tools' must be an array of strings");
+  const timeout = readOptionalField(rawDefinition, "timeout", readPositiveInteger, "'timeout' must be a positive integer");
 
   return {
     type,
@@ -173,57 +132,12 @@ function resolveLocalMcpEntry(
   rawDefinition: Record<string, unknown>,
   type: "local" | "stdio"
 ): ReviewMcpServerConfig {
-  let command: string;
-  try {
-    command = readNonBlankString(rawDefinition.command);
-  } catch {
-    throw new Error("'command' must be a non-blank string");
-  }
-
-  let args: string[] | undefined;
-  if (rawDefinition.args !== undefined) {
-    try {
-      args = readStringArray(rawDefinition.args);
-    } catch {
-      throw new Error("'args' must be an array of strings");
-    }
-  }
-
-  let env: Record<string, string> | undefined;
-  if (rawDefinition.env !== undefined) {
-    try {
-      env = readStringRecord(rawDefinition.env);
-    } catch {
-      throw new Error("'env' must be a string record");
-    }
-  }
-
-  let tools: string[] | undefined;
-  if (rawDefinition.tools !== undefined) {
-    try {
-      tools = readStringArray(rawDefinition.tools);
-    } catch {
-      throw new Error("'tools' must be an array of strings");
-    }
-  }
-
-  let cwd: string | undefined;
-  if (rawDefinition.cwd !== undefined) {
-    try {
-      cwd = readNonEmptyString(rawDefinition.cwd);
-    } catch {
-      throw new Error("'cwd' must be a non-empty string");
-    }
-  }
-
-  let timeout: number | undefined;
-  if (rawDefinition.timeout !== undefined) {
-    try {
-      timeout = readPositiveInteger(rawDefinition.timeout);
-    } catch {
-      throw new Error("'timeout' must be a positive integer");
-    }
-  }
+  const command = readRequiredField(rawDefinition, "command", readNonBlankString, "'command' must be a non-blank string");
+  const args = readOptionalField(rawDefinition, "args", readStringArray, "'args' must be an array of strings");
+  const env = readOptionalField(rawDefinition, "env", readStringRecord, "'env' must be a string record");
+  const tools = readOptionalField(rawDefinition, "tools", readStringArray, "'tools' must be an array of strings");
+  const cwd = readOptionalField(rawDefinition, "cwd", readNonEmptyString, "'cwd' must be a non-empty string");
+  const timeout = readOptionalField(rawDefinition, "timeout", readPositiveInteger, "'timeout' must be a positive integer");
 
   return {
     type,

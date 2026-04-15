@@ -56,3 +56,33 @@ export function readNonBlankString(value: unknown): string {
 
   return value;
 }
+
+export function readOptionalField<T>(
+  raw: Record<string, unknown>,
+  field: string,
+  reader: (value: unknown) => T,
+  errorMessage: string
+): T | undefined {
+  if (raw[field] === undefined) {
+    return undefined;
+  }
+
+  try {
+    return reader(raw[field]);
+  } catch {
+    throw new Error(errorMessage);
+  }
+}
+
+export function readRequiredField<T>(
+  raw: Record<string, unknown>,
+  field: string,
+  reader: (value: unknown) => T,
+  errorMessage: string
+): T {
+  try {
+    return reader(raw[field]);
+  } catch {
+    throw new Error(errorMessage);
+  }
+}
