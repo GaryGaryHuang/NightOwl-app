@@ -71,6 +71,143 @@ export class ToolPolicyGuard {
     };
   }
 
+  // --- Per-kind permission evaluators ---
+  // Each method extracts request args and returns a HandlerDecisionRecord.
+  // Adding a new SDK permission kind requires only a new evaluator + a dispatch entry.
+
+  #evaluateRead(
+    request: Record<string, unknown>,
+    profile: Pick<ReviewSessionProfile, "repoRoot">
+  ): HandlerDecisionRecord {
+    const readPath = typeof request.path === "string" ? request.path : undefined;
+
+    if (readPath !== undefined && isAllowedReviewReadPath(readPath, profile.repoRoot)) {
+      return { tool: "read", decision: "allow", args: { path: readPath } };
+    }
+
+    return {
+      tool: "read",
+      decision: "deny",
+      reason: "Read path is outside the allowed boundary.",
+      args: readPath !== undefined ? { path: readPath } : {}
+    };
+  }
+
+  #evaluateWrite(
+    request: Record<string, unknown>
+  ): HandlerDecisionRecord {
+    const fileName =
+      "fileName" in request && typeof request.fileName === "string"
+        ? request.fileName
+        : undefined;
+
+    return {
+      tool: "write",
+      decision: "deny",
+      reason: "Write operations are not permitted in review sessions.",
+      args: fileName !== undefined ? { path: fileName } : {}
+    };
+  }
+
+  #evaluateShell(
+    request: Record<string, unknown>,
+    profile: Pick<ReviewSessionProfile, "repoRoot">
+  ): HandlerDecisionRecord {
+    const fullCommandText =
+      typeof request.fullCommandText === "string"
+        ? request.fullCommandText
+        : "";
+    const args: Record<string, string | undefined> = fullCommandText
+      ? { fullCommandText }
+      : {};
+
+    if (!fullCommandText) {
+      return { tool: "shell", decision: "allow", args };
+    }
+
+    try {
+      const policyDecision = evaluateReadonlyShellCommand(fullCommandText, profile);
+
+      return policyDecision
+        ? { tool: "shell", decision: "deny", reason: policyDecision.permissionDecisionReason, args }
+        : { tool: "shell", decision: "allow", args };
+    } catch {
+      return { tool: "shell", decision: "deny", reason: SHELL_POLICY_FAIL_CLOSED_REASON, args };
+    }
+  }
+
+  async #evaluateUrl(
+    request: Record<string, unknown>
+  ): Promise<HandlerDecisionRecord> {
+    const url = typeof request.url === "string" ? request.url : "";
+    const args: Record<string, string | undefined> = url ? { url } : {};
+
+    if (!url) {
+      return { tool: "url", decision: "allow", args };
+    }
+
+    try {
+      const policyDecision = await this.#webFetchPolicy.evaluate(url);
+
+      return policyDecision
+        ? { tool: "url", decision: "deny", reason: policyDecision.permissionDecisionReason, args }
+        : { tool: "url", decision: "allow", args };
+    } catch {
+      return { tool: "url", decision: "deny", reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON, args };
+    }
+  }
+
+  #evaluateMcp(
+    request: Record<string, unknown>
+  ): HandlerDecisionRecord {
+    const serverName =
+      typeof request.serverName === "string" ? request.serverName : undefined;
+    const toolName =
+      typeof request.toolName === "string" ? request.toolName : undefined;
+    const args: Record<string, string | undefined> = {};
+    if (serverName !== undefined) args.serverName = serverName;
+    if (toolName !== undefined) args.toolName = toolName;
+
+    return { tool: "mcp", decision: "allow", args };
+  }
+
+  #evaluateCustomTool(
+    request: Record<string, unknown>
+  ): HandlerDecisionRecord {
+    const toolName =
+      typeof request.toolName === "string" ? request.toolName : undefined;
+    const args: Record<string, string | undefined> = {};
+    if (toolName !== undefined) args.toolName = toolName;
+
+    return { tool: "custom-tool", decision: "deny", reason: CUSTOM_TOOL_DENY_REASON, args };
+  }
+
+  #evaluateMemory(
+    request: Record<string, unknown>
+  ): HandlerDecisionRecord {
+    // Defensive: memory kind (not in SDK PermissionRequest.kind union,
+    // but exists in session-events.d.ts). Low-risk; approve.
+    const subject =
+      typeof request.subject === "string" ? request.subject : undefined;
+    const args: Record<string, string | undefined> = {};
+    if (subject !== undefined) args.subject = subject;
+
+    return { tool: "memory", decision: "allow", args };
+  }
+
+  #evaluateHook(
+    request: Record<string, unknown>
+  ): HandlerDecisionRecord {
+    // Defensive: hook kind (not in SDK PermissionRequest.kind union).
+    // Unknown security implications; fail-closed deny.
+    const toolName =
+      typeof request.toolName === "string" ? request.toolName : undefined;
+    const args: Record<string, string | undefined> = {};
+    if (toolName !== undefined) args.toolName = toolName;
+
+    return { tool: "hook", decision: "deny", reason: HOOK_DENY_REASON, args };
+  }
+
   // SDK exposes two independent interception paths:
   //   - onPermissionRequest (PermissionHandler): intercepts SDK permission request
   //     events, covering read / write / shell / url / mcp / custom-tool etc.
@@ -88,103 +225,22 @@ export class ToolPolicyGuard {
     return async (request) => {
       let record: HandlerDecisionRecord;
 
-      if (
-        request.kind === "read" &&
-        typeof request.path === "string" &&
-        isAllowedReviewReadPath(request.path, profile.repoRoot)
-      ) {
-        record = { tool: "read", decision: "allow", args: { path: request.path } };
-      } else if (request.kind === "read") {
-        const readPath = typeof request.path === "string" ? request.path : undefined;
-        record = {
-          tool: "read",
-          decision: "deny",
-          reason: "Read path is outside the allowed boundary.",
-          args: readPath !== undefined ? { path: readPath } : {}
-        };
+      if (request.kind === "read") {
+        record = this.#evaluateRead(request, profile);
       } else if (request.kind === "write") {
-        const fileName =
-          "fileName" in request && typeof request.fileName === "string"
-            ? request.fileName
-            : undefined;
-        record = {
-          tool: "write",
-          decision: "deny",
-          reason: "Write operations are not permitted in review sessions.",
-          args: fileName !== undefined ? { path: fileName } : {}
-        };
+        record = this.#evaluateWrite(request);
       } else if (request.kind === "shell") {
-        const fullCommandText =
-          typeof request.fullCommandText === "string"
-            ? request.fullCommandText
-            : "";
-        const args: Record<string, string | undefined> = fullCommandText
-          ? { fullCommandText }
-          : {};
-
-        if (fullCommandText) {
-          try {
-            const policyDecision = evaluateReadonlyShellCommand(fullCommandText, profile);
-            if (policyDecision) {
-              record = { tool: request.kind, decision: "deny", reason: policyDecision.permissionDecisionReason, args };
-            } else {
-              record = { tool: request.kind, decision: "allow", args };
-            }
-          } catch {
-            record = { tool: request.kind, decision: "deny", reason: SHELL_POLICY_FAIL_CLOSED_REASON, args };
-          }
-        } else {
-          record = { tool: request.kind, decision: "allow", args };
-        }
+        record = this.#evaluateShell(request, profile);
       } else if (request.kind === "url") {
-        const url = typeof request.url === "string" ? request.url : "";
-        const args: Record<string, string | undefined> = url ? { url } : {};
-
-        if (url) {
-          try {
-            const policyDecision = await this.#webFetchPolicy.evaluate(url);
-            if (policyDecision) {
-              record = { tool: request.kind, decision: "deny", reason: policyDecision.permissionDecisionReason, args };
-            } else {
-              record = { tool: request.kind, decision: "allow", args };
-            }
-          } catch {
-            record = { tool: request.kind, decision: "deny", reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON, args };
-          }
-        } else {
-          record = { tool: request.kind, decision: "allow", args };
-        }
+        record = await this.#evaluateUrl(request);
       } else if (request.kind === "mcp") {
-        const serverName =
-          typeof request.serverName === "string" ? request.serverName : undefined;
-        const toolName =
-          typeof request.toolName === "string" ? request.toolName : undefined;
-        const args: Record<string, string | undefined> = {};
-        if (serverName !== undefined) args.serverName = serverName;
-        if (toolName !== undefined) args.toolName = toolName;
-        record = { tool: "mcp", decision: "allow", args };
+        record = this.#evaluateMcp(request);
       } else if (request.kind === "custom-tool") {
-        const toolName =
-          typeof request.toolName === "string" ? request.toolName : undefined;
-        const args: Record<string, string | undefined> = {};
-        if (toolName !== undefined) args.toolName = toolName;
-        record = { tool: "custom-tool", decision: "deny", reason: CUSTOM_TOOL_DENY_REASON, args };
+        record = this.#evaluateCustomTool(request);
       } else if (request.kind === "memory") {
-        // Defensive: memory kind (not in SDK PermissionRequest.kind union,
-        // but exists in session-events.d.ts). Low-risk; approve.
-        const subject =
-          typeof request.subject === "string" ? request.subject : undefined;
-        const args: Record<string, string | undefined> = {};
-        if (subject !== undefined) args.subject = subject;
-        record = { tool: "memory", decision: "allow", args };
+        record = this.#evaluateMemory(request);
       } else if (request.kind === "hook") {
-        // Defensive: hook kind (not in SDK PermissionRequest.kind union).
-        // Unknown security implications; fail-closed deny.
-        const toolName =
-          typeof request.toolName === "string" ? request.toolName : undefined;
-        const args: Record<string, string | undefined> = {};
-        if (toolName !== undefined) args.toolName = toolName;
-        record = { tool: "hook", decision: "deny", reason: HOOK_DENY_REASON, args };
+        record = this.#evaluateHook(request);
       } else {
         // Unknown kind — fail-closed.
         // Exhaustive check: if the SDK adds a new kind to the PermissionRequest.kind
