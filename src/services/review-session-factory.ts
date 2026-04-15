@@ -7,7 +7,7 @@ import type { ReviewSessionFactoryLike } from "../core/session-factory-contracts
 import type { CopilotClientLike } from "./copilot-client-manager.ts";
 import { SessionExecutor } from "./session-executor.ts";
 import type { KnowledgeSvc } from "./knowledge.ts";
-import { ToolPolicyGuard } from "./tool-policy-guard.ts";
+import { ToolPolicyGuard } from "./tool-policy/tool-policy-guard.ts";
 import type { ToolAuditSink } from "./tool-audit-writer.ts";
 
 export interface ReviewSessionProfile {

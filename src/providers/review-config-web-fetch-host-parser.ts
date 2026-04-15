@@ -1,4 +1,4 @@
-import { canonicalizeHostnameForComparison } from "../services/web-fetch-hostname-normalization.ts";
+import { canonicalizeHostnameForComparison } from "../services/tool-policy/web-fetch-hostname-normalization.ts";
 
 export function resolveWebFetchAllowedHostsFromConfigObject(
   config: Record<string, unknown>

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   evaluateReadonlyShellCommand
-} from "../../src/services/tool-policy-shell-policy.ts";
+} from "../../src/services/tool-policy/tool-policy-shell-policy.ts";
 import { BASE_PROFILE } from "../helpers/tool-policy-fixture.ts";
 
 function assertAllowedCommands(commands: readonly string[]): void {

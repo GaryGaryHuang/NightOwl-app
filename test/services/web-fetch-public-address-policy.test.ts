@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   isAllowedPublicWebFetchAddress
-} from "../../src/services/web-fetch-public-address-policy.ts";
+} from "../../src/services/tool-policy/web-fetch-public-address-policy.ts";
 
 function assertAddressClassification(
   addresses: readonly string[],

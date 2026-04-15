@@ -5,7 +5,7 @@ import {
   CONFIGURED_WEB_FETCH_HOST_REASON,
   ToolPolicyWebFetchPolicy,
   UNSAFE_WEB_FETCH_URL_REASON
-} from "../../src/services/tool-policy-web-fetch-policy.ts";
+} from "../../src/services/tool-policy/tool-policy-web-fetch-policy.ts";
 import {
   createWebFetchPolicy,
   FakeHostnameClassifier

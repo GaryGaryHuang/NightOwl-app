@@ -1,8 +1,8 @@
 import path from "node:path";
 
-import { isAllowedReviewReadPath } from "../core/review-access-guard.ts";
+import { isAllowedReviewReadPath } from "../../core/review-access-guard.ts";
 
-import type { ReviewSessionProfile } from "./review-session-factory.ts";
+import type { ReviewSessionProfile } from "../review-session-factory.ts";
 import {
   containsTopLevelRedirection,
   splitTopLevelChainSegments,

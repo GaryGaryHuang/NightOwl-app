@@ -30,9 +30,9 @@ import {
   type ClientManagerLike
 } from "../services/copilot-client-manager.ts";
 import { ReviewSessionFactory } from "../services/review-session-factory.ts";
-import { ToolPolicyGuard } from "../services/tool-policy-guard.ts";
+import { ToolPolicyGuard } from "../services/tool-policy/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../services/tool-audit-writer.ts";
-import type { WebFetchHostnameClassifier } from "../services/web-fetch-hostname-classifier.ts";
+import type { WebFetchHostnameClassifier } from "../services/tool-policy/web-fetch-hostname-classifier.ts";
 import {
   DryRunReviewSessionFactory
 } from "../services/dry-run-review-session-factory.ts";

@@ -6,7 +6,7 @@ import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { ReviewConfig } from "../../src/providers/review-config-provider.ts";
-import type { WebFetchHostnameClassifier } from "../../src/services/web-fetch-hostname-classifier.ts";
+import type { WebFetchHostnameClassifier } from "../../src/services/tool-policy/web-fetch-hostname-classifier.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {

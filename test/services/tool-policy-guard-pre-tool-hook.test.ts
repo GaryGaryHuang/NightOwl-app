@@ -9,7 +9,7 @@ import {
   SHELL_POLICY_FAIL_CLOSED_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
-} from "../../src/services/tool-policy-guard.ts";
+} from "../../src/services/tool-policy/tool-policy-guard.ts";
 import {
   assertAuditRecord,
   createPolicySession,

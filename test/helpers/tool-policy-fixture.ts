@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
-import { ToolPolicyGuard } from "../../src/services/tool-policy-guard.ts";
-import { ToolPolicyWebFetchPolicy } from "../../src/services/tool-policy-web-fetch-policy.ts";
+import { ToolPolicyGuard } from "../../src/services/tool-policy/tool-policy-guard.ts";
+import { ToolPolicyWebFetchPolicy } from "../../src/services/tool-policy/tool-policy-web-fetch-policy.ts";
 import type { ToolAuditRecord, ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
 import type {
   WebFetchHostnameClassification,
   WebFetchHostnameClassifier
-} from "../../src/services/web-fetch-hostname-classifier.ts";
+} from "../../src/services/tool-policy/web-fetch-hostname-classifier.ts";
 
 export const BASE_PROFILE: Pick<ReviewSessionProfile, "repoRoot"> = {
   repoRoot: "/workspace/repo"

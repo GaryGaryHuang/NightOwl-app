@@ -3,13 +3,13 @@ import {
   type SessionConfig
 } from "@github/copilot-sdk";
 
-import { isAllowedReviewReadPath } from "../core/review-access-guard.ts";
-import type { ReviewSessionProfile } from "./review-session-factory.ts";
+import { isAllowedReviewReadPath } from "../../core/review-access-guard.ts";
+import type { ReviewSessionProfile } from "../review-session-factory.ts";
 import {
   evaluateReadonlyShellCommand,
   READONLY_BASH_DENY_REASON
 } from "./tool-policy-shell-policy.ts";
-import type { ToolAuditRecord, ToolAuditSink } from "./tool-audit-writer.ts";
+import type { ToolAuditRecord, ToolAuditSink } from "../tool-audit-writer.ts";
 import {
   ToolPolicyWebFetchPolicy,
   UNSAFE_WEB_FETCH_URL_REASON,

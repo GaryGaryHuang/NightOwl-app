@@ -5,7 +5,7 @@ import {
   DefaultWebFetchHostnameClassifier,
   UNSAFE_WEB_FETCH_HOSTNAME_REASON,
   type WebFetchHostnameLookupResult
-} from "../../src/services/web-fetch-hostname-classifier.ts";
+} from "../../src/services/tool-policy/web-fetch-hostname-classifier.ts";
 
 async function assertDeniedClassification(
   classifier: DefaultWebFetchHostnameClassifier,

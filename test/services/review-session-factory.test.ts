@@ -9,7 +9,7 @@ import {
 import {
   ToolPolicyGuard,
   type ToolPolicyGuardOptions
-} from "../../src/services/tool-policy-guard.ts";
+} from "../../src/services/tool-policy/tool-policy-guard.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import type { ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
 import {
