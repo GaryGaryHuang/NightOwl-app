@@ -3,12 +3,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import {
+  CANONICAL_TIERS,
   ManifestVerificationError,
   loadVerifiedTestTierManifest
 } from "./verify-test-tier-manifest.mjs";
 
-const MANIFEST_TIERS = ["unit", "integration", "e2e"];
-const VALID_TIERS = new Set([...MANIFEST_TIERS, "all"]);
+const VALID_TIERS = new Set([...CANONICAL_TIERS, "all"]);
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFilePath), "..");
@@ -43,7 +43,7 @@ export function runTestTierCommand({
     throw error;
   }
 
-  const tiers = tier === "all" ? MANIFEST_TIERS : [tier];
+  const tiers = tier === "all" ? CANONICAL_TIERS : [tier];
   const files = tiers.flatMap((t) => manifest[t]);
 
   if (files.length === 0) {

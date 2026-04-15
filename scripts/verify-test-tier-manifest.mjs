@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const CANONICAL_TIERS = ["unit", "integration", "e2e"];
+export const CANONICAL_TIERS = ["unit", "integration", "e2e"];
 const MANIFEST_VERIFICATION_ERROR_MESSAGE = "test-tier-manifest verification failed";
 
 const currentFilePath = fileURLToPath(import.meta.url);

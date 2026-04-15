@@ -1,3 +1,5 @@
+export declare const CANONICAL_TIERS: readonly string[];
+
 export interface TestTierManifestEvaluationResult {
   tierLists: Record<string, string[]>;
   allSchemaViolations: string[];
