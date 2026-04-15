@@ -4,19 +4,19 @@ import test from "node:test";
 import {
   MANIFEST_SCHEMA_VERSION,
   RunManifestFinalizer
-} from "../../src/core/run-manifest-finalizer.ts";
+} from "../../../src/core/finalizers/run-manifest-finalizer.ts";
 import type {
   ManifestSchema,
   RunManifestRenderInput,
   SuccessfulFileEntry
-} from "../../src/core/run-manifest-finalizer.ts";
+} from "../../../src/core/finalizers/run-manifest-finalizer.ts";
 import {
   createFinding,
   createOutputTarget,
   createPlannedNotes,
   createSkippedFile,
   createSuccessfulFile
-} from "../helpers/completed-run-finalizer-contract-fixture.ts";
+} from "../../helpers/completed-run-finalizer-contract-fixture.ts";
 
 function renderManifest(
   overrides: Partial<RunManifestRenderInput> = {}

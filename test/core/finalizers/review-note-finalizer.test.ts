@@ -5,8 +5,8 @@ import {
   FileReviewContext,
   type FileReviewContextInput,
   type Finding
-} from "../../src/core/file-review-context.ts";
-import { ReviewNoteFinalizer } from "../../src/core/finalizer.ts";
+} from "../../../src/core/file-review-context.ts";
+import { ReviewNoteFinalizer } from "../../../src/core/finalizers/review-note-finalizer.ts";
 import {
   assertBootstrapShape,
   assertFindingsStats,
@@ -16,7 +16,7 @@ import {
   assertTraceabilityForms,
   assertWarningBlock,
   assertWarningBlockAtEnd
-} from "../helpers/finalizer-contract-fixture.ts";
+} from "../../helpers/finalizer-contract-fixture.ts";
 
 const FILE_PATH = "src/app.ts";
 

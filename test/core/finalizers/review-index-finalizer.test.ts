@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ReviewIndexFinalizer } from "../../src/core/review-index-finalizer.ts";
+import { ReviewIndexFinalizer } from "../../../src/core/finalizers/review-index-finalizer.ts";
 import {
   createFinding,
   createOutputTarget,
   createPlannedNotes,
   createSkippedFile,
   createSuccessfulFile
-} from "../helpers/completed-run-finalizer-contract-fixture.ts";
+} from "../../helpers/completed-run-finalizer-contract-fixture.ts";
 
 test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links", () => {
   const finalizer = new ReviewIndexFinalizer();

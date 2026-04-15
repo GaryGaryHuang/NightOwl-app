@@ -3,10 +3,10 @@ import path from "node:path";
 import type {
   OutputTarget,
   PlannedNoteFile
-} from "./review-path-resolver.ts";
-import { deriveFileRiskLevel, RISK_ORDER } from "./risk-level.ts";
-import { resolveFileOutcomes } from "./run-outcome-resolver.ts";
-import type { SuccessfulFileOutcome, SkippedFileOutcome } from "./run-outcomes.ts";
+} from "../review-path-resolver.ts";
+import { deriveFileRiskLevel, RISK_ORDER } from "../risk-level.ts";
+import { resolveFileOutcomes } from "../run-outcome-resolver.ts";
+import type { SuccessfulFileOutcome, SkippedFileOutcome } from "../run-outcomes.ts";
 
 // Derives from RISK_ORDER key count so skipped items always sort after every known risk level.
 const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;

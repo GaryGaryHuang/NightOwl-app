@@ -2,7 +2,7 @@ import type {
   FileReviewContext,
   Finding,
   FindingTraceability
-} from "./file-review-context.ts";
+} from "../file-review-context.ts";
 
 /**
  * Render the canonical in-memory file state into the Markdown review note shape.

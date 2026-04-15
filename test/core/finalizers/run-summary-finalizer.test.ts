@@ -4,13 +4,13 @@ import test from "node:test";
 import {
   RunSummaryFinalizer,
   type RunSummaryRenderInput
-} from "../../src/core/run-summary-finalizer.ts";
+} from "../../../src/core/finalizers/run-summary-finalizer.ts";
 import {
   createFinding,
   createPlannedNotesFromPaths,
   createSkippedFile,
   createSuccessfulFile
-} from "../helpers/completed-run-finalizer-contract-fixture.ts";
+} from "../../helpers/completed-run-finalizer-contract-fixture.ts";
 
 function renderSummary(overrides: Partial<RunSummaryRenderInput> = {}): string {
   return new RunSummaryFinalizer().render({

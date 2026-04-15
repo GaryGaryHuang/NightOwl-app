@@ -1,7 +1,7 @@
-import type { PlannedNoteFile } from "./review-path-resolver.ts";
-import { deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "./risk-level.ts";
-import { resolveFileOutcomes } from "./run-outcome-resolver.ts";
-import type { SuccessfulFileOutcome, SkippedFileOutcome } from "./run-outcomes.ts";
+import type { PlannedNoteFile } from "../review-path-resolver.ts";
+import { deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "../risk-level.ts";
+import { resolveFileOutcomes } from "../run-outcome-resolver.ts";
+import type { SuccessfulFileOutcome, SkippedFileOutcome } from "../run-outcomes.ts";
 
 export interface RunSummaryRenderInput {
   repoRoot: string;

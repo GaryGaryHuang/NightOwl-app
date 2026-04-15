@@ -20,11 +20,11 @@ function extractSignalName(reason: unknown): "SIGINT" | "SIGTERM" | undefined {
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
 import { FileReviewContext } from "./file-review-context.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
-import { ReviewNoteFinalizer } from "./finalizer.ts";
-import { RunSummaryFinalizer } from "./run-summary-finalizer.ts";
+import { ReviewNoteFinalizer } from "./finalizers/review-note-finalizer.ts";
+import { RunSummaryFinalizer } from "./finalizers/run-summary-finalizer.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
-import { ReviewIndexFinalizer } from "./review-index-finalizer.ts";
-import { RunManifestFinalizer } from "./run-manifest-finalizer.ts";
+import { ReviewIndexFinalizer } from "./finalizers/review-index-finalizer.ts";
+import { RunManifestFinalizer } from "./finalizers/run-manifest-finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";

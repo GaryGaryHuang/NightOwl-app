@@ -1,11 +1,11 @@
-import { deriveFileRiskLevel } from "./risk-level.ts";
-import type { RiskLevel } from "./risk-level.ts";
+import { deriveFileRiskLevel } from "../risk-level.ts";
+import type { RiskLevel } from "../risk-level.ts";
 import type {
   OutputTarget,
   PlannedNoteFile
-} from "./review-path-resolver.ts";
-import { resolveFileOutcomes } from "./run-outcome-resolver.ts";
-import type { SuccessfulFileOutcome, SkippedFileOutcome } from "./run-outcomes.ts";
+} from "../review-path-resolver.ts";
+import { resolveFileOutcomes } from "../run-outcome-resolver.ts";
+import type { SuccessfulFileOutcome, SkippedFileOutcome } from "../run-outcomes.ts";
 
 export const MANIFEST_SCHEMA_VERSION = 2 as const;
 

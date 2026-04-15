@@ -1,5 +1,5 @@
 import type { FileReviewContext } from "../file-review-context.ts";
-import type { ReviewNoteFinalizer } from "../finalizer.ts";
+import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
 import { SUMMARY_SECTION_KEY } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
