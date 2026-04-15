@@ -77,3 +77,14 @@ export function createPlannedNotes(
     createPlannedNote(filePath, noteFilePath)
   );
 }
+
+export function createPlannedNotesFromPaths(
+  filePaths: string[]
+): PlannedNoteFile[] {
+  return filePaths.map((filePath) =>
+    createPlannedNote(
+      filePath,
+      `${DEFAULT_BASE_PATH}/files/${filePath.replace(/\//gu, "__")}.md`
+    )
+  );
+}
