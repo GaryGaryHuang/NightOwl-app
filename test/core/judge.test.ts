@@ -121,9 +121,28 @@ test("JudgeService does not require judge sessions to expose abort", async () =>
   assert.deepEqual(observed.at(-1), ["disconnect"]);
 });
 
+test("JudgeService uses custom model and timeout when provided", async () => {
+  const { observed, service } = createRecordingJudgeService({
+    response: "Y",
+    model: "gpt-5",
+    timeoutMs: 60_000
+  });
+
+  const result = await service.evaluate(DEFAULT_EVALUATION_INPUT);
+
+  assert.equal(result.passed, true);
+  assert.deepEqual(observed[0]?.[1], {
+    model: "gpt-5",
+    systemMessage: (observed[0]?.[1] as { systemMessage: string }).systemMessage
+  });
+  assert.equal(observed[1]?.[2], 60_000);
+});
+
 function createRecordingJudgeService(input: {
   response?: string;
   sendError?: Error;
+  model?: string;
+  timeoutMs?: number;
 }): { observed: JudgeObservedEvent[]; service: JudgeService } {
   const observed: JudgeObservedEvent[] = [];
   const service = new JudgeService({
@@ -150,7 +169,9 @@ function createRecordingJudgeService(input: {
           }
         });
       }
-    }
+    },
+    ...(input.model === undefined ? {} : { model: input.model }),
+    ...(input.timeoutMs === undefined ? {} : { timeoutMs: input.timeoutMs })
   });
 
   return { observed, service };

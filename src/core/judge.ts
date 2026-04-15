@@ -14,6 +14,8 @@ export interface JudgeEvaluationResult {
 
 export interface JudgeServiceOptions {
   judgeSessionFactory: JudgeSessionFactoryLike;
+  model?: string;
+  timeoutMs?: number;
 }
 
 /**
@@ -39,9 +41,13 @@ export class JudgeService {
   ].join("\n");
 
   readonly #judgeSessionFactory: JudgeSessionFactoryLike;
+  readonly #model: string;
+  readonly #timeoutMs: number;
 
   constructor(options: JudgeServiceOptions) {
     this.#judgeSessionFactory = options.judgeSessionFactory;
+    this.#model = options.model ?? "gpt-5-mini";
+    this.#timeoutMs = options.timeoutMs ?? 180_000;
   }
 
   async evaluate(input: JudgeEvaluationInput): Promise<JudgeEvaluationResult> {
@@ -49,7 +55,7 @@ export class JudgeService {
 
     try {
       session = await this.#judgeSessionFactory.createSession({
-        model: "gpt-5-mini",
+        model: this.#model,
         systemMessage: this.#systemMessage
       });
     } catch {
@@ -61,7 +67,7 @@ export class JudgeService {
     try {
       response = await session.sendAndWait(
         buildJudgePrompt(input),
-        180_000
+        this.#timeoutMs
       );
     } catch {
       throw new Error("judge timeout");
