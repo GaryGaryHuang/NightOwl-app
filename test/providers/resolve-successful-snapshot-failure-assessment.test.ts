@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
   resolveSuccessfulSnapshotFailureAssessment,
+} from "../../src/providers/resolve-successful-snapshot-failure-assessment.ts";
+import {
   type SuccessfulSnapshotFailureInput,
   type SuccessfulSnapshotOutputHealthAssessor
 } from "../../src/providers/review-output-health-assessor.ts";

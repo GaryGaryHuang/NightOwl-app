@@ -17,3 +17,7 @@ export async function wrapBoundaryError<T>(
     throw toError(error);
   }
 }
+
+export function isEnoent(error: unknown): boolean {
+  return error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
+}

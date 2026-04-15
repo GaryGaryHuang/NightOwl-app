@@ -10,7 +10,7 @@ import {
   buildDefaultReviewConfig,
   parseReviewConfig
 } from "./review-config-parser.ts";
-import { wrapBoundaryError } from "../boundary-error-helper.ts";
+import { isEnoent, wrapBoundaryError } from "../boundary-error-helper.ts";
 
 /**
  * Load repo-local review config and normalize the supported overrides.
@@ -37,8 +37,4 @@ export class LocalReviewConfigProvider implements ReviewConfigProvider {
       )
     );
   }
-}
-
-function isEnoent(error: unknown): boolean {
-  return error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }

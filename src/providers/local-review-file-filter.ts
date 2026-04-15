@@ -8,7 +8,7 @@ import {
   ReviewFileFilterError,
   type ReviewFileFilter
 } from "./review-file-filter.ts";
-import { wrapBoundaryError } from "./boundary-error-helper.ts";
+import { isEnoent, wrapBoundaryError } from "./boundary-error-helper.ts";
 
 /**
  * Local review file filter backed by canonical `.nightowl/reviewignore` rules.
@@ -45,8 +45,4 @@ export class LocalReviewFileFilter implements ReviewFileFilter {
 
 function normalizeFilePath(filePath: string): string {
   return filePath.replace(/\\/gu, "/");
-}
-
-function isEnoent(error: unknown): boolean {
-  return error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
 }
