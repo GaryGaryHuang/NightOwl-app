@@ -105,55 +105,29 @@ export function splitTopLevelPipelineSegments(command: string): string[] | undef
 }
 
 export function containsTopLevelRedirection(command: string): boolean | undefined {
-  let inSingleQuote = false;
-  let inDoubleQuote = false;
-  let escaping = false;
+  // Reuse the single quote-aware FSM to detect top-level '<' or '>' characters.
+  // If the command has unclosed quotes, splitOnTopLevelDelimiter returns undefined,
+  // which maps to our undefined return (ambiguous). If a redirection char is found
+  // the delimiter callback returns undefined to abort the split early, which also
+  // yields undefined from the splitter — but we set a flag to distinguish the two.
+  let redirectionFound = false;
 
-  for (let i = 0; i < command.length; i++) {
-    const char = command[i];
-
-    if (escaping) {
-      escaping = false;
-      continue;
-    }
-
-    if (inSingleQuote) {
-      if (char === "'") {
-        inSingleQuote = false;
-      }
-
-      continue;
-    }
-
-    if (char === "\\") {
-      escaping = true;
-      continue;
-    }
-
-    if (inDoubleQuote) {
-      if (char === '"') {
-        inDoubleQuote = false;
-      }
-
-      continue;
-    }
-
-    if (char === "'") {
-      inSingleQuote = true;
-      continue;
-    }
-
-    if (char === '"') {
-      inDoubleQuote = true;
-      continue;
-    }
-
+  const result = splitOnTopLevelDelimiter(command, (char) => {
     if (char === "<" || char === ">") {
-      return true;
+      redirectionFound = true;
+      // Abort the split — we found what we were looking for.
+      return undefined;
     }
+
+    return 0;
+  });
+
+  if (redirectionFound) {
+    return true;
   }
 
-  if (escaping || inSingleQuote || inDoubleQuote) {
+  // result === undefined means unclosed quotes (ambiguous input).
+  if (result === undefined) {
     return undefined;
   }
 
