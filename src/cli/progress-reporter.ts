@@ -256,6 +256,14 @@ export function reduceProgressEvent(
         }
       };
 
+    case "finalizer-failed":
+      return {
+        state: current,
+        instruction: {
+          appendMessage: `Finalizer failed: ${event.artifact} | ${event.message}`
+        }
+      };
+
     default:
       return { state: current, instruction: {} };
   }

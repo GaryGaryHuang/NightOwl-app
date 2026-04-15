@@ -198,19 +198,14 @@ export class ReviewOrchestrator {
       throw new ReviewRunInterruptedError(extractSignalName(options.signal.reason));
     }
 
-    const runAbortState: AbortState = {};
-    const throwIfRunAborted = (): void => {
-      if (runAbortState.error) {
-        throw runAbortState.error;
-      }
-    };
+    const abortGuard = new RunAbortGuard();
 
     // Establish continuous abort observation before any post-Step0 side effect begins.
     options?.signal?.addEventListener(
       "abort",
       () => {
-        runAbortState.error ??= new ReviewRunInterruptedError(
-          extractSignalName(options?.signal?.reason)
+        abortGuard.markAborted(
+          new ReviewRunInterruptedError(extractSignalName(options?.signal?.reason))
         );
       },
       { once: true }
@@ -220,7 +215,7 @@ export class ReviewOrchestrator {
       type: "phase-changed",
       phase: "planning"
     });
-    throwIfRunAborted();
+    abortGuard.throwIfAborted();
 
     const branchName = await this.#sourceProvider.getCurrentBranch(repoRoot);
     const changedFiles = await this.#sourceProvider.getChangedFiles(
@@ -241,13 +236,13 @@ export class ReviewOrchestrator {
     const plannedNoteFiles = planNoteFiles(outputTarget.filesPath, reviewableFiles);
     const providerOutputTarget = toReviewOutputTarget(outputTarget);
     const outputPublisher = await this.#outputSink.initializeRun(providerOutputTarget);
-    throwIfRunAborted();
+    abortGuard.throwIfAborted();
 
     await outputPublisher.publishChangesetOverview({ content: runContext.changesetOverview });
-    throwIfRunAborted();
+    abortGuard.throwIfAborted();
 
     this.#onOutputTargetReady?.(outputTarget);
-    throwIfRunAborted();
+    abortGuard.throwIfAborted();
 
     this.#emitProgressEvent({
       type: "run-initialized",
@@ -255,11 +250,11 @@ export class ReviewOrchestrator {
       outputTarget,
       plannedFileCount: plannedNoteFiles.length
     });
-    throwIfRunAborted();
+    abortGuard.throwIfAborted();
 
     // Publish bootstrap snapshots before any per-file step runs so every file starts from the same skeleton.
     for (const plannedNote of plannedNoteFiles) {
-      throwIfRunAborted();
+      abortGuard.throwIfAborted();
       await outputPublisher.publishFileReview({
         noteFilePath: plannedNote.noteFilePath,
         content: this.#finalizer.render(
@@ -272,21 +267,21 @@ export class ReviewOrchestrator {
           })
         )
       });
-      throwIfRunAborted();
+      abortGuard.throwIfAborted();
     }
 
     this.#emitProgressEvent({
       type: "phase-changed",
       phase: "reviewing"
     });
-    throwIfRunAborted();
+    abortGuard.throwIfAborted();
 
     // Steps 2–7 each receive the progressively rendered note via <current_review> so each step builds on prior output.
     const steps = this.#perFileStepsFactory({
       runContext,
       reviewNoteFinalizer: this.#finalizer
     });
-    const outcomeSlots: PlannedOutcomeSlot[] = new Array(plannedNoteFiles.length);
+    const outcomeSlots: (PlannedOutcomeSlot | undefined)[] = new Array(plannedNoteFiles.length);
 
     await this.#runPlannedFileWorkers({
       plannedNoteFiles,
@@ -297,14 +292,14 @@ export class ReviewOrchestrator {
       repoRoot,
       signal: options?.signal,
       steps,
-      runAbortState
+      abortGuard
     });
 
     const successfulFiles = outcomeSlots.flatMap((slot) =>
-      slot?.successful ? [slot.successful] : []
+      slot?.kind === "successful" ? [slot.outcome] : []
     );
     const skippedFiles = outcomeSlots.flatMap((slot) =>
-      slot?.skipped ? [slot.skipped] : []
+      slot?.kind === "skipped" ? [slot.outcome] : []
     );
 
     this.#emitProgressEvent({
@@ -316,8 +311,8 @@ export class ReviewOrchestrator {
 
     const finalizerFailures: FinalizerFailure[] = [];
 
-    try {
-      await outputPublisher.publishRunSummary({
+    await this.#tryPublishFinalizer("summary", finalizerFailures, () =>
+      outputPublisher.publishRunSummary({
         content: this.#runSummaryFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,
@@ -326,16 +321,11 @@ export class ReviewOrchestrator {
           successfulFiles,
           skippedFiles
         })
-      });
-    } catch (error) {
-      finalizerFailures.push({
-        artifact: "summary",
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
+      })
+    );
 
-    try {
-      await outputPublisher.publishReviewIndex({
+    await this.#tryPublishFinalizer("index", finalizerFailures, () =>
+      outputPublisher.publishReviewIndex({
         content: this.#reviewIndexFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,
@@ -345,16 +335,11 @@ export class ReviewOrchestrator {
           outputTarget,
           plannedNotes: plannedNoteFiles
         })
-      });
-    } catch (error) {
-      finalizerFailures.push({
-        artifact: "index",
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
+      })
+    );
 
-    try {
-      await outputPublisher.publishRunManifest({
+    await this.#tryPublishFinalizer("manifest", finalizerFailures, () =>
+      outputPublisher.publishRunManifest({
         content: this.#runManifestFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,
@@ -364,13 +349,8 @@ export class ReviewOrchestrator {
           outputTarget,
           plannedNotes: plannedNoteFiles
         })
-      });
-    } catch (error) {
-      finalizerFailures.push({
-        artifact: "manifest",
-        message: error instanceof Error ? error.message : String(error)
-      });
-    }
+      })
+    );
 
     return {
       repoRoot,
@@ -386,13 +366,13 @@ export class ReviewOrchestrator {
 
   async #runPlannedFileWorkers(input: {
     plannedNoteFiles: PlannedNoteFile[];
-    outcomeSlots: PlannedOutcomeSlot[];
+    outcomeSlots: (PlannedOutcomeSlot | undefined)[];
     outputPublisher: RunOutputPublisher;
     outputTarget: OutputTarget;
     request: RunRequest;
     repoRoot: string;
     signal?: AbortSignal;
-    runAbortState: AbortState;
+    abortGuard: RunAbortGuard;
     steps: StepDefinition[];
   }): Promise<void> {
     const workerCount = Math.min(
@@ -404,7 +384,7 @@ export class ReviewOrchestrator {
 
     // Each worker pulls the next file atomically from the shared cursor until no work remains.
     const claimNextWorkItem = (): PlannedFileWorkItem | undefined => {
-      if (input.runAbortState.error) {
+      if (input.abortGuard.isAborted) {
         return undefined;
       }
 
@@ -431,7 +411,7 @@ export class ReviewOrchestrator {
     await Promise.all(
       Array.from({ length: workerCount }, async () => {
         while (true) {
-          if (input.runAbortState.error) {
+          if (input.abortGuard.isAborted) {
             return;
           }
 
@@ -450,31 +430,29 @@ export class ReviewOrchestrator {
               request: input.request,
               repoRoot: input.repoRoot,
               signal: input.signal,
-              runAbortState: input.runAbortState,
+              abortGuard: input.abortGuard,
               steps: input.steps
             });
           } catch (error) {
-            input.runAbortState.error ??= error;
+            input.abortGuard.markAborted(error);
             return;
           }
         }
       })
     );
 
-    if (input.runAbortState.error) {
-      throw input.runAbortState.error;
-    }
+    input.abortGuard.throwIfAborted();
   }
 
   async #processPlannedFile(input: {
     workItem: PlannedFileWorkItem;
-    outcomeSlots: PlannedOutcomeSlot[];
+    outcomeSlots: (PlannedOutcomeSlot | undefined)[];
     outputPublisher: RunOutputPublisher;
     outputTarget: OutputTarget;
     request: RunRequest;
     repoRoot: string;
     signal?: AbortSignal;
-    runAbortState: AbortState;
+    abortGuard: RunAbortGuard;
     steps: StepDefinition[];
   }): Promise<void> {
     let diffContent: string;
@@ -490,43 +468,20 @@ export class ReviewOrchestrator {
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
 
-      const fileContext = new FileReviewContext({
-        filePath: input.workItem.plannedNote.filePath,
-        noteFilePath: input.workItem.plannedNote.noteFilePath,
-        diffContent: "",
-        baseRef: input.request.baseRef,
-        headRef: input.request.headRef
-      });
-
-      fileContext.markInterrupted("diff-loading", reason);
-
-      try {
-        await input.outputPublisher.publishFileReview({
-          noteFilePath: fileContext.noteFilePath,
-          content: this.#finalizer.render(fileContext)
-        });
-      } catch (outputError) {
-        input.runAbortState.error ??= outputError;
-        throw outputError;
-      }
-
-      try {
-        await input.outputPublisher.publishSkippedFile({
-          filePath: fileContext.filePath,
-          stepId: "diff-loading",
-          reason
-        });
-      } catch (outputError) {
-        input.runAbortState.error ??= outputError;
-        throw outputError;
-      }
-
-      this.#recordFileSkipped({
+      await this.#skipFile({
+        fileContext: new FileReviewContext({
+          filePath: input.workItem.plannedNote.filePath,
+          noteFilePath: input.workItem.plannedNote.noteFilePath,
+          diffContent: "",
+          baseRef: input.request.baseRef,
+          headRef: input.request.headRef
+        }),
+        stepId: "diff-loading",
+        reason,
         outcomeSlots: input.outcomeSlots,
         plannedIndex: input.workItem.plannedIndex,
-        filePath: fileContext.filePath,
-        stepId: "diff-loading",
-        reason
+        outputPublisher: input.outputPublisher,
+        abortGuard: input.abortGuard
       });
 
       return;
@@ -540,12 +495,12 @@ export class ReviewOrchestrator {
       headRef: input.request.headRef
     });
 
-    if (input.runAbortState.error) {
+    if (input.abortGuard.isAborted) {
       return;
     }
 
     for (const step of input.steps) {
-      if (input.runAbortState.error) {
+      if (input.abortGuard.isAborted) {
         return;
       }
 
@@ -565,55 +520,30 @@ export class ReviewOrchestrator {
           ? error.stepCause
           : (error instanceof Error ? error.message : String(error));
 
-        if (input.runAbortState.error) {
+        if (input.abortGuard.isAborted) {
           return;
         }
 
-        fileContext.markInterrupted(step.stepId, reason);
-
-        try {
-          await input.outputPublisher.publishFileReview({
-            noteFilePath: fileContext.noteFilePath,
-            content: this.#finalizer.render(fileContext)
-          });
-        } catch (outputError) {
-          input.runAbortState.error ??= outputError;
-          throw outputError;
-        }
-
-        if (input.runAbortState.error) {
-          return;
-        }
-
-        try {
-          await input.outputPublisher.publishSkippedFile({
-            filePath: fileContext.filePath,
-            stepId: step.stepId,
-            reason
-          });
-        } catch (outputError) {
-          input.runAbortState.error ??= outputError;
-          throw outputError;
-        }
-
-        this.#recordFileSkipped({
+        await this.#skipFile({
+          fileContext,
+          stepId: step.stepId,
+          reason,
           outcomeSlots: input.outcomeSlots,
           plannedIndex: input.workItem.plannedIndex,
-          filePath: fileContext.filePath,
-          stepId: step.stepId,
-          reason
+          outputPublisher: input.outputPublisher,
+          abortGuard: input.abortGuard
         });
 
         return;
       }
 
-      if (input.runAbortState.error) {
+      if (input.abortGuard.isAborted) {
         return;
       }
 
       result.applyTo(fileContext);
 
-      if (input.runAbortState.error) {
+      if (input.abortGuard.isAborted) {
         return;
       }
 
@@ -634,50 +564,26 @@ export class ReviewOrchestrator {
         );
 
         if (assessment.faultScope === "shared-output-target-fault") {
-          input.runAbortState.error ??= outputError;
+          input.abortGuard.markAborted(outputError);
           throw outputError;
         }
 
         const reason = outputError instanceof Error ? outputError.message : String(outputError);
 
-        fileContext.markInterrupted(step.stepId, reason);
-
-        if (input.runAbortState.error) {
+        if (input.abortGuard.isAborted) {
           return;
         }
 
-        try {
-          await input.outputPublisher.publishFileReview({
-            noteFilePath: fileContext.noteFilePath,
-            content: this.#finalizer.render(fileContext)
-          });
-        } catch (innerOutputError) {
-          input.runAbortState.error ??= innerOutputError;
-          throw innerOutputError;
-        }
-
-        if (input.runAbortState.error) {
-          return;
-        }
-
-        try {
-          await input.outputPublisher.publishSkippedFile({
-            filePath: fileContext.filePath,
-            stepId: step.stepId,
-            reason
-          });
-        } catch (innerOutputError) {
-          input.runAbortState.error ??= innerOutputError;
-          throw innerOutputError;
-        }
-
-        this.#recordFileSkipped({
+        await this.#skipFile({
+          fileContext,
+          stepId: step.stepId,
+          reason,
           outcomeSlots: input.outcomeSlots,
           plannedIndex: input.workItem.plannedIndex,
-          filePath: fileContext.filePath,
-          stepId: step.stepId,
-          reason
+          outputPublisher: input.outputPublisher,
+          abortGuard: input.abortGuard
         });
+
         return;
       }
 
@@ -688,12 +594,13 @@ export class ReviewOrchestrator {
       });
     }
 
-    if (input.runAbortState.error) {
+    if (input.abortGuard.isAborted) {
       return;
     }
 
     input.outcomeSlots[input.workItem.plannedIndex] = {
-      successful: {
+      kind: "successful",
+      outcome: {
         filePath: fileContext.filePath,
         findings: fileContext.getFindings() ?? []
       }
@@ -705,15 +612,57 @@ export class ReviewOrchestrator {
     });
   }
 
+  async #skipFile(input: {
+    fileContext: FileReviewContext;
+    stepId: string;
+    reason: string;
+    outcomeSlots: (PlannedOutcomeSlot | undefined)[];
+    plannedIndex: number;
+    outputPublisher: RunOutputPublisher;
+    abortGuard: RunAbortGuard;
+  }): Promise<void> {
+    input.fileContext.markInterrupted(input.stepId, input.reason);
+
+    try {
+      await input.outputPublisher.publishFileReview({
+        noteFilePath: input.fileContext.noteFilePath,
+        content: this.#finalizer.render(input.fileContext)
+      });
+    } catch (outputError) {
+      input.abortGuard.markAborted(outputError);
+      throw outputError;
+    }
+
+    try {
+      await input.outputPublisher.publishSkippedFile({
+        filePath: input.fileContext.filePath,
+        stepId: input.stepId,
+        reason: input.reason
+      });
+    } catch (outputError) {
+      input.abortGuard.markAborted(outputError);
+      throw outputError;
+    }
+
+    this.#recordFileSkipped({
+      outcomeSlots: input.outcomeSlots,
+      plannedIndex: input.plannedIndex,
+      filePath: input.fileContext.filePath,
+      stepId: input.stepId,
+      reason: input.reason
+    });
+  }
+
   #recordFileSkipped(input: {
-    outcomeSlots: PlannedOutcomeSlot[];
+    outcomeSlots: (PlannedOutcomeSlot | undefined)[];
     plannedIndex: number;
     filePath: string;
     stepId: string;
     reason: string;
   }): void {
     input.outcomeSlots[input.plannedIndex] = {
-      skipped: {
+      kind: "skipped",
+      outcome: {
         filePath: input.filePath,
         stepId: input.stepId,
         reason: input.reason
@@ -726,6 +675,20 @@ export class ReviewOrchestrator {
       stepId: input.stepId,
       reason: input.reason
     });
+  }
+
+  async #tryPublishFinalizer(
+    artifact: FinalizerFailure["artifact"],
+    failures: FinalizerFailure[],
+    publish: () => Promise<void>
+  ): Promise<void> {
+    try {
+      await publish();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push({ artifact, message });
+      this.#emitProgressEvent({ type: "finalizer-failed", artifact, message });
+    }
   }
 
   #emitProgressEvent(event: RunProgressEvent): void {
@@ -764,13 +727,26 @@ interface PlannedFileWorkItem {
   plannedNote: PlannedNoteFile;
 }
 
-interface PlannedOutcomeSlot {
-  successful?: SuccessfulFileOutcome;
-  skipped?: SkippedFileOutcome;
-}
+type PlannedOutcomeSlot =
+  | { kind: "successful"; outcome: SuccessfulFileOutcome }
+  | { kind: "skipped"; outcome: SkippedFileOutcome };
 
-interface AbortState {
-  error?: unknown;
+class RunAbortGuard {
+  #error?: unknown;
+
+  get isAborted(): boolean {
+    return this.#error !== undefined;
+  }
+
+  throwIfAborted(): void {
+    if (this.#error) {
+      throw this.#error;
+    }
+  }
+
+  markAborted(error: unknown): void {
+    this.#error ??= error;
+  }
 }
 
 function defaultTimestampProvider(): string {
@@ -784,14 +760,5 @@ function defaultTimestampProvider(): string {
 }
 
 function toReviewOutputTarget(outputTarget: OutputTarget): ReviewOutputTarget {
-  return {
-    basePath: outputTarget.basePath,
-    changesetOverviewPath: outputTarget.changesetOverviewPath,
-    filesPath: outputTarget.filesPath,
-    skippedPath: outputTarget.skippedPath,
-    summaryPath: outputTarget.summaryPath,
-    indexPath: outputTarget.indexPath,
-    manifestPath: outputTarget.manifestPath,
-    toolAuditPath: outputTarget.toolAuditPath
-  };
+  return { ...outputTarget };
 }

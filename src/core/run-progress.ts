@@ -38,6 +38,11 @@ export type RunProgressEvent =
       plannedFileCount: number;
       successfulFileCount: number;
       skippedFileCount: number;
+    }
+  | {
+      type: "finalizer-failed";
+      artifact: "summary" | "index" | "manifest";
+      message: string;
     };
 
 export type RunProgressEventHandler = (event: RunProgressEvent) => void;

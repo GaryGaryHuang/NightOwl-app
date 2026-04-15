@@ -163,5 +163,7 @@ function renderProgressEvent(event: RunProgressEvent): string {
       return `skipped:${event.filePath}:${event.stepId}:${event.reason}`;
     case "run-finalizing":
       return `finalizing:${event.plannedFileCount}:${event.successfulFileCount}:${event.skippedFileCount}`;
+    case "finalizer-failed":
+      return `finalizer-failed:${event.artifact}:${event.message}`;
   }
 }
