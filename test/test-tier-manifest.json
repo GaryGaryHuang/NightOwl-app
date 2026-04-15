@@ -19,6 +19,7 @@
     "test/core/run-outcome-resolver.test.ts",
     "test/core/run-summary-finalizer.test.ts",
     "test/core/structured-output-validator.test.ts",
+    "test/core/web-fetch-hostname-normalization.test.ts",
     "test/providers/async-mutex.test.ts",
     "test/providers/boundary-error-helper.test.ts",
     "test/providers/local-git-provider-unit.test.ts",
@@ -39,7 +40,6 @@
     "test/services/tool-policy-shell-policy-paths.test.ts",
     "test/services/tool-policy-web-fetch-policy.test.ts",
     "test/services/web-fetch-hostname-classifier.test.ts",
-    "test/services/web-fetch-hostname-normalization.test.ts",
     "test/services/web-fetch-public-address-policy.test.ts"
   ],
   "integration": [

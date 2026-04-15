@@ -5,7 +5,7 @@ import {
   DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS,
   type WebFetchHostnameClassifier
 } from "./web-fetch-hostname-classifier.ts";
-import { canonicalizeHostnameForComparison } from "./web-fetch-hostname-normalization.ts";
+import { canonicalizeHostnameForComparison } from "../../core/web-fetch-hostname-normalization.ts";
 import {
   DefaultWebFetchPublicAddressPolicy,
   type WebFetchPublicAddressPolicy

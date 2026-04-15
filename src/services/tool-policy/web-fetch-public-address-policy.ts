@@ -1,6 +1,6 @@
 import { isIP } from "node:net";
 
-import { normalizeHostnameForNetworkChecks } from "./web-fetch-hostname-normalization.ts";
+import { normalizeHostnameForNetworkChecks } from "../../core/web-fetch-hostname-normalization.ts";
 
 export interface WebFetchPublicAddressPolicy {
   isAllowed(address: string): boolean;

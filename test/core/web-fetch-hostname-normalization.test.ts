@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   canonicalizeHostnameForComparison,
   normalizeHostnameForNetworkChecks
-} from "../../src/services/tool-policy/web-fetch-hostname-normalization.ts";
+} from "../../src/core/web-fetch-hostname-normalization.ts";
 
 interface HostnameCase {
   input: string;

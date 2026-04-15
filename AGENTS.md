@@ -44,7 +44,8 @@ src/
 │   ├── structured-output-validator.ts  Step 5/6 JSON validation
 │   ├── judge.ts           JudgeService: Step 1–4, 7 completion check
 │   ├── changeset-overview-runner.ts   Step 0 execution
-│   └── session-factory-contracts.ts   Factory contract interfaces (ReviewSessionFactoryLike, JudgeSessionFactoryLike)
+│   ├── session-factory-contracts.ts   Factory contract interfaces (ReviewSessionFactoryLike, JudgeSessionFactoryLike)
+│   └── web-fetch-hostname-normalization.ts  Shared hostname normalization (used by providers & services)
 ├── providers/             External I/O adapters
 │   ├── local-git-provider.ts
 │   ├── local-workspace-provider.ts
@@ -68,7 +69,6 @@ src/
         ├── tool-policy-shell-policy.ts Shell command security policy
         ├── tool-policy-web-fetch-policy.ts  Web fetch URL security policy
         ├── shell-command-parser.ts     Shell command tokenizer
-        ├── web-fetch-hostname-normalization.ts
         ├── web-fetch-hostname-classifier.ts
         └── web-fetch-public-address-policy.ts
 ```

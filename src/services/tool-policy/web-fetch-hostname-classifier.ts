@@ -1,6 +1,6 @@
 import { lookup as dnsLookup } from "node:dns/promises";
 import { DefaultWebFetchPublicAddressPolicy, type WebFetchPublicAddressPolicy } from "./web-fetch-public-address-policy.ts";
-import { canonicalizeHostnameForComparison } from "./web-fetch-hostname-normalization.ts";
+import { canonicalizeHostnameForComparison } from "../../core/web-fetch-hostname-normalization.ts";
 
 export const DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS = 5000;
 export const UNSAFE_WEB_FETCH_HOSTNAME_REASON =
