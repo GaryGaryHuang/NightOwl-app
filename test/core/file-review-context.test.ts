@@ -24,7 +24,7 @@ test("FileReviewContext preserves execution metadata and starts empty", () => {
   assert.equal(context.headRef, DEFAULT_CONTEXT_INPUT.headRef);
   assert.equal(context.getSection("overview"), undefined);
   assert.deepEqual(context.getSectionEntries(), []);
-  assert.deepEqual(context.getStructuredState(), {});
+  assert.equal(context.getFindings(), undefined);
   assert.equal(context.getInterruption(), undefined);
   assert.equal(context.getFindingsInsertionIndex(), undefined);
 });
@@ -104,7 +104,7 @@ test("FileReviewContext stores interruption state separately and returns defensi
     reason: "deterministic validation failed"
   });
   assert.equal(context.getSection("overview"), undefined);
-  assert.deepEqual(context.getStructuredState(), {});
+  assert.equal(context.getFindings(), undefined);
 
   const snapshot = context.getInterruption();
   if (!snapshot) {
@@ -117,10 +117,6 @@ test("FileReviewContext stores interruption state separately and returns defensi
     stepId: "step5-validation-interrogation",
     reason: "deterministic validation failed"
   });
-
-  context.clearInterruption();
-
-  assert.equal(context.getInterruption(), undefined);
 });
 
 function createContext(

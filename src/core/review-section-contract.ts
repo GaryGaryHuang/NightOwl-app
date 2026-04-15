@@ -1,10 +1,3 @@
-export type BuiltinReviewSectionKey =
-  | "overview"
-  | "dependencies-boundaries"
-  | "knowledge-source-of-truth"
-  | "strategy-what-if-scenarios"
-  | "summary";
-
 export type ReviewSectionKey = string;
 
 export const OVERVIEW_SECTION_KEY = "overview" as const;

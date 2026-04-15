@@ -38,10 +38,6 @@ export interface FindingsPayload {
   findings: Finding[];
 }
 
-export interface ReviewStructuredState {
-  findings?: Finding[];
-}
-
 export interface ReviewInterruption {
   stepId: string;
   reason: string;
@@ -58,7 +54,7 @@ export class FileReviewContext {
   readonly baseRef: string;
   readonly headRef: string;
   readonly #sections = new Map<string, string>();
-  readonly #structuredState: ReviewStructuredState = {};
+  #findings?: Finding[];
   #interruption?: ReviewInterruption;
   #findingsInsertionIndex?: number;
 
@@ -84,7 +80,7 @@ export class FileReviewContext {
 
   // Findings are replaced wholesale, not merged, because Step 6 produces the complete final set.
   setFindings(findings: Finding[]): void {
-    this.#structuredState.findings = findings.map(cloneFinding);
+    this.#findings = findings.map(cloneFinding);
     this.#findingsInsertionIndex ??= this.#sections.size;
   }
 
@@ -92,19 +88,12 @@ export class FileReviewContext {
     return this.#findingsInsertionIndex;
   }
 
-  getStructuredState(): ReviewStructuredState {
-    const findings = this.#structuredState.findings?.map(cloneFinding);
-
-    // Return a defensive copy so renderers see the current canonical state without mutating it.
-    return findings ? { findings } : {};
+  getFindings(): Finding[] | undefined {
+    return this.#findings ? [...this.#findings] : undefined;
   }
 
   markInterrupted(stepId: string, reason: string): void {
     this.#interruption = { stepId, reason };
-  }
-
-  clearInterruption(): void {
-    this.#interruption = undefined;
   }
 
   getInterruption(): ReviewInterruption | undefined {

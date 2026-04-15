@@ -11,13 +11,13 @@ export class ReviewNoteFinalizer {
   render(
     context: Pick<
       FileReviewContext,
-      "filePath" | "getSectionEntries" | "getFindingsInsertionIndex" | "getStructuredState" | "getInterruption"
+      "filePath" | "getSectionEntries" | "getFindingsInsertionIndex" | "getFindings" | "getInterruption"
     >
   ): string {
     const allEntries = context.getSectionEntries();
     const findingsInsertionIndex = context.getFindingsInsertionIndex();
     const findingsSection = renderFindingsSection(
-      context.getStructuredState().findings
+      context.getFindings()
     );
     const warningBlock = renderInterruptionWarning(context.getInterruption());
 
