@@ -35,10 +35,11 @@ src/
 │   ├── step-runner.ts     Step execution: execute → completion check → retry
 │   ├── steps/             Step 1–7 strategy modules (one file per step)
 │   ├── file-review-context.ts   Single-file source of truth
-│   ├── finalizer.ts       Review notes Markdown render
-│   ├── run-summary-finalizer.ts
-│   ├── review-index-finalizer.ts
-│   ├── run-manifest-finalizer.ts
+│   ├── finalizers/
+│   │   ├── review-note-finalizer.ts  Review notes Markdown render
+│   │   ├── run-summary-finalizer.ts
+│   │   ├── review-index-finalizer.ts
+│   │   └── run-manifest-finalizer.ts
 │   ├── review-path-resolver.ts  Output path planning & collision handling
 │   ├── risk-level.ts      Four-tier risk derivation (High/Medium/Low/None)
 │   ├── structured-output-validator.ts  Step 5/6 JSON validation
