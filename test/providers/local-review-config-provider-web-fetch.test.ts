@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ReviewConfigProviderError } from "../../src/providers/review-config-provider.ts";
+import { ReviewConfigProviderError } from "../../src/providers/config/review-config-provider.ts";
 import {
   buildExpectedReviewConfig,
   createReviewConfigProviderFixture

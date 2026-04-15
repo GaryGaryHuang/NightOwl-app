@@ -1,6 +1,6 @@
 import { stat, readFile } from "node:fs/promises";
 
-import { reviewConfigPath } from "../core/nightowl-namespace.ts";
+import { reviewConfigPath } from "../../core/nightowl-namespace.ts";
 import type {
   ReviewConfig,
   ReviewConfigProvider
@@ -10,7 +10,7 @@ import {
   buildDefaultReviewConfig,
   parseReviewConfig
 } from "./review-config-parser.ts";
-import { wrapBoundaryError } from "./boundary-error-helper.ts";
+import { wrapBoundaryError } from "../boundary-error-helper.ts";
 
 /**
  * Load repo-local review config and normalize the supported overrides.

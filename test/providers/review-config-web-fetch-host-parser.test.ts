@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   resolveWebFetchAllowedHostsFromConfigObject,
   resolveWebFetchDeniedHostsFromConfigObject
-} from "../../src/providers/review-config-web-fetch-host-parser.ts";
+} from "../../src/providers/config/review-config-web-fetch-host-parser.ts";
 
 const INVALID_HOST_ENTRIES: unknown[] = [
   123,

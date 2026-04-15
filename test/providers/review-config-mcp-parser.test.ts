@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveMcpServersFromConfigObject } from "../../src/providers/review-config-mcp-parser.ts";
+import { resolveMcpServersFromConfigObject } from "../../src/providers/config/review-config-mcp-parser.ts";
 
 function assertMcpConfigError(input: {
   config: Record<string, unknown>;

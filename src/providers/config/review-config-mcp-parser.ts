@@ -1,7 +1,7 @@
 import type {
   ReviewMcpServerConfig,
   ReviewMcpServers
-} from "../core/review-mcp-server-config.ts";
+} from "../../core/review-mcp-server-config.ts";
 import {
   isPlainObject,
   readNonBlankString,

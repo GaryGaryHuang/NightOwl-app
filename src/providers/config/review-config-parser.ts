@@ -1,9 +1,9 @@
 import {
   DEFAULT_CONFIDENCE_THRESHOLDS
-} from "../core/confidence-thresholds.ts";
+} from "../../core/confidence-thresholds.ts";
 import {
   DEFAULT_MAX_CONCURRENT_FILES
-} from "../core/max-concurrent-files.ts";
+} from "../../core/max-concurrent-files.ts";
 import {
   resolveConfidenceThresholdsFromConfigObject,
   resolveMaxConcurrentFilesFromConfigObject

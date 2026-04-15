@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   resolveConfidenceThresholdsFromConfigObject,
   resolveMaxConcurrentFilesFromConfigObject
-} from "../../src/providers/review-config-field-resolvers.ts";
+} from "../../src/providers/config/review-config-field-resolvers.ts";
 
 test("resolveConfidenceThresholdsFromConfigObject preserves defaults and partial overrides", () => {
   const cases: Array<{

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseReviewConfig } from "../../src/providers/review-config-parser.ts";
+import { parseReviewConfig } from "../../src/providers/config/review-config-parser.ts";
 import { buildExpectedReviewConfig } from "../helpers/review-config-provider-contract-fixture.ts";
 
 test("parseReviewConfig rejects malformed JSON and non-object top-level values", () => {

@@ -1,5 +1,5 @@
-import type { ConfidenceThresholds } from "../core/confidence-thresholds.ts";
-import type { ReviewMcpServers } from "../core/review-mcp-server-config.ts";
+import type { ConfidenceThresholds } from "../../core/confidence-thresholds.ts";
+import type { ReviewMcpServers } from "../../core/review-mcp-server-config.ts";
 
 export type ReviewConfigProviderOperation = "loadReviewConfig";
 

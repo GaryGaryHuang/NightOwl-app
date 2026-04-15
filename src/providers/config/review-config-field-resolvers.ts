@@ -1,5 +1,5 @@
-import { type ConfidenceThresholds, DEFAULT_CONFIDENCE_THRESHOLDS } from "../core/confidence-thresholds.ts";
-import { DEFAULT_MAX_CONCURRENT_FILES } from "../core/max-concurrent-files.ts";
+import { type ConfidenceThresholds, DEFAULT_CONFIDENCE_THRESHOLDS } from "../../core/confidence-thresholds.ts";
+import { DEFAULT_MAX_CONCURRENT_FILES } from "../../core/max-concurrent-files.ts";
 
 export function resolveConfidenceThresholdsFromConfigObject(
   config: Record<string, unknown>
