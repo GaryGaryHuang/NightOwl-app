@@ -34,13 +34,16 @@ export class ToolAuditWriter implements ToolAuditSink {
   #auditFilePath: string | undefined;
   #buffer: ToolAuditRecord[] | undefined;
   #writeChain: Promise<void> = Promise.resolve();
+  #writeFailureLogged = false;
+  readonly #onWriteFailure?: (error: unknown) => void;
 
-  constructor(auditFilePath?: string) {
+  constructor(auditFilePath?: string, options?: { onWriteFailure?: (error: unknown) => void }) {
     if (auditFilePath !== undefined) {
       this.#auditFilePath = auditFilePath;
     } else {
       this.#buffer = [];
     }
+    this.#onWriteFailure = options?.onWriteFailure;
   }
 
   append(record: ToolAuditRecord): void {
@@ -71,8 +74,14 @@ export class ToolAuditWriter implements ToolAuditSink {
     this.#writeChain = this.#writeChain.then(async () => {
       try {
         await appendFile(this.#auditFilePath!, JSON.stringify(record) + "\n");
-      } catch {
-        // best-effort: silently ignore write failures
+      } catch (error) {
+        // Best-effort: report the first write failure via the callback so callers
+        // have a chance to log a diagnostic, then silently ignore subsequent failures
+        // to avoid flooding output during a review session.
+        if (!this.#writeFailureLogged) {
+          this.#writeFailureLogged = true;
+          this.#onWriteFailure?.(error);
+        }
       }
     });
   }
