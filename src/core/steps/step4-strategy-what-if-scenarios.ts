@@ -1,8 +1,9 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
 import { STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY } from "../review-section-contract.ts";
-import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
+import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { createSectionResolve } from "./step-resolve-helpers.ts";
 
 
 const STEP4_SYSTEM_ADDITION = [
@@ -104,26 +105,12 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },
-      async resolve(response: string, services: StepResolveServices) {
-        if (!services.judgeService) {
-          throw new Error("judge service is not configured");
-        }
-
-        const judgeResult = await services.judgeService.evaluate({
-          stepId,
-          filePath: context.filePath,
-          criteria: STEP4_JUDGE_CRITERIA,
-          sectionContent: response
-        });
-
-        if (!judgeResult.passed) {
-          throw new Error(judgeResult.cause ?? "judge rejected");
-        }
-
-        return (targetContext: FileReviewContext) => {
-          targetContext.setSection(STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY, response);
-        };
-      }
+      resolve: createSectionResolve({
+        stepId,
+        filePath: context.filePath,
+        sectionKey: STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY,
+        criteria: STEP4_JUDGE_CRITERIA
+      })
     };
   }
 }

@@ -1,8 +1,9 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import { OVERVIEW_SECTION_KEY } from "../review-section-contract.ts";
 import type { RunContext } from "../run-context.ts";
-import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
+import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { createSectionResolve } from "./step-resolve-helpers.ts";
 
 
 const STEP1_SYSTEM_ADDITION = [
@@ -88,26 +89,12 @@ export class Step1OverviewStep implements StepDefinition {
         model: "gpt-5-mini",
         timeoutMs: 300_000
       },
-      async resolve(response: string, services: StepResolveServices) {
-        if (!services.judgeService) {
-          throw new Error("judge service is not configured");
-        }
-
-        const judgeResult = await services.judgeService.evaluate({
-          stepId,
-          filePath: context.filePath,
-          criteria: STEP1_JUDGE_CRITERIA,
-          sectionContent: response
-        });
-
-        if (!judgeResult.passed) {
-          throw new Error(judgeResult.cause ?? "judge rejected");
-        }
-
-        return (targetContext: FileReviewContext) => {
-          targetContext.setSection(OVERVIEW_SECTION_KEY, response);
-        };
-      }
+      resolve: createSectionResolve({
+        stepId,
+        filePath: context.filePath,
+        sectionKey: OVERVIEW_SECTION_KEY,
+        criteria: STEP1_JUDGE_CRITERIA
+      })
     };
   }
 }

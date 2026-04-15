@@ -1,7 +1,8 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
-import type { StepExecutionPlan, StepDefinition, StepResolveServices } from "../step-runner.ts";
+import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { createStructuredResolve } from "./step-resolve-helpers.ts";
 
 
 const STEP5_SYSTEM_ADDITION = [
@@ -93,17 +94,7 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },
-      async resolve(response: string, services: StepResolveServices) {
-        const validated = services.validator.validate({
-          responseText: response,
-          diffContent: context.diffContent
-        });
-        const payload = services.validator.filterByConfidence(validated);
-
-        return (targetContext: FileReviewContext) => {
-          targetContext.setFindings(payload.findings);
-        };
-      }
+      resolve: createStructuredResolve(context.diffContent)
     };
   }
 }
