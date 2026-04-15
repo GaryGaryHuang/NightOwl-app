@@ -7,6 +7,7 @@ import {
 } from "../../src/core/run-summary-finalizer.ts";
 import {
   createFinding,
+  createPlannedNotesFromPaths,
   createSkippedFile,
   createSuccessfulFile
 } from "../helpers/completed-run-finalizer-contract-fixture.ts";
@@ -16,7 +17,7 @@ function renderSummary(overrides: Partial<RunSummaryRenderInput> = {}): string {
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
-    plannedFileCount: 0,
+    plannedNotes: [],
     successfulFiles: [],
     skippedFiles: [],
     ...overrides
@@ -25,7 +26,7 @@ function renderSummary(overrides: Partial<RunSummaryRenderInput> = {}): string {
 
 test("RunSummaryFinalizer renders the exact aggregate summary contract with rebased derived risk levels", () => {
   const rendered = renderSummary({
-    plannedFileCount: 3,
+    plannedNotes: createPlannedNotesFromPaths(["src/a.ts", "src/b.ts", "src/c.ts"]),
     successfulFiles: [
       createSuccessfulFile("src/a.ts", [
         createFinding("must", 92, { title: "Must finding" }),
@@ -90,7 +91,7 @@ test("RunSummaryFinalizer renders explicit empty sections for zero-file runs", (
 
 test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate output", () => {
   const rendered = renderSummary({
-    plannedFileCount: 2,
+    plannedNotes: createPlannedNotesFromPaths(["src/a.ts", "src/b.ts"]),
     skippedFiles: [
       createSkippedFile("src/a.ts", "step1-overview", "judge rejected"),
       createSkippedFile(
@@ -118,7 +119,7 @@ test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate outpu
 
 test("RunSummaryFinalizer excludes skipped files from final findings totals", () => {
   const rendered = renderSummary({
-    plannedFileCount: 2,
+    plannedNotes: createPlannedNotesFromPaths(["src/a.ts", "src/b.ts"]),
     successfulFiles: [createSuccessfulFile("src/a.ts", [createFinding("nice", 91)])],
     skippedFiles: [createSkippedFile(
       "src/b.ts",
@@ -133,7 +134,7 @@ test("RunSummaryFinalizer excludes skipped files from final findings totals", ()
 
 test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, Low, and None counts", () => {
   const rendered = renderSummary({
-    plannedFileCount: 4,
+    plannedNotes: createPlannedNotesFromPaths(["high.ts", "medium.ts", "low.ts", "none.ts"]),
     successfulFiles: [
       createSuccessfulFile("high.ts", [createFinding("must", 90, { title: "High issue" })]),
       createSuccessfulFile("medium.ts", [createFinding("must", 89, { title: "Medium issue" })]),
@@ -151,7 +152,7 @@ test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, L
 
 test("RunSummaryFinalizer sorts successful files by risk level with planned-order tie-breaking", () => {
   const rendered = renderSummary({
-    plannedFileCount: 5,
+    plannedNotes: createPlannedNotesFromPaths(["a.ts", "b.ts", "c.ts", "d.ts", "e.ts"]),
     successfulFiles: [
       createSuccessfulFile("a.ts", []),
       createSuccessfulFile("b.ts", [createFinding("nice", 80, { title: "Low issue" })]),
@@ -172,7 +173,7 @@ test("RunSummaryFinalizer sorts successful files by risk level with planned-orde
 
 test("RunSummaryFinalizer preserves planned order for same-risk-level successful files", () => {
   const rendered = renderSummary({
-    plannedFileCount: 3,
+    plannedNotes: createPlannedNotesFromPaths(["a.ts", "b.ts", "c.ts"]),
     successfulFiles: [
       createSuccessfulFile("a.ts", [createFinding("nice", 85, { title: "Nice suggestion" })]),
       createSuccessfulFile("b.ts", [createFinding("nice", 83, { title: "Another nice" })]),

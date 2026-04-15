@@ -4,7 +4,8 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "./review-path-resolver.ts";
-import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
+import { resolveFileOutcomes } from "./run-outcome-resolver.ts";
+import type { SuccessfulFileOutcome, SkippedFileOutcome } from "./run-outcomes.ts";
 
 export const MANIFEST_SCHEMA_VERSION = 2 as const;
 
@@ -54,45 +55,43 @@ export interface RunManifestRenderInput {
  */
 export class RunManifestFinalizer {
   render(input: RunManifestRenderInput): string {
-    const files: ManifestFileEntry[] = input.plannedNotes.map((plannedNote): ManifestFileEntry => {
-      const successfulFile = input.successfulFiles.find(
-        (file) => file.filePath === plannedNote.filePath
-      );
+    const resolvedOutcomes = resolveFileOutcomes(
+      input.plannedNotes,
+      input.successfulFiles,
+      input.skippedFiles
+    );
 
-      if (successfulFile) {
-        const mustCount = successfulFile.findings.filter(
-          (finding) => finding.type === "must"
-        ).length;
-        const niceCount = successfulFile.findings.filter(
-          (finding) => finding.type === "nice"
-        ).length;
+    const files: ManifestFileEntry[] = input.plannedNotes.map(
+      (plannedNote, index): ManifestFileEntry => {
+        const resolved = resolvedOutcomes[index];
 
-        return {
-          filePath: plannedNote.filePath,
-          notePath: plannedNote.noteFilePath,
-          status: "successful",
-          riskLevel: deriveFileRiskLevel(successfulFile.findings),
-          mustCount,
-          niceCount
-        };
-      }
+        if (resolved.status === "successful") {
+          const mustCount = resolved.outcome.findings.filter(
+            (finding) => finding.type === "must"
+          ).length;
+          const niceCount = resolved.outcome.findings.filter(
+            (finding) => finding.type === "nice"
+          ).length;
 
-      const skippedFile = input.skippedFiles.find(
-        (file) => file.filePath === plannedNote.filePath
-      );
+          return {
+            filePath: plannedNote.filePath,
+            notePath: plannedNote.noteFilePath,
+            status: "successful",
+            riskLevel: deriveFileRiskLevel(resolved.outcome.findings),
+            mustCount,
+            niceCount
+          };
+        }
 
-      if (skippedFile) {
         return {
           filePath: plannedNote.filePath,
           notePath: plannedNote.noteFilePath,
           status: "skipped",
-          failedStepId: skippedFile.stepId,
-          reason: skippedFile.reason
+          failedStepId: resolved.outcome.stepId,
+          reason: resolved.outcome.reason
         };
       }
-
-      throw new Error(`Missing finalized outcome for planned file: ${plannedNote.filePath}`);
-    });
+    );
 
     const manifest: ManifestSchema = {
       schemaVersion: MANIFEST_SCHEMA_VERSION,

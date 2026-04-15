@@ -1,11 +1,13 @@
+import type { PlannedNoteFile } from "./review-path-resolver.ts";
 import { deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "./risk-level.ts";
+import { resolveFileOutcomes } from "./run-outcome-resolver.ts";
 import type { SuccessfulFileOutcome, SkippedFileOutcome } from "./run-outcomes.ts";
 
 export interface RunSummaryRenderInput {
   repoRoot: string;
   baseRef: string;
   headRef: string;
-  plannedFileCount: number;
+  plannedNotes: PlannedNoteFile[];
   successfulFiles: SuccessfulFileOutcome[];
   skippedFiles: SkippedFileOutcome[];
 }
@@ -15,6 +17,14 @@ export interface RunSummaryRenderInput {
  */
 export class RunSummaryFinalizer {
   render(input: RunSummaryRenderInput): string {
+    // Validate that every planned file has a finalized outcome before rendering.
+    resolveFileOutcomes(
+      input.plannedNotes,
+      input.successfulFiles,
+      input.skippedFiles
+    );
+
+    const plannedFileCount = input.plannedNotes.length;
     const totalMust = input.successfulFiles.reduce(
       (count, file) =>
         count +
@@ -73,7 +83,7 @@ export class RunSummaryFinalizer {
       `- Repo root: \`${input.repoRoot}\``,
       `- Base ref: \`${input.baseRef}\``,
       `- Head ref: \`${input.headRef}\``,
-      `- Planned files: ${input.plannedFileCount}`,
+      `- Planned files: ${plannedFileCount}`,
       `- Successful files: ${input.successfulFiles.length}`,
       `- Skipped files: ${input.skippedFiles.length}`,
       `- Final findings totals: must=${totalMust}, nice=${totalNice}`,

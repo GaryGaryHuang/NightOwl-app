@@ -4,8 +4,9 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "./review-path-resolver.ts";
-import { deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "./risk-level.ts";
-import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
+import { deriveFileRiskLevel, RISK_ORDER } from "./risk-level.ts";
+import { resolveFileOutcomes } from "./run-outcome-resolver.ts";
+import type { SuccessfulFileOutcome, SkippedFileOutcome } from "./run-outcomes.ts";
 
 // Derives from RISK_ORDER key count so skipped items always sort after every known risk level.
 const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;
@@ -25,42 +26,42 @@ export interface ReviewIndexRenderInput {
  */
 export class ReviewIndexFinalizer {
   render(input: ReviewIndexRenderInput): string {
-    const sortedNotes = [...input.plannedNotes].sort((a, b) => {
-      const aKey = getSortKey(a.filePath, input.successfulFiles);
-      const bKey = getSortKey(b.filePath, input.successfulFiles);
+    const resolvedOutcomes = resolveFileOutcomes(
+      input.plannedNotes,
+      input.successfulFiles,
+      input.skippedFiles
+    );
+
+    const indexedOutcomes = input.plannedNotes.map((note, index) => ({
+      note,
+      resolved: resolvedOutcomes[index]
+    }));
+
+    const sortedEntries = [...indexedOutcomes].sort((a, b) => {
+      const aKey = a.resolved.status === "successful"
+        ? RISK_ORDER[deriveFileRiskLevel(a.resolved.outcome.findings)]
+        : SKIPPED_SORT_KEY;
+      const bKey = b.resolved.status === "successful"
+        ? RISK_ORDER[deriveFileRiskLevel(b.resolved.outcome.findings)]
+        : SKIPPED_SORT_KEY;
       return aKey - bKey;
     });
 
     const fileNoteLines =
-      sortedNotes.length === 0
+      sortedEntries.length === 0
         ? ["- 無"]
-        : sortedNotes.map((plannedNote) => {
-            const successfulFile = input.successfulFiles.find(
-              (f) => f.filePath === plannedNote.filePath
+        : sortedEntries.map(({ note, resolved }) => {
+            const link = toRelativeLink(
+              input.outputTarget.basePath,
+              note.noteFilePath
             );
-            if (successfulFile) {
-              const prefix = `[${deriveFileRiskLevel(successfulFile.findings)}]`;
-              const link = toRelativeLink(
-                input.outputTarget.basePath,
-                plannedNote.noteFilePath
-              );
-              return `- ${prefix} [\`${plannedNote.filePath}\`](${link})`;
+
+            if (resolved.status === "successful") {
+              const prefix = `[${deriveFileRiskLevel(resolved.outcome.findings)}]`;
+              return `- ${prefix} [\`${note.filePath}\`](${link})`;
             }
 
-            const skippedFile = input.skippedFiles.find(
-              (f) => f.filePath === plannedNote.filePath
-            );
-            if (skippedFile) {
-              const link = toRelativeLink(
-                input.outputTarget.basePath,
-                plannedNote.noteFilePath
-              );
-              return `- [Skipped] [\`${plannedNote.filePath}\`](${link})`;
-            }
-
-            throw new Error(
-              `Missing finalized outcome for planned file: ${plannedNote.filePath}`
-            );
+            return `- [Skipped] [\`${note.filePath}\`](${link})`;
           });
 
     return [
@@ -82,18 +83,6 @@ export class ReviewIndexFinalizer {
       ...fileNoteLines
     ].join("\n");
   }
-}
-
-function getSortKey(
-  filePath: string,
-  successfulFiles: SuccessfulFileOutcome[]
-): number {
-  const successfulFile = successfulFiles.find((f) => f.filePath === filePath);
-  if (successfulFile) {
-    return RISK_ORDER[deriveFileRiskLevel(successfulFile.findings)];
-  }
-  // Skipped files are intentionally sorted after every successful file.
-  return SKIPPED_SORT_KEY; // Skipped — always last
 }
 
 function toRelativeLink(basePath: string, targetPath: string): string {

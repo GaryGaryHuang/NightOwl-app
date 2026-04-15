@@ -86,6 +86,10 @@ export interface ReviewOrchestratorOptions {
   onOutputTargetReady?: (outputTarget: OutputTarget) => void;
   perFileStepsFactory?: ReviewPerFileStepsFactory;
   reviewFileFilter: ReviewFileFilter;
+  reviewNoteFinalizer?: Pick<ReviewNoteFinalizer, "render">;
+  reviewIndexFinalizer?: Pick<ReviewIndexFinalizer, "render">;
+  runManifestFinalizer?: Pick<RunManifestFinalizer, "render">;
+  runSummaryFinalizer?: Pick<RunSummaryFinalizer, "render">;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor?: SuccessfulSnapshotOutputHealthAssessor;
@@ -106,10 +110,10 @@ export class ReviewOrchestrator {
   readonly #stepRunner: Pick<StepRunner, "run">;
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
-  readonly #finalizer: ReviewNoteFinalizer;
-  readonly #runSummaryFinalizer: RunSummaryFinalizer;
-  readonly #reviewIndexFinalizer: ReviewIndexFinalizer;
-  readonly #runManifestFinalizer: RunManifestFinalizer;
+  readonly #finalizer: Pick<ReviewNoteFinalizer, "render">;
+  readonly #runSummaryFinalizer: Pick<RunSummaryFinalizer, "render">;
+  readonly #reviewIndexFinalizer: Pick<ReviewIndexFinalizer, "render">;
+  readonly #runManifestFinalizer: Pick<RunManifestFinalizer, "render">;
   readonly #maxConcurrentFiles: number;
   readonly #onProgressEvent?: RunProgressEventHandler;
   readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
@@ -137,10 +141,10 @@ export class ReviewOrchestrator {
     this.#stepRunner = options.stepRunner;
     this.#workingDirectory = options.workingDirectory;
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
-    this.#finalizer = new ReviewNoteFinalizer();
-    this.#runSummaryFinalizer = new RunSummaryFinalizer();
-    this.#reviewIndexFinalizer = new ReviewIndexFinalizer();
-    this.#runManifestFinalizer = new RunManifestFinalizer();
+    this.#finalizer = options.reviewNoteFinalizer ?? new ReviewNoteFinalizer();
+    this.#runSummaryFinalizer = options.runSummaryFinalizer ?? new RunSummaryFinalizer();
+    this.#reviewIndexFinalizer = options.reviewIndexFinalizer ?? new ReviewIndexFinalizer();
+    this.#runManifestFinalizer = options.runManifestFinalizer ?? new RunManifestFinalizer();
     this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
     this.#onProgressEvent = options.onProgressEvent;
     this.#onOutputTargetReady = options.onOutputTargetReady;
@@ -315,7 +319,7 @@ export class ReviewOrchestrator {
           repoRoot,
           baseRef: request.baseRef,
           headRef: request.headRef,
-          plannedFileCount: plannedNoteFiles.length,
+          plannedNotes: plannedNoteFiles,
           successfulFiles,
           skippedFiles
         })
