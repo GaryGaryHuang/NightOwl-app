@@ -48,7 +48,10 @@ src/
 ├── providers/             External I/O adapters
 │   ├── local-git-provider.ts
 │   ├── local-workspace-provider.ts
-│   ├── local-review-config-provider.ts
+│   ├── config/            Review configuration parsing & loading
+│   │   ├── local-review-config-provider.ts
+│   │   ├── review-config-parser.ts
+│   │   └── review-config-provider.ts  Interface definitions
 │   └── review-*.ts        Interface definitions
 └── services/              SDK session management
     ├── copilot-client-manager.ts   Copilot Client process lifecycle
@@ -59,11 +62,15 @@ src/
     ├── dry-run-judge-session-factory.ts   Dry-run judge stub factory (no SDK calls)
     ├── dry-run-stub-catalog.ts     Deterministic stub responses keyed by stepId
     ├── knowledge.ts                KnowledgeSvc: MCP configuration
-    ├── tool-policy-guard.ts        Tool permission hook
     ├── tool-audit-writer.ts        JSONL audit log
-    ├── web-fetch-hostname-normalization.ts
-    ├── web-fetch-public-address-policy.ts
-    └── web-fetch-hostname-classifier.ts
+    └── tool-policy/               Tool permission & security boundary
+        ├── tool-policy-guard.ts        Tool permission hook
+        ├── tool-policy-shell-policy.ts Shell command security policy
+        ├── tool-policy-web-fetch-policy.ts  Web fetch URL security policy
+        ├── shell-command-parser.ts     Shell command tokenizer
+        ├── web-fetch-hostname-normalization.ts
+        ├── web-fetch-hostname-classifier.ts
+        └── web-fetch-public-address-policy.ts
 ```
 
 ### Key Config Files
