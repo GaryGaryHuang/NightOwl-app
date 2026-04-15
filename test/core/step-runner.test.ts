@@ -185,6 +185,9 @@ test("StepRunner does not consume retry budget or run deterministic validation w
       validate() {
         validateCalls += 1;
         return { findings: [] };
+      },
+      filterByConfidence(payload) {
+        return payload;
       }
     }
   });

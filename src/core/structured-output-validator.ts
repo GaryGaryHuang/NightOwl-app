@@ -25,20 +25,17 @@ export class StructuredOutputValidator {
   }
 
   validate(input: {
-    validatorId: "findings-json";
     responseText: string;
     diffContent?: string;
   }): FindingsPayload {
-    if (input.validatorId !== "findings-json") {
-      throw new Error("deterministic validation failed");
-    }
-
     let parsed: unknown;
 
     try {
       parsed = JSON.parse(input.responseText);
     } catch {
-      throw new Error("deterministic validation failed");
+      throw new Error(
+        "deterministic validation failed: response is not valid JSON"
+      );
     }
 
     if (
@@ -47,13 +44,17 @@ export class StructuredOutputValidator {
       Array.isArray(parsed) ||
       !("findings" in parsed)
     ) {
-      throw new Error("deterministic validation failed");
+      throw new Error(
+        "deterministic validation failed: top-level payload must be an object with a 'findings' array"
+      );
     }
 
     const findings = (parsed as { findings: unknown }).findings;
 
     if (!Array.isArray(findings)) {
-      throw new Error("deterministic validation failed");
+      throw new Error(
+        "deterministic validation failed: top-level payload must be an object with a 'findings' array"
+      );
     }
 
     const hunkHeaders = collectUnifiedDiffHunkHeaders(input.diffContent);
@@ -61,9 +62,12 @@ export class StructuredOutputValidator {
       validateFinding(finding, hunkHeaders)
     );
 
-    // Validation happens first; threshold filtering trims low-confidence findings after the payload is structurally sound.
+    return { findings: validatedFindings };
+  }
+
+  filterByConfidence(payload: FindingsPayload): FindingsPayload {
     return {
-      findings: validatedFindings.filter((finding) =>
+      findings: payload.findings.filter((finding) =>
         finding.type === "must"
           ? finding.confidence >= this.#confidenceThresholds.must
           : finding.confidence >= this.#confidenceThresholds.nice
@@ -77,21 +81,25 @@ function validateFinding(
   hunkHeaders: Set<string>
 ): Finding {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("deterministic validation failed");
+    throw new Error(
+      "deterministic validation failed: each finding must be a non-null object"
+    );
   }
 
   const finding = input as Record<string, unknown>;
-  const type = validateStringField(finding.type);
-  const title = validateStringField(finding.title);
+  const type = validateStringField(finding.type, "type");
+  const title = validateStringField(finding.title, "title");
   const traceability = validateTraceability(finding.traceability, hunkHeaders);
-  const context = validateStringField(finding.context);
-  const deviation = validateStringField(finding.deviation);
-  const impact = validateStringField(finding.impact);
-  const suggestion = validateStringField(finding.suggestion);
+  const context = validateStringField(finding.context, "context");
+  const deviation = validateStringField(finding.deviation, "deviation");
+  const impact = validateStringField(finding.impact, "impact");
+  const suggestion = validateStringField(finding.suggestion, "suggestion");
   const confidence = finding.confidence;
 
   if (type !== "must" && type !== "nice") {
-    throw new Error("deterministic validation failed");
+    throw new Error(
+      "deterministic validation failed: 'type' must be 'must' or 'nice'"
+    );
   }
 
   if (
@@ -100,7 +108,9 @@ function validateFinding(
     confidence < 0 ||
     confidence > 100
   ) {
-    throw new Error("deterministic validation failed");
+    throw new Error(
+      "deterministic validation failed: 'confidence' must be a number between 0 and 100"
+    );
   }
 
   return {
@@ -120,18 +130,28 @@ function validateTraceability(
   hunkHeaders: Set<string>
 ): FindingTraceability {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("deterministic validation failed");
+    throw new Error(
+      "deterministic validation failed: 'traceability' must be a non-null object"
+    );
   }
 
   const traceability = input as Record<string, unknown>;
-  const kind = validateStringField(traceability.kind);
+  const kind = validateStringField(traceability.kind, "traceability.kind");
 
   if (kind === "line-range") {
-    const lineStart = validatePositiveInteger(traceability.lineStart);
-    const lineEnd = validatePositiveInteger(traceability.lineEnd);
+    const lineStart = validatePositiveInteger(
+      traceability.lineStart,
+      "traceability.lineStart"
+    );
+    const lineEnd = validatePositiveInteger(
+      traceability.lineEnd,
+      "traceability.lineEnd"
+    );
 
     if (lineEnd < lineStart) {
-      throw new Error("deterministic validation failed");
+      throw new Error(
+        "deterministic validation failed: 'traceability.lineEnd' must be >= 'traceability.lineStart'"
+      );
     }
 
     return {
@@ -142,10 +162,15 @@ function validateTraceability(
   }
 
   if (kind === "diff-hunk") {
-    const hunkHeader = validateStringField(traceability.hunkHeader);
+    const hunkHeader = validateStringField(
+      traceability.hunkHeader,
+      "traceability.hunkHeader"
+    );
 
     if (!hunkHeaders.has(hunkHeader)) {
-      throw new Error("deterministic validation failed");
+      throw new Error(
+        "deterministic validation failed: 'traceability.hunkHeader' not found in diff"
+      );
     }
 
     return {
@@ -154,16 +179,20 @@ function validateTraceability(
     };
   }
 
-  throw new Error("deterministic validation failed");
+  throw new Error(
+    "deterministic validation failed: unsupported traceability kind"
+  );
 }
 
-function validatePositiveInteger(value: unknown): number {
+function validatePositiveInteger(value: unknown, fieldName: string): number {
   if (
     typeof value !== "number" ||
     !Number.isInteger(value) ||
     value <= 0
   ) {
-    throw new Error("deterministic validation failed");
+    throw new Error(
+      `deterministic validation failed: '${fieldName}' must be a positive integer`
+    );
   }
 
   return value;
@@ -182,15 +211,19 @@ function collectUnifiedDiffHunkHeaders(diffContent?: string): Set<string> {
   );
 }
 
-function validateStringField(value: unknown): string {
+function validateStringField(value: unknown, fieldName: string): string {
   if (typeof value !== "string") {
-    throw new Error("deterministic validation failed");
+    throw new Error(
+      `deterministic validation failed: '${fieldName}' must be a non-empty string`
+    );
   }
 
   const trimmed = value.trim();
 
   if (!trimmed) {
-    throw new Error("deterministic validation failed");
+    throw new Error(
+      `deterministic validation failed: '${fieldName}' must be a non-empty string`
+    );
   }
 
   return trimmed;

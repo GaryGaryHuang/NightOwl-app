@@ -133,11 +133,11 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         timeoutMs: 300_000
       },
       async resolve(response: string, services: StepResolveServices) {
-        const payload = services.validator.validate({
-          validatorId: "findings-json",
+        const validated = services.validator.validate({
           responseText: response,
           diffContent: context.diffContent
         });
+        const payload = services.validator.filterByConfidence(validated);
 
         // Step 6 replaces the provisional findings with the post-simulation final set.
         return (targetContext: FileReviewContext) => {

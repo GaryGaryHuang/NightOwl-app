@@ -16,10 +16,10 @@ export interface StepResolveServices {
   };
   validator: {
     validate(input: {
-      validatorId: "findings-json";
       responseText: string;
       diffContent?: string;
     }): FindingsPayload;
+    filterByConfidence(payload: FindingsPayload): FindingsPayload;
   };
 }
 
@@ -78,10 +78,10 @@ export interface StepRunnerOptions {
   };
   structuredOutputValidator?: {
     validate(input: {
-      validatorId: "findings-json";
       responseText: string;
       diffContent?: string;
     }): FindingsPayload;
+    filterByConfidence(payload: FindingsPayload): FindingsPayload;
   };
   onStepRetry?: (info: StepRetryInfo) => void;
 }

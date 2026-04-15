@@ -128,11 +128,11 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
         timeoutMs: 300_000
       },
       async resolve(response: string, services: StepResolveServices) {
-        const payload = services.validator.validate({
-          validatorId: "findings-json",
+        const validated = services.validator.validate({
           responseText: response,
           diffContent: context.diffContent
         });
+        const payload = services.validator.filterByConfidence(validated);
 
         return (targetContext: FileReviewContext) => {
           targetContext.setFindings(payload.findings);

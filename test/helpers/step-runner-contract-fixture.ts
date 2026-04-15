@@ -50,6 +50,9 @@ export function makePassingJudgeServices(): StepResolveServices {
     validator: {
       validate(_input) {
         return { findings: [] };
+      },
+      filterByConfidence(payload) {
+        return payload;
       }
     }
   };
@@ -151,10 +154,10 @@ export function createStructuredTestStep(input: {
           timeoutMs: 300_000
         },
         resolve: input.resolve ?? (async (response: string, services: StepResolveServices) => {
-          const payload = services.validator.validate({
-            validatorId: "findings-json",
+          const validated = services.validator.validate({
             responseText: response
           });
+          const payload = services.validator.filterByConfidence(validated);
 
           return (context: FileReviewContext) => {
             context.setFindings(payload.findings);

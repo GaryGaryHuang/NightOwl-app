@@ -42,29 +42,39 @@ function payload(findings: unknown[]): string {
 function validate(input: {
   responseText: string;
   diffContent?: string;
-  thresholds?: { must: number; nice: number };
 }) {
-  return new StructuredOutputValidator(
-    input.thresholds === undefined
-      ? {}
-      : { confidenceThresholds: input.thresholds }
-  ).validate({
-    validatorId: "findings-json",
+  return new StructuredOutputValidator().validate({
     responseText: input.responseText,
     ...(input.diffContent === undefined ? {} : { diffContent: input.diffContent })
   });
 }
 
+function validateAndFilter(input: {
+  responseText: string;
+  diffContent?: string;
+  thresholds?: { must: number; nice: number };
+}) {
+  const validator = new StructuredOutputValidator(
+    input.thresholds === undefined
+      ? {}
+      : { confidenceThresholds: input.thresholds }
+  );
+  const payload = validator.validate({
+    responseText: input.responseText,
+    ...(input.diffContent === undefined ? {} : { diffContent: input.diffContent })
+  });
+
+  return validator.filterByConfidence(payload);
+}
+
 function assertValidationFails(input: {
   responseText: string;
   diffContent?: string;
-  validatorId?: "findings-json";
   label?: string;
 }): void {
   assert.throws(
     () =>
       new StructuredOutputValidator().validate({
-        validatorId: input.validatorId ?? "findings-json",
         responseText: input.responseText,
         ...(input.diffContent === undefined ? {} : { diffContent: input.diffContent })
       }),
@@ -78,13 +88,6 @@ test("StructuredOutputValidator accepts schema-valid findings JSON", () => {
 
   assert.deepEqual(validate({ responseText: payload([validFinding]) }), {
     findings: [validFinding]
-  });
-});
-
-test("StructuredOutputValidator rejects unsupported validator ids at runtime", () => {
-  assertValidationFails({
-    validatorId: "other-json" as "findings-json",
-    responseText: payload([])
   });
 });
 
@@ -147,7 +150,29 @@ test("StructuredOutputValidator rejects schema-invalid findings payloads", () =>
   }
 });
 
-test("StructuredOutputValidator filters findings by default confidence thresholds", () => {
+test("StructuredOutputValidator validate returns all structurally valid findings without filtering", () => {
+  const mustAbove = finding({
+    type: "must",
+    title: "must above threshold",
+    traceability: lineRangeTraceability(10, 12),
+    confidence: 80
+  });
+  const mustBelow = finding({
+    type: "must",
+    title: "must below threshold",
+    traceability: lineRangeTraceability(15, 15),
+    confidence: 50
+  });
+
+  assert.deepEqual(
+    validate({
+      responseText: payload([mustAbove, mustBelow])
+    }),
+    { findings: [mustAbove, mustBelow] }
+  );
+});
+
+test("StructuredOutputValidator filterByConfidence filters findings by default confidence thresholds", () => {
   const keptMust = finding({
     type: "must",
     title: "保留 must",
@@ -166,7 +191,7 @@ test("StructuredOutputValidator filters findings by default confidence threshold
   });
 
   assert.deepEqual(
-    validate({
+    validateAndFilter({
       responseText: payload([
         keptMust,
         finding({
@@ -193,7 +218,7 @@ test("StructuredOutputValidator filters findings by default confidence threshold
   );
 });
 
-test("StructuredOutputValidator filters findings by supplied confidence thresholds", () => {
+test("StructuredOutputValidator filterByConfidence filters findings by supplied confidence thresholds", () => {
   const keptMust = finding({
     type: "must",
     title: "保留 must",
@@ -213,7 +238,7 @@ test("StructuredOutputValidator filters findings by supplied confidence threshol
   const customHunkHeader = "@@ -30,1 +30,2 @@";
 
   assert.deepEqual(
-    validate({
+    validateAndFilter({
       responseText: payload([
         keptMust,
         finding({
