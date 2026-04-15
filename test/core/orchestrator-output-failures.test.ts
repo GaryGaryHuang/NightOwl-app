@@ -9,6 +9,7 @@ import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { StepRunner } from "../../src/core/step-runner.ts";
 import type { RunStepInput, StepResult } from "../../src/core/step-runner.ts";
+import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { ReviewFileFilterError } from "../../src/providers/review-file-filter.ts";
@@ -1251,9 +1252,11 @@ function createStepFailureRunner(input: {
         context.filePath === input.failedFile &&
         step.stepId === input.failedStepId
       ) {
-        throw new Error(
-          `Step ${step.stepId} failed for ${context.filePath}: ${input.failureCause}`
-        );
+        throw new StepExecutionError({
+          stepId: step.stepId,
+          filePath: context.filePath,
+          cause: input.failureCause
+        });
       }
 
       return buildSuccessfulStepResult(step.stepId, context.filePath);

@@ -12,6 +12,7 @@ import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import {
   buildFindingsForFile,
   buildSuccessfulStepResult,
@@ -588,9 +589,11 @@ function createConcurrentRunner(input: {
 
       if (isFailedFile && isFailedStep) {
         await completeFile(context.filePath, input, activeFiles);
-        throw new Error(
-          `Step ${step.stepId} failed for ${context.filePath}: ${input.failureCause}`
-        );
+        throw new StepExecutionError({
+          stepId: step.stepId,
+          filePath: context.filePath,
+          cause: input.failureCause!
+        });
       }
 
       if (step.stepId === "step7-summary") {
@@ -640,9 +643,11 @@ function createSharedAbortRunner(input: {
         `${context.filePath}:${step.stepId}`
       );
       if (failureCause) {
-        throw new Error(
-          `Step ${step.stepId} failed for ${context.filePath}: ${failureCause}`
-        );
+        throw new StepExecutionError({
+          stepId: step.stepId,
+          filePath: context.filePath,
+          cause: failureCause
+        });
       }
 
       return buildSuccessfulStepResult(step.stepId, context.filePath);

@@ -16,6 +16,7 @@ import {
 } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { RunStepInput, StepResult, StepRunner } from "../../src/core/step-runner.ts";
+import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
@@ -561,9 +562,11 @@ function createMixedResultRunner(
         context.filePath === skippedFile &&
         step.stepId === "step5-validation-interrogation"
       ) {
-        throw new Error(
-          `Step ${step.stepId} failed for ${context.filePath}: deterministic validation failed`
-        );
+        throw new StepExecutionError({
+          stepId: step.stepId,
+          filePath: context.filePath,
+          cause: "deterministic validation failed"
+        });
       }
 
       return buildSuccessfulStepResult(step.stepId, context.filePath, options);
@@ -578,9 +581,11 @@ function createAllSkippedRunner(
   return {
     async run({ context, step }: RunStepInput): Promise<StepResult> {
       if (skippedFiles.has(context.filePath) && step.stepId === "step1-overview") {
-        throw new Error(
-          `Step ${step.stepId} failed for ${context.filePath}: judge rejected`
-        );
+        throw new StepExecutionError({
+          stepId: step.stepId,
+          filePath: context.filePath,
+          cause: "judge rejected"
+        });
       }
 
       return buildSuccessfulStepResult(step.stepId, context.filePath, options);

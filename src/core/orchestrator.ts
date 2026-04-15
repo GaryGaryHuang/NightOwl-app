@@ -19,6 +19,7 @@ function extractSignalName(reason: unknown): "SIGINT" | "SIGTERM" | undefined {
 
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
 import { FileReviewContext } from "./file-review-context.ts";
+import { StepExecutionError } from "./step-execution-error.ts";
 import { ReviewNoteFinalizer } from "./finalizer.ts";
 import { RunSummaryFinalizer } from "./run-summary-finalizer.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
@@ -558,11 +559,9 @@ export class ReviewOrchestrator {
           workingDirectory: input.repoRoot
         });
       } catch (error) {
-        const reason = extractStepFailureReason({
-          stepId: step.stepId,
-          filePath: fileContext.filePath,
-          error
-        });
+        const reason = error instanceof StepExecutionError
+          ? error.stepCause
+          : (error instanceof Error ? error.message : String(error));
 
         if (input.runAbortState.error) {
           return;
@@ -770,20 +769,6 @@ interface PlannedOutcomeSlot {
 
 interface AbortState {
   error?: unknown;
-}
-
-
-
-function extractStepFailureReason(input: {
-  stepId: string;
-  filePath: string;
-  error: unknown;
-}): string {
-  const message =
-    input.error instanceof Error ? input.error.message : String(input.error);
-  const prefix = `Step ${input.stepId} failed for ${input.filePath}: `;
-
-  return message.startsWith(prefix) ? message.slice(prefix.length) : message;
 }
 
 function defaultTimestampProvider(): string {
