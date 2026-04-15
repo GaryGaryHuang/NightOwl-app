@@ -29,10 +29,10 @@ export interface PlannedNoteFile {
 }
 
 export function buildSessionId(input: BuildSessionIdInput): string {
-  // Sanitize the branch-derived prefix so session IDs stay filesystem-safe and deterministic.
-  const candidate = sanitizeSegment(input.branchName ?? input.headRef);
-  const fallback = sanitizeSegment(input.headRef);
-  const prefix = candidate || fallback || "review";
+  const prefix =
+    sanitizeSegment(input.branchName ?? "") ||
+    sanitizeSegment(input.headRef) ||
+    "review";
 
   return `${prefix}_${input.timestamp}`;
 }
@@ -59,41 +59,45 @@ export function planNoteFiles(
   filesPath: string,
   changedFiles: string[]
 ): PlannedNoteFile[] {
-  // Start from the basename and prepend parent segments only as needed until every note filename is unique.
+  // Track how many parent segments to include per file, starting at 1 (basename only).
   const depths = new Map(changedFiles.map((filePath) => [filePath, 1]));
 
-  // Termination invariant: every conflict pass increments the depth of at least one conflicting
-  // path. Since path segment count is bounded above by the number of directory components in each
-  // file path, the loop must terminate in at most max(depth(filePath)) passes.
-  while (true) {
-    // Recompute the whole mapping each pass so collision resolution stays deterministic.
-    const collisions = new Map();
-
-    for (const filePath of changedFiles) {
-      const key = buildNoteFileName(filePath, depths.get(filePath) ?? 1);
-      const matchingPaths = collisions.get(key) ?? [];
-      matchingPaths.push(filePath);
-      collisions.set(key, matchingPaths);
-    }
-
-    const conflicts = [...collisions.values()].filter((paths) => paths.length > 1);
-
-    if (conflicts.length === 0) {
-      return changedFiles.map((filePath) => ({
-        filePath,
-        noteFilePath: path.join(
-          filesPath,
-          buildNoteFileName(filePath, depths.get(filePath) ?? 1)
-        )
-      }));
-    }
-
+  // Iteratively widen any colliding note filenames by incrementing parent depth.
+  // Terminates because each conflict pass increments depth for at least one file,
+  // bounded above by the number of directory segments in that file's path.
+  let conflicts = detectNoteNameConflicts(changedFiles, depths);
+  while (conflicts.length > 0) {
     for (const filePaths of conflicts) {
       for (const filePath of filePaths) {
         depths.set(filePath, (depths.get(filePath) ?? 1) + 1);
       }
     }
+    conflicts = detectNoteNameConflicts(changedFiles, depths);
   }
+
+  return changedFiles.map((filePath) => ({
+    filePath,
+    noteFilePath: path.join(
+      filesPath,
+      buildNoteFileName(filePath, depths.get(filePath) ?? 1)
+    )
+  }));
+}
+
+function detectNoteNameConflicts(
+  changedFiles: string[],
+  depths: Map<string, number>
+): string[][] {
+  const noteNameToFiles = new Map<string, string[]>();
+
+  for (const filePath of changedFiles) {
+    const key = buildNoteFileName(filePath, depths.get(filePath) ?? 1);
+    const existing = noteNameToFiles.get(key) ?? [];
+    existing.push(filePath);
+    noteNameToFiles.set(key, existing);
+  }
+
+  return [...noteNameToFiles.values()].filter((paths) => paths.length > 1);
 }
 
 function sanitizeSegment(value: string): string {
