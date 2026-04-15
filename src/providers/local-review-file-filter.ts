@@ -2,10 +2,8 @@ import { stat, readFile } from "node:fs/promises";
 
 import ignore from "ignore";
 
-import {
-  isNightOwlNamespacePath,
-  reviewIgnorePath
-} from "../core/nightowl-namespace.ts";
+import { isNightOwlNamespacePath } from "../core/review-access-guard.ts";
+import { reviewIgnorePath } from "../core/nightowl-namespace.ts";
 import {
   ReviewFileFilterError,
   type ReviewFileFilter

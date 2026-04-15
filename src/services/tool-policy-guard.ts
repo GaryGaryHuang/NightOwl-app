@@ -3,7 +3,7 @@ import {
   type SessionConfig
 } from "@github/copilot-sdk";
 
-import { isAllowedReviewReadPath } from "../core/nightowl-namespace.ts";
+import { isAllowedReviewReadPath } from "../core/review-access-guard.ts";
 import type { ReviewSessionProfile } from "./review-session-factory.ts";
 import {
   evaluateReadonlyShellCommand,

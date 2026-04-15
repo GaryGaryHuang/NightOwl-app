@@ -10,6 +10,7 @@
     "test/core/judge.test.ts",
     "test/core/max-concurrent-files.test.ts",
     "test/core/nightowl-namespace.test.ts",
+    "test/core/review-access-guard.test.ts",
     "test/core/review-index-finalizer.test.ts",
     "test/core/review-path-resolver.test.ts",
     "test/core/risk-level.test.ts",
