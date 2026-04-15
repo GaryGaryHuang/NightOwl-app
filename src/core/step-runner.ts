@@ -1,9 +1,10 @@
 import type { FileReviewContext } from "./file-review-context.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
+import { StepExecutionError } from "./step-execution-error.ts";
+import { retryOnce } from "./session-retry.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload } from "./file-review-context.ts";
-import { SessionTurnAbortedError } from "../services/session-executor.ts";
 
 export interface StepResolveServices {
   judgeService?: {
@@ -104,8 +105,8 @@ export class StepRunner {
   }
 
   async run(input: RunStepInput): Promise<StepResult> {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
+    return retryOnce({
+      execute: async () => {
         const plan = input.step.prepare(input.context);
         const sessionProfile = {
           stepId: plan.stepId,
@@ -142,36 +143,22 @@ export class StepRunner {
             deferred(context);
           }
         };
-      } catch (error) {
-        if (error instanceof SessionTurnAbortedError) {
-          throw error;
-        }
-        const message =
-          error instanceof Error ? error.message : String(error);
-        const stepId = input.step.stepId;
-        const contextualError = new Error(
-          `Step ${stepId} failed for ${input.context.filePath}: ${message}`
-        );
-
-        if (attempt === 1) {
-          throw contextualError;
-        }
-
-        try {
-          this.#onStepRetry?.({
-            stepId: input.step.stepId,
-            filePath: input.context.filePath,
-            attempt,
-            cause: message
-          });
-        } catch {
-          // swallow: onStepRetry is a side-channel notification only
-        }
+      },
+      onRetry: (attempt, cause) => {
+        this.#onStepRetry?.({
+          stepId: input.step.stepId,
+          filePath: input.context.filePath,
+          attempt,
+          cause
+        });
+      },
+      buildFinalError: (lastCause) => {
+        return new StepExecutionError({
+          stepId: input.step.stepId,
+          filePath: input.context.filePath,
+          cause: lastCause
+        });
       }
-    }
-
-    throw new Error(
-      `Step ${input.step.stepId} failed for ${input.context.filePath}: retry exhausted`
-    );
+    });
   }
 }

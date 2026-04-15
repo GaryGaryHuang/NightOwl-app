@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { StepRunner } from "../../src/core/step-runner.ts";
+import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import {
   SessionExecutor,
   SessionTurnAbortedError
@@ -383,7 +384,7 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /^Error: Step step1-overview failed for src\/app\.ts: judge timeout$/u
+    /^StepExecutionError: Step step1-overview failed for src\/app\.ts: judge timeout$/u
   );
 });
 
