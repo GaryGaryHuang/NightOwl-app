@@ -1,5 +1,6 @@
 import { CopilotClient } from "@github/copilot-sdk";
 
+import { CopilotClientManagerBase } from "./copilot-client-manager.ts";
 import {
   DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS,
   stopClientManagerWithTimeout
@@ -32,50 +33,15 @@ export interface CopilotAvailabilityCheckerOptions {
   pingMessage?: string;
 }
 
-// Intentionally mirrors the start/stop/getClient structure of CopilotClientManager.
-// The two classes are kept separate because they expose different capability surfaces:
-// CopilotClientManager.getClient() returns createSession(), while this class returns ping().
-// Merging them would require a generic base or builder pattern whose indirection cost
-// outweighs the ~30-line duplication savings. Revisit only if a third client path emerges.
 class CopilotAvailabilityClientManager
+  extends CopilotClientManagerBase<CopilotAvailabilityClientLike, CopilotAvailabilityProbeLike>
   implements CopilotAvailabilityClientManagerLike {
-  readonly #createClient: () => CopilotAvailabilityClientLike;
-  #client?: CopilotAvailabilityClientLike;
 
   constructor(options: CopilotAvailabilityClientManagerOptions = {}) {
-    this.#createClient = options.createClient ?? (() => new CopilotClient());
-  }
-
-  async start(): Promise<void> {
-    if (!this.#client) {
-      this.#client = this.#createClient();
-    }
-
-    await this.#client.start();
-  }
-
-  getClient(): CopilotAvailabilityProbeLike {
-    if (!this.#client) {
-      throw new Error("Copilot client has not been started.");
-    }
-
-    return this.#client;
-  }
-
-  async stop(): Promise<void> {
-    if (!this.#client) {
-      return;
-    }
-
-    await this.#client.stop();
-  }
-
-  async forceStop(): Promise<void> {
-    if (!this.#client) {
-      return;
-    }
-
-    await this.#client.forceStop();
+    super(
+      options.createClient ?? (() => new CopilotClient() as CopilotAvailabilityClientLike),
+      (client) => client
+    );
   }
 }
 
