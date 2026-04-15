@@ -14,12 +14,9 @@ export interface SessionLike {
   disconnect(): Promise<void>;
 }
 
-export class SessionTurnAbortedError extends Error {
-  constructor() {
-    super("Session turn aborted by run-level interrupt.");
-    this.name = "SessionTurnAbortedError";
-  }
-}
+// Re-export from its canonical home in core/ so existing consumers of this module keep working.
+export { SessionTurnAbortedError } from "../core/session-turn-aborted-error.ts";
+import { SessionTurnAbortedError } from "../core/session-turn-aborted-error.ts";
 
 export class SessionExecutor {
   readonly #session: SessionLike;

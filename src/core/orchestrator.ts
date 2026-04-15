@@ -53,7 +53,7 @@ import {
 } from "../providers/review-output-health-assessor.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
-import { SessionTurnAbortedError } from "../services/session-executor.ts";
+import { SessionTurnAbortedError } from "./session-turn-aborted-error.ts";
 
 export interface FinalizerFailure {
   artifact: "summary" | "index" | "manifest";
@@ -693,7 +693,7 @@ export class ReviewOrchestrator {
     input.outcomeSlots[input.workItem.plannedIndex] = {
       successful: {
         filePath: fileContext.filePath,
-        findings: fileContext.getStructuredState().findings ?? []
+        findings: fileContext.getFindings() ?? []
       }
     };
 
