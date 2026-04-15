@@ -18,7 +18,7 @@ import { LocalReviewFileFilter } from "../providers/local-review-file-filter.ts"
 import { LocalReviewConfigProvider } from "../providers/config/local-review-config-provider.ts";
 import { LocalSuccessfulSnapshotOutputHealthAssessor } from "../providers/local-successful-snapshot-output-health-assessor.ts";
 import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
-import type { ReviewConfigProvider } from "../providers/config/review-config-provider.ts";
+import type { ReviewConfig, ReviewConfigProvider } from "../providers/config/review-config-provider.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
 import type { SuccessfulSnapshotOutputHealthAssessor } from "../providers/review-output-health-assessor.ts";
@@ -70,6 +70,12 @@ export interface ReviewApp {
   run(request: RunRequest): Promise<ReviewRunSummary>;
 }
 
+interface RunDeps {
+  orchestrator: ReviewOrchestrator;
+  lifecycleManager: RunLifecycleManager;
+  flush(): Promise<void>;
+}
+
 /**
  * Composition root for a single local review run.
  * The repo-root-dependent pieces are assembled inside run() after repo root resolution.
@@ -90,6 +96,80 @@ export function createLocalReviewRunApp(
   const reviewConfigProvider =
     options.reviewConfigProvider ?? new LocalReviewConfigProvider();
 
+  function buildRunDeps(isDryRun: boolean, reviewConfig: ReviewConfig): RunDeps {
+    const judgeSessionFactory = isDryRun
+      ? new DryRunJudgeSessionFactory()
+      : new JudgeSessionFactory({ clientManager });
+    const judgeService = new JudgeService({ judgeSessionFactory });
+
+    let reviewSessionFactory: Pick<ReviewSessionFactory, "createSession">;
+    let onOutputTargetReady: ((outputTarget: { toolAuditPath: string }) => void) | undefined;
+    let flush: () => Promise<void> = async () => {};
+
+    if (isDryRun) {
+      reviewSessionFactory = new DryRunReviewSessionFactory();
+    } else {
+      const auditWriter = new ToolAuditWriter();
+      flush = () => auditWriter.flush();
+      const knowledgeSvc =
+        options.knowledgeSvc ??
+        new KnowledgeSvc({
+          context7ApiKey: options.context7ApiKey ?? process.env.CONTEXT7_API_KEY,
+          userMcpServers: reviewConfig.mcpServers
+        });
+      const toolPolicyGuard = new ToolPolicyGuard({
+        hostnameClassifier: options.webFetchHostnameClassifier,
+        webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
+        webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
+        webFetchHostnameClassificationTimeoutMs:
+          options.webFetchHostnameClassificationTimeoutMs
+      });
+      reviewSessionFactory = new ReviewSessionFactory({
+        clientManager,
+        knowledgeSvc,
+        toolPolicyGuard,
+        auditWriterProvider: () => auditWriter
+      });
+      onOutputTargetReady = (outputTarget) => {
+        auditWriter.setPath(outputTarget.toolAuditPath);
+      };
+    }
+
+    const changesetOverviewRunner =
+      options.changesetOverviewRunner ??
+      new ChangesetOverviewRunner({ reviewSessionFactory });
+    const stepRunner =
+      options.stepRunner ??
+      new StepRunner({
+        reviewSessionFactory,
+        judgeService,
+        structuredOutputValidator: new StructuredOutputValidator({
+          confidenceThresholds: reviewConfig.confidenceThresholds
+        })
+      });
+    const orchestrator = new ReviewOrchestrator({
+      changesetOverviewRunner,
+      reviewFileFilter,
+      sourceProvider,
+      outputSink,
+      successfulSnapshotOutputHealthAssessor,
+      stepRunner,
+      workingDirectory: options.workingDirectory,
+      timestampProvider: options.timestampProvider,
+      maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
+      perFileStepsFactory: options.perFileStepsFactory,
+      onProgressEvent: options.onProgressEvent,
+      onOutputTargetReady
+    });
+
+    const lifecycleManager = new RunLifecycleManager({
+      clientManager: isDryRun ? undefined : clientManager,
+      gracefulShutdownTimeoutMs
+    });
+
+    return { orchestrator, lifecycleManager, flush };
+  }
+
   return {
     async run(request: RunRequest): Promise<ReviewRunSummary> {
       const startPath = path.resolve(
@@ -99,90 +179,18 @@ export function createLocalReviewRunApp(
       const repoRoot = await sourceProvider.resolveRepoRoot(startPath);
       const reviewConfig = await reviewConfigProvider.loadReviewConfig(repoRoot);
 
-      // In dry-run mode substitute stub factories so no Copilot CLI or AI calls are made.
-      const isDryRun = request.dryRun === true;
-
-      // judgeSessionFactory and judgeService are request-scoped: built after isDryRun is known.
-      const judgeSessionFactory = isDryRun
-        ? new DryRunJudgeSessionFactory()
-        : new JudgeSessionFactory({ clientManager });
-      const judgeService = new JudgeService({ judgeSessionFactory });
-
-      let reviewSessionFactory: Pick<ReviewSessionFactory, "createSession">;
-      let onOutputTargetReady: ((outputTarget: { toolAuditPath: string }) => void) | undefined;
-      let auditWriter: ToolAuditWriter | undefined;
-
-      if (isDryRun) {
-        reviewSessionFactory = new DryRunReviewSessionFactory();
-      } else {
-        auditWriter = new ToolAuditWriter();
-        const knowledgeSvc =
-          options.knowledgeSvc ??
-          new KnowledgeSvc({
-            context7ApiKey: options.context7ApiKey ?? process.env.CONTEXT7_API_KEY,
-            userMcpServers: reviewConfig.mcpServers
-          });
-        const toolPolicyGuard = new ToolPolicyGuard({
-          hostnameClassifier: options.webFetchHostnameClassifier,
-          webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
-          webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
-          webFetchHostnameClassificationTimeoutMs:
-            options.webFetchHostnameClassificationTimeoutMs
-        });
-        reviewSessionFactory = new ReviewSessionFactory({
-          clientManager,
-          knowledgeSvc,
-          toolPolicyGuard,
-          auditWriterProvider: () => auditWriter!
-        });
-        onOutputTargetReady = (outputTarget) => {
-          auditWriter!.setPath(outputTarget.toolAuditPath);
-        };
-      }
-
-      const changesetOverviewRunner =
-        options.changesetOverviewRunner ??
-        new ChangesetOverviewRunner({
-          reviewSessionFactory
-        });
-      const stepRunner =
-        options.stepRunner ??
-        new StepRunner({
-          reviewSessionFactory,
-          judgeService,
-          structuredOutputValidator: new StructuredOutputValidator({
-            confidenceThresholds: reviewConfig.confidenceThresholds
-          })
-        });
-      const orchestrator = new ReviewOrchestrator({
-        changesetOverviewRunner,
-        reviewFileFilter,
-        sourceProvider,
-        outputSink,
-        successfulSnapshotOutputHealthAssessor,
-        stepRunner,
-        workingDirectory: options.workingDirectory,
-        timestampProvider: options.timestampProvider,
-        maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
-        perFileStepsFactory: options.perFileStepsFactory,
-        onProgressEvent: options.onProgressEvent,
-        onOutputTargetReady
-      });
-
-      const lifecycleManager = new RunLifecycleManager({
-        clientManager: isDryRun ? undefined : clientManager,
-        gracefulShutdownTimeoutMs
-      });
-
-      const result = await lifecycleManager.run((signal) =>
-        orchestrator.run(request, { signal })
+      const { orchestrator, lifecycleManager, flush } = buildRunDeps(
+        request.dryRun === true,
+        reviewConfig
       );
 
-      // Ensure all async audit records are flushed to disk before the process exits.
-      // Individual write failures are still silently ignored per the best-effort contract.
-      await auditWriter?.flush();
-
-      return result;
+      try {
+        return await lifecycleManager.run((signal) =>
+          orchestrator.run(request, { signal })
+        );
+      } finally {
+        await flush();
+      }
     }
   };
 }
