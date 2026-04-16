@@ -4,6 +4,8 @@
 
 NightOwl is a local Code Review CLI tool powered by the [GitHub Copilot SDK](https://www.npmjs.com/package/@github/copilot-sdk). It drives an AI Agent to automatically perform structured Code Reviews on Git changes and produce traceable Markdown review reports.
 
+[Why NightOwl?](#why-nightowl) • [Quick Start](#quick-start) • [Usage](#usage) • [Configuration](#configuration) • [Development](#development) • [Architecture](#architecture)
+
 ## Why NightOwl?
 
 - **Structured**: every review follows the same multi-step SOP and format
@@ -17,38 +19,30 @@ The generated reports can serve as a starting point for engineer self-review or 
 ### Prerequisites
 
 - Node.js ≥ 22.7.0
-- [GitHub Copilot CLI](https://docs.github.com/en/copilot) installed and authenticated
+- A [GitHub Copilot](https://github.com/features/copilot) subscription
+- GitHub authentication via one of:
+  - [GitHub CLI](https://cli.github.com/) — `gh auth login`
+  - [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli) — authenticate on first launch
 
 ### Installation
 
 ```bash
-git clone <repo-url> && cd NightOwl-app
+git clone https://github.com/GaryGaryHuang/NightOwl-app.git && cd NightOwl-app
 npm install
-npm pack
-npm install -g ./nightowl-0.1.0.tgz
+npm install -g .
 ```
 
-For development, use `npm link` instead of `npm pack` (see [Development](#development)).
+For development, use `npm link` instead (see [Development](#development)).
 
 ### Verify Setup
-
-Run the preflight command after installing or re-authenticating GitHub Copilot CLI, and before starting a full review run:
 
 ```bash
 review --check
 ```
 
-Prints `GitHub Copilot is available.` on success.
+Prints `GitHub Copilot is available.` on success. If the check fails, verify your Copilot agent is running and authenticated.
 
-If the check fails, NightOwl exits with a non-zero status and preserves the underlying error message so you can troubleshoot CLI installation, authentication, or service connectivity without entering the review pipeline.
-
-If `review --check` fails:
-
-- Confirm GitHub Copilot CLI is installed and available in `PATH`
-- Re-authenticate Copilot CLI if your login or subscription has expired
-- Retry `review --check` before running a full review so availability issues stay isolated from review-run failures
-
-### Usage
+## Usage
 
 ```bash
 review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
