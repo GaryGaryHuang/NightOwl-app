@@ -10,6 +10,8 @@ Design goals:
 - **Fast feedback** — deterministic logic stays in unit tests; slow or stateful tests live in higher tiers
 - **Complementary tiers** — lower tiers own deterministic detail; higher tiers verify boundaries and the published surface
 
+If this document conflicts with the actual code, **the code is the source of truth**.
+
 ---
 
 ## Taxonomy
@@ -27,7 +29,7 @@ Fast, deterministic, logic-owner tests. A test is unit when it exercises a singl
 - Runs entirely in-memory — no file system, network, child process, or real Git operations
 - Deterministic: same input always produces the same output
 
-**Typical subjects:** CLI parser, step prompt preparation, section contracts, findings validation, risk derivation, path planning, Markdown finalizers, config normalization, shell policy decision logic, web-fetch policy decision logic, hostname classifier, redirect resolver.
+**Typical subjects:** CLI parser, risk derivation, config normalization, shell/web-fetch policy decision logic, Markdown finalizers, etc. See the `unit` array in `test/test-tier-manifest.json` for the full list.
 
 ### Integration
 
@@ -40,7 +42,7 @@ Boundary and collaboration tests between two or more modules, or between a modul
 - Tests lifecycle behavior that spans multiple components (startup, shutdown, signal handling)
 - Validates hook-level behavior where the system under test is a composition of real objects
 
-**Typical subjects:** app startup fail-fast and lifecycle, signal-driven graceful shutdown, orchestrator coordination (Step 0 → fan-out → finalizers), step runner retry and state application, real Git/workspace provider operations, review-session factory wiring, hook-level tool-policy guard behavior, app-visible web-fetch guardrails.
+**Typical subjects:** app lifecycle and graceful shutdown, orchestrator coordination, step runner retry, real Git/workspace provider operations, tool-policy guard hook behavior, etc. See the `integration` array in `test/test-tier-manifest.json` for the full list.
 
 ### E2E
 
@@ -51,7 +53,7 @@ Thin guardrails for the published CLI surface. These tests exercise the outermos
 - Tests the installed or runnable CLI entry point as a user would invoke it
 - Verifies exit codes, stdout/stderr output, and error messages for success, failure, and interrupt paths
 
-**Typical subjects:** installable `review` executable (`package-bin`), CLI success / fatal / interrupted paths (`run-cli`), `--check` mode environment smoke test (`run-cli-check-smoke`).
+**Typical subjects:** installable `review` executable (`package-bin`), CLI success / fatal / interrupted paths (`run-cli`), CLI progress rendering (`run-cli-progress`), `--check` mode environment smoke test (`run-cli-check-smoke`).
 
 ---
 
@@ -80,8 +82,7 @@ npm run test:e2e           # Build + run e2e tests only
 `review --check` has an environment-gated smoke test that talks to a real GitHub Copilot CLI environment. It is skipped by default so CI stays deterministic.
 
 ```bash
-NIGHTOWL_RUN_CHECK_SMOKE=1 npm run build
-NIGHTOWL_RUN_CHECK_SMOKE=1 node --test test/cli/run-cli-check-smoke.test.ts
+npm run build && NIGHTOWL_RUN_CHECK_SMOKE=1 node --test test/cli/run-cli-check-smoke.test.ts
 ```
 
 Use it only on a machine where GitHub Copilot CLI is installed, authenticated, and expected to respond successfully.
@@ -94,6 +95,14 @@ npm run build && node --test test/core/orchestrator-bounded-concurrency.test.ts
 
 All primary commands run `npm run build` first. After modifying `src/`, always build before testing.
 
+### Type checking test code
+
+`npm test` type-checks `src/` during the build step but does not type-check test files. To verify both `src/` and `test/` with the full TypeScript compiler:
+
+```bash
+npm run typecheck
+```
+
 ### Convenience commands
 
 ```bash
@@ -101,7 +110,7 @@ npm run test:watch         # Watch mode (outside the primary taxonomy contract)
 npm run test:coverage      # Coverage run (outside the primary taxonomy contract)
 ```
 
-These are developer conveniences, not the primary `unit / integration / e2e` entrypoints.
+These are developer conveniences, not the primary `unit / integration / e2e` entrypoints. They do not run `npm run build` first and do not go through the tier manifest verifier.
 
 ---
 
@@ -111,7 +120,7 @@ These are developer conveniences, not the primary `unit / integration / e2e` ent
 
 - **Test runner:** Node.js built-in test runner (`node:test`)
 - **Assertions:** `node:assert/strict`
-- **Mocking:** Hand-written fakes and stubs injected via constructor parameters
+- **Mocking:** Primarily hand-written fakes injected via constructor parameters. The built-in `mock` from `node:test` is used sparingly for cases that cannot be reached through injection (e.g., simulating module-level failures).
 
 The project exclusively uses Node.js built-in test APIs. Do not introduce external test frameworks (Jest, Vitest, Mocha), assertion libraries, or mocking libraries (Sinon, `jest.fn()`).
 
@@ -126,6 +135,7 @@ The project exclusively uses Node.js built-in test APIs. Do not introduce extern
 - Test files end in `.test.ts` and live under `test/`
 - Directory structure mirrors `src/`: for example, `test/core/orchestrator-bounded-concurrency.test.ts` tests `src/core/orchestrator.ts`
 - When a single source module needs multiple focused test suites, they share a prefix: `orchestrator-abort.test.ts`, `orchestrator-bounded-concurrency.test.ts`, `orchestrator-output-failures.test.ts`, etc.
+- `test/scripts/` contains tests for the build and manifest tooling itself
 - Shared test utilities live in `test/helpers/` — these are fixture modules, not test suites
 
 ---
@@ -160,24 +170,15 @@ assert.deepStrictEqual(calls, ["a.ts", "b.ts"]);
 
 Each `test()` block constructs its own fixture and collaborators from scratch. Tests must not rely on execution order or shared state.
 
+When fixture setup is expensive (e.g., wiring a full app composition), integration tests may use `describe()` with `before()` / `after()` from `node:test` to share setup and teardown across related assertions.
+
 ---
 
 ## Fixtures (`test/helpers/`)
 
-Shared fixtures follow the `create*Fixture()` / `build*Response()` naming convention.
+Shared test utilities live in `test/helpers/`. These are fixture modules, not test suites — they are excluded from the tier manifest.
 
-| File | Purpose |
-|------|---------|
-| `git-fixture.ts` | Create real temporary Git repos (main + feature branch) with `writeFile`, `commitAll`, `cleanup` |
-| `orchestrator-fixture.ts` | Fake LLM responses for each SOP step; `detectStepId` routing by system message |
-| `review-app-fixture.ts` | `buildSessionResponse` routing by system message |
-| `review-session-runtime-contract-fixture.ts` | Recording client manager that captures `SessionConfig`; `createAssistantSession` |
-| `step-runner-contract-fixture.ts` | Default `FileReviewContext` builder; `applySection`; `seedStep4Context` for prerequisite state |
-| `finalizer-contract-fixture.ts` | Text assertions: `assertTextContainsAll`, `assertTextExcludesAll`, `assertTextContainsInOrder`, `assertBootstrapShape`, `assertFindingsStats`, `assertFindingsTitlesInOrder`, `assertTraceabilityForms`, `assertWarningBlock`, `assertWarningBlockAtEnd` |
-| `completed-run-finalizer-contract-fixture.ts` | Factory functions for `Finding`, `SuccessfulFileOutcome`, `SkippedFileOutcome`, `OutputTarget` |
-| `review-config-provider-contract-fixture.ts` | Wraps git fixture + `LocalReviewConfigProvider` for `repo_root/.nightowl/reviewconfig.json` testing |
-| `workspace-provider-contract-fixture.ts` | Temporary directory `OutputTarget` fixture with `LocalWorkspaceProvider` |
-| `tool-policy-fixture.ts` | Fake `HostnameClassifier` and `RedirectResolver` for `ToolPolicyGuard` tests |
+Fixtures follow the `create*Fixture()` / `build*Response()` naming convention. Browse the directory for the current list of helpers and their exports.
 
 ---
 
