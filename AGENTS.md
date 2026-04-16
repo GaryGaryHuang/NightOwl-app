@@ -24,65 +24,26 @@ Node.js ≥ 22.7.0. Published artifacts are built with the repo-local TypeScript
 
 ```
 src/
-├── bin/review.ts          CLI entry point
-├── cli/parser.ts          CLI parsing → RunRequest
-├── cli/progress-reporter.ts  Runtime progress rendering for TTY/non-TTY CLI output
-├── index.ts               runCli(): error handling, exit code
-├── app/review-app.ts      Composition root: wire all dependencies, lifecycle
-├── core/
-│   ├── orchestrator.ts    Core flow control
-│   ├── run-progress.ts    Structured runtime progress events emitted during a run
-│   ├── step-runner.ts     Step execution: execute → completion check → retry
-│   ├── steps/             Step 1–7 strategy modules (one file per step)
-│   ├── file-review-context.ts   Single-file source of truth
-│   ├── finalizers/
-│   │   ├── review-note-finalizer.ts  Review notes Markdown render
-│   │   ├── run-summary-finalizer.ts
-│   │   ├── review-index-finalizer.ts
-│   │   └── run-manifest-finalizer.ts
-│   ├── review-path-resolver.ts  Output path planning & collision handling
-│   ├── risk-level.ts      Four-tier risk derivation (High/Medium/Low/None)
-│   ├── structured-output-validator.ts  Step 5/6 JSON validation
-│   ├── judge.ts           JudgeService: Step 1–4, 7 completion check
-│   ├── changeset-overview-runner.ts   Step 0 execution
-│   ├── session-factory-contracts.ts   Factory contract interfaces (ReviewSessionFactoryLike, JudgeSessionFactoryLike)
-│   └── web-fetch-hostname-normalization.ts  Shared hostname normalization (used by providers & services)
-├── providers/             External I/O adapters
-│   ├── local-git-provider.ts
-│   ├── local-workspace-provider.ts
-│   ├── config/            Review configuration parsing & loading
-│   │   ├── local-review-config-provider.ts
-│   │   ├── review-config-parser.ts
-│   │   └── review-config-provider.ts  Interface definitions
-│   └── review-*.ts        Interface definitions
-└── services/              SDK session management
-    ├── copilot-client-manager.ts   Copilot Client process lifecycle
-    ├── session-executor.ts         Session turn execution
-    ├── review-session-factory.ts   Review session creation
-    ├── judge-session-factory.ts    Judge session creation
-    ├── dry-run-review-session-factory.ts  Dry-run review stub factory (no SDK calls)
-    ├── dry-run-judge-session-factory.ts   Dry-run judge stub factory (no SDK calls)
-    ├── dry-run-stub-catalog.ts     Deterministic stub responses keyed by stepId
-    ├── knowledge.ts                KnowledgeSvc: MCP configuration
-    ├── tool-audit-writer.ts        JSONL audit log
-    └── tool-policy/               Tool permission & security boundary
-        ├── tool-policy-guard.ts        Tool permission hook
-        ├── tool-policy-shell-policy.ts Shell command security policy
-        ├── tool-policy-web-fetch-policy.ts  Web fetch URL security policy
-        ├── shell-command-parser.ts     Shell command tokenizer
-        ├── web-fetch-hostname-classifier.ts
-        └── web-fetch-public-address-policy.ts
+├── bin/review.ts        CLI entry point
+├── index.ts             runCli(): error handling, exit code
+├── cli/                 CLI parsing (→ RunRequest) & progress rendering
+├── app/                 Composition root: wire dependencies, lifecycle, signal handling
+├── core/                Business logic
+│   ├── orchestrator.ts  Flow control: Step 0 → path planning → fan-out → Steps 1–7 → finalizers
+│   ├── step-runner.ts   Step execution + completion check + retry
+│   ├── steps/           One strategy module per SOP step (Step 1–7)
+│   └── finalizers/      Output renderers (review notes, summary, index, manifest)
+├── providers/           External I/O adapters (Git, filesystem, config)
+└── services/            SDK session lifecycle, tool policy, MCP injection
 ```
 
 ### Key Config Files
 
 | File | Purpose |
 |------|---------|
-| `tsconfig.json` | TypeScript typecheck / editor configuration (`noEmit`) |
-| `tsconfig.build.json` | Publish build configuration for `src/** -> dist/**` |
-| `scripts/build.mjs` | Thin build wrapper: clean `dist/`, invoke `tsc`, normalize bin permissions, verify artifact |
-| `reviewconfig.json` | Review runtime settings (optional, placed at `repo_root/.nightowl/`) |
-| `reviewignore` | File filtering (`.gitignore` syntax, placed at `repo_root/.nightowl/`) |
+| `scripts/build.mjs` | Build wrapper: clean `dist/`, invoke `tsc`, normalize bin permissions, verify artifact |
+| `<target_repo>/.nightowl/reviewconfig.json` | Review runtime settings (optional) |
+| `<target_repo>/.nightowl/reviewignore` | File filtering (`.gitignore` syntax) |
 
 ### Layer Boundaries
 
@@ -102,12 +63,10 @@ Strictly follow these layers. Do not merge or cross boundaries:
 
 - **`FileReviewContext` is the single source of truth for each file.** On-disk notes are snapshot projections only; they must not be read back.
 - **Completion check precedes state update.** Step responses must pass judge or deterministic validation before being written to `FileReviewContext`. The Orchestrator applies updates via `StepResult.applyTo(context)`.
-- **Step 0 is run-level**, not a per-file step. It does not go through `StepRunner` and does not implement `ISopStep`.
+- **Steps are pluggable.** Each per-file step implements the minimal `StepDefinition` interface (`stepId` + `prepare()`). The Orchestrator receives steps via an injected `perFileStepsFactory`; adding, removing, or reordering steps does not require changes to the Orchestrator or StepRunner.
+- **Step 0 is run-level**, not a per-file step. It does not go through `StepRunner` and does not implement `StepDefinition`.
 - **Bounded concurrency**: files are processed in parallel (default 5); within each file, Steps 1–7 run strictly in sequence.
 - **Retry once**: a failed step retries once; if it fails again, the file is demoted to skipped. A Step 0 failure aborts the entire run.
-- **`--check` has highest CLI priority**: when `--check` is present (regardless of other arguments), the CLI runs a Copilot availability preflight and exits. No branch refs are required and the review pipeline is not entered. `--check` takes priority over `--dry-run`; when neither flag is present, the normal review flow runs.
-- **Dry-run mode**: when `RunRequest.dryRun` is `true`, the Composition Root substitutes `DryRunReviewSessionFactory` and `DryRunJudgeSessionFactory` for all AI calls and skips `clientManager.start()` / `stop()`. All non-AI pipeline stages run identically.
-- **CLI runtime progress is event-driven**: `ReviewOrchestrator` emits structured progress events, and the CLI renders them as TTY live output or non-TTY append-only snapshots.
 
 ## Testing
 
@@ -139,8 +98,9 @@ See [TESTING.md](./TESTING.md) for tier decision criteria, test patterns, fixtur
 ## Code Conventions
 
 - TypeScript strict mode
-- Language: Traditional Chinese for prose and user-facing text; English for code identifiers and established terms
-- Terminology follows existing project conventions (Traditional Chinese for prose, English for code identifiers and established terms such as `FileReviewContext`, `completion check`)
+- Review output language is configured in Step prompts (`common-system-message.ts`); currently set to Traditional Chinese. Users can change the output language by modifying Step prompt definitions without touching the framework.
+- Framework-layer messages (CLI, logs, errors) are in English
+- Code identifiers and established terms (e.g. `FileReviewContext`, `completion check`) are always in English
 - Prefer minimal, explicit implementations; no speculative abstractions
 - Do not create helpers or abstractions for one-time operations
 - Do not perform refactors not explicitly requested by the task (extract function, rename, move files)
@@ -161,9 +121,7 @@ These are product safety boundaries that must not be circumvented or relaxed:
 
 ## Copilot SDK Notes
 
-- Currently using `@github/copilot-sdk@^0.2.0`
-- Before changing the SDK version, re-verify: runtime imports, session lifecycle, permission hooks, MCP config types, and test behavior
-- Review sessions implement tool permission control via `hooks.onPreToolUse`
+- Using `@github/copilot-sdk@^0.2.0`. Before upgrading, re-verify: runtime imports, session lifecycle, permission hooks (`onPreToolUse`), MCP config types, and test behavior.
 
 ## Commit Guidance
 
@@ -177,5 +135,6 @@ Before finalizing a change, confirm:
 
 - [ ] Related tests have been added or updated
 - [ ] `npm test` passes entirely
+- [ ] `npm run typecheck` passes (covers `src/`, `test/`, and `scripts/`; `npm test` only type-checks `src/`)
 - [ ] README.md still reflects current behavior
 - [ ] If install contracts, completed capabilities, or major safety boundaries changed, update this file
