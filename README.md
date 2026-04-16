@@ -4,8 +4,6 @@
 
 NightOwl is a local Code Review CLI tool powered by the [GitHub Copilot SDK](https://www.npmjs.com/package/@github/copilot-sdk). It drives an AI Agent to automatically perform structured Code Reviews on Git changes and produce traceable Markdown review reports.
 
-[Why NightOwl?](#why-nightowl) • [Quick Start](#quick-start) • [Usage](#usage) • [Configuration](#configuration) • [Development](#development) • [Architecture](#architecture)
-
 ## Why NightOwl?
 
 - **Structured**: every review follows the same multi-step SOP and format
@@ -21,14 +19,15 @@ The generated reports can serve as a starting point for engineer self-review or 
 - Node.js ≥ 22.7.0
 - A [GitHub Copilot](https://github.com/features/copilot) subscription
 - GitHub authentication via one of:
-  - [GitHub CLI](https://cli.github.com/) — `gh auth login`
-  - [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli) — authenticate on first launch
+  - [GitHub CLI](https://cli.github.com/) — run `gh auth login`
+  - [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli) — run `/login` on first launch
 
 ### Installation
 
 ```bash
 git clone https://github.com/GaryGaryHuang/NightOwl-app.git && cd NightOwl-app
 npm install
+npm run build
 npm install -g .
 ```
 
@@ -40,7 +39,7 @@ For development, use `npm link` instead (see [Development](#development)).
 review --check
 ```
 
-Prints `GitHub Copilot is available.` on success. If the check fails, verify your Copilot agent is running and authenticated.
+Prints `GitHub Copilot is available.` on success.
 
 ## Usage
 
