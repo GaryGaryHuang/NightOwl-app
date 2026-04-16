@@ -5,7 +5,7 @@ import { isAllowedReviewReadPath } from "../../core/review-access-guard.ts";
 import type { ReviewSessionProfile } from "../review-session-factory.ts";
 import {
   containsTopLevelRedirection,
-  splitTopLevelChainSegments,
+  splitTopLevelSequenceSegments,
   splitTopLevelPipelineSegments
 } from "./shell-command-parser.ts";
 import type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
@@ -15,43 +15,92 @@ export type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-t
 export const READONLY_BASH_DENY_REASON =
   "Review sessions only allow repo-local read-only shell analysis commands.";
 
-const ALLOWED_BASH_PREFIXES = [
-  "git diff",
-  "git show",
-  "git log",
-  "git status",
-  "git rev-parse",
-  "git merge-base",
-  "git rev-list",
-  "git ls-files",
-  "git blame",
-  "git grep",
-  "git cat-file",
-  "cat",
-  "ls",
-  "head",
-  "tail",
-  "find",
-  "rg",
-  "grep",
-  "sed -n",
-  "cut",
-  "sort",
-  "uniq",
-  "wc",
-  "cd",
-  "nl",
-  "file",
-  "stat",
-  "tree",
-  "realpath",
-  "basename",
-  "dirname",
-  "diff",
-  "awk"
-];
+// --- Command allow-list registry ---
+//
+// Each entry maps a command name to its argument-level policy.  Git uses a
+// separate subcommand set rather than a per-binary entry so that `git -C`
+// normalisation and subcommand validation can be handled in a single pass.
+//
+// Policy flags:
+//   deniedFlags   – flags that MUST NOT appear (e.g. write / exec flags)
+//   requiredFlags – at least one of these flags MUST be present
 
-const DANGEROUS_BASH_FLAGS = new Set(["-o", "--output", "-exec", "-execdir"]);
+interface CommandPolicy {
+  deniedFlags?: Set<string>;
+  deniedFlagPrefixes?: string[];
+  requiredFlags?: Set<string>;
+}
+
+const DEFAULT_POLICY: CommandPolicy = {};
+
+const ALLOWED_COMMANDS = new Map<string, CommandPolicy>([
+  // --- file / text inspection ---
+  ["cat", DEFAULT_POLICY],
+  ["ls", DEFAULT_POLICY],
+  ["head", DEFAULT_POLICY],
+  ["tail", DEFAULT_POLICY],
+  ["nl", DEFAULT_POLICY],
+  ["file", DEFAULT_POLICY],
+  ["stat", DEFAULT_POLICY],
+  ["tree", DEFAULT_POLICY],
+  ["wc", DEFAULT_POLICY],
+  ["diff", DEFAULT_POLICY],
+
+  // --- search ---
+  ["grep", DEFAULT_POLICY],
+  ["rg", DEFAULT_POLICY],
+  ["find", {
+    deniedFlags: new Set(["-exec", "-execdir", "-delete", "-ok", "-okdir"])
+  }],
+
+  // --- text processing (typically pipeline-only) ---
+  ["cut", DEFAULT_POLICY],
+  ["sort", {
+    deniedFlags: new Set(["-o"]),
+    deniedFlagPrefixes: ["--output="]
+  }],
+  ["uniq", DEFAULT_POLICY],
+  // awk is Turing-complete and can call system(); kept for convenience in
+  // review pipelines (e.g. `awk '{print $1}'`).  The threat model accepts
+  // this because the LLM is constrained by our system prompt and the user
+  // controls what code is reviewed.
+  ["awk", DEFAULT_POLICY],
+  ["sed", {
+    deniedFlags: new Set(["-i", "--in-place"]),
+    requiredFlags: new Set(["-n"])
+  }],
+
+  // --- path utilities ---
+  ["realpath", DEFAULT_POLICY],
+  ["basename", DEFAULT_POLICY],
+  ["dirname", DEFAULT_POLICY],
+
+  // --- output formatting ---
+  ["printf", DEFAULT_POLICY],
+  ["echo", DEFAULT_POLICY],
+
+  // --- navigation ---
+  ["cd", DEFAULT_POLICY]
+]);
+
+const ALLOWED_GIT_SUBCOMMANDS = new Set([
+  "diff",
+  "show",
+  "log",
+  "status",
+  "rev-parse",
+  "merge-base",
+  "rev-list",
+  "ls-files",
+  "blame",
+  "grep",
+  "cat-file"
+]);
+
+const GIT_POLICY: CommandPolicy = {
+  deniedFlags: new Set(["-exec", "-execdir"]),
+  deniedFlagPrefixes: ["--output="]
+};
 
 export function evaluateReadonlyShellCommand(
   command: string,
@@ -77,7 +126,7 @@ function isAllowedReadonlyBashCommand(
     return false;
   }
 
-  if (/[;`]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
+  if (/[`]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
     return false;
   }
 
@@ -87,20 +136,16 @@ function isAllowedReadonlyBashCommand(
     return false;
   }
 
-  if (trimmedCommand.includes("||")) {
-    return false;
-  }
+  const sequenceSegments = splitTopLevelSequenceSegments(trimmedCommand);
 
-  const chainSegments = splitTopLevelChainSegments(trimmedCommand);
-
-  if (!chainSegments) {
+  if (!sequenceSegments) {
     return false;
   }
 
   let effectiveCwd = commandCwd;
 
-  for (const chainSegment of chainSegments) {
-    const pipelineSegments = splitTopLevelPipelineSegments(chainSegment);
+  for (const sequenceSegment of sequenceSegments) {
+    const pipelineSegments = splitTopLevelPipelineSegments(sequenceSegment);
 
     if (!pipelineSegments) {
       return false;
@@ -114,7 +159,7 @@ function isAllowedReadonlyBashCommand(
       return false;
     }
 
-    const cdCwd = extractCdCwd(chainSegment, profile, effectiveCwd);
+    const cdCwd = extractCdCwd(sequenceSegment, profile, effectiveCwd);
 
     if (cdCwd === false) {
       return false;
@@ -186,15 +231,13 @@ function isAllowedSingleSegment(
     return false;
   }
 
-  if (
-    !ALLOWED_BASH_PREFIXES.some((prefix) =>
-      matchesAllowedBashPrefix(normalizedSegment.command, prefix)
-    )
-  ) {
+  const commandPolicy = resolveCommandPolicy(normalizedSegment.command);
+
+  if (!commandPolicy) {
     return false;
   }
 
-  if (containsDangerousFlag(normalizedSegment.command)) {
+  if (!satisfiesCommandPolicy(normalizedSegment.command, commandPolicy)) {
     return false;
   }
 
@@ -245,8 +288,63 @@ function normalizeGitChangeDirectorySegment(
   };
 }
 
-function matchesAllowedBashPrefix(command: string, prefix: string): boolean {
-  return command === prefix || command.startsWith(`${prefix} `);
+/**
+ * Resolve the command policy for a single segment.
+ * Returns the CommandPolicy if the command is allowed, or undefined if not.
+ * For `git`, the subcommand is validated against ALLOWED_GIT_SUBCOMMANDS.
+ */
+function resolveCommandPolicy(command: string): CommandPolicy | undefined {
+  const tokens = command.split(/\s+/u).filter(Boolean);
+  const commandName = tokens[0];
+
+  if (!commandName) {
+    return undefined;
+  }
+
+  if (commandName === "git") {
+    const subcommand = tokens[1];
+
+    if (!subcommand || !ALLOWED_GIT_SUBCOMMANDS.has(subcommand)) {
+      return undefined;
+    }
+
+    return GIT_POLICY;
+  }
+
+  return ALLOWED_COMMANDS.get(commandName);
+}
+
+/**
+ * Check that a command satisfies per-command denied/required flag constraints.
+ */
+function satisfiesCommandPolicy(command: string, policy: CommandPolicy): boolean {
+  const tokens = command.split(/\s+/u).filter(Boolean);
+
+  if (policy.deniedFlags) {
+    for (const token of tokens) {
+      if (policy.deniedFlags.has(token)) {
+        return false;
+      }
+    }
+  }
+
+  if (policy.deniedFlagPrefixes) {
+    for (const token of tokens) {
+      if (policy.deniedFlagPrefixes.some((prefix) => token.startsWith(prefix))) {
+        return false;
+      }
+    }
+  }
+
+  if (policy.requiredFlags) {
+    const hasRequired = tokens.some((token) => policy.requiredFlags!.has(token));
+
+    if (!hasRequired) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function hasOnlyAllowedPathArguments(
@@ -308,12 +406,4 @@ function resolvePathToken(token: string, baseDirectory: string): string {
   }
 
   return path.resolve(baseDirectory, token);
-}
-
-function containsDangerousFlag(command: string): boolean {
-  const tokens = command.split(/\s+/u).filter(Boolean);
-
-  return tokens.some(
-    (token) => DANGEROUS_BASH_FLAGS.has(token) || token.startsWith("--output=")
-  );
 }

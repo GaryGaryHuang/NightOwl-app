@@ -46,13 +46,15 @@ const OUT_OF_BOUNDARY_PATH_COMMANDS = [
 
 const DANGEROUS_FLAG_COMMANDS = [
   "git log --oneline | sort --output=result.txt",
-  "git show -exec sh {} +"
+  "git show -exec sh {} +",
+  "sort -o result.txt src/app.ts"
 ] as const;
 
 const SUBCOMMAND_EXECUTION_COMMANDS = [
   "find . -exec sh {} +",
   "find . -name '*.ts' -exec cat {} +",
   "find . -execdir sh {} +",
+  "find . -name '*.ts' -delete",
   "git log --oneline | find . -exec cat {} +",
   "git status && find . -exec sh {} +"
 ] as const;

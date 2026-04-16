@@ -90,8 +90,12 @@ function splitOnTopLevelDelimiter(
   return segments;
 }
 
-export function splitTopLevelChainSegments(command: string): string[] | undefined {
+export function splitTopLevelSequenceSegments(command: string): string[] | undefined {
   return splitOnTopLevelDelimiter(command, (char, nextChar) => {
+    if (char === ";") {
+      return 1;
+    }
+
     if (char === "&") {
       return nextChar === "&" ? 2 : undefined;
     }
@@ -101,7 +105,13 @@ export function splitTopLevelChainSegments(command: string): string[] | undefine
 }
 
 export function splitTopLevelPipelineSegments(command: string): string[] | undefined {
-  return splitOnTopLevelDelimiter(command, (char) => (char === "|" ? 1 : 0));
+  return splitOnTopLevelDelimiter(command, (char, nextChar) => {
+    if (char === "|") {
+      return nextChar === "|" ? undefined : 1;
+    }
+
+    return 0;
+  });
 }
 
 export function containsTopLevelRedirection(command: string): boolean | undefined {

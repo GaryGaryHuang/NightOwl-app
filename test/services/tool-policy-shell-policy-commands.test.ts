@@ -2,13 +2,27 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  evaluateReadonlyShellCommand
+  evaluateReadonlyShellCommand,
+  READONLY_BASH_DENY_REASON
 } from "../../src/services/tool-policy/tool-policy-shell-policy.ts";
 import { BASE_PROFILE } from "../helpers/tool-policy-fixture.ts";
 
 function assertAllowedCommands(commands: readonly string[]): void {
   for (const command of commands) {
     assert.equal(evaluateReadonlyShellCommand(command, BASE_PROFILE), undefined, command);
+  }
+}
+
+function assertDeniedCommands(commands: readonly string[]): void {
+  for (const command of commands) {
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, BASE_PROFILE),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
+      command
+    );
   }
 }
 
@@ -68,5 +82,46 @@ test("tool policy shell policy allows directory tree and file counts as convenie
   assertAllowedCommands([
     "tree src/",
     "wc src/app.ts"
+  ]);
+});
+
+test("tool policy shell policy allows printf and echo for output formatting", () => {
+  assertAllowedCommands([
+    "printf 'hello\\n'",
+    "echo hello",
+    "echo '---'",
+    "printf '%s\\n' foo"
+  ]);
+});
+
+test("tool policy shell policy denies sed without required -n flag", () => {
+  assertDeniedCommands([
+    "sed 's/foo/bar/' src/app.ts",
+    "sed -e 's/foo/bar/' src/app.ts"
+  ]);
+});
+
+test("tool policy shell policy denies sed with in-place edit flags", () => {
+  assertDeniedCommands([
+    "sed -n -i 's/foo/bar/' src/app.ts",
+    "sed -n --in-place 's/foo/bar/' src/app.ts"
+  ]);
+});
+
+test("tool policy shell policy denies find with destructive predicates", () => {
+  assertDeniedCommands([
+    "find . -name '*.ts' -delete",
+    "find . -name '*.ts' -ok rm {} +",
+    "find . -name '*.ts' -okdir rm {} +"
+  ]);
+});
+
+test("tool policy shell policy denies unrecognised git subcommands", () => {
+  assertDeniedCommands([
+    "git push origin main",
+    "git commit -m 'msg'",
+    "git checkout -b new-branch",
+    "git reset --hard HEAD~1",
+    "git stash"
   ]);
 });

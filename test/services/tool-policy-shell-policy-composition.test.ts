@@ -36,7 +36,11 @@ const PIPELINE_AND_CHAIN_ALLOWED_COMMANDS = [
   "git -C /workspace/repo show HEAD:src/app.ts | head -20",
   "cd /workspace/repo && git show HEAD:src/app.ts | head -20",
   "cd /workspace/repo && git -C /workspace/repo/src grep TODO file.ts && cat app.ts",
-  "cd /workspace/repo && git rev-parse --abbrev-ref HEAD && git status --short"
+  "cd /workspace/repo && git rev-parse --abbrev-ref HEAD && git status --short",
+  "printf 'STATUS\\n'; git status --short",
+  "printf 'DIFFSTAT\\n'; git diff --stat -- src/app.ts; printf '\\nNAMEONLY\\n'; git diff --name-only -- src/app.ts",
+  "echo hello; git log --oneline | head -5",
+  "echo '---'; git diff HEAD~1; echo '---'"
 ] as const;
 
 const EMPTY_OR_UNTRUSTED_SEGMENT_COMMANDS = [
@@ -47,7 +51,11 @@ const EMPTY_OR_UNTRUSTED_SEGMENT_COMMANDS = [
   "cd /workspace/repo && python -c \"print(1)\"",
   "git log &&",
   "&& git log",
-  "git log &&   && git status"
+  "git log &&   && git status",
+  "git log; rm -rf /",
+  "git log ;",
+  "; head -5",
+  "git log ;   ; git status"
 ] as const;
 
 const QUOTED_OR_ESCAPED_DELIMITER_COMMANDS = [
@@ -61,7 +69,12 @@ const QUOTED_OR_ESCAPED_DELIMITER_COMMANDS = [
   'grep "foo > bar" src/app.ts',
   "grep 'List<Foo>' src/app.ts",
   String.raw`grep foo\>bar src/app.ts`,
-  String.raw`grep foo\<bar src/app.ts`
+  String.raw`grep foo\<bar src/app.ts`,
+  'grep "foo; bar" src/app.ts',
+  "grep 'foo; bar' src/app.ts",
+  'grep "foo||bar" src/app.ts',
+  "grep 'foo||bar' src/app.ts",
+  String.raw`grep foo\|\|bar src/app.ts`
 ] as const;
 
 const MALFORMED_QUOTE_OR_ESCAPE_COMMANDS = [
@@ -89,8 +102,6 @@ test("tool policy shell policy keeps lexical guards for shell combining syntax a
     "cat < /etc/passwd",
     "git status || echo fail",
     "git log || true | head",
-    'grep "foo||bar"',
-    "git log; rm -rf /",
     "git log &",
     "git log &&& git status"
   ]);
