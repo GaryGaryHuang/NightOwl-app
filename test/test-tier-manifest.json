@@ -44,9 +44,10 @@
   "integration": [
     "test/app/review-app-dry-run.test.ts",
     "test/app/review-app-lifecycle.test.ts",
+    "test/app/review-app-mcp-startup-failure.test.ts",
     "test/app/review-app-progress.test.ts",
+    "test/app/review-app-startup-guards.test.ts",
     "test/app/review-app-web-fetch.test.ts",
-    "test/app/review-app.test.ts",
     "test/core/orchestrator-abort.test.ts",
     "test/core/orchestrator-bounded-concurrency.test.ts",
     "test/core/orchestrator-output-failures.test.ts",
