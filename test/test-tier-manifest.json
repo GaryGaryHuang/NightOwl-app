@@ -2,6 +2,7 @@
   "unit": [
     "test/app/run-lifecycle-manager.test.ts",
     "test/cli/parser.test.ts",
+    "test/cli/progress-reporter-helpers.test.ts",
     "test/cli/progress-reporter.test.ts",
     "test/core/changeset-overview-runner.test.ts",
     "test/core/file-review-context.test.ts",
