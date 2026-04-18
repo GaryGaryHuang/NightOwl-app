@@ -6,30 +6,26 @@ import test from "node:test";
 import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
-import { createRunContext } from "../../src/core/run-context.ts";
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
-import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
-import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import {
   buildFindingsForFile,
   buildSuccessfulStepResult,
   escapeRegExp
 } from "../helpers/orchestrator-fixture.ts";
+import {
+  BASE_REF,
+  HEAD_REF,
+  REQUEST,
+  RUN_TIMESTAMP,
+  bootstrapReviewHarness,
+  createDefaultChangesetOverviewRunner,
+  type ReviewHarness
+} from "../helpers/orchestrator-harness.ts";
 import { createWritableOutputSink } from "../helpers/output-sink-double.ts";
-
-const BASE_REF = "main";
-const HEAD_REF = "feature-branch";
-const RUN_TIMESTAMP = "03131430";
-const REQUEST = {
-  baseRef: BASE_REF,
-  headRef: HEAD_REF,
-  repoPath: "./packages/app",
-  userContext: [],
-  dryRun: false
-};
 
 type StepEvent = [string, string];
 type StepRunnerDouble = {
@@ -41,14 +37,6 @@ type StepRunnerDouble = {
     applyTo(context: FileReviewContext): void;
   }>;
 };
-
-interface ReviewHarness {
-  fixture: ReviewRepoFixture;
-  repoRoot: string;
-  reviewableFiles: string[];
-  reviewFileFilter: LocalReviewFileFilter;
-  sourceProvider: LocalGitProvider;
-}
 
 test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan-out, and keeps summary/index in planned order despite out-of-order completion", async () => {
   await withReviewHarness(
@@ -423,22 +411,9 @@ async function withReviewHarness(
 
     fixture.commitAll(input.commitMessage);
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = await sourceProvider.resolveRepoRoot(fixture.appDir);
-    const changedFiles = await sourceProvider.getChangedFiles(repoRoot, BASE_REF, HEAD_REF);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      changedFiles
-    );
+    const harness = await bootstrapReviewHarness(fixture);
 
-    await run({
-      fixture,
-      repoRoot,
-      reviewableFiles,
-      reviewFileFilter,
-      sourceProvider
-    });
+    await run(harness);
   } finally {
     fixture.cleanup();
   }
@@ -465,14 +440,7 @@ async function runOrchestrator(
             overrides.successfulSnapshotOutputHealthAssessor
         }),
     stepRunner: overrides.stepRunner,
-    changesetOverviewRunner: {
-      async run() {
-        return createRunContext({
-          changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-          userContext: []
-        });
-      }
-    },
+    changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
     workingDirectory: harness.fixture.repoDir,
     timestampProvider: () => RUN_TIMESTAMP,
     maxConcurrentFiles: overrides.maxConcurrentFiles

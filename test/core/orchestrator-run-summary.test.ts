@@ -14,38 +14,34 @@ import {
   ReviewOrchestrator,
   type ReviewOrchestratorOptions
 } from "../../src/core/orchestrator.ts";
-import { createRunContext } from "../../src/core/run-context.ts";
 import type { RunStepInput, StepResult, StepRunner } from "../../src/core/step-runner.ts";
 import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
-import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type {
   ReviewOutputTarget,
   RunOutputPublisher
 } from "../../src/providers/review-output-sink.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
-import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import {
   buildFindingsForFile,
   buildSuccessfulStepResult,
   escapeRegExp,
   type SuccessfulStepResultOptions
 } from "../helpers/orchestrator-fixture.ts";
-
-const BASE_REF = "main";
-const HEAD_REF = "feature-branch";
-const RUN_TIMESTAMP = "03131430";
-const REQUEST = {
-  baseRef: BASE_REF,
-  headRef: HEAD_REF,
-  repoPath: "./packages/app",
-  userContext: [],
-  dryRun: false
-};
+import {
+  BASE_REF,
+  HEAD_REF,
+  REQUEST,
+  RUN_TIMESTAMP,
+  bootstrapReviewHarness,
+  createDefaultChangesetOverviewRunner,
+  type ReviewHarness
+} from "../helpers/orchestrator-harness.ts";
 
 type OutputCall = "initializeRun"
   | "publishFileReview"
@@ -54,14 +50,6 @@ type OutputCall = "initializeRun"
   | "publishReviewIndex"
   | "publishRunManifest"
   | "publishChangesetOverview";
-
-interface ReviewHarness {
-  fixture: ReviewRepoFixture;
-  repoRoot: string;
-  reviewableFiles: string[];
-  reviewFileFilter: LocalReviewFileFilter;
-  sourceProvider: LocalGitProvider;
-}
 
 test("ReviewOrchestrator publishes run-level artifacts for an all-successful run", async () => {
   await withReviewHarness({}, async (harness) => {
@@ -492,21 +480,9 @@ async function withReviewHarness(
       fixture.commitAll(input.commitMessage);
     }
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = await sourceProvider.resolveRepoRoot(fixture.appDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, BASE_REF, HEAD_REF)
-    );
+    const harness = await bootstrapReviewHarness(fixture);
 
-    await run({
-      fixture,
-      repoRoot,
-      reviewableFiles,
-      reviewFileFilter,
-      sourceProvider
-    });
+    await run(harness);
   } finally {
     fixture.cleanup();
   }
@@ -527,14 +503,7 @@ async function runOrchestrator(
     outputSink: overrides.outputSink,
     stepRunner: overrides.stepRunner,
     changesetOverviewRunner:
-      overrides.changesetOverviewRunner ?? {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      overrides.changesetOverviewRunner ?? createDefaultChangesetOverviewRunner(),
     workingDirectory: harness.fixture.repoDir,
     timestampProvider: () => RUN_TIMESTAMP
   });
