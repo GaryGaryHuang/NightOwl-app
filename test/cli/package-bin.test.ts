@@ -16,6 +16,7 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFilePath);
 const repoRoot = path.resolve(currentDir, "..", "..");
 const EXTERNAL_COMMAND_TIMEOUT_MS = 300_000;
+const shouldRunPackageBin = process.env.NIGHTOWL_RUN_PACKAGE_BIN === "1";
 
 interface PackageBinWorkspace {
   appCopyDir: string;
@@ -27,7 +28,11 @@ interface PackageBinWorkspace {
 // Validates the full npm pack → global install path, not just running from
 // source. This catches issues that only surface in a published package: wrong
 // bin entry, missing build output, incorrect file inclusions in the tarball.
-test("package exposes an installable review executable", () => {
+//
+// Skipped by default because `npm pack` + global install is slow and depends
+// on the public npm registry; opt in by setting `NIGHTOWL_RUN_PACKAGE_BIN=1`
+// before release. Mirrors the env-gate pattern of run-cli-check-smoke.test.ts.
+test("package exposes an installable review executable", { skip: !shouldRunPackageBin }, () => {
   const packageJson = JSON.parse(
     readFileSync(path.join(repoRoot, "package.json"), "utf8")
   );
