@@ -1,286 +1,24 @@
 import assert from "node:assert/strict";
-import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
-import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
-import { createRunContext } from "../../src/core/run-context.ts";
-import { StepRunner } from "../../src/core/step-runner.ts";
+import type { StepRunner } from "../../src/core/step-runner.ts";
 import type { RunStepInput, StepResult } from "../../src/core/step-runner.ts";
 import { StepExecutionError } from "../../src/core/step-execution-error.ts";
-import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
-import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
-import { ReviewFileFilterError } from "../../src/providers/review-file-filter.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
+import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";
 import {
-  buildDependenciesResponse,
-  buildKnowledgeResponse,
-  buildOverviewResponse,
-  buildStrategyResponse,
-  buildSuccessfulStepResult
-} from "../helpers/orchestrator-fixture.ts";
+  REQUEST,
+  RUN_TIMESTAMP,
+  bootstrapReviewHarness,
+  createDefaultChangesetOverviewRunner
+} from "../helpers/orchestrator-harness.ts";
 
 type StepEvent = [string, string];
 type OutputCall = [string, string];
-
-test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap note publish or step execution", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for initializeRun failure");
-
-    const outputCalls: OutputCall[] = [];
-    const stepEvents: StepEvent[] = [];
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider: new LocalGitProvider(),
-      reviewFileFilter: new LocalReviewFileFilter(),
-      outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
-          throw new Error("initialize failed");
-        },
-        async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
-        },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
-      }),
-      stepRunner: {
-        async run({ context, step }: RunStepInput): Promise<StepResult> {
-          stepEvents.push([step.stepId, context.filePath]);
-          throw new Error("should not start steps");
-        }
-      },
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      /initialize failed/u
-    );
-
-    assert.deepEqual(outputCalls, [["initializeRun", path.join(
-      realpathSync(fixture.repoDir),
-      ".nightowl",
-      "review",
-      "feature-branch_03131430"
-    )]]);
-    assert.deepEqual(stepEvents, []);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("ReviewOrchestrator aborts before output initialization and file dispatch when review file filtering fails during planning", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for review file filter failure");
-
-    const outputCalls: OutputCall[] = [];
-    const stepEvents: StepEvent[] = [];
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider: new LocalGitProvider(),
-      reviewFileFilter: {
-        async filterReviewableFiles() {
-          throw new ReviewFileFilterError(
-            "filterReviewableFiles",
-            "Review file filter failed during filterReviewableFiles.",
-            { cause: new Error("reviewignore read failed") }
-          );
-        }
-      },
-      outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
-          return this;
-        },
-        async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
-        },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
-      }),
-      stepRunner: {
-        async run({ context, step }: RunStepInput): Promise<StepResult> {
-          stepEvents.push([step.stepId, context.filePath]);
-          throw new Error("should not start steps");
-        }
-      },
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      (error: unknown) =>
-        error instanceof ReviewFileFilterError &&
-        error.operation === "filterReviewableFiles" &&
-        error.cause instanceof Error &&
-        error.cause.message === "reviewignore read failed"
-    );
-
-    assert.deepEqual(outputCalls, []);
-    assert.deepEqual(stepEvents, []);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves earlier bootstrap notes, and stops the bootstrap loop before Step 1", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for bootstrap publish failure");
-
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
-    );
-    const outputCalls: OutputCall[] = [];
-    const writtenNotes = new Map<string, string>();
-    const stepEvents: StepEvent[] = [];
-    const failedNotePath = plannedNotes[1].noteFilePath;
-    const successfulSnapshotOutputHealthAssessor = {
-      async assess() {
-        return { faultScope: "single-file-output-fault" as const };
-      }
-    };
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
-      outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
-          return this;
-        },
-        async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
-
-          if (fileResult.noteFilePath === failedNotePath) {
-            throw new Error("note write failed");
-          }
-
-          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
-        },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
-      }),
-      successfulSnapshotOutputHealthAssessor,
-      stepRunner: {
-        async run({ context, step }: RunStepInput): Promise<StepResult> {
-          stepEvents.push([step.stepId, context.filePath]);
-          throw new Error(`should not start ${step.stepId}`);
-        }
-      },
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
-    });
-
-    await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      /note write failed/u
-    );
-
-    assert.deepEqual(stepEvents, []);
-    assert.deepEqual(
-      outputCalls.filter(([callType]) => callType === "publishFileReview"),
-      [
-        ["publishFileReview", plannedNotes[0].noteFilePath],
-        ["publishFileReview", plannedNotes[1].noteFilePath]
-      ]
-    );
-    assert.match(
-      writtenNotes.get(plannedNotes[0].noteFilePath) ?? "",
-      /Review not yet generated/u
-    );
-    assert.equal(writtenNotes.has(plannedNotes[1].noteFilePath), false);
-    assert.equal(writtenNotes.has(plannedNotes[2].noteFilePath), false);
-    assert.equal(
-      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
-      false
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
 
 test("ReviewOrchestrator downgrades a file to skipped when a successful step snapshot write fails and later files can continue", async () => {
   const fixture = createReviewRepoFixture();
@@ -290,18 +28,12 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for successful snapshot skip downgrade");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
+    const harness = await bootstrapReviewHarness(fixture);
+    const failedFile = harness.reviewableFiles[1];
+    const laterFile = harness.reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      harness.reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
@@ -318,8 +50,8 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
       }
     };
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -348,25 +80,12 @@ test("ReviewOrchestrator downgrades a file to skipped when a successful step sna
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
+    const result = await orchestrator.run(REQUEST);
 
     assert.equal(result.skippedFileCount, 1);
     assert.ok(
@@ -399,18 +118,12 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for shared-target successful snapshot failure");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
+    const harness = await bootstrapReviewHarness(fixture);
+    const failedFile = harness.reviewableFiles[1];
+    const laterFile = harness.reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      harness.reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
@@ -424,8 +137,8 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
       }
     };
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -454,27 +167,13 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
     await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
+      () => orchestrator.run(REQUEST),
       /disk full/u
     );
 
@@ -505,18 +204,12 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for failed successful snapshot assessment");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
+    const harness = await bootstrapReviewHarness(fixture);
+    const failedFile = harness.reviewableFiles[1];
+    const laterFile = harness.reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      harness.reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
@@ -529,8 +222,8 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
       }
     };
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -557,27 +250,13 @@ test("ReviewOrchestrator aborts conservatively when successful snapshot assessme
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
     await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
+      () => orchestrator.run(REQUEST),
       /note write failed/u
     );
 
@@ -604,18 +283,12 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for successful snapshot downgrade interrupted publish failure");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
+    const harness = await bootstrapReviewHarness(fixture);
+    const failedFile = harness.reviewableFiles[1];
+    const laterFile = harness.reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      harness.reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
@@ -629,8 +302,8 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
       }
     };
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -666,27 +339,13 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
     await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
+      () => orchestrator.run(REQUEST),
       /interrupted snapshot write failed/u
     );
 
@@ -715,18 +374,12 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for successful snapshot downgrade skipped publish failure");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
+    const harness = await bootstrapReviewHarness(fixture);
+    const failedFile = harness.reviewableFiles[1];
+    const laterFile = harness.reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      harness.reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
@@ -740,8 +393,8 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
       }
     };
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -773,27 +426,13 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
     await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
+      () => orchestrator.run(REQUEST),
       /skipped log write failed/u
     );
 
@@ -824,17 +463,12 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for later successful snapshot failure");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
+    const harness = await bootstrapReviewHarness(fixture);
+    const reviewableFiles = harness.reviewableFiles;
     const failedFile = reviewableFiles[1];
     const laterFile = reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
@@ -850,8 +484,8 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
       }
     };
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -880,25 +514,12 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
-    const result = await orchestrator.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
+    const result = await orchestrator.run(REQUEST);
 
     assert.equal(result.skippedFileCount, 1);
     assert.match(writtenNotes.get(firstNotePath) ?? "", /^# [\s\S]*^## Summary/mu);
@@ -932,18 +553,13 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
+    const harness = await bootstrapReviewHarness(fixture);
+    const reviewableFiles = harness.reviewableFiles;
     const stepEvents: StepEvent[] = [];
     const outputCalls: OutputCall[] = [];
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -976,27 +592,13 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
           };
         }
       },
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
     await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
+      () => orchestrator.run(REQUEST),
       /apply failed/u
     );
 
@@ -1018,18 +620,12 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for interrupted snapshot publish failure");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
+    const harness = await bootstrapReviewHarness(fixture);
+    const failedFile = harness.reviewableFiles[1];
+    const laterFile = harness.reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      harness.reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
@@ -1038,8 +634,8 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     const outputCalls: OutputCall[] = [];
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1071,27 +667,13 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
         failedStepId: "step5-validation-interrogation",
         failureCause: "deterministic validation failed"
       }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
     await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
+      () => orchestrator.run(REQUEST),
       /note write failed/u
     );
 
@@ -1124,18 +706,12 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
     fixture.writeFile("README.md", "# Demo feature change\n");
     fixture.commitAll("add third changed file for skipped log publish failure");
 
-    const sourceProvider = new LocalGitProvider();
-    const reviewFileFilter = new LocalReviewFileFilter();
-    const repoRoot = realpathSync(fixture.repoDir);
-    const reviewableFiles = await reviewFileFilter.filterReviewableFiles(
-      repoRoot,
-      await sourceProvider.getChangedFiles(repoRoot, "main", "feature-branch")
-    );
-    const failedFile = reviewableFiles[1];
-    const laterFile = reviewableFiles[2];
+    const harness = await bootstrapReviewHarness(fixture);
+    const failedFile = harness.reviewableFiles[1];
+    const laterFile = harness.reviewableFiles[2];
     const plannedNotes = planNoteFiles(
-      path.join(repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      reviewableFiles
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      harness.reviewableFiles
     );
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
@@ -1144,8 +720,8 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
     const outputCalls: OutputCall[] = [];
     const stepEvents: StepEvent[] = [];
     const orchestrator = new ReviewOrchestrator({
-      sourceProvider,
-      reviewFileFilter,
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
         async initializeRun(outputTarget) {
           outputCalls.push(["initializeRun", outputTarget.basePath]);
@@ -1173,27 +749,13 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
         failedStepId: "step7-summary",
         failureCause: "judge rejected"
       }),
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-            userContext: []
-          });
-        }
-      },
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => "03131430"
+      timestampProvider: () => RUN_TIMESTAMP
     });
 
     await assert.rejects(
-      () =>
-        orchestrator.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
+      () => orchestrator.run(REQUEST),
       /skipped log write failed/u
     );
 
