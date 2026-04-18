@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import test from "node:test";
+import test, { after, before, describe } from "node:test";
 
 import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
@@ -9,7 +9,7 @@ import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
-import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
+import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import {
   buildFindingsForFile,
@@ -38,82 +38,110 @@ type StepRunnerDouble = {
   }>;
 };
 
-test("ReviewOrchestrator uses bounded concurrency, finishes bootstrap before fan-out, and keeps summary/index in planned order despite out-of-order completion", async () => {
-  await withReviewHarness(
-    {
-      commitMessage: "add changed files for bounded concurrency ordering",
-      extraFiles: { "lib/utils.ts": "export const helper = true;\n" }
-    },
-    async (harness) => {
-      const skippedFile = requireReviewableFile(harness, "README.md");
-      const fastSuccessfulFile = requireReviewableFile(harness, "packages/app/index.ts");
-      const slowSuccessfulFile = requireReviewableFile(harness, "src/app.ts");
-      const mediumSuccessfulFile =
-        harness.reviewableFiles.find(
-          (filePath) =>
-            filePath !== skippedFile &&
-            filePath !== fastSuccessfulFile &&
-            filePath !== slowSuccessfulFile
-        ) ?? slowSuccessfulFile;
+describe("ReviewOrchestrator bounded concurrency with mixed completion order", () => {
+  let fixture: ReviewRepoFixture;
+  let harness: ReviewHarness;
+  let result: Awaited<ReturnType<typeof runOrchestrator>>;
+  let metrics: ReturnType<typeof createConcurrencyMetrics>;
+  let bootstrapPublishCount = 0;
+  let skippedFile: string;
+  let fastSuccessfulFile: string;
+  let slowSuccessfulFile: string;
+  let summaryContent: string;
+  let indexContent: string;
+  let expectedSuccessfulFiles: string[];
 
-      const metrics = createConcurrencyMetrics();
-      let bootstrapPublishCount = 0;
-      const outputSink = createWritableOutputSink();
-      const basePublishFileReview = outputSink.publishFileReview;
-      outputSink.publishFileReview = async (fileResult) => {
-        if (isBootstrapSnapshot(fileResult.content)) {
-          bootstrapPublishCount += 1;
-        }
-        await basePublishFileReview(fileResult);
-      };
-      const result = await runOrchestrator(harness, {
-        maxConcurrentFiles: harness.reviewableFiles.length,
-        outputSink,
-        stepRunner: createConcurrentRunner({
-          metrics,
-          getBootstrapPublishCount: () => bootstrapPublishCount,
-          completionDelayByFile: new Map([
-            [fastSuccessfulFile, 0],
-            [skippedFile, 80],
-            [mediumSuccessfulFile, 140],
-            [slowSuccessfulFile, 220]
-          ]),
-          failedFile: skippedFile,
-          failedStepId: "step5-validation-interrogation",
-          failureCause: "deterministic validation failed"
-        })
-      });
+  before(async () => {
+    fixture = createReviewRepoFixture();
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.writeFile("lib/utils.ts", "export const helper = true;\n");
+    fixture.commitAll("add changed files for bounded concurrency ordering");
 
-      assert.equal(metrics.firstStepBootstrapCount, harness.reviewableFiles.length);
-      assert.equal(bootstrapPublishCount, harness.reviewableFiles.length);
-      assert.ok(metrics.maxActiveFiles > 1);
-      assert.notDeepEqual(metrics.completionOrder, harness.reviewableFiles);
-      assert.ok(
-        metrics.completionOrder.indexOf(fastSuccessfulFile) <
-          metrics.completionOrder.indexOf(slowSuccessfulFile)
-      );
+    harness = await bootstrapReviewHarness(fixture);
 
-      const expectedSuccessfulFiles = riskSortedSuccessfulFiles(
-        harness.reviewableFiles,
-        skippedFile
-      );
-      const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
-      const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    skippedFile = requireReviewableFile(harness, "README.md");
+    fastSuccessfulFile = requireReviewableFile(harness, "packages/app/index.ts");
+    slowSuccessfulFile = requireReviewableFile(harness, "src/app.ts");
+    const mediumSuccessfulFile =
+      harness.reviewableFiles.find(
+        (filePath) =>
+          filePath !== skippedFile &&
+          filePath !== fastSuccessfulFile &&
+          filePath !== slowSuccessfulFile
+      ) ?? slowSuccessfulFile;
 
-      assertSuccessfulFileOrder(summaryContent, expectedSuccessfulFiles);
-      assert.match(
-        summaryContent,
-        new RegExp(
-          `## Skipped Files\\n- \`${escapeRegExp(skippedFile)}\` — step5-validation-interrogation — deterministic validation failed`,
-          "u"
-        )
-      );
-      assertFileNotesOrder(indexContent, [
-        ...expectedSuccessfulFiles,
-        skippedFile
-      ]);
-    }
-  );
+    metrics = createConcurrencyMetrics();
+    bootstrapPublishCount = 0;
+    const outputSink = createWritableOutputSink();
+    const basePublishFileReview = outputSink.publishFileReview;
+    outputSink.publishFileReview = async (fileResult) => {
+      if (isBootstrapSnapshot(fileResult.content)) {
+        bootstrapPublishCount += 1;
+      }
+      await basePublishFileReview(fileResult);
+    };
+    result = await runOrchestrator(harness, {
+      maxConcurrentFiles: harness.reviewableFiles.length,
+      outputSink,
+      stepRunner: createConcurrentRunner({
+        metrics,
+        getBootstrapPublishCount: () => bootstrapPublishCount,
+        completionDelayByFile: new Map([
+          [fastSuccessfulFile, 0],
+          [skippedFile, 80],
+          [mediumSuccessfulFile, 140],
+          [slowSuccessfulFile, 220]
+        ]),
+        failedFile: skippedFile,
+        failedStepId: "step5-validation-interrogation",
+        failureCause: "deterministic validation failed"
+      })
+    });
+
+    expectedSuccessfulFiles = riskSortedSuccessfulFiles(
+      harness.reviewableFiles,
+      skippedFile
+    );
+    summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
+    indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+  });
+
+  after(() => {
+    fixture.cleanup();
+  });
+
+  test("ReviewOrchestrator caps concurrent file workers at maxConcurrentFiles", () => {
+    assert.ok(metrics.maxActiveFiles > 1);
+  });
+
+  test("ReviewOrchestrator publishes all bootstrap notes before any worker enters Step 1", () => {
+    assert.equal(metrics.firstStepBootstrapCount, harness.reviewableFiles.length);
+    assert.equal(bootstrapPublishCount, harness.reviewableFiles.length);
+  });
+
+  test("ReviewOrchestrator publishes summary and index in planned order despite out-of-order completion", () => {
+    assert.notDeepEqual(metrics.completionOrder, harness.reviewableFiles);
+    assert.ok(
+      metrics.completionOrder.indexOf(fastSuccessfulFile) <
+        metrics.completionOrder.indexOf(slowSuccessfulFile)
+    );
+    assert.match(
+      summaryContent,
+      new RegExp(
+        `## Skipped Files\\n- \`${escapeRegExp(skippedFile)}\` — step5-validation-interrogation — deterministic validation failed`,
+        "u"
+      )
+    );
+    assertFileNotesOrder(indexContent, [
+      ...expectedSuccessfulFiles,
+      skippedFile
+    ]);
+  });
+
+  test("ReviewOrchestrator emits risk-sorted successful files in summary regardless of completion order", () => {
+    assertSuccessfulFileOrder(summaryContent, expectedSuccessfulFiles);
+  });
 });
 
 test("ReviewOrchestrator keeps an all-skipped run as a completed run under bounded concurrency and writes intact skipped.md records", async () => {
