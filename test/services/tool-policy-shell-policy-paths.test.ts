@@ -44,32 +44,8 @@ const OUT_OF_BOUNDARY_PATH_COMMANDS = [
   "diff /etc/hosts src/app.ts"
 ] as const;
 
-const DANGEROUS_FLAG_COMMANDS = [
-  "git log --oneline | sort --output=result.txt",
-  "git show -exec sh {} +",
-  "sort -o result.txt src/app.ts"
-] as const;
-
-const SUBCOMMAND_EXECUTION_COMMANDS = [
-  "find . -exec sh {} +",
-  "find . -name '*.ts' -exec cat {} +",
-  "find . -execdir sh {} +",
-  "find . -name '*.ts' -delete",
-  "git log --oneline | find . -exec cat {} +",
-  "git status && find . -exec sh {} +"
-] as const;
-
-const SAFE_FIND_INSPECTION_COMMANDS = [
-  "find . -name '*.ts' -type f",
-  "find . -executable -type f"
-] as const;
-
 test("tool policy shell policy denies out-of-boundary path arguments", () => {
   assertDeniedCommands(OUT_OF_BOUNDARY_PATH_COMMANDS);
-});
-
-test("tool policy shell policy denies dangerous write and subcommand flags", () => {
-  assertDeniedCommands(DANGEROUS_FLAG_COMMANDS);
 });
 
 test("tool policy shell policy resolves repo-relative path arguments against the effective cwd", () => {
@@ -118,12 +94,4 @@ test("tool policy shell policy propagates cd-derived cwd and enforces cd path bo
     "cd && git status",
     "cd /tmp && ls"
   ]);
-});
-
-test("tool policy shell policy blocks find subcommand execution forms", () => {
-  assertDeniedCommands(SUBCOMMAND_EXECUTION_COMMANDS);
-});
-
-test("tool policy shell policy allows safe find inspection predicates", () => {
-  assertAllowedCommands(SAFE_FIND_INSPECTION_COMMANDS);
 });

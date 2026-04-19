@@ -47,16 +47,15 @@ const UNSAFE_URL_GATE_CASES = [
     ]
   },
   {
+    // Representative IP-literal denials only. The full IPv4/IPv6 address-range
+    // matrix (private, loopback, link-local, CGN, documentation, benchmark,
+    // multicast, IPv4-mapped IPv6, etc.) is owned by
+    // test/services/web-fetch-public-address-policy.test.ts.
     label: "local hosts and unsafe IP literals",
     urls: [
       "https://localhost:3000",
       "https://192.168.1.10/admin",
-      "https://198.51.100.10/reference",
-      "https://100.64.0.1/reference",
-      "https://198.18.0.10/reference",
-      "https://[::1]/admin",
-      "https://[::]/admin",
-      "https://[::ffff:127.0.0.1]/admin"
+      "https://[::1]/admin"
     ]
   }
 ] as const;
@@ -84,12 +83,6 @@ test("tool policy web-fetch policy applies hostname DNS classification only to h
   ]);
 
   assert.deepEqual(await policy.evaluate("https://192.168.1.10/admin"), {
-    permissionDecision: "deny",
-    permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-  });
-  assert.equal(classifier.calls.length, 1);
-
-  assert.deepEqual(await policy.evaluate("https://198.51.100.10/reference"), {
     permissionDecision: "deny",
     permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
   });

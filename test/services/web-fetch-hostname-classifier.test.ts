@@ -63,6 +63,11 @@ const PUBLIC_LOOKUP_CASES = [
   result: WebFetchHostnameLookupResult[];
 }>;
 
+// Two representative non-public lookups (one IPv4 private, one IPv6 reserved)
+// keep the surface contract — "deny when any resolved address is non-public"
+// — under direct test. The exhaustive IPv4/IPv6 address-range table is owned
+// by test/services/web-fetch-public-address-policy.test.ts and the
+// classifier-to-address-policy delegation is asserted separately below.
 const NON_PUBLIC_LOOKUP_CASES = [
   {
     label: "private IPv4 result",
@@ -73,31 +78,6 @@ const NON_PUBLIC_LOOKUP_CASES = [
     label: "loopback IPv6 result",
     hostname: "loopback-ipv6.example.com",
     result: [{ address: "::1", family: 6 }]
-  },
-  {
-    label: "unique-local IPv6 result",
-    hostname: "unique-local-ipv6.example.com",
-    result: [{ address: "fd12:3456:789a::1", family: 6 }]
-  },
-  {
-    label: "site-local IPv6 result",
-    hostname: "site-local-ipv6.example.com",
-    result: [{ address: "fec0::1", family: 6 }]
-  },
-  {
-    label: "documentation IPv4 result",
-    hostname: "documentation-range.example.com",
-    result: [{ address: "198.51.100.5", family: 4 }]
-  },
-  {
-    label: "carrier-grade NAT IPv4 result",
-    hostname: "carrier-grade-nat.example.com",
-    result: [{ address: "100.64.0.1", family: 4 }]
-  },
-  {
-    label: "benchmark IPv4 result",
-    hostname: "benchmark-range.example.com",
-    result: [{ address: "198.18.0.10", family: 4 }]
   }
 ] satisfies ReadonlyArray<{
   label: string;

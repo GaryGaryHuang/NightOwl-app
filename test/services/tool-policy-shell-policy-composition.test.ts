@@ -114,3 +114,23 @@ test("tool policy shell policy treats quoted and escaped pipes and chain markers
 test("tool policy shell policy rejects malformed quoting dangling escapes and blank commands conservatively", () => {
   assertDeniedCommands(MALFORMED_QUOTE_OR_ESCAPE_COMMANDS);
 });
+
+test("tool policy shell policy denies command substitution syntax even when the inner command is allowlisted", () => {
+  assertDeniedCommands([
+    "echo $(git status)",
+    "git log $(git rev-parse HEAD)",
+    "cat $(ls)",
+    "echo `git status`",
+    "git log `git rev-parse HEAD`",
+    "cat `ls`",
+    "echo \"prefix $(git status) suffix\"",
+    "echo \"prefix `git status` suffix\""
+  ]);
+});
+
+test("tool policy shell policy keeps denied subcommand-execution flags denied inside pipes and chains", () => {
+  assertDeniedCommands([
+    "git log --oneline | find . -exec cat {} +",
+    "git status && find . -exec sh {} +"
+  ]);
+});

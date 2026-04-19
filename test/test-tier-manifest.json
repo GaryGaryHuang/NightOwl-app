@@ -34,6 +34,7 @@
     "test/providers/review-config-web-fetch-host-parser.test.ts",
     "test/scripts/test-tier-tooling.test.ts",
     "test/services/copilot-availability-checker.test.ts",
+    "test/services/copilot-client-manager.test.ts",
     "test/services/copilot-client-shutdown.test.ts",
     "test/services/dry-run-session-factory.test.ts",
     "test/services/judge-session-factory.test.ts",

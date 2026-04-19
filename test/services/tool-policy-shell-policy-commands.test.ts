@@ -108,11 +108,29 @@ test("tool policy shell policy denies sed with in-place edit flags", () => {
   ]);
 });
 
-test("tool policy shell policy denies find with destructive predicates", () => {
+test("tool policy shell policy denies find with destructive or subcommand-execution predicates", () => {
   assertDeniedCommands([
     "find . -name '*.ts' -delete",
     "find . -name '*.ts' -ok rm {} +",
-    "find . -name '*.ts' -okdir rm {} +"
+    "find . -name '*.ts' -okdir rm {} +",
+    "find . -exec sh {} +",
+    "find . -name '*.ts' -exec cat {} +",
+    "find . -execdir sh {} +"
+  ]);
+});
+
+test("tool policy shell policy allows safe find inspection predicates", () => {
+  assertAllowedCommands([
+    "find . -name '*.ts' -type f",
+    "find . -executable -type f"
+  ]);
+});
+
+test("tool policy shell policy denies write or output flags on otherwise allowlisted commands", () => {
+  assertDeniedCommands([
+    "git log --oneline | sort --output=result.txt",
+    "git show -exec sh {} +",
+    "sort -o result.txt src/app.ts"
   ]);
 });
 
