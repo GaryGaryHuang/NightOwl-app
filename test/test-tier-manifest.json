@@ -52,6 +52,8 @@
     "test/app/review-app-progress.test.ts",
     "test/app/review-app-startup-guards.test.ts",
     "test/app/review-app-web-fetch.test.ts",
+    "test/cli/run-cli-progress.test.ts",
+    "test/cli/run-cli.test.ts",
     "test/core/orchestrator-bounded-concurrency.test.ts",
     "test/core/orchestrator-planning.test.ts",
     "test/core/orchestrator-pre-dispatch-failures.test.ts",
@@ -74,8 +76,6 @@
   ],
   "e2e": [
     "test/cli/package-bin.test.ts",
-    "test/cli/run-cli-check-smoke.test.ts",
-    "test/cli/run-cli-progress.test.ts",
-    "test/cli/run-cli.test.ts"
+    "test/cli/run-cli-check-smoke.test.ts"
   ]
 }
