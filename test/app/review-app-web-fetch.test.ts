@@ -3,9 +3,7 @@ import { describe, before, after, test } from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
-import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
-import type { ReviewConfig } from "../../src/providers/config/review-config-provider.ts";
 import type { WebFetchHostnameClassifier } from "../../src/services/tool-policy/web-fetch-hostname-classifier.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
@@ -16,8 +14,9 @@ import {
 
 type PreToolUseHook = NonNullable<NonNullable<SessionConfig["hooks"]>["onPreToolUse"]>;
 
-// Returns "allowed" for every hostname so tests can focus on the policy
-// logic (URL shape, redirect chain) without coupling to the real classifier.
+// Returns "allowed" for every hostname so the smoke test does not depend on
+// real DNS classification. Detailed classifier behaviour is owned by
+// test/services/web-fetch-hostname-classifier.test.ts.
 function createAllowingHostnameClassifier(): WebFetchHostnameClassifier {
   return {
     async classifyHostname() {
@@ -27,95 +26,22 @@ function createAllowingHostnameClassifier(): WebFetchHostnameClassifier {
 }
 
 /**
- * Runs the full review pipeline and returns the onPreToolUse hook installed on
- * the Step 3 (Knowledge & Source of Truth) session by the tool policy guard.
+ * App-level wiring smoke for the web-fetch tool policy.
  *
- * Centralises the composition-root wiring shared by all web-fetch policy
- * tests, so each test only needs to declare its policy variant and assertions.
+ * Confirms that createLocalReviewRunApp installs an onPreToolUse hook on the
+ * Step 3 (Knowledge & Source of Truth) session so the configured tool policy
+ * actually reaches the SDK boundary.
+ *
+ * Detailed URL policy behaviour (https gate, allowlist/denylist semantics,
+ * IP-literal handling) is owned by:
+ *   - test/services/tool-policy-web-fetch-policy.test.ts
+ *   - test/services/web-fetch-hostname-classifier.test.ts
+ *   - test/services/web-fetch-public-address-policy.test.ts
+ * Hook surface and dual SDK-permission handling is owned by:
+ *   - test/services/tool-policy-guard-pre-tool-hook.test.ts
+ *   - test/services/tool-policy-guard-permission-handler.test.ts
  */
-async function runPipelineAndGetPreToolUse(
-  fixture: ReviewRepoFixture,
-  reviewConfigOverrides: Partial<Pick<ReviewConfig, "webFetchAllowedHosts" | "webFetchDeniedHosts">> = {}
-): Promise<{ preToolUse: PreToolUseHook; result: ReviewRunSummary }> {
-  const sessionConfigs: SessionConfig[] = [];
-
-  const app = createLocalReviewRunApp({
-    workingDirectory: fixture.repoDir,
-    webFetchHostnameClassifier: createAllowingHostnameClassifier(),
-    clientManager: {
-      async start() {},
-      async stop() {},
-      async forceStop() {},
-      getClient() {
-        return {
-          async start() {},
-          async stop() {},
-          async forceStop() {},
-          async createSession(config: SessionConfig) {
-            sessionConfigs.push(config);
-            return {
-              async sendAndWait({ prompt }) {
-                return { data: { content: buildSessionResponse(config, prompt) } };
-              },
-              async disconnect() {}
-            };
-          }
-        };
-      }
-    },
-    changesetOverviewRunner: {
-      async run() {
-        return createRunContext({
-          changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
-          userContext: []
-        });
-      }
-    },
-    reviewConfigProvider: {
-      async loadReviewConfig() {
-        return {
-          maxConcurrentFiles: 1,
-          confidenceThresholds: { must: 80, nice: 90 },
-          mcpServers: {},
-          ...reviewConfigOverrides
-        };
-      }
-    },
-    outputSink: defineOutputSinkDouble({
-      async initializeRun() {
-        return this;
-      },
-      async publishFileReview() {},
-      async publishSkippedFile() {},
-      async publishRunSummary() {},
-      async publishReviewIndex() {},
-      async publishRunManifest() {},
-      async publishChangesetOverview() {}
-    })
-  });
-
-  const result = await app.run({
-    baseRef: "main",
-    headRef: "feature-branch",
-    repoPath: "./packages/app",
-    userContext: [],
-    dryRun: false
-  });
-
-  // Step 3 (Knowledge & Source of Truth) is the only step that enables
-  // external URL retrieval and installs the onPreToolUse enforcement hook.
-  const step3Config = sessionConfigs.find(
-    (config) =>
-      isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
-      config.hooks?.onPreToolUse
-  );
-  const preToolUse = step3Config?.hooks?.onPreToolUse;
-  assert.ok(preToolUse, "Step 3 session must have an onPreToolUse hook installed");
-
-  return { preToolUse, result };
-}
-
-describe("web-fetch policy: open (no allowlist)", () => {
+describe("createLocalReviewRunApp web-fetch tool policy wiring", () => {
   let fixture: ReviewRepoFixture;
   let repoDir: string;
   let preToolUse!: PreToolUseHook;
@@ -124,99 +50,102 @@ describe("web-fetch policy: open (no allowlist)", () => {
     fixture = createReviewRepoFixture();
     repoDir = fixture.repoDir;
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    const run = await runPipelineAndGetPreToolUse(fixture);
-    assert.ok(run.result.plannedFileCount >= 2);
-    assert.ok(run.result.successfulFileCount >= 1);
-    preToolUse = run.preToolUse;
-  });
 
-  after(() => {
-    fixture.cleanup();
-  });
+    const sessionConfigs: SessionConfig[] = [];
 
-  test("non-https and localhost URLs are denied for both web_fetch and url tool names", async () => {
-    for (const toolName of ["web_fetch", "url"]) {
-      assert.deepEqual(
-        await preToolUse(
-          { timestamp: Date.now(), cwd: repoDir, toolName, toolArgs: { url: "http://localhost:3000" } },
-          { sessionId: "session-1" }
-        ),
-        {
-          permissionDecision: "deny",
-          permissionDecisionReason:
-            "Review sessions only allow fetching absolute public https URLs."
+    const app = createLocalReviewRunApp({
+      workingDirectory: repoDir,
+      webFetchHostnameClassifier: createAllowingHostnameClassifier(),
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              sessionConfigs.push(config);
+              return {
+                async sendAndWait({ prompt }) {
+                  return { data: { content: buildSessionResponse(config, prompt) } };
+                },
+                async disconnect() {}
+              };
+            }
+          };
         }
-      );
-    }
-  });
-
-  test("absolute public https URL is allowed", async () => {
-    assert.equal(
-      await preToolUse(
-        { timestamp: Date.now(), cwd: repoDir, toolName: "url", toolArgs: { url: "https://docs.example.com/guide" } },
-        { sessionId: "session-1" }
-      ),
-      undefined
-    );
-  });
-});
-
-describe("web-fetch policy: host allowlist configured", () => {
-  let fixture: ReviewRepoFixture;
-  let repoDir: string;
-  let preToolUse!: PreToolUseHook;
-
-  before(async () => {
-    fixture = createReviewRepoFixture();
-    repoDir = fixture.repoDir;
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    const run = await runPipelineAndGetPreToolUse(fixture, {
-      webFetchAllowedHosts: ["docs.example.com"]
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            userContext: []
+          });
+        }
+      },
+      reviewConfigProvider: {
+        async loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: { must: 80, nice: 90 },
+            mcpServers: {}
+          };
+        }
+      },
+      outputSink: defineOutputSinkDouble({
+        async initializeRun() {
+          return this;
+        },
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
+      })
     });
-    assert.ok(run.result.plannedFileCount >= 2);
-    assert.ok(run.result.successfulFileCount >= 1);
-    preToolUse = run.preToolUse;
+
+    const result = await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: "./packages/app",
+      userContext: [],
+      dryRun: false
+    });
+    assert.ok(result.plannedFileCount >= 2);
+    assert.ok(result.successfulFileCount >= 1);
+
+    const step3Config = sessionConfigs.find(
+      (config) =>
+        isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
+        config.hooks?.onPreToolUse
+    );
+    const hook = step3Config?.hooks?.onPreToolUse;
+    assert.ok(hook, "Step 3 session must have an onPreToolUse hook installed by the composition root");
+    preToolUse = hook;
   });
 
   after(() => {
     fixture.cleanup();
   });
 
-  test("URL in allowlist is allowed", async () => {
-    assert.equal(
-      await preToolUse(
-        { timestamp: Date.now(), cwd: repoDir, toolName: "web_fetch", toolArgs: { url: "https://docs.example.com/guide" } },
-        { sessionId: "session-1" }
-      ),
-      undefined
-    );
-  });
-
-  test("URL not in allowlist is denied", async () => {
-    assert.deepEqual(
-      await preToolUse(
-        { timestamp: Date.now(), cwd: repoDir, toolName: "web_fetch", toolArgs: { url: "https://react.dev/reference" } },
-        { sessionId: "session-1" }
-      ),
+  test("Step 3 session has the tool-policy guard wired in (composition smoke)", async () => {
+    // A single representative deny case proves the hook is a real policy
+    // hook and not a no-op placeholder. The exhaustive URL policy matrix
+    // lives in test/services/tool-policy-web-fetch-policy.test.ts.
+    const decision = await preToolUse(
       {
-        permissionDecision: "deny",
-        permissionDecisionReason:
-          "Review sessions only allow fetching configured public https hosts."
-      }
+        timestamp: Date.now(),
+        cwd: repoDir,
+        toolName: "web_fetch",
+        toolArgs: { url: "http://localhost:3000" }
+      },
+      { sessionId: "session-1" }
     );
-  });
 
-  test("deny applies to all unlisted hosts regardless of path", async () => {
-    assert.deepEqual(
-      await preToolUse(
-        { timestamp: Date.now(), cwd: repoDir, toolName: "web_fetch", toolArgs: { url: "https://reference.example.net/page" } },
-        { sessionId: "session-1" }
-      ),
-      {
-        permissionDecision: "deny",
-        permissionDecisionReason:
-          "Review sessions only allow fetching configured public https hosts."
-      }
-    );
+    assert.ok(decision, "expected the tool-policy guard to return a decision for an unsafe URL");
+    assert.equal(decision.permissionDecision, "deny");
   });
 });

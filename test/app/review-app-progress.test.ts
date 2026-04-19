@@ -9,19 +9,17 @@ import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";
 
 /**
- * Progress event contract tests.
+ * App-level wiring smoke for run progress.
  *
- * Runs the full review pipeline with injected doubles over a deterministic
- * two-file scenario:
- *  - src/app.ts          → all steps succeed
- *  - packages/app/index.ts → skipped at step2 due to a thrown step failure
- *
- * maxConcurrentFiles is set to 1 so files are processed sequentially,
- * giving the event sequence a deterministic total order.
+ * Confirms the composition root assembled by createLocalReviewRunApp
+ * threads the orchestrator's progress event handler back to the caller and
+ * publishes a coherent ReviewRunSummary across one successful and one
+ * skipped file. Detailed event ordering for ReviewOrchestrator is owned by
+ * test/core/orchestrator-progress-events.test.ts.
  */
-describe("createLocalReviewRunApp progress events", () => {
+describe("createLocalReviewRunApp progress wiring", () => {
   let result: ReviewRunSummary;
-  const events: string[] = [];
+  const events: RunProgressEvent[] = [];
 
   before(async () => {
     const app = createLocalReviewRunApp({
@@ -87,8 +85,6 @@ describe("createLocalReviewRunApp progress events", () => {
       }),
       stepRunner: {
         async run({ step, context }) {
-          // Deterministic skip: packages/app/index.ts fails at step2.
-          // The orchestrator does not retry at this level; it catches and skips.
           if (
             context.filePath === "packages/app/index.ts" &&
             step.stepId === "step2-dependencies-boundaries"
@@ -100,7 +96,7 @@ describe("createLocalReviewRunApp progress events", () => {
         }
       },
       onProgressEvent(event) {
-        events.push(renderProgressEvent(event));
+        events.push(event);
       }
     });
 
@@ -113,57 +109,20 @@ describe("createLocalReviewRunApp progress events", () => {
     });
   });
 
-  test("run summary counts one success and one skip", () => {
+  test("publishes a run summary that aggregates successful and skipped files", () => {
     assert.equal(result.plannedFileCount, 2);
     assert.equal(result.successfulFileCount, 1);
     assert.equal(result.skippedFileCount, 1);
   });
 
-  test("event sequence covers all phases, per-file steps, skip, and finalize", () => {
-    assert.deepEqual(events, [
-      "phase:step0",
-      "phase:planning",
-      "initialized:2:/workspace/repo/.nightowl/review/feature-branch_03131430",
-      "phase:reviewing",
-      "claimed:1:src/app.ts",
-      "progress:src/app.ts:step1-overview",
-      "progress:src/app.ts:step2-dependencies-boundaries",
-      "progress:src/app.ts:step3-knowledge-source-of-truth",
-      "progress:src/app.ts:step4-strategy-what-if-scenarios",
-      "progress:src/app.ts:step5-validation-interrogation",
-      "progress:src/app.ts:step6-cognitive-simulation",
-      "progress:src/app.ts:step7-summary",
-      "completed:src/app.ts",
-      "claimed:2:packages/app/index.ts",
-      "progress:packages/app/index.ts:step1-overview",
-      "skipped:packages/app/index.ts:step2-dependencies-boundaries:deterministic validation failed",
-      "finalizing:2:1:1"
-    ]);
+  test("forwards progress events emitted by the orchestrator to the injected handler", () => {
+    // Wiring smoke only: app must deliver SOME orchestrator events through
+    // the onProgressEvent callback. Detailed sequence is asserted in
+    // test/core/orchestrator-progress-events.test.ts.
+    assert.ok(events.length > 0, "expected at least one progress event to be forwarded");
+    assert.ok(
+      events.some((event) => event.type === "run-finalizing"),
+      "expected the run-finalizing event to be forwarded as a wiring smoke"
+    );
   });
 });
-
-/**
- * Serializes a RunProgressEvent to a compact string for use in deepEqual assertions.
- * The switch is exhaustive over RunProgressEvent — TypeScript will flag a compile error
- * if a new event type is added without a corresponding case here.
- */
-function renderProgressEvent(event: RunProgressEvent): string {
-  switch (event.type) {
-    case "phase-changed":
-      return `phase:${event.phase}`;
-    case "run-initialized":
-      return `initialized:${event.plannedFileCount}:${event.outputTarget.basePath}`;
-    case "file-claimed":
-      return `claimed:${event.claimOrder}:${event.filePath}`;
-    case "file-progressed":
-      return `progress:${event.filePath}:${event.stepId}`;
-    case "file-completed":
-      return `completed:${event.filePath}`;
-    case "file-skipped":
-      return `skipped:${event.filePath}:${event.stepId}:${event.reason}`;
-    case "run-finalizing":
-      return `finalizing:${event.plannedFileCount}:${event.successfulFileCount}:${event.skippedFileCount}`;
-    case "finalizer-failed":
-      return `finalizer-failed:${event.artifact}:${event.message}`;
-  }
-}

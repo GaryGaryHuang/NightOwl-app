@@ -2,13 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
-import {
-  createLocalReviewRunApp,
-  formatLocalReviewRunSummary,
-  LOCAL_REVIEW_RUN_HEADER
-} from "../../src/app/review-app.ts";
-import { createRunContext } from "../../src/core/run-context.ts";
-import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
+import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { isChangesetOverviewSystemMessage } from "../helpers/review-app-fixture.ts";
@@ -77,78 +71,6 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
     fixture.cleanup();
   }
 });
-
-// ---------------------------------------------------------------------------
-// formatLocalReviewRunSummary — dry-run header tests
-// ---------------------------------------------------------------------------
-
-function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): ReviewRunSummary {
-  const base = "/workspace/.nightowl/review/run";
-  return {
-    repoRoot: "/workspace/repo",
-    runContext: createRunContext({ changesetOverview: "## Changeset Overview", userContext: [] }),
-    outputTarget: {
-      basePath: base,
-      changesetOverviewPath: `${base}/changeset-overview.md`,
-      filesPath: `${base}/files`,
-      skippedPath: `${base}/skipped.md`,
-      summaryPath: `${base}/summary.md`,
-      indexPath: `${base}/index.md`,
-      manifestPath: `${base}/manifest.json`,
-      toolAuditPath: `${base}/tool-audit.jsonl`
-    },
-    plannedFileCount: 1,
-    successfulFileCount: 1,
-    skippedFileCount: 0,
-    dryRun: false,
-    finalizerFailures: [],
-    ...overrides
-  };
-}
-
-test("formatLocalReviewRunSummary adds [DRY RUN] prefix to header when dryRun is true", () => {
-  const result = buildMinimalRunSummary({ dryRun: true });
-  const summary = formatLocalReviewRunSummary(result);
-
-  assert.ok(
-    summary.startsWith("[DRY RUN] " + LOCAL_REVIEW_RUN_HEADER),
-    `Expected [DRY RUN] prefix, got: ${summary.split("\n")[0]}`
-  );
-});
-
-test("formatLocalReviewRunSummary does not add [DRY RUN] prefix when dryRun is false", () => {
-  const result = buildMinimalRunSummary({ dryRun: false });
-  const summary = formatLocalReviewRunSummary(result);
-
-  assert.ok(
-    summary.startsWith(LOCAL_REVIEW_RUN_HEADER),
-    `Expected plain header, got: ${summary.split("\n")[0]}`
-  );
-  assert.ok(!summary.includes("[DRY RUN]"), "Must not contain [DRY RUN] when dryRun is false");
-});
-
-test("formatLocalReviewRunSummary has no warning line when finalizerFailures is empty", () => {
-  const result = buildMinimalRunSummary({ finalizerFailures: [] });
-  const summary = formatLocalReviewRunSummary(result);
-
-  assert.ok(!summary.includes("Warning:"), "Must not contain Warning when finalizerFailures is empty");
-});
-
-test("formatLocalReviewRunSummary appends warning line listing failed artifact names when finalizerFailures is non-empty", () => {
-  const result = buildMinimalRunSummary({
-    finalizerFailures: [
-      { artifact: "summary", message: "ENOSPC" },
-      { artifact: "manifest", message: "disk full" }
-    ]
-  });
-  const summary = formatLocalReviewRunSummary(result);
-
-  assert.match(summary, /Warning: Failed to write run-level artifacts: summary, manifest/u);
-});
-
-// ---------------------------------------------------------------------------
-// context7ApiKey injection
-// ---------------------------------------------------------------------------
 
 test("createLocalReviewRunApp passes context7ApiKey option to the session config as headers.CONTEXT7_API_KEY", async () => {
   const fixture = createReviewRepoFixture();

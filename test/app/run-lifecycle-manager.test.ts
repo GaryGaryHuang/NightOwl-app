@@ -73,6 +73,23 @@ test("RunLifecycleManager SIGTERM aborts the signal with reason SIGTERM", async 
   );
 });
 
+test("RunLifecycleManager keeps the first signal as the abort reason when SIGINT then SIGTERM arrive in quick succession", async () => {
+  const signalSource = createFakeSignalSource();
+  const { clientManager } = createLifecycleTracker();
+  const manager = new RunLifecycleManager({ clientManager, signalSource });
+
+  await assert.rejects(
+    () =>
+      manager.run(async (signal) => {
+        signalSource.emit("SIGINT");
+        signalSource.emit("SIGTERM");
+        assert.equal(signal.reason, "SIGINT");
+        throw new Error("interrupted");
+      }),
+    { message: "interrupted" }
+  );
+});
+
 // ─── Listener cleanup ───────────────────────────────────────────────────────
 
 test("RunLifecycleManager removes signal listeners after callback succeeds", async () => {
@@ -273,6 +290,29 @@ test("RunLifecycleManager does not call forceStop when stop resolves within time
   await manager.run(async () => "done");
 
   assert.deepEqual(calls, ["start", "stop"]);
+});
+
+test("RunLifecycleManager preserves the original callback error when forceStop follows a timed-out stop", async () => {
+  const signalSource = createFakeSignalSource();
+  const callbackError = new Error("callback failure");
+  const { calls, clientManager } = createLifecycleTracker({
+    stopImpl: () => new Promise(() => {})
+  });
+  const manager = new RunLifecycleManager({
+    clientManager,
+    signalSource,
+    gracefulShutdownTimeoutMs: 10
+  });
+
+  await assert.rejects(
+    () =>
+      manager.run(async () => {
+        throw callbackError;
+      }),
+    (err: unknown) => err === callbackError
+  );
+
+  assert.deepEqual(calls, ["start", "stop", "forceStop"]);
 });
 
 // ─── Custom signalSource injection ──────────────────────────────────────────

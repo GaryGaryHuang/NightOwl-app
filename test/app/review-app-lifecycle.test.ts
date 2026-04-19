@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
-import { createLocalReviewRunApp, formatLocalReviewRunSummary } from "../../src/app/review-app.ts";
+import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
@@ -12,40 +12,36 @@ import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSessionResponse } from "../helpers/review-app-fixture.ts";
 
 /**
- * Shared factory for signal and lifecycle tests.
- * Uses in-memory stubs for all dependencies; TEST_FILES replaces a real git
- * changeset so no on-disk repo is needed. Injection hooks (`onStep1`,
- * `stopImpl`, `forceStopImpl`, etc.) let individual tests assert or trigger
- * side-effects at specific lifecycle points.
+ * App-level lifecycle smoke only.
+ *
+ * Detailed shutdown ordering, signal listener cleanup, graceful timeout, and
+ * stop()/forceStop() error propagation are owned by:
+ *   - test/app/run-lifecycle-manager.test.ts
+ *   - test/services/copilot-client-shutdown.test.ts
+ *
+ * This suite verifies only that createLocalReviewRunApp composes the lifecycle
+ * manager with the orchestrator so that:
+ *   1. A process signal during a run surfaces as ReviewRunInterruptedError
+ *      with the signal identity, and clientManager.stop() is invoked.
+ *   2. The composition root wires through to a successful real-fixture run
+ *      with on-disk tool-audit.jsonl creation.
  */
+
 function createSignalTestApp(options: {
   stopCalls: string[];
   onStep1?: () => void;
-  step0ShouldThrow?: boolean;
-  step0Error?: Error;
-  startError?: Error;
-  stopImpl?: () => Promise<void>;
-  forceStopImpl?: () => Promise<void>;
-  gracefulShutdownTimeoutMs?: number;
 }) {
   const TEST_FILES = ["src/app.ts", "packages/app/index.ts"];
 
   return createLocalReviewRunApp({
     workingDirectory: "/tmp/signal-test",
-    gracefulShutdownTimeoutMs: options.gracefulShutdownTimeoutMs,
     clientManager: {
-      async start() {
-        if (options.startError) {
-          throw options.startError;
-        }
-      },
+      async start() {},
       async stop() {
         options.stopCalls.push("stop");
-        await options.stopImpl?.();
       },
       async forceStop() {
         options.stopCalls.push("forceStop");
-        await options.forceStopImpl?.();
       },
       getClient() {
         throw new Error("unused");
@@ -86,13 +82,6 @@ function createSignalTestApp(options: {
     }),
     changesetOverviewRunner: {
       async run() {
-        if (options.step0Error) {
-          throw options.step0Error;
-        }
-
-        if (options.step0ShouldThrow) {
-          throw new Error("step0 fatal error in test");
-        }
         return createRunContext({
           changesetOverview: "## Changeset\n- test",
           userContext: []
@@ -121,7 +110,7 @@ const SIGNAL_TEST_REQUEST = {
   dryRun: false
 };
 
-test("createLocalReviewRunApp SIGINT during run propagates ReviewRunInterruptedError with signal identity and calls stop()", async () => {
+test("createLocalReviewRunApp surfaces a process signal during a run as ReviewRunInterruptedError and invokes clientManager.stop()", async () => {
   const stopCalls: string[] = [];
   let sigintFired = false;
 
@@ -141,339 +130,6 @@ test("createLocalReviewRunApp SIGINT during run propagates ReviewRunInterruptedE
   );
   assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after interruption");
 });
-
-test("createLocalReviewRunApp SIGTERM during run propagates ReviewRunInterruptedError with signal identity and calls stop()", async () => {
-  const stopCalls: string[] = [];
-  let sigtermFired = false;
-
-  const app = createSignalTestApp({
-    stopCalls,
-    onStep1() {
-      if (!sigtermFired) {
-        sigtermFired = true;
-        process.emit("SIGTERM", "SIGTERM");
-      }
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGTERM"
-  );
-  assert.deepEqual(stopCalls, ["stop"], "clientManager.stop() must be called after SIGTERM");
-});
-
-// ─── First-signal-wins ──────────────────────────────────────────────────────
-
-test("createLocalReviewRunApp first signal wins when SIGINT then SIGTERM arrive in quick succession", async () => {
-  const stopCalls: string[] = [];
-  let fired = false;
-
-  const app = createSignalTestApp({
-    stopCalls,
-    onStep1() {
-      if (!fired) {
-        fired = true;
-        process.emit("SIGINT", "SIGINT");
-        process.emit("SIGTERM", "SIGTERM");
-      }
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err instanceof ReviewRunInterruptedError && err.signal === "SIGINT"
-  );
-});
-
-test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after normal run completion", async () => {
-  const stopCalls: string[] = [];
-  const sigintBefore = process.listenerCount("SIGINT");
-  const sigtermBefore = process.listenerCount("SIGTERM");
-
-  const app = createSignalTestApp({
-    stopCalls,
-    async stopImpl() {
-      assert.equal(
-        process.listenerCount("SIGINT"),
-        sigintBefore,
-        "SIGINT listener should be removed before stop() on normal completion"
-      );
-      assert.equal(
-        process.listenerCount("SIGTERM"),
-        sigtermBefore,
-        "SIGTERM listener should be removed before stop() on normal completion"
-      );
-    }
-  });
-
-  await app.run(SIGNAL_TEST_REQUEST);
-
-  assert.equal(
-    process.listenerCount("SIGINT"),
-    sigintBefore,
-    "SIGINT listener should be removed after normal completion"
-  );
-  assert.equal(
-    process.listenerCount("SIGTERM"),
-    sigtermBefore,
-    "SIGTERM listener should be removed after normal completion"
-  );
-  assert.deepEqual(stopCalls, ["stop"]);
-});
-
-test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after a run error", async () => {
-  const stopCalls: string[] = [];
-  const sigintBefore = process.listenerCount("SIGINT");
-  const sigtermBefore = process.listenerCount("SIGTERM");
-
-  const app = createSignalTestApp({
-    stopCalls,
-    step0ShouldThrow: true,
-    async stopImpl() {
-      assert.equal(
-        process.listenerCount("SIGINT"),
-        sigintBefore,
-        "SIGINT listener should be removed before stop() after error"
-      );
-      assert.equal(
-        process.listenerCount("SIGTERM"),
-        sigtermBefore,
-        "SIGTERM listener should be removed before stop() after error"
-      );
-    }
-  });
-
-  await assert.rejects(() => app.run(SIGNAL_TEST_REQUEST));
-
-  assert.equal(
-    process.listenerCount("SIGINT"),
-    sigintBefore,
-    "SIGINT listener should be removed after error"
-  );
-  assert.equal(
-    process.listenerCount("SIGTERM"),
-    sigtermBefore,
-    "SIGTERM listener should be removed after error"
-  );
-  assert.deepEqual(stopCalls, ["stop"]);
-});
-
-test("createLocalReviewRunApp removes SIGINT and SIGTERM handlers after an interrupted run", async () => {
-  const stopCalls: string[] = [];
-  const sigintBefore = process.listenerCount("SIGINT");
-  const sigtermBefore = process.listenerCount("SIGTERM");
-  let fired = false;
-
-  const app = createSignalTestApp({
-    stopCalls,
-    async stopImpl() {
-      assert.equal(
-        process.listenerCount("SIGINT"),
-        sigintBefore,
-        "SIGINT listener should be removed before stop() after interruption"
-      );
-      assert.equal(
-        process.listenerCount("SIGTERM"),
-        sigtermBefore,
-        "SIGTERM listener should be removed before stop() after interruption"
-      );
-    },
-    onStep1() {
-      if (!fired) {
-        fired = true;
-        process.emit("SIGINT", "SIGINT");
-      }
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err instanceof ReviewRunInterruptedError
-  );
-
-  assert.equal(
-    process.listenerCount("SIGINT"),
-    sigintBefore,
-    "SIGINT listener should be removed after interruption"
-  );
-  assert.equal(
-    process.listenerCount("SIGTERM"),
-    sigtermBefore,
-    "SIGTERM listener should be removed after interruption"
-  );
-  assert.deepEqual(stopCalls, ["stop"]);
-});
-
-test("createLocalReviewRunApp keeps the successful summary when stop() resolves before the graceful shutdown timeout", async () => {
-  const stopCalls: string[] = [];
-  const app = createSignalTestApp({
-    stopCalls,
-    gracefulShutdownTimeoutMs: 1, // 1 ms deadline; sleep(0) resolves within it
-    async stopImpl() {
-      await sleep(0);
-    }
-  });
-
-  const summary = await app.run(SIGNAL_TEST_REQUEST);
-
-  assert.equal(summary.repoRoot, "/tmp/signal-test");
-  assert.deepEqual(stopCalls, ["stop"]);
-});
-
-test("createLocalReviewRunApp falls back to clientManager.forceStop() after a successful run when stop() exceeds the graceful shutdown timeout", async () => {
-  const stopCalls: string[] = [];
-  const sigintBefore = process.listenerCount("SIGINT");
-  const sigtermBefore = process.listenerCount("SIGTERM");
-  const app = createSignalTestApp({
-    stopCalls,
-    gracefulShutdownTimeoutMs: 1,
-    async stopImpl() {
-      await sleep(20);
-    },
-    async forceStopImpl() {
-      assert.equal(
-        process.listenerCount("SIGINT"),
-        sigintBefore,
-        "SIGINT listener should be removed before forceStop() on normal completion"
-      );
-      assert.equal(
-        process.listenerCount("SIGTERM"),
-        sigtermBefore,
-        "SIGTERM listener should be removed before forceStop() on normal completion"
-      );
-    }
-  });
-
-  const summary = await app.run(SIGNAL_TEST_REQUEST);
-
-  assert.equal(summary.repoRoot, "/tmp/signal-test");
-  assert.equal(process.listenerCount("SIGINT"), sigintBefore);
-  assert.equal(process.listenerCount("SIGTERM"), sigtermBefore);
-  assert.deepEqual(stopCalls, ["stop", "forceStop"]);
-});
-
-test("createLocalReviewRunApp preserves ReviewRunInterruptedError when forceStop() follows a timed-out stop()", async () => {
-  const stopCalls: string[] = [];
-  const sigintBefore = process.listenerCount("SIGINT");
-  const sigtermBefore = process.listenerCount("SIGTERM");
-  let sigintFired = false;
-  const app = createSignalTestApp({
-    stopCalls,
-    gracefulShutdownTimeoutMs: 1,
-    async stopImpl() {
-      await sleep(20);
-    },
-    async forceStopImpl() {
-      assert.equal(
-        process.listenerCount("SIGINT"),
-        sigintBefore,
-        "SIGINT listener should be removed before forceStop() after interruption"
-      );
-      assert.equal(
-        process.listenerCount("SIGTERM"),
-        sigtermBefore,
-        "SIGTERM listener should be removed before forceStop() after interruption"
-      );
-    },
-    onStep1() {
-      if (!sigintFired) {
-        sigintFired = true;
-        process.emit("SIGINT", "SIGINT");
-      }
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err instanceof ReviewRunInterruptedError
-  );
-
-  assert.equal(process.listenerCount("SIGINT"), sigintBefore);
-  assert.equal(process.listenerCount("SIGTERM"), sigtermBefore);
-  assert.deepEqual(stopCalls, ["stop", "forceStop"]);
-});
-
-test("createLocalReviewRunApp preserves the original run error when forceStop() follows a timed-out stop()", async () => {
-  const stopCalls: string[] = [];
-  const sigintBefore = process.listenerCount("SIGINT");
-  const sigtermBefore = process.listenerCount("SIGTERM");
-  const runError = new Error("step0 fatal error in test");
-  const app = createSignalTestApp({
-    stopCalls,
-    step0Error: runError,
-    gracefulShutdownTimeoutMs: 1,
-    async stopImpl() {
-      await sleep(20);
-    },
-    async forceStopImpl() {
-      assert.equal(
-        process.listenerCount("SIGINT"),
-        sigintBefore,
-        "SIGINT listener should be removed before forceStop() after error"
-      );
-      assert.equal(
-        process.listenerCount("SIGTERM"),
-        sigtermBefore,
-        "SIGTERM listener should be removed before forceStop() after error"
-      );
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err === runError
-  );
-
-  assert.equal(process.listenerCount("SIGINT"), sigintBefore);
-  assert.equal(process.listenerCount("SIGTERM"), sigtermBefore);
-  assert.deepEqual(stopCalls, ["stop", "forceStop"]);
-});
-
-test("createLocalReviewRunApp surfaces a fast stop() rejection without calling forceStop()", async () => {
-  const stopCalls: string[] = [];
-  const stopError = new Error("stop failed fast");
-  const app = createSignalTestApp({
-    stopCalls,
-    gracefulShutdownTimeoutMs: 1,
-    async stopImpl() {
-      throw stopError;
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err === stopError
-  );
-
-  assert.deepEqual(stopCalls, ["stop"]);
-});
-
-test("createLocalReviewRunApp surfaces a forceStop() rejection instead of the original run outcome", async () => {
-  const stopCalls: string[] = [];
-  const forceStopError = new Error("forceStop failed");
-  const app = createSignalTestApp({
-    stopCalls,
-    gracefulShutdownTimeoutMs: 1,
-    async stopImpl() {
-      await sleep(20);
-    },
-    async forceStopImpl() {
-      throw forceStopError;
-    }
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err === forceStopError
-  );
-
-  assert.deepEqual(stopCalls, ["stop", "forceStop"]);
-});
-
-// ---------------------------------------------------------------------------
-// Composition root wiring — tool-audit.jsonl integration
-// ---------------------------------------------------------------------------
 
 test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAuditPath after a successful run", async () => {
   const fixture = createReviewRepoFixture();
@@ -542,44 +198,3 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
     fixture.cleanup();
   }
 });
-
-// ─── formatLocalReviewRunSummary: reduced CLI summary contract ──────────────
-
-test("formatLocalReviewRunSummary keeps only completion counts in the final CLI summary", () => {
-  const basePath = "/workspace/.nightowl/review/feature-branch_03131430";
-  const result = {
-    repoRoot: "/workspace/repo",
-    runContext: { changesetOverview: "## Changeset Overview", userContext: [] },
-    outputTarget: {
-      basePath,
-      changesetOverviewPath: `${basePath}/changeset-overview.md`,
-      filesPath: `${basePath}/files`,
-      summaryPath: `${basePath}/summary.md`,
-      indexPath: `${basePath}/index.md`,
-      manifestPath: `${basePath}/manifest.json`,
-      skippedPath: `${basePath}/skipped.md`,
-      toolAuditPath: `${basePath}/tool-audit.jsonl`
-    },
-    plannedFileCount: 1,
-    successfulFileCount: 1,
-    skippedFileCount: 0,
-    dryRun: false,
-    finalizerFailures: []
-  };
-
-  const output = formatLocalReviewRunSummary(result);
-  const lines = output.split("\n");
-
-  assert.deepEqual(lines, [
-    "Review run completed.",
-    "Planned files: 1",
-    "Successful files: 1",
-    "Skipped files: 0"
-  ]);
-});
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}

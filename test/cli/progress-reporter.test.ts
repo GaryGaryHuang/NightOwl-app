@@ -210,6 +210,22 @@ test("CliProgressReporter emits a non-TTY snapshot when a file completes success
   assert.equal(stdout.logs.at(-1), "Progress 1/2 | active 0");
 });
 
+test("CliProgressReporter renders a final non-TTY snapshot using the counts carried by run-finalizing", () => {
+  const { stdout, reporter } = createInitializedReporter({
+    isTTY: false,
+    plannedFileCount: 2
+  });
+
+  reporter.handleEvent({
+    type: "run-finalizing",
+    plannedFileCount: 4,
+    successfulFileCount: 3,
+    skippedFileCount: 1
+  });
+
+  assert.equal(stdout.logs.at(-1), "Progress 4/4 | active 0");
+});
+
 test("CliProgressReporter clears the TTY live line during finalize so the final summary does not leave a stale progress row", () => {
   const { stdout, reporter } = createInitializedReporter({
     isTTY: true,
