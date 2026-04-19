@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   FileReviewContext,
-  type FileReviewContextInput
+  type FileReviewContextInput,
+  type Finding
 } from "../../src/core/file-review-context.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
@@ -117,6 +118,48 @@ test("FileReviewContext stores interruption state separately and returns defensi
     stepId: "step5-validation-interrogation",
     reason: "deterministic validation failed"
   });
+});
+
+test("FileReviewContext setFindings deep-clones v2 fields so mutations do not leak", () => {
+  const context = createContext();
+
+  const original: Finding = {
+    type: "must",
+    title: "leak test",
+    traceability: { kind: "line-range", lineStart: 1, lineEnd: 2 },
+    context: "ctx",
+    deviation: "dev",
+    impact: "imp",
+    suggestion: "sug",
+    confidence: 90,
+    findingId: "F1",
+    supportingEvidence: [
+      { source: "diff:src/app.ts:1-2", content: "original content" }
+    ],
+    reachability: { credible: true, description: "direct path" },
+    uncertaintyStatus: "supported" as const
+  };
+
+  context.setFindings([original]);
+
+  // Mutate the original object after setFindings
+  original.supportingEvidence[0]!.source = "MUTATED";
+  original.supportingEvidence[0]!.content = "MUTATED";
+  original.reachability.credible = false;
+  original.reachability.description = "MUTATED";
+  original.findingId = "MUTATED";
+  original.uncertaintyStatus = "tentative";
+
+  const stored = context.getFindings()!;
+  assert.equal(stored.length, 1);
+  const f = stored[0]!;
+
+  assert.equal(f.findingId, "F1");
+  assert.equal(f.uncertaintyStatus, "supported");
+  assert.equal(f.reachability.credible, true);
+  assert.equal(f.reachability.description, "direct path");
+  assert.equal(f.supportingEvidence[0]!.source, "diff:src/app.ts:1-2");
+  assert.equal(f.supportingEvidence[0]!.content, "original content");
 });
 
 function createContext(

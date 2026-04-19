@@ -298,6 +298,24 @@ test("Finalizer excludes confidence from rendered findings", () => {
   assertTextExcludesAll(result, ["confidence", "0.9"]);
 });
 
+test("Finalizer excludes v2 internal fields from rendered findings", () => {
+  const context = createContext();
+
+  context.setSection("overview", "## Overview\nContent");
+  context.setFindings([makeMustFinding("v2-exclusion-test")]);
+
+  const result = finalizer.render(context);
+
+  assertTextExcludesAll(result, [
+    "findingId",
+    "supportingEvidence",
+    "reachability",
+    "uncertaintyStatus",
+    "credible",
+    "direct code path"
+  ]);
+});
+
 test("Finalizer renders traceability formats correctly", () => {
   const context = createContext();
 

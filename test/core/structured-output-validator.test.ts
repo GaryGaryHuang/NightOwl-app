@@ -672,28 +672,43 @@ test("StructuredOutputValidator rejects empty sourceHypothesisId", () => {
 });
 
 test("StructuredOutputValidator rejects unknown fields at finding top-level", () => {
-  assertValidationFails({
-    responseText: payload([finding({ extra: true })])
-  });
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validate({
+        responseText: payload([finding({ extra: true })])
+      }),
+    /extra/u,
+    "error should mention the unknown field name"
+  );
 });
 
 test("StructuredOutputValidator rejects unknown fields in traceability", () => {
-  assertValidationFails({
-    responseText: payload([
-      finding({
-        traceability: { kind: "line-range", lineStart: 14, lineEnd: 18, extra: true }
-      })
-    ])
-  });
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validate({
+        responseText: payload([
+          finding({
+            traceability: { kind: "line-range", lineStart: 14, lineEnd: 18, extra: true }
+          })
+        ])
+      }),
+    /extra/u,
+    "error should mention the unknown field name"
+  );
 });
 
 test("StructuredOutputValidator rejects unknown fields in top-level payload", () => {
-  assertValidationFails({
-    responseText: JSON.stringify({
-      findings: [finding()],
-      metadata: {}
-    })
-  });
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validate({
+        responseText: JSON.stringify({
+          findings: [finding()],
+          metadata: {}
+        })
+      }),
+    /metadata/u,
+    "error should mention the unknown field name"
+  );
 });
 
 test("StructuredOutputValidator filterByAcceptance filters tentative findings regardless of confidence", () => {
