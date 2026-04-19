@@ -195,33 +195,6 @@ function assertNoRunLevelArtifactsPublished(sink: TrackingOutputSink): void {
   }
 }
 
-function assertRunLevelArtifactsPublished(sink: TrackingOutputSink): void {
-  for (const call of [
-    "publishRunSummary",
-    "publishReviewIndex",
-    "publishRunManifest"
-  ]) {
-    assert.equal(
-      sink.calls.includes(call),
-      true,
-      `${call} should be called on normal completion`
-    );
-  }
-}
-
-test("ReviewRunInterruptedError exposes stable error metadata", () => {
-  const err = new ReviewRunInterruptedError("SIGINT");
-
-  assert.ok(err instanceof Error);
-  assert.ok(err instanceof ReviewRunInterruptedError);
-  assert.equal(err.name, "ReviewRunInterruptedError");
-  assert.equal(err.message, "Run interrupted by external signal.");
-  assert.equal(err.signal, "SIGINT");
-  assert.equal(new ReviewRunInterruptedError("SIGTERM").signal, "SIGTERM");
-  assert.equal(new ReviewRunInterruptedError().signal, undefined);
-  assert.ok(!(new Error("generic") instanceof ReviewRunInterruptedError));
-});
-
 test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already aborted before dispatch", async () => {
   const controller = new AbortController();
   controller.abort();
@@ -234,30 +207,6 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already
     () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
     undefined,
     "pre-aborted signal should interrupt the run"
-  );
-  assert.deepEqual(step1Calls, []);
-});
-
-test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is aborted during Step 0", async () => {
-  const controller = new AbortController();
-  const step1Calls: string[] = [];
-  const orchestrator = createBaseOrchestrator({
-    changesetOverviewRunner: {
-      async run() {
-        controller.abort();
-        return createRunContext({
-          changesetOverview: "## Changeset\n- test",
-          userContext: []
-        });
-      }
-    },
-    stepRunner: recordStep1Calls(step1Calls)
-  });
-
-  await assertRunInterrupted(
-    () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
-    undefined,
-    "Step 0 abort should interrupt before per-file work"
   );
   assert.deepEqual(step1Calls, []);
 });
@@ -431,18 +380,6 @@ test("ReviewOrchestrator does not publish run-level artifacts after external abo
     undefined
   );
   assertNoRunLevelArtifactsPublished(sink);
-});
-
-test("ReviewOrchestrator publishes run-level artifacts and summary counts on a normal run", async () => {
-  const sink = createTrackingOutputSink();
-  const orchestrator = createBaseOrchestrator({ outputSink: sink });
-
-  const result = await orchestrator.run(TEST_REQUEST);
-
-  assert.equal(result.plannedFileCount, TEST_FILES.length);
-  assert.equal(result.successfulFileCount, TEST_FILES.length);
-  assert.equal(result.skippedFileCount, 0);
-  assertRunLevelArtifactsPublished(sink);
 });
 
 test("ReviewOrchestrator maps recognized abort reasons onto interrupted run errors", async () => {

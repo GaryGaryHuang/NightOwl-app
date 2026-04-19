@@ -57,6 +57,7 @@
     "test/core/orchestrator-bounded-concurrency.test.ts",
     "test/core/orchestrator-planning.test.ts",
     "test/core/orchestrator-pre-dispatch-failures.test.ts",
+    "test/core/orchestrator-progress-events.test.ts",
     "test/core/orchestrator-run-summary.test.ts",
     "test/core/orchestrator-snapshot-fault-handling.test.ts",
     "test/providers/local-git-provider.test.ts",

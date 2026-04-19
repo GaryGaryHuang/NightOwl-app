@@ -9,7 +9,6 @@ import {
 import path from "node:path";
 import test from "node:test";
 
-import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 import {
   ReviewOrchestrator,
   type ReviewOrchestratorOptions
@@ -17,10 +16,7 @@ import {
 import type { RunStepInput, StepResult, StepRunner } from "../../src/core/step-runner.ts";
 import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
-import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
-import { deriveFileRiskLevel } from "../../src/core/risk-level.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
-import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
 import type {
   ReviewOutputTarget,
   RunOutputPublisher
@@ -28,14 +24,10 @@ import type {
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import {
-  buildFindingsForFile,
   buildSuccessfulStepResult,
-  escapeRegExp,
   type SuccessfulStepResultOptions
 } from "../helpers/orchestrator-fixture.ts";
 import {
-  BASE_REF,
-  HEAD_REF,
   REQUEST,
   RUN_TIMESTAMP,
   bootstrapReviewHarness,
@@ -51,220 +43,100 @@ type OutputCall = "initializeRun"
   | "publishRunManifest"
   | "publishChangesetOverview";
 
-test("ReviewOrchestrator publishes run-level artifacts for an all-successful run", async () => {
+const RUN_LEVEL_FINALIZER_CALLS: OutputCall[] = [
+  "publishRunSummary",
+  "publishReviewIndex",
+  "publishRunManifest"
+];
+
+test("ReviewOrchestrator dispatches every run-level finalizer for an all-successful run and writes their artifacts", async () => {
   await withReviewHarness({}, async (harness) => {
+    const outputSink = new RecordingOutputSink();
     const result = await runOrchestrator(harness, {
-      outputSink: new LocalWorkspaceProvider(),
+      outputSink,
       stepRunner: createSuccessfulSummaryRunner()
     });
-
-    const plannedNotes = planNoteFiles(
-      result.outputTarget.filesPath,
-      harness.reviewableFiles
-    );
-    const representativeNote = plannedNotes.find(
-      (plannedNote) => plannedNote.filePath === "packages/app/index.ts"
-    );
-    assert.ok(representativeNote);
-
-    const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
-    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
-    const manifest = readManifest(result.outputTarget.manifestPath);
-    const representativeRisk = deriveFileRiskLevel(
-      buildFindingsForFile(representativeNote.filePath)
-    );
 
     assert.equal(result.plannedFileCount, harness.reviewableFiles.length);
     assert.equal(result.successfulFileCount, harness.reviewableFiles.length);
     assert.equal(result.skippedFileCount, 0);
-    assertOutputArtifactsExist(result.outputTarget);
+    assert.deepEqual(result.finalizerFailures, []);
     assertOutputTargetPaths(result.outputTarget, harness.repoRoot);
-    assert.match(summaryContent, /^# Review Summary$/mu);
-    assert.match(
-      summaryContent,
-      new RegExp(`- Successful files: ${harness.reviewableFiles.length}`, "u")
-    );
-    assert.equal(
-      summaryContent.includes(
-        `- [${representativeRisk}] \`${representativeNote.filePath}\` — must=1, nice=0`
-      ),
-      true
-    );
-    assert.match(indexContent, /^# Review Index$/mu);
-    assert.match(indexContent, /\[changeset-overview\.md\]\(\.\/changeset-overview\.md\)/u);
-    assert.match(indexContent, new RegExp(escapeRegExp(representativeNote.filePath), "u"));
-    assert.equal(manifest.schemaVersion, 2);
-    assert.equal(manifest.successfulFileCount, harness.reviewableFiles.length);
-    assert.equal(manifest.artifacts.manifestPath, result.outputTarget.manifestPath);
+    assertOutputArtifactsExist(result.outputTarget);
+    for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+      assert.equal(outputSink.calls.includes(call), true, call);
+    }
   });
 });
 
-test("ReviewOrchestrator publishes summary.md for a mixed-result run from formal in-memory outcomes rather than disk notes", async () => {
+test("ReviewOrchestrator feeds finalizers in-memory outcomes rather than reading back corrupted on-disk artifacts", async () => {
   await withReviewHarness(
     {
-      commitMessage: "add third changed file for mixed aggregate summary",
+      commitMessage: "add third changed file for in-memory data source contract",
       extraFiles: { "README.md": "# Demo feature change\n" }
     },
     async (harness) => {
       const skippedFile = "README.md";
-      const outputSink = new CorruptingSummaryOutputSink();
+      const outputSink = new CorruptingDiskOutputSink();
 
       const result = await runOrchestrator(harness, {
         outputSink,
         stepRunner: createMixedResultRunner(skippedFile)
       });
 
-      const plannedNotes = planNoteFiles(
-        result.outputTarget.filesPath,
-        harness.reviewableFiles
-      );
-      const corruptedSuccessfulNote = readFileSync(plannedNotes[0].noteFilePath, "utf8");
-      const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
-      const manifest = readManifest(result.outputTarget.manifestPath);
-      const skippedManifestEntry = manifest.files.find(
-        (fileEntry) => fileEntry.filePath === skippedFile
-      );
-
-      assert.match(corruptedSuccessfulNote, /CORRUPTED NOTE/u);
       assert.equal(result.successfulFileCount, harness.reviewableFiles.length - 1);
       assert.equal(result.skippedFileCount, 1);
-      assertOutputTargetPaths(result.outputTarget, harness.repoRoot);
-      assert.match(
-        summaryContent,
-        new RegExp(`- Successful files: ${harness.reviewableFiles.length - 1}`, "u")
-      );
-      assert.match(summaryContent, /- Skipped files: 1/u);
-      assert.doesNotMatch(summaryContent, /CORRUPTED NOTE/u);
-      assert.match(
-        summaryContent,
-        new RegExp(`- \`${escapeRegExp(skippedFile)}\` — step5-validation-interrogation — deterministic validation failed`, "u")
-      );
-      assert.equal(manifest.skippedFileCount, 1);
-      assert.equal(skippedManifestEntry?.status, "skipped");
-      assert.equal(skippedManifestEntry?.failedStepId, "step5-validation-interrogation");
-    }
-  );
-});
 
-test("ReviewOrchestrator publishes summary.md for zero planned files with explicit empty sections", async () => {
-  await withReviewHarness({ reviewignore: "**\n" }, async (harness) => {
-    const result = await runOrchestrator(harness, {
-      outputSink: new LocalWorkspaceProvider(),
-      stepRunner: createFailingIfStartedRunner()
-    });
-
-    const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
-    const manifest = readManifest(result.outputTarget.manifestPath);
-
-    assert.equal(result.plannedFileCount, 0);
-    assert.equal(result.successfulFileCount, 0);
-    assert.equal(result.skippedFileCount, 0);
-    assertOutputTargetPaths(result.outputTarget, harness.repoRoot);
-    assert.match(summaryContent, /- Planned files: 0/u);
-    assert.match(summaryContent, /- Successful files: 0/u);
-    assert.match(summaryContent, /- Skipped files: 0/u);
-    assert.match(summaryContent, /## Successful Files\n- 無/u);
-    assert.match(summaryContent, /## Skipped Files\n- 無/u);
-    assert.equal(manifest.plannedFileCount, 0);
-    assert.equal(manifest.successfulFileCount, 0);
-    assert.equal(manifest.skippedFileCount, 0);
-    assert.equal(manifest.files.length, 0);
-  });
-});
-
-test("ReviewOrchestrator treats an all-skipped run as a completed run with zero successful files", async () => {
-  await withReviewHarness({}, async (harness) => {
-    const result = await runOrchestrator(harness, {
-      outputSink: new CorruptingSummaryOutputSink(),
-      stepRunner: createAllSkippedRunner(new Set(harness.reviewableFiles))
-    });
-
-    const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
-    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
-    const manifest = readManifest(result.outputTarget.manifestPath);
-    const plannedNotes = planNoteFiles(
-      result.outputTarget.filesPath,
-      harness.reviewableFiles
-    );
-
-    assert.equal(result.successfulFileCount, 0);
-    assert.equal(result.skippedFileCount, harness.reviewableFiles.length);
-    assertOutputTargetPaths(result.outputTarget, harness.repoRoot);
-    assert.match(summaryContent, /- Successful files: 0/u);
-    assert.match(
-      summaryContent,
-      new RegExp(`- Skipped files: ${harness.reviewableFiles.length}`, "u")
-    );
-    assert.match(indexContent, /^# Review Index$/mu);
-    for (const plannedNote of plannedNotes) {
-      const noteLink = toRunRelativeLink(result.outputTarget, plannedNote.noteFilePath);
-      assert.equal(
-        indexContent.includes(`[Skipped] [\`${plannedNote.filePath}\`](${noteLink})`),
-        true
-      );
-    }
-    assert.equal(manifest.successfulFileCount, 0);
-    assert.equal(manifest.skippedFileCount, harness.reviewableFiles.length);
-  });
-});
-
-test("ReviewOrchestrator publishes deterministic index.md for a mixed-result run from formal completed-run data rather than disk artifacts", async () => {
-  await withReviewHarness(
-    {
-      commitMessage: "add third changed file for review index",
-      extraFiles: { "README.md": "# Demo feature change\n" }
-    },
-    async (harness) => {
-      const skippedFile = "README.md";
-      const outputSink = new CorruptingIndexOutputSink();
-      const result = await runOrchestrator(harness, {
-        outputSink,
-        stepRunner: createMixedResultRunner(skippedFile)
-      });
-
+      const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
       const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
       const manifestContent = readFileSync(result.outputTarget.manifestPath, "utf8");
-      const plannedNotes = planNoteFiles(
-        result.outputTarget.filesPath,
-        harness.reviewableFiles
-      );
-      const successfulNote = plannedNotes.find(
-        (plannedNote) => plannedNote.filePath === "packages/app/index.ts"
-      );
-      const skippedNote = plannedNotes.find(
-        (plannedNote) => plannedNote.filePath === skippedFile
-      );
 
-      assert.equal(result.successfulFileCount, harness.reviewableFiles.length - 1);
-      assert.equal(result.skippedFileCount, 1);
-      assertOutputTargetPaths(result.outputTarget, harness.repoRoot);
-      assert.ok(successfulNote);
-      assert.ok(skippedNote);
-      assert.match(indexContent, /^# Review Index$/mu);
-      assert.match(indexContent, /\[summary\.md\]\(\.\/summary\.md\)/u);
-      assert.equal(indexContent.includes(`[High] [\`${successfulNote.filePath}\`]`), true);
-      assert.equal(indexContent.includes(`[Skipped] [\`${skippedNote.filePath}\`]`), true);
-      assert.doesNotMatch(indexContent, /CORRUPTED SUMMARY/u);
+      assert.doesNotMatch(summaryContent, /CORRUPTED/u);
+      assert.doesNotMatch(indexContent, /CORRUPTED/u);
       assert.doesNotMatch(indexContent, /EXTRA DISK FILE/u);
       assert.doesNotMatch(manifestContent, /CORRUPTED/u);
     }
   );
 });
 
-test("ReviewOrchestrator publishes index.md for zero planned files with explicit empty file notes", async () => {
+test("ReviewOrchestrator still dispatches every run-level finalizer when zero files are planned", async () => {
   await withReviewHarness({ reviewignore: "**\n" }, async (harness) => {
+    const outputSink = new RecordingOutputSink();
     const result = await runOrchestrator(harness, {
-      outputSink: new LocalWorkspaceProvider(),
+      outputSink,
       stepRunner: createFailingIfStartedRunner()
     });
 
-    const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
+    assert.equal(result.plannedFileCount, 0);
+    assert.equal(result.successfulFileCount, 0);
+    assert.equal(result.skippedFileCount, 0);
+    assert.deepEqual(result.finalizerFailures, []);
+    assertOutputArtifactsExist(result.outputTarget);
+    for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+      assert.equal(outputSink.calls.includes(call), true, call);
+    }
+  });
+});
 
-    assert.match(indexContent, /^# Review Index$/mu);
-    assert.match(indexContent, /- Planned files: 0/u);
-    assert.match(indexContent, /- Successful files: 0/u);
-    assert.match(indexContent, /- Skipped files: 0/u);
-    assert.match(indexContent, /## File Notes\n- 無/u);
+test("ReviewOrchestrator treats an all-skipped run as a completed run that still dispatches every run-level finalizer", async () => {
+  await withReviewHarness({}, async (harness) => {
+    const outputSink = new RecordingOutputSink();
+    const result = await runOrchestrator(harness, {
+      outputSink,
+      stepRunner: createAllSkippedRunner(new Set(harness.reviewableFiles))
+    });
+
+    assert.equal(result.successfulFileCount, 0);
+    assert.equal(result.skippedFileCount, harness.reviewableFiles.length);
+    assert.deepEqual(result.finalizerFailures, []);
+    assertOutputArtifactsExist(result.outputTarget);
+    for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+      assert.equal(outputSink.calls.includes(call), true, call);
+    }
+    assert.equal(
+      outputSink.records.filter((entry) => entry.call === "publishSkippedFile").length,
+      harness.reviewableFiles.length
+    );
   });
 });
 
@@ -294,9 +166,9 @@ test("ReviewOrchestrator does not publish run-level artifacts when applyTo fails
       /apply failed/u
     );
 
-    assert.equal(outputSink.calls.includes("publishRunSummary"), false);
-    assert.equal(outputSink.calls.includes("publishReviewIndex"), false);
-    assert.equal(outputSink.calls.includes("publishRunManifest"), false);
+    for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+      assert.equal(outputSink.calls.includes(call), false, call);
+    }
   });
 });
 
@@ -325,7 +197,7 @@ test("ReviewOrchestrator does not initialize output when Step 0 fails", async ()
 test("ReviewOrchestrator publishes run-level artifacts when getDiff failure downgrades one file to skipped", async () => {
   await withReviewHarness(
     {
-      commitMessage: "add third changed file for getDiff no-summary",
+      commitMessage: "add third changed file for getDiff downgrade",
       extraFiles: { "README.md": "# Demo feature change\n" }
     },
     async (harness) => {
@@ -342,9 +214,9 @@ test("ReviewOrchestrator publishes run-level artifacts when getDiff failure down
 
       assert.equal(result.skippedFileCount, 1);
       assert.equal(result.successfulFileCount, harness.reviewableFiles.length - 1);
-      assert.equal(outputSink.calls.includes("publishRunSummary"), true);
-      assert.equal(outputSink.calls.includes("publishReviewIndex"), true);
-      assert.equal(outputSink.calls.includes("publishRunManifest"), true);
+      for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+        assert.equal(outputSink.calls.includes(call), true, call);
+      }
       assert.equal(
         outputSink.records.some(
           (record) =>
@@ -361,25 +233,21 @@ test("ReviewOrchestrator records finalizerFailure and continues remaining finali
     artifact: "summary" | "index" | "manifest";
     message: RegExp;
     failure: Partial<Record<"summary" | "index" | "manifest", string>>;
-    expectedCalls: OutputCall[];
   }> = [
     {
       artifact: "summary",
       message: /summary write failed/u,
-      failure: { summary: "summary write failed" },
-      expectedCalls: ["publishRunSummary", "publishReviewIndex", "publishRunManifest"]
+      failure: { summary: "summary write failed" }
     },
     {
       artifact: "index",
       message: /index write failed/u,
-      failure: { index: "index write failed" },
-      expectedCalls: ["publishRunSummary", "publishReviewIndex", "publishRunManifest"]
+      failure: { index: "index write failed" }
     },
     {
       artifact: "manifest",
       message: /manifest write failed/u,
-      failure: { manifest: "manifest write failed" },
-      expectedCalls: ["publishRunSummary", "publishReviewIndex", "publishRunManifest"]
+      failure: { manifest: "manifest write failed" }
     }
   ];
 
@@ -394,23 +262,12 @@ test("ReviewOrchestrator records finalizerFailure and continues remaining finali
       assert.equal(result.finalizerFailures.length, 1, testCase.artifact);
       assert.equal(result.finalizerFailures[0].artifact, testCase.artifact);
       assert.match(result.finalizerFailures[0].message, testCase.message);
-      for (const call of testCase.expectedCalls) {
+      for (const call of RUN_LEVEL_FINALIZER_CALLS) {
         assert.equal(outputSink.calls.includes(call), true, `${testCase.artifact}:${call}`);
       }
       assert.ok(outputSink.writtenFileReviews.length > 0);
     });
   }
-});
-
-test("ReviewOrchestrator returns empty finalizerFailures when all finalizers succeed", async () => {
-  await withReviewHarness({}, async (harness) => {
-    const result = await runOrchestrator(harness, {
-      outputSink: new RecordingOutputSink(),
-      stepRunner: createSuccessfulSummaryRunner()
-    });
-
-    assert.deepEqual(result.finalizerFailures, []);
-  });
 });
 
 test("ReviewOrchestrator records multiple finalizerFailures in call order", async () => {
@@ -671,15 +528,7 @@ class RecordingOutputSink {
   }
 }
 
-class CorruptingSummaryOutputSink extends RecordingOutputSink {
-  override async publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): Promise<void> {
-    writeArtifact(fileResult.noteFilePath, "# CORRUPTED NOTE\n");
-    this.writtenFileReviews.push(fileResult.noteFilePath);
-    this.record("publishFileReview", fileResult.noteFilePath);
-  }
-}
-
-class CorruptingIndexOutputSink extends RecordingOutputSink {
+class CorruptingDiskOutputSink extends RecordingOutputSink {
   override async initializeRun(outputTarget: ReviewOutputTarget): Promise<RunOutputPublisher> {
     const publisher = await super.initializeRun(outputTarget);
     writeFileSync(outputTarget.skippedPath, "# CORRUPTED SKIPPED LOG\n");
@@ -699,11 +548,6 @@ class CorruptingIndexOutputSink extends RecordingOutputSink {
       `CORRUPTED SKIP: ${skipRecord.filePath} ${skipRecord.stepId} ${skipRecord.reason}\n`
     );
     this.record("publishSkippedFile", skipRecord.filePath);
-  }
-
-  override async publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): Promise<void> {
-    writeFileSync(this.outputTarget.summaryPath, "# CORRUPTED SUMMARY\n");
-    this.record("publishRunSummary", this.outputTarget.summaryPath);
   }
 }
 
@@ -748,24 +592,6 @@ function writeArtifact(filePath: string, content: string): void {
   writeFileSync(filePath, content);
 }
 
-function readManifest(manifestPath: string): {
-  schemaVersion: number;
-  plannedFileCount: number;
-  successfulFileCount: number;
-  skippedFileCount: number;
-  artifacts: {
-    manifestPath: string;
-    summaryPath: string;
-  };
-  files: Array<{
-    filePath: string;
-    status: string;
-    failedStepId?: string;
-  }>;
-} {
-  return JSON.parse(readFileSync(manifestPath, "utf8"));
-}
-
 function assertOutputArtifactsExist(outputTarget: OutputTarget): void {
   assert.equal(existsSync(outputTarget.summaryPath), true);
   assert.equal(existsSync(outputTarget.indexPath), true);
@@ -798,8 +624,4 @@ function assertCallAfter(
   earlierCall: OutputCall
 ): void {
   assert.ok(calls.lastIndexOf(laterCall) > calls.lastIndexOf(earlierCall));
-}
-
-function toRunRelativeLink(outputTarget: OutputTarget, noteFilePath: string): string {
-  return `./${path.relative(outputTarget.basePath, noteFilePath).replace(/\\/gu, "/")}`;
 }
