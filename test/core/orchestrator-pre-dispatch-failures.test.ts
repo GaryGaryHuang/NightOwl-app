@@ -10,6 +10,7 @@ import type { RunStepInput, StepResult } from "../../src/core/step-runner.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
 import { ReviewFileFilterError } from "../../src/providers/review-file-filter.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
@@ -117,7 +118,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
             userContext: []
           });
         }

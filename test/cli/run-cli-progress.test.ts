@@ -7,6 +7,7 @@ import {
   type ReviewRunSummary
 } from "../../src/core/orchestrator.ts";
 import { runCli } from "../../src/index.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createOutputTarget } from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
 const CLEAR_TTY_LIVE_LINE = "\u001b[2K\r";
@@ -129,7 +130,8 @@ function createCompletedRunResult(): ReviewRunSummary {
   return {
     repoRoot: REPO_ROOT,
     runContext: {
-      changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+      changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
+      changesetOverviewMarkdown: "## Changeset Overview\n- 調整範圍：feature\n",
       userContext: []
     },
     outputTarget: createOutputTarget({ basePath: REVIEW_BASE_PATH }),

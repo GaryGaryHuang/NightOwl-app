@@ -23,6 +23,7 @@
     "test/core/step-runner-error-wrapping.test.ts",
     "test/core/step-runner-retry.test.ts",
     "test/core/step0-output-validator.test.ts",
+    "test/core/steps/step0-changeset-overview.test.ts",
     "test/core/structured-output-validator.test.ts",
     "test/core/web-fetch-hostname-normalization.test.ts",
     "test/providers/async-mutex.test.ts",

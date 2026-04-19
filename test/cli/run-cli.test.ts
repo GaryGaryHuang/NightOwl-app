@@ -18,6 +18,7 @@ import {
   runCli,
   type CliRuntime
 } from "../../src/index.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createOutputTarget } from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
 const DEFAULT_ARGV = ["main", "feature-branch"];
@@ -532,7 +533,8 @@ function createCompletedRunResult(
   return {
     repoRoot: REPO_ROOT,
     runContext: {
-      changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+      changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
+      changesetOverviewMarkdown: "## Changeset Overview\n- 調整範圍：feature\n",
       userContext: []
     },
     outputTarget: {

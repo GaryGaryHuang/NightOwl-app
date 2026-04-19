@@ -1,6 +1,7 @@
 import { createRunContext, type RunContext } from "../../src/core/run-context.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../../src/providers/local-review-file-filter.ts";
+import { stubChangeMap } from "./change-map-stub.ts";
 import type { ReviewRepoFixture } from "./git-fixture.ts";
 
 export const BASE_REF = "main";
@@ -49,7 +50,7 @@ export function createDefaultChangesetOverviewRunner(): {
   return {
     async run() {
       return createRunContext({
-        changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+        changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
         userContext: []
       });
     }

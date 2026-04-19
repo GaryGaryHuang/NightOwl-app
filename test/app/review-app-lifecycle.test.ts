@@ -7,6 +7,7 @@ import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { ReviewRunInterruptedError } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSessionResponse } from "../helpers/review-app-fixture.ts";
@@ -83,7 +84,7 @@ function createSignalTestApp(options: {
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: "## Changeset\n- test",
+          changesetOverview: stubChangeMap("## Changeset\n- test"),
           userContext: []
         });
       }
@@ -160,7 +161,7 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
             userContext: []
           });
         }

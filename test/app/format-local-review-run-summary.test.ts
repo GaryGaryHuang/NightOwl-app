@@ -7,12 +7,13 @@ import {
 } from "../../src/app/review-app.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 
 function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): ReviewRunSummary {
   const base = "/workspace/.nightowl/review/run";
   return {
     repoRoot: "/workspace/repo",
-    runContext: createRunContext({ changesetOverview: "## Changeset Overview", userContext: [] }),
+    runContext: createRunContext({ changesetOverview: stubChangeMap("## Changeset Overview"), userContext: [] }),
     outputTarget: {
       basePath: base,
       changesetOverviewPath: `${base}/changeset-overview.md`,

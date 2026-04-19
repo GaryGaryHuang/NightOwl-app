@@ -5,6 +5,7 @@ import type { SessionConfig } from "@github/copilot-sdk";
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { WebFetchHostnameClassifier } from "../../src/services/tool-policy/web-fetch-hostname-classifier.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
@@ -80,7 +81,7 @@ describe("createLocalReviewRunApp web-fetch tool policy wiring", () => {
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
             userContext: []
           });
         }

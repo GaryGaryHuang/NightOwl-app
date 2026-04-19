@@ -6,6 +6,7 @@ import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import type { ReviewMcpServerConfig } from "../../src/core/review-mcp-server-config.ts";
 import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
@@ -166,7 +167,7 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
             userContext: []
           });
         }
@@ -417,7 +418,7 @@ async function assertPerFileMcpStartupFailureSkipsOneFile(input: {
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
             userContext: []
           });
         }

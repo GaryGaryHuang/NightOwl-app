@@ -5,6 +5,7 @@ import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import type { RunProgressEvent } from "../../src/core/run-progress.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";
 
@@ -67,7 +68,7 @@ describe("createLocalReviewRunApp progress wiring", () => {
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: "## Changeset Overview\n- 調整範圍：feature",
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
             userContext: []
           });
         }

@@ -13,6 +13,7 @@ import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts
 import type { ReviewOutputBootstrapAndPublisher } from "../helpers/output-sink-double.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
+import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 
 type StepRunInput = {
@@ -149,7 +150,7 @@ function createBaseOrchestrator(overrides: {
     changesetOverviewRunner: overrides.changesetOverviewRunner ?? {
       async run() {
         return createRunContext({
-          changesetOverview: "## Changeset\n- test",
+          changesetOverview: stubChangeMap("## Changeset\n- test"),
           userContext: []
         });
       }
