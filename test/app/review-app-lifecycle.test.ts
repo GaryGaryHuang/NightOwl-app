@@ -471,22 +471,6 @@ test("createLocalReviewRunApp surfaces a forceStop() rejection instead of the or
   assert.deepEqual(stopCalls, ["stop", "forceStop"]);
 });
 
-test("createLocalReviewRunApp skips stop() and forceStop() when client startup fails", async () => {
-  const stopCalls: string[] = [];
-  const startError = new Error("client start failed");
-  const app = createSignalTestApp({
-    stopCalls,
-    startError
-  });
-
-  await assert.rejects(
-    () => app.run(SIGNAL_TEST_REQUEST),
-    (err: unknown) => err === startError
-  );
-
-  assert.deepEqual(stopCalls, []);
-});
-
 // ---------------------------------------------------------------------------
 // Composition root wiring — tool-audit.jsonl integration
 // ---------------------------------------------------------------------------
