@@ -211,16 +211,31 @@ function validateTraceability(
       "traceability.hunkHeader"
     );
 
+    const resolved: FindingTraceability = {
+      kind,
+      hunkHeader
+    };
+
+    if (diffAnchorMap) {
+      const verdict = verifyFindingAnchor({
+        traceability: resolved,
+        diffAnchorMap
+      });
+
+      if (!verdict.ok) {
+        throw new Error(formatAnchorFailure("traceability", verdict));
+      }
+
+      return resolved;
+    }
+
     if (!hunkHeaders.has(hunkHeader)) {
       throw new Error(
         "deterministic validation failed: 'traceability.hunkHeader' not found in diff"
       );
     }
 
-    return {
-      kind,
-      hunkHeader
-    };
+    return resolved;
   }
 
   throw new Error(

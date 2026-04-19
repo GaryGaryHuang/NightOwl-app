@@ -4,7 +4,13 @@ import test from "node:test";
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 
 const DEFAULT_HUNK_HEADER = "@@ -20,2 +20,4 @@";
-const DEFAULT_DIFF = [DEFAULT_HUNK_HEADER, "-old()", "+new()"].join("\n");
+const DEFAULT_DIFF = [
+  DEFAULT_HUNK_HEADER,
+  " context-before",
+  "+added-21",
+  "+added-22",
+  " context-after"
+].join("\n");
 
 function lineRangeTraceability(lineStart: unknown, lineEnd: unknown) {
   return {
@@ -205,7 +211,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by default c
         finding({
           type: "nice",
           title: "移除 nice",
-          traceability: lineRangeTraceability(20, 20),
+          traceability: lineRangeTraceability(21, 21),
           deviation: "可再調整",
           impact: "影響可維護性",
           suggestion: "補上整理",
@@ -344,12 +350,64 @@ test("StructuredOutputValidator rejects line-range outside changed head lines wi
   );
 });
 
+test("StructuredOutputValidator rejects line-range inside hunk span when it misses all changed lines", () => {
+  const unchangedSpanFinding = finding({
+    traceability: lineRangeTraceability(23, 23)
+  });
+
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validate({
+        responseText: payload([unchangedSpanFinding]),
+        diffContent: DEFAULT_DIFF,
+        filePath: "src/foo.ts"
+      }),
+    /deterministic validation failed: 'traceability' \[ANCHOR\] line range 23-23/u
+  );
+});
+
+test("StructuredOutputValidator accepts diff-hunk with trimmed header through anchor verifier", () => {
+  const trimmedHeaderFinding = finding({
+    traceability: diffHunkTraceability(`  ${DEFAULT_HUNK_HEADER}  `)
+  });
+
+  const result = new StructuredOutputValidator().validate({
+    responseText: payload([trimmedHeaderFinding]),
+    diffContent: DEFAULT_DIFF,
+    filePath: "src/foo.ts"
+  });
+
+  assert.deepEqual(result.findings[0].traceability, {
+    kind: "diff-hunk",
+    hunkHeader: DEFAULT_HUNK_HEADER
+  });
+});
+
+test("StructuredOutputValidator rejects unknown diff-hunk header with ANCHOR tag when diffContent is supplied", () => {
+  const unknownHunkFinding = finding({
+    traceability: diffHunkTraceability("@@ -40,2 +40,3 @@")
+  });
+
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validate({
+        responseText: payload([unknownHunkFinding]),
+        diffContent: DEFAULT_DIFF,
+        filePath: "src/foo.ts"
+      }),
+    /deterministic validation failed: 'traceability' \[ANCHOR\] hunk header '@@ -40,2 \+40,3 @@'/u
+  );
+});
+
 test("StructuredOutputValidator accepts line-range outside changed lines when dependencyPathException is supplied", () => {
   const exceptionFinding = finding({
     traceability: lineRangeTraceability(14, 18),
     dependencyPathException: {
       reason: "called from changed initializer",
-      dependencyAnchor: { filePath: "src/dep.ts" }
+      dependencyAnchor: {
+        filePath: "src/dep.ts",
+        symbol: "bootstrap"
+      }
     }
   });
 
@@ -362,7 +420,10 @@ test("StructuredOutputValidator accepts line-range outside changed lines when de
   assert.equal(result.findings.length, 1);
   assert.deepEqual(result.findings[0].dependencyPathException, {
     reason: "called from changed initializer",
-    dependencyAnchor: { filePath: "src/dep.ts" }
+    dependencyAnchor: {
+      filePath: "src/dep.ts",
+      symbol: "bootstrap"
+    }
   });
 });
 
@@ -394,6 +455,28 @@ test("StructuredOutputValidator rejects dependencyPathException with empty depen
     responseText: payload([bad]),
     diffContent: DEFAULT_DIFF
   });
+});
+
+test("StructuredOutputValidator rejects dependencyPathException with empty dependencyAnchor.symbol", () => {
+  const bad = finding({
+    traceability: lineRangeTraceability(14, 18),
+    dependencyPathException: {
+      reason: "ok",
+      dependencyAnchor: {
+        filePath: "src/dep.ts",
+        symbol: ""
+      }
+    }
+  });
+
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validate({
+        responseText: payload([bad]),
+        diffContent: DEFAULT_DIFF
+      }),
+    /deterministic validation failed: 'dependencyPathException\.dependencyAnchor\.symbol' must be a non-empty string/u
+  );
 });
 
 test("StructuredOutputValidator falls back to legacy line-range check when diffContent is omitted", () => {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildDiffAnchorMap } from "../../src/core/diff-anchor-map.ts";
+import type { DependencyPathException } from "../../src/core/file-review-context.ts";
 import {
   ANCHOR_FAILURE_TAG,
   verifyFindingAnchor
@@ -16,6 +17,14 @@ const DIFF = [
 ].join("\n");
 
 const MAP = buildDiffAnchorMap("src/foo.ts", DIFF);
+
+const STRUCTURAL_EXCEPTION_WITH_SYMBOL: DependencyPathException = {
+  reason: "called from changed initializer",
+  dependencyAnchor: {
+    filePath: "src/dep.ts",
+    symbol: "bootstrap"
+  }
+};
 
 test("line-range overlapping a changed head line passes verification", () => {
   const result = verifyFindingAnchor({
@@ -44,14 +53,11 @@ test("line-range fully outside any changed head line fails with ANCHOR tag", () 
   );
 });
 
-test("line-range outside changed lines passes when dependency-path exception is supplied", () => {
+test("dependency-path exception structural shape with optional symbol bypasses overlap", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
     diffAnchorMap: MAP,
-    dependencyPathException: {
-      reason: "called from changed initializer",
-      dependencyAnchor: { filePath: "src/dep.ts" }
-    }
+    dependencyPathException: STRUCTURAL_EXCEPTION_WITH_SYMBOL
   });
 
   assert.deepEqual(result, { ok: true });
@@ -84,6 +90,19 @@ test("line-range below headLineStart fails when no exception", () => {
   });
 
   assert.equal(result.ok, false);
+});
+
+test("line-range inside hunk span but outside changed lines still fails", () => {
+  const result = verifyFindingAnchor({
+    traceability: { kind: "line-range", lineStart: 23, lineEnd: 23 },
+    diffAnchorMap: MAP
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(
+    result.ok ? null : result.reason,
+    "line-range-outside-changed-lines"
+  );
 });
 
 test("line-range partially overlapping first changed line passes", () => {
