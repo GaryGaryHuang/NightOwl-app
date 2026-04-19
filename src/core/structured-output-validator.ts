@@ -19,6 +19,7 @@ import {
   verifyFindingAnchor,
   type AnchorVerificationFailure
 } from "./finding-anchor-verifier.ts";
+import type { VerifierReportEntry } from "./verifier-report.ts";
 
 export interface StructuredOutputValidatorOptions {
   confidenceThresholds?: ConfidenceThresholds;
@@ -100,13 +101,92 @@ export class StructuredOutputValidator {
 
   filterByAcceptance(payload: FindingsPayload): FindingsPayload {
     return {
-      findings: payload.findings.filter((finding) => {
-        if (finding.uncertaintyStatus !== "supported") return false;
-        if (!finding.reachability.credible) return false;
-        return finding.type === "must"
-          ? finding.confidence >= this.#confidenceThresholds.must
-          : finding.confidence >= this.#confidenceThresholds.nice;
-      })
+      findings: payload.findings.filter((finding) =>
+        this.#classifyAcceptance(finding).accepted
+      )
+    };
+  }
+
+  validateWithReport(input: {
+    responseText: string;
+    diffContent?: string;
+    filePath?: string;
+  }): { payload: FindingsPayload; report: VerifierReportEntry[] } {
+    const payload = this.validate(input);
+    const report: VerifierReportEntry[] = payload.findings.map((f) => ({
+      findingId: f.findingId,
+      taxonomy: "OK" as const,
+      outcome: "accepted" as const,
+      gate: "schema" as const,
+      reason: "passed schema and anchor validation"
+    }));
+    return { payload, report };
+  }
+
+  filterByAcceptanceWithReport(payload: FindingsPayload): {
+    payload: FindingsPayload;
+    report: VerifierReportEntry[];
+  } {
+    const accepted: Finding[] = [];
+    const report: VerifierReportEntry[] = [];
+
+    for (const finding of payload.findings) {
+      const classification = this.#classifyAcceptance(finding);
+
+      report.push({
+        findingId: finding.findingId,
+        taxonomy: classification.taxonomy,
+        outcome: classification.accepted ? "accepted" : "rejected",
+        gate: "acceptance",
+        reason: classification.reason
+      });
+
+      if (classification.accepted) {
+        accepted.push(finding);
+      }
+    }
+
+    return { payload: { findings: accepted }, report };
+  }
+
+  #classifyAcceptance(finding: Finding): {
+    accepted: boolean;
+    taxonomy: VerifierReportEntry["taxonomy"];
+    reason: string;
+  } {
+    if (finding.uncertaintyStatus !== "supported") {
+      return {
+        accepted: false,
+        taxonomy: "EVIDENCE",
+        reason: `uncertaintyStatus is '${finding.uncertaintyStatus}'`
+      };
+    }
+
+    if (!finding.reachability.credible) {
+      return {
+        accepted: false,
+        taxonomy: "REACHABILITY",
+        reason: "reachability is not credible"
+      };
+    }
+
+    const threshold =
+      finding.type === "must"
+        ? this.#confidenceThresholds.must
+        : this.#confidenceThresholds.nice;
+
+    if (finding.confidence < threshold) {
+      return {
+        accepted: false,
+        taxonomy: "ACCEPTANCE",
+        reason: `confidence ${finding.confidence} below ${finding.type} threshold ${threshold}`
+      };
+    }
+
+    return {
+      accepted: true,
+      taxonomy: "OK",
+      reason: "passed all acceptance gates"
     };
   }
 
