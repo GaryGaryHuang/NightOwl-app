@@ -1,19 +1,20 @@
 export const GENERIC_DRY_RUN_STUB =
   "[dry-run] No built-in stub template for this step.";
 
-const STUB_CHANGESET_OVERVIEW_MARKDOWN = `## Changeset Overview
+const STUB_CHANGESET_OVERVIEW_MARKDOWN = [
+  "## Changeset Overview",
+  "- 調整範圍：[dry-run] 本次變更涉及主要業務邏輯調整，影響核心模組的介面設計與行為契約。",
+  "- 跨檔案邊界：[dry-run] 多個模組之間存在介面依賴，變更需要同步更新呼叫端。",
+  "- 行為變更：[dry-run] 主要函式的輸入參數或輸出型別有所調整，可能影響下游消費者的行為預期。",
+  "- 測試覆蓋觀察：[dry-run] 測試覆蓋狀態待真實 run 驗證。"
+].join("\n");
 
-### 調整範圍
-本次變更涉及主要業務邏輯調整，影響核心模組的介面設計與行為契約。
+type DryRunChangeMapStatus = "A" | "M" | "D" | "R";
 
-### 跨檔案邊界
-多個模組之間存在介面依賴，變更需要同步更新呼叫端。
-
-### 行為變更
-主要函式的輸入參數或輸出型別有所調整，可能影響下游消費者的行為預期。
-
-### 測試覆蓋觀察
-[dry-run] 測試覆蓋狀態待真實 run 驗證。`;
+interface DryRunChangedFileEntry {
+  readonly path: string;
+  readonly status: DryRunChangeMapStatus;
+}
 
 /**
  * Build a deterministic ChangeMap JSON for dry-run Step 0 by parsing the
@@ -21,10 +22,10 @@ const STUB_CHANGESET_OVERVIEW_MARKDOWN = `## Changeset Overview
  * for rename/copy entries (last tab-separated field).
  */
 export function buildDryRunChangesetOverviewResponse(prompt: string): string {
-  const paths = extractChangedFilesBlockPaths(prompt);
-  const changedFiles = paths.map((path) => ({
-    path,
-    status: "M" as const,
+  const changedFileEntries = extractChangedFilesBlockEntries(prompt);
+  const changedFiles = changedFileEntries.map((entry) => ({
+    path: entry.path,
+    status: entry.status,
     category: "feature" as const,
     basis: "name-status" as const
   }));
@@ -38,23 +39,45 @@ export function buildDryRunChangesetOverviewResponse(prompt: string): string {
   });
 }
 
-function extractChangedFilesBlockPaths(prompt: string): string[] {
+function extractChangedFilesBlockEntries(prompt: string): DryRunChangedFileEntry[] {
   const startIdx = prompt.indexOf("<changed_files>");
   const endIdx = prompt.indexOf("</changed_files>");
   if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) {
     return [];
   }
   const block = prompt.slice(startIdx + "<changed_files>".length, endIdx);
-  const paths: string[] = [];
+  const entries: DryRunChangedFileEntry[] = [];
   for (const rawLine of block.split("\n")) {
     const line = rawLine.trim();
     if (line.length === 0) continue;
     const fields = line.split("\t");
     if (fields.length < 2) continue;
+    const status = normalizeDryRunStatus(fields[0]);
     const path = fields[fields.length - 1];
-    if (path.length > 0) paths.push(path);
+    if (path.length > 0) {
+      entries.push({ path, status });
+    }
   }
-  return paths;
+  return entries;
+}
+
+function normalizeDryRunStatus(statusField: string): DryRunChangeMapStatus {
+  if (/^R\d*$/u.test(statusField)) {
+    return "R";
+  }
+  if (/^C\d*$/u.test(statusField)) {
+    return "A";
+  }
+
+  switch (statusField) {
+    case "A":
+    case "M":
+    case "D":
+    case "R":
+      return statusField;
+    default:
+      return "M";
+  }
 }
 
 const STUB_OVERVIEW = `## Overview
