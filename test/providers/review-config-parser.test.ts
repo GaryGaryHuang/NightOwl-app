@@ -11,74 +11,34 @@ test("parseReviewConfig rejects malformed JSON and non-object top-level values",
   assert.throws(() => parseReviewConfig("null"), /invalid review config/u);
 });
 
-test("parseReviewConfig preserves run-level defaults and omission semantics", () => {
-  assert.deepEqual(parseReviewConfig("{}"), buildExpectedReviewConfig());
+test("parseReviewConfig integrates leaf defaults and omits absent webFetch host keys", () => {
+  const config = parseReviewConfig("{}");
 
-  assert.deepEqual(
-    parseReviewConfig(
-      JSON.stringify({
-        maxConcurrentFiles: 2
-      })
-    ),
-    buildExpectedReviewConfig({
-      maxConcurrentFiles: 2
-    })
-  );
-
-  const config = parseReviewConfig(
-    JSON.stringify({
-      confidenceThresholds: {
-        must: 70,
-        nice: 85
-      }
-    })
-  );
-
-  assert.deepEqual(
-    config,
-    buildExpectedReviewConfig({
-      confidenceThresholds: {
-        must: 70,
-        nice: 85
-      }
-    })
-  );
+  assert.deepEqual(config, buildExpectedReviewConfig());
   assert.equal("webFetchAllowedHosts" in config, false);
   assert.equal("webFetchDeniedHosts" in config, false);
 });
 
-test("parseReviewConfig rejects invalid run-level config fields", () => {
+test("parseReviewConfig dispatches each top-level key to its leaf parser and surfaces leaf errors", () => {
   assert.throws(
     () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: 0 })),
     /maxConcurrentFiles/u
   );
   assert.throws(
-    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: -1 })),
-    /maxConcurrentFiles/u
-  );
-  assert.throws(
-    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: 2.5 })),
-    /maxConcurrentFiles/u
-  );
-  assert.throws(
-    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: "2" })),
-    /maxConcurrentFiles/u
-  );
-  assert.throws(
-    () => parseReviewConfig(JSON.stringify({ confidenceThresholds: [] })),
-    /confidenceThresholds/u
-  );
-  assert.throws(
-    () => parseReviewConfig(JSON.stringify({ confidenceThresholds: { musst: 70 } })),
-    /confidenceThresholds/u
-  );
-  assert.throws(
     () => parseReviewConfig(JSON.stringify({ confidenceThresholds: { must: 101 } })),
-    /confidenceThresholds\.must/u
+    /confidenceThresholds/u
   );
   assert.throws(
-    () => parseReviewConfig(JSON.stringify({ confidenceThresholds: { nice: "85" } })),
-    /confidenceThresholds\.nice/u
+    () => parseReviewConfig(JSON.stringify({ mcpServers: { demo: { type: "local" } } })),
+    /mcpServers/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ webFetchAllowedHosts: ["*"] })),
+    /webFetchAllowedHosts/u
+  );
+  assert.throws(
+    () => parseReviewConfig(JSON.stringify({ webFetchDeniedHosts: "evil.com" })),
+    /webFetchDeniedHosts/u
   );
 });
 

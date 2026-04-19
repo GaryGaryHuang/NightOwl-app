@@ -7,13 +7,11 @@ import {
   createReviewConfigProviderFixture
 } from "../helpers/review-config-provider-contract-fixture.ts";
 
-test("LocalReviewConfigProvider loads supported MCP transport variants from repo-local config", async () => {
+test("LocalReviewConfigProvider applies the MCP parser to the repo-local mcpServers block and returns the merged config", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
     configFixture.writeReviewConfig({
-      maxConcurrentFiles: 3,
-      confidenceThresholds: { must: 70, nice: 85 },
       mcpServers: {
         context7: {
           type: "http",
@@ -23,28 +21,7 @@ test("LocalReviewConfigProvider loads supported MCP transport variants from repo
         "local-tool": {
           type: "local",
           command: "npx",
-          args: ["-y", "@example/local-mcp"],
-          env: { MCP_MODE: "test" },
-          tools: ["*"],
-          cwd: "/opt/tools",
-          timeout: 10000
-        },
-        "stdio-tool": {
-          type: "stdio",
-          command: "node",
-          args: ["server.js"]
-        },
-        "remote-http": {
-          type: "http",
-          url: "https://mcp.example.com/v1",
-          headers: { "X-Api-Key": "key123" },
-          tools: ["search"],
-          timeout: 30000
-        },
-        "legacy-sse": {
-          type: "sse",
-          url: "https://sse.example.com/mcp",
-          headers: { Authorization: "Bearer tok123" }
+          args: ["-y", "@example/local-mcp"]
         }
       }
     });
@@ -52,8 +29,6 @@ test("LocalReviewConfigProvider loads supported MCP transport variants from repo
     assert.deepEqual(
       await configFixture.loadReviewConfig(),
       buildExpectedReviewConfig({
-        maxConcurrentFiles: 3,
-        confidenceThresholds: { must: 70, nice: 85 },
         mcpServers: {
           context7: {
             type: "context7",
@@ -63,28 +38,7 @@ test("LocalReviewConfigProvider loads supported MCP transport variants from repo
           "local-tool": {
             type: "local",
             command: "npx",
-            args: ["-y", "@example/local-mcp"],
-            env: { MCP_MODE: "test" },
-            tools: ["*"],
-            cwd: "/opt/tools",
-            timeout: 10000
-          },
-          "stdio-tool": {
-            type: "stdio",
-            command: "node",
-            args: ["server.js"]
-          },
-          "remote-http": {
-            type: "http",
-            url: "https://mcp.example.com/v1",
-            headers: { "X-Api-Key": "key123" },
-            tools: ["search"],
-            timeout: 30000
-          },
-          "legacy-sse": {
-            type: "sse",
-            url: "https://sse.example.com/mcp",
-            headers: { Authorization: "Bearer tok123" }
+            args: ["-y", "@example/local-mcp"]
           }
         }
       })
@@ -94,7 +48,7 @@ test("LocalReviewConfigProvider loads supported MCP transport variants from repo
   }
 });
 
-test("LocalReviewConfigProvider rejects invalid repo-local MCP config before Step 0", async () => {
+test("LocalReviewConfigProvider wraps MCP parser errors in ReviewConfigProviderError tagged with the canonical config path", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {

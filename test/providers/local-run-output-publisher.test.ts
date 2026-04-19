@@ -3,18 +3,28 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { ReviewOutputBoundaryError } from "../../src/providers/review-output-sink.ts";
+import { LocalRunOutputPublisher } from "../../src/providers/local-run-output-publisher.ts";
+import {
+  ReviewOutputBoundaryError,
+  type ReviewOutputTarget
+} from "../../src/providers/review-output-sink.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
-type WorkspaceFixture = ReturnType<typeof createWorkspaceProviderFixture>;
-type RunScopedPublisher = Awaited<ReturnType<WorkspaceFixture["provider"]["initializeRun"]>>;
+function createPublisher(outputTarget: ReviewOutputTarget): LocalRunOutputPublisher {
+  // Publisher's narrow contract assumes the OutputTarget is already provisioned.
+  // Create only the directories required by writeFile/appendFile; do NOT bootstrap
+  // the append-only artifacts that LocalWorkspaceProvider owns.
+  mkdirSync(outputTarget.basePath, { recursive: true });
+  mkdirSync(outputTarget.filesPath, { recursive: true });
+  return new LocalRunOutputPublisher(outputTarget);
+}
 
 test("run-scoped output publisher publishes file review content to the target note path", async () => {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
 
   try {
-    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = createPublisher(fixture.outputTarget);
     await publisher.publishFileReview({
       noteFilePath,
       content: "# src/app.ts\n\nPending review.\n"
@@ -30,7 +40,7 @@ test("run-scoped output publisher appends deterministic skipped-file records to 
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = createPublisher(fixture.outputTarget);
     await publisher.publishSkippedFile({
       filePath: "src/app.ts",
       stepId: "step5-validation-interrogation",
@@ -59,7 +69,7 @@ test("run-scoped output publisher preserves intact skipped.md lines across multi
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = createPublisher(fixture.outputTarget);
 
     await Promise.all([
       Promise.resolve().then(() =>
@@ -92,9 +102,9 @@ test("run-scoped output publisher publishes run-level artifact content to the co
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = createPublisher(fixture.outputTarget);
     const cases: Array<{
-      publish(publisher: RunScopedPublisher, content: string): Promise<void>;
+      publish(publisher: LocalRunOutputPublisher, content: string): Promise<void>;
       outputPath: string;
       content: string;
     }> = [
@@ -150,13 +160,13 @@ test("run-scoped output publisher publishes run-level artifact content to the co
   }
 });
 
-test("run-scoped output publishers do not share output state across runs", async () => {
+test("run-scoped output publishers do not share output state across distinct OutputTargets", async () => {
   const fixtureA = createWorkspaceProviderFixture();
   const fixtureB = createWorkspaceProviderFixture();
 
   try {
-    const publisherA = await fixtureA.provider.initializeRun(fixtureA.outputTarget);
-    const publisherB = await fixtureB.provider.initializeRun(fixtureB.outputTarget);
+    const publisherA = createPublisher(fixtureA.outputTarget);
+    const publisherB = createPublisher(fixtureB.outputTarget);
 
     await publisherA.publishRunSummary({ content: "summary A\n" });
     await publisherB.publishRunSummary({ content: "summary B\n" });
@@ -174,7 +184,7 @@ test("run-scoped output publisher reports typed file-review write failures with 
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
 
   try {
-    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = createPublisher(fixture.outputTarget);
     mkdirSync(path.dirname(noteFilePath), { recursive: true });
     mkdirSync(noteFilePath, { recursive: true });
 

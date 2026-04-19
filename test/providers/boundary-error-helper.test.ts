@@ -11,7 +11,7 @@ test("wrapBoundaryError returns the value from a successful async fn", async () 
   assert.equal(result, "ok");
 });
 
-test("wrapBoundaryError converts a thrown Error via toError callback", async () => {
+test("wrapBoundaryError converts a thrown Error via toError, preserving the original as cause", async () => {
   const original = new Error("disk full");
 
   const wrapped = wrapBoundaryError(
@@ -26,39 +26,17 @@ test("wrapBoundaryError converts a thrown Error via toError callback", async () 
   });
 });
 
-test("wrapBoundaryError preserves cause when a string is thrown", async () => {
-  const wrapped = wrapBoundaryError(
-    () => { throw "string error"; },
-    (cause) => new Error("boundary", { cause })
-  );
+test("wrapBoundaryError preserves non-Error throws (string, null, undefined) as cause", async () => {
+  for (const thrown of ["string error", null, undefined] as const) {
+    const wrapped = wrapBoundaryError(
+      () => { throw thrown; },
+      (cause) => new Error("boundary", { cause })
+    );
 
-  await assert.rejects(wrapped, (err: Error) => {
-    assert.equal(err.message, "boundary");
-    assert.equal(err.cause, "string error");
-    return true;
-  });
-});
-
-test("wrapBoundaryError preserves cause when null is thrown", async () => {
-  const wrapped = wrapBoundaryError(
-    () => { throw null; },
-    (cause) => new Error("boundary", { cause })
-  );
-
-  await assert.rejects(wrapped, (err: Error) => {
-    assert.equal(err.cause, null);
-    return true;
-  });
-});
-
-test("wrapBoundaryError preserves cause when undefined is thrown", async () => {
-  const wrapped = wrapBoundaryError(
-    () => { throw undefined; },
-    (cause) => new Error("boundary", { cause })
-  );
-
-  await assert.rejects(wrapped, (err: Error) => {
-    assert.equal(err.cause, undefined);
-    return true;
-  });
+    await assert.rejects(wrapped, (err: Error) => {
+      assert.equal(err.message, "boundary");
+      assert.equal(err.cause, thrown);
+      return true;
+    });
+  }
 });

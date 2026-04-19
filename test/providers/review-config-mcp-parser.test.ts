@@ -50,6 +50,11 @@ test("resolveMcpServersFromConfigObject preserves current local and remote MCP p
         headers: { Authorization: "Bearer tok123" },
         tools: ["search"],
         timeout: 30000
+      },
+      "legacy-sse": {
+        type: "sse",
+        url: "https://sse.example.com/mcp",
+        headers: { Authorization: "Bearer tok456" }
       }
     }
   } satisfies Record<string, unknown>;
@@ -73,6 +78,11 @@ test("resolveMcpServersFromConfigObject preserves current local and remote MCP p
       headers: { Authorization: "Bearer tok123" },
       tools: ["search"],
       timeout: 30000
+    },
+    "legacy-sse": {
+      type: "sse",
+      url: "https://sse.example.com/mcp",
+      headers: { Authorization: "Bearer tok456" }
     }
   });
 });

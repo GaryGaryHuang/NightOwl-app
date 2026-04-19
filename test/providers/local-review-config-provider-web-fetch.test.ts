@@ -7,30 +7,20 @@ import {
   createReviewConfigProviderFixture
 } from "../helpers/review-config-provider-contract-fixture.ts";
 
-test("LocalReviewConfigProvider loads web_fetch host policy from repo-local config", async () => {
+test("LocalReviewConfigProvider applies the web-fetch host parser to the repo-local config and merges the result", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {
     configFixture.writeReviewConfig({
-      maxConcurrentFiles: 2,
-      confidenceThresholds: {
-        must: 70,
-        nice: 85
-      },
-      webFetchAllowedHosts: [" Docs.Example.Com. ", "*.Example.Com. "],
-      webFetchDeniedHosts: [" Internal.Example.Com. ", "*.Secret.Example.Com. "]
+      webFetchAllowedHosts: ["docs.example.com"],
+      webFetchDeniedHosts: ["internal.example.com"]
     });
 
     assert.deepEqual(
       await configFixture.loadReviewConfig(),
       buildExpectedReviewConfig({
-        maxConcurrentFiles: 2,
-        confidenceThresholds: {
-          must: 70,
-          nice: 85
-        },
-        webFetchAllowedHosts: ["docs.example.com", "*.example.com"],
-        webFetchDeniedHosts: ["internal.example.com", "*.secret.example.com"]
+        webFetchAllowedHosts: ["docs.example.com"],
+        webFetchDeniedHosts: ["internal.example.com"]
       })
     );
   } finally {
@@ -38,7 +28,7 @@ test("LocalReviewConfigProvider loads web_fetch host policy from repo-local conf
   }
 });
 
-test("LocalReviewConfigProvider rejects invalid repo-local web_fetch host config before Step 0", async () => {
+test("LocalReviewConfigProvider wraps web-fetch host parser errors in ReviewConfigProviderError tagged with the canonical config path", async () => {
   const configFixture = createReviewConfigProviderFixture();
 
   try {

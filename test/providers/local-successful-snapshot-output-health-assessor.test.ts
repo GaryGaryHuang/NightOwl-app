@@ -42,13 +42,16 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note 
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
-    assert.deepEqual(
-      await assessorFixture.assess(Object.assign(new Error("name too long"), {
-        code: "ENAMETOOLONG",
-        path: assessorFixture.noteFilePath
-      })),
-      { faultScope: "single-file-output-fault" }
-    );
+    for (const code of ["ENAMETOOLONG", "EISDIR"]) {
+      assert.deepEqual(
+        await assessorFixture.assess(Object.assign(new Error(`${code} write failure`), {
+          code,
+          path: assessorFixture.noteFilePath
+        })),
+        { faultScope: "single-file-output-fault" },
+        `expected ${code} on the note path to be single-file-output-fault`
+      );
+    }
   } finally {
     assessorFixture.cleanup();
   }

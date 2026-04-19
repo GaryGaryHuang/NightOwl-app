@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { AsyncMutex } from "../../src/providers/async-mutex.ts";
 
-test("AsyncMutex serializes concurrent operations", async () => {
+test("AsyncMutex serializes concurrent runs in submission order and returns each fn value", async () => {
   const mutex = new AsyncMutex();
   const order: number[] = [];
 
@@ -12,21 +12,19 @@ test("AsyncMutex serializes concurrent operations", async () => {
       order.push(id);
       await new Promise((r) => setTimeout(r, delayMs));
       order.push(id * 10);
+      return id;
     });
 
-  await Promise.all([task(1, 20), task(2, 5), task(3, 1)]);
+  // Submit out of natural completion order: task 1 has the longest delay,
+  // task 3 has the shortest. The mutex must still execute them in submission
+  // order and return each fn's value to its caller.
+  const results = await Promise.all([task(1, 20), task(2, 5), task(3, 1)]);
 
-  // Tasks must complete fully in submission order, never interleaved.
   assert.deepEqual(order, [1, 10, 2, 20, 3, 30]);
+  assert.deepEqual(results, [1, 2, 3]);
 });
 
-test("AsyncMutex returns the value from fn", async () => {
-  const mutex = new AsyncMutex();
-  const result = await mutex.run(async () => 42);
-  assert.equal(result, 42);
-});
-
-test("AsyncMutex propagates errors from fn", async () => {
+test("AsyncMutex propagates fn errors and stays usable for subsequent runs", async () => {
   const mutex = new AsyncMutex();
   const original = new Error("boom");
 
@@ -37,35 +35,8 @@ test("AsyncMutex propagates errors from fn", async () => {
       return true;
     }
   );
-});
 
-test("AsyncMutex allows subsequent calls after a fn throws", async () => {
-  const mutex = new AsyncMutex();
-
-  // First call throws.
-  await assert.rejects(
-    mutex.run(async () => { throw new Error("first fails"); })
-  );
-
-  // Second call should still execute normally.
-  const result = await mutex.run(async () => "recovered");
-  assert.equal(result, "recovered");
-});
-
-test("AsyncMutex preserves submission order under concurrency", async () => {
-  const mutex = new AsyncMutex();
-  const results: string[] = [];
-
-  const promises = Array.from({ length: 5 }, (_, i) =>
-    mutex.run(async () => {
-      results.push(`start-${i}`);
-      await new Promise((r) => setTimeout(r, 1));
-      results.push(`end-${i}`);
-    })
-  );
-
-  await Promise.all(promises);
-
-  const expected = Array.from({ length: 5 }, (_, i) => [`start-${i}`, `end-${i}`]).flat();
-  assert.deepEqual(results, expected);
+  // The queue must release after a throw so later submissions still execute.
+  const recovered = await mutex.run(async () => "recovered");
+  assert.equal(recovered, "recovered");
 });

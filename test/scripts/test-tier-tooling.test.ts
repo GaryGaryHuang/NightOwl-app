@@ -60,107 +60,30 @@ test("evaluateTestTierManifest still reports parity drift when manifest shape is
   assert.deepEqual(result.staleInManifest, []);
 });
 
-test("runTestTierCommand exits cleanly when manifest verification fails", () => {
-  let spawnCalled = false;
-
+test("runTestTierCommand exits 1 without spawning or re-throwing when manifest verification or spawn startup fails", () => {
   // ManifestVerificationError is already reported to stderr inside
   // loadVerifiedTestTierManifest, so runTestTierCommand just exits with code 1
-  // without re-throwing or spawning the test runner.
-  const exitCode = runTestTierCommand({
+  // without spawning anything or re-throwing.
+  let spawnCalledOnVerificationFailure = false;
+  const verificationExit = runTestTierCommand({
     args: ["unit"],
     loadManifest: () => {
       throw new ManifestVerificationError();
     },
     spawn: () => {
-      spawnCalled = true;
+      spawnCalledOnVerificationFailure = true;
       return { status: 0 };
     },
-    logger: {
-      error() {},
-      log() {}
-    }
+    logger: { error() {}, log() {} }
   });
+  assert.equal(verificationExit, 1);
+  assert.equal(spawnCalledOnVerificationFailure, false);
 
-  assert.equal(exitCode, 1);
-  assert.equal(spawnCalled, false);
-});
-
-test("runTestTierCommand spawns the manifest-defined source test files for the requested tier", () => {
-  let receivedCommand;
-  let receivedArgs;
-  let receivedOptions;
-
-  const exitCode = runTestTierCommand({
-    args: ["integration"],
-    loadManifest: () => createManifest({
-      integration: ["test/app/review-app.test.ts"]
-    }),
-    // All external dependencies are injected so the test can assert the exact
-    // spawn contract without executing a real node subprocess.
-    spawn: (command, args, options) => {
-      receivedCommand = command;
-      receivedArgs = args;
-      receivedOptions = options;
-      return { status: 0 };
-    },
-    execPath: "node",
-    cwd: "/tmp/nightowl-app",
-    logger: {
-      error() {},
-      log() {}
-    }
-  });
-
-  assert.equal(exitCode, 0);
-  assert.equal(receivedCommand, "node");
-  // Source test files are passed directly as positional arguments after --test;
-  // Node's built-in test runner resolves them from the cwd.
-  assert.deepEqual(receivedArgs, ["--test", "test/app/review-app.test.ts"]);
-  // stdio: "inherit" forwards test runner output directly to the terminal
-  // without buffering so progress and failures are visible in real time.
-  assert.deepEqual(receivedOptions, {
-    cwd: "/tmp/nightowl-app",
-    stdio: "inherit"
-  });
-});
-
-test("runTestTierCommand collects files from all tiers when invoked with 'all'", () => {
-  let receivedArgs: string[] | undefined;
-
-  const exitCode = runTestTierCommand({
-    args: ["all"],
-    loadManifest: () => createManifest({
-      unit: ["test/core/alpha.test.ts"],
-      integration: ["test/app/beta.test.ts"],
-      e2e: ["test/cli/gamma.test.ts"]
-    }),
-    spawn: (_command, args) => {
-      receivedArgs = args;
-      return { status: 0 };
-    },
-    execPath: "node",
-    cwd: "/tmp/nightowl-app",
-    logger: {
-      error() {},
-      log() {}
-    }
-  });
-
-  assert.equal(exitCode, 0);
-  // "all" concatenates files in canonical tier order: unit → integration → e2e.
-  assert.deepEqual(receivedArgs, [
-    "--test",
-    "test/core/alpha.test.ts",
-    "test/app/beta.test.ts",
-    "test/cli/gamma.test.ts"
-  ]);
-});
-
-test("runTestTierCommand returns exit code 1 and logs the error when spawn fails to start", () => {
+  // When the spawn itself fails to start, the runner must surface the error
+  // through the injected logger and still return exit code 1 (not throw).
   const loggedErrors: unknown[] = [];
   const spawnError = new Error("spawn ENOENT");
-
-  const exitCode = runTestTierCommand({
+  const spawnFailureExit = runTestTierCommand({
     args: ["unit"],
     loadManifest: () => createManifest({
       unit: ["test/core/example.test.ts"]
@@ -171,10 +94,68 @@ test("runTestTierCommand returns exit code 1 and logs the error when spawn fails
       error(message) { loggedErrors.push(message); }
     }
   });
+  assert.equal(spawnFailureExit, 1);
+  assert.deepEqual(loggedErrors, [spawnError]);
+});
 
-  assert.equal(exitCode, 1);
-  assert.equal(loggedErrors.length, 1);
-  assert.equal(loggedErrors[0], spawnError);
+test("runTestTierCommand spawns the manifest-defined files for a tier and concatenates all tiers in canonical order for 'all'", () => {
+  // Single tier: spawn must receive --test followed by exactly the manifest
+  // entries for the requested tier, executed in the cwd with inherited stdio.
+  let receivedCommand: string | undefined;
+  let receivedArgs: string[] | undefined;
+  let receivedOptions: { cwd: string; stdio: string } | undefined;
+
+  const singleTierExit = runTestTierCommand({
+    args: ["integration"],
+    loadManifest: () => createManifest({
+      integration: ["test/app/review-app.test.ts"]
+    }),
+    spawn: (command, args, options) => {
+      receivedCommand = command;
+      receivedArgs = args;
+      receivedOptions = options;
+      return { status: 0 };
+    },
+    execPath: "node",
+    cwd: "/tmp/nightowl-app",
+    logger: { error() {}, log() {} }
+  });
+
+  assert.equal(singleTierExit, 0);
+  assert.equal(receivedCommand, "node");
+  assert.deepEqual(receivedArgs, ["--test", "test/app/review-app.test.ts"]);
+  // stdio: "inherit" forwards test runner output directly to the terminal
+  // without buffering so progress and failures are visible in real time.
+  assert.deepEqual(receivedOptions, {
+    cwd: "/tmp/nightowl-app",
+    stdio: "inherit"
+  });
+
+  // "all": files concatenated in canonical tier order unit → integration → e2e.
+  let allTierArgs: string[] | undefined;
+  const allTierExit = runTestTierCommand({
+    args: ["all"],
+    loadManifest: () => createManifest({
+      unit: ["test/core/alpha.test.ts"],
+      integration: ["test/app/beta.test.ts"],
+      e2e: ["test/cli/gamma.test.ts"]
+    }),
+    spawn: (_command, args) => {
+      allTierArgs = args;
+      return { status: 0 };
+    },
+    execPath: "node",
+    cwd: "/tmp/nightowl-app",
+    logger: { error() {}, log() {} }
+  });
+
+  assert.equal(allTierExit, 0);
+  assert.deepEqual(allTierArgs, [
+    "--test",
+    "test/core/alpha.test.ts",
+    "test/app/beta.test.ts",
+    "test/cli/gamma.test.ts"
+  ]);
 });
 
 test("loadVerifiedTestTierManifest routes all output through the injected logger", () => {

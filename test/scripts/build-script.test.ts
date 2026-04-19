@@ -19,10 +19,12 @@ const currentDir = path.dirname(currentFilePath);
 const repoRoot = path.resolve(currentDir, "..", "..");
 const nodeModulesSourceDir = path.join(repoRoot, "node_modules");
 
-test("build emits the published CLI artifact with rewritten JavaScript imports", () => {
+test("build emits the published CLI artifact, normalizes bin permissions, and clears stale dist files on rerun", () => {
   const fixture = createBuildFixture();
 
   try {
+    // First build: must produce the published CLI bundle with the rewritten
+    // JavaScript import target, executable shebang, and executable file mode.
     runBuild(fixture);
 
     const builtCliPath = path.join(fixture.appCopyDir, "dist", "bin", "review.js");
@@ -36,17 +38,10 @@ test("build emits the published CLI artifact with rewritten JavaScript imports",
       0o111,
       "dist/bin/review.js should be executable after build"
     );
-  } finally {
-    fixture.cleanup();
-  }
-});
 
-test("build removes stale dist artifacts before compiler emit", () => {
-  const fixture = createBuildFixture();
-
-  try {
-    runBuild(fixture);
-
+    // Plant a stale artifact that no source file would emit, then rebuild.
+    // The build script must wipe dist/ before the compiler emits, so the
+    // stale file must be gone afterwards while the canonical artifact remains.
     const staleArtifactPath = path.join(
       fixture.appCopyDir,
       "dist",
@@ -56,10 +51,15 @@ test("build removes stale dist artifacts before compiler emit", () => {
     assert.ok(existsSync(staleArtifactPath), "stale artifact setup should exist");
 
     runBuild(fixture);
+
     assert.equal(
       existsSync(staleArtifactPath),
       false,
       "stale dist artifacts should be removed before the next build"
+    );
+    assert.ok(
+      existsSync(builtCliPath),
+      "dist/bin/review.js should still exist after a clean rebuild"
     );
   } finally {
     fixture.cleanup();

@@ -38,6 +38,18 @@ test("resolveSuccessfulSnapshotFailureAssessment returns the assessor result whe
   assert.deepEqual(result, { faultScope: "single-file-output-fault" });
 });
 
+test("resolveSuccessfulSnapshotFailureAssessment passes through shared-output-target-fault from the assessor", async () => {
+  const assessor: SuccessfulSnapshotOutputHealthAssessor = {
+    async assess() {
+      return { faultScope: "shared-output-target-fault" as const };
+    }
+  };
+
+  const result = await resolveSuccessfulSnapshotFailureAssessment(assessor, createInput());
+
+  assert.deepEqual(result, { faultScope: "shared-output-target-fault" });
+});
+
 test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-target-fault when assess rejects", async () => {
   const assessor: SuccessfulSnapshotOutputHealthAssessor = {
     async assess() {

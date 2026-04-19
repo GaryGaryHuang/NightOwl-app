@@ -71,6 +71,7 @@
     "test/providers/local-successful-snapshot-output-health-assessor.test.ts",
     "test/providers/local-workspace-provider.test.ts",
     "test/scripts/build-script.test.ts",
+    "test/scripts/test-tier-tooling-subprocess.test.ts",
     "test/services/review-session-factory.test.ts",
     "test/services/tool-audit-writer.test.ts",
     "test/services/tool-policy-guard-dual-path.test.ts",
