@@ -276,6 +276,18 @@ test("Step0OutputValidator fails with COVERAGE on duplicate path entries", () =>
   );
 });
 
+test("Step0OutputValidator fails with COVERAGE when expectedChangedPaths contains duplicates", () => {
+  const validator = new Step0OutputValidator();
+  expectFailure(
+    () =>
+      validator.validate({
+        responseText: makeValid(),
+        expectedChangedPaths: ["src/app.ts", "src/app.ts"]
+      }),
+    "COVERAGE"
+  );
+});
+
 test("Step0OutputValidator accepts a zero-file changeset when both sides are empty", () => {
   const validator = new Step0OutputValidator();
   const responseText = JSON.stringify({

@@ -341,6 +341,17 @@ function enforceCoverage(
   changedFiles: ChangedFileArray,
   expectedChangedPaths: readonly string[]
 ): void {
+  const seenExpectedPaths = new Set<string>();
+  for (const expected of expectedChangedPaths) {
+    if (seenExpectedPaths.has(expected)) {
+      throw new Step0OutputValidationError(
+        "COVERAGE",
+        `expectedChangedPaths contains duplicate path "${expected}"`
+      );
+    }
+    seenExpectedPaths.add(expected);
+  }
+
   // Duplicate-path detection — duplicates are surfaced as COVERAGE failures
   // because Step 0 should report each changed path exactly once.
   const seenPaths = new Set<string>();
@@ -354,8 +365,7 @@ function enforceCoverage(
     seenPaths.add(entry.path);
   }
 
-  const expectedSet = new Set(expectedChangedPaths);
-  for (const expected of expectedSet) {
+  for (const expected of seenExpectedPaths) {
     if (!seenPaths.has(expected)) {
       throw new Step0OutputValidationError(
         "COVERAGE",
@@ -364,7 +374,7 @@ function enforceCoverage(
     }
   }
   for (const actual of seenPaths) {
-    if (!expectedSet.has(actual)) {
+    if (!seenExpectedPaths.has(actual)) {
       throw new Step0OutputValidationError(
         "COVERAGE",
         `changedFiles[] reports path "${actual}" that is not in the expected changeset`
