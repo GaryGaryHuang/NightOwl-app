@@ -1,5 +1,5 @@
 import type { FileReviewContext } from "../file-review-context.ts";
-import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
+import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createStructuredResolve } from "./step-resolve-helpers.ts";
@@ -7,21 +7,21 @@ import { createStructuredResolve } from "./step-resolve-helpers.ts";
 
 const STEP5_SYSTEM_ADDITION = [
   "## Current Step: Validation & Interrogation",
-  "- Use the W# scenarios in the Strategy & What-if Scenarios section of <current_review> as the investigation plan for this step.",
+  "- Use the W# scenarios in the Strategy & What-if Scenarios section of <review_state> as the investigation plan for this step.",
   "- Treat each W# as a testable hypothesis, not as an assumed defect.",
   "- Validate each scenario with targeted code-level analysis. Trace the relevant Data Flow and Control Flow, including entry conditions, guard conditions, state-change points, exception branches, and any rollback, retry, or compensation logic that materially affects the scenario.",
   "- This step produces the first-pass findings for later review. Convert a validated deviation into a finding only when the available evidence supports a concrete, actionable problem on a credibly reachable real-world path.",
   "- Every emitted finding must include a `traceability` object that anchors the finding to the reviewed file.",
   "- When <diff> can be validated, a `line-range` anchor must overlap at least one changed head-side line. If the correct anchor intentionally points outside the changed lines because it identifies a dependency path, include `dependencyPathException` with a non-empty `reason` and `dependencyAnchor.filePath`.",
   "- Keep the scope centered on scenario-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
-  "- When determining whether a deviation exists, explicitly check against the rules, assumptions, and scope boundaries established in the Knowledge & Source of Truth section of <current_review>. Do not report deviations that fall within the declared out-of-scope boundaries.",
+  "- When determining whether a deviation exists, explicitly check against the rules, assumptions, and scope boundaries established in the Knowledge & Source of Truth section of <review_state>. Do not report deviations that fall within the declared out-of-scope boundaries.",
   "- IMPORTANT: Do not report findings based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a finding for every scenario.",
   "- Every finding must include `findingId`, `supportingEvidence`, `reachability`, and `uncertaintyStatus`. Only `\"supported\"` findings will be accepted.",
   "- Output valid JSON only."
 ].join("\n");
 
 const STEP5_INSTRUCTION = [
-  "Based on the W# scenarios in the Strategy & What-if Scenarios section of <current_review>, validate each scenario in sequence and produce the first-pass findings for this file.",
+  "Based on the W# scenarios in the Strategy & What-if Scenarios section of <review_state>, validate each scenario in sequence and produce the first-pass findings for this file.",
   "",
   "1. Use the W# scenarios as the investigation plan for this step.",
   "   - Treat each W# as a testable hypothesis, not as an assumed defect.",
@@ -82,7 +82,7 @@ const STEP5_INSTRUCTION = [
 ].join("\n");
 
 export interface Step5ValidationInterrogationStepOptions {
-  reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
@@ -90,10 +90,10 @@ export interface Step5ValidationInterrogationStepOptions {
  */
 export class Step5ValidationInterrogationStep implements StepDefinition {
   readonly stepId = "step5-validation-interrogation";
-  readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
   constructor(options: Step5ValidationInterrogationStepOptions) {
-    this.#reviewNoteFinalizer = options.reviewNoteFinalizer;
+    this.#promptSerializer = options.promptSerializer;
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
@@ -103,7 +103,7 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP5_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep5UserMessage(
           context,
-          this.#reviewNoteFinalizer.render(context)
+          this.#promptSerializer.serialize({ context, include: ["sections"] })
         )
       },
       reviewProfile: {
@@ -120,16 +120,14 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
 
 function buildStep5UserMessage(
   context: FileReviewContext,
-  currentReview: string
+  reviewState: string
 ): string {
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
     context.diffContent,
     "</diff>",
     "",
-    "<current_review>",
-    currentReview,
-    "</current_review>",
+    reviewState,
     "",
     STEP5_INSTRUCTION
   ].join("\n");

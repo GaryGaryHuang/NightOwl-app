@@ -1,6 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
-import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
 import { STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY } from "../review-section-contract.ts";
+import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createSectionResolve } from "./step-resolve-helpers.ts";
@@ -8,7 +8,7 @@ import { createSectionResolve } from "./step-resolve-helpers.ts";
 
 const STEP4_SYSTEM_ADDITION = [
   "## Current Step: Strategy & What-if Scenarios",
-  "- Synthesize the Overview, Dependencies & Boundaries, and Knowledge & Source of Truth in <current_review> to define the investigation strategy for later validation.",
+  "- Synthesize the Overview, Dependencies & Boundaries, and Knowledge & Source of Truth in <review_state> to define the investigation strategy for later validation.",
   "- Use prior context to identify the specific failure surfaces that are most worth testing in this file. Do not generate generic scenarios that could apply to arbitrary code changes.",
   "- Each What-if scenario must be a neutral, testable hypothesis for later validation to investigate — not a conclusion that a bug exists.",
   "- Ground each scenario in available evidence from the diff, the file's role, relevant dependency boundaries, and any governing rules, versions, assumptions, or out-of-scope constraints established earlier.",
@@ -20,7 +20,7 @@ const STEP4_SYSTEM_ADDITION = [
 const STEP4_INSTRUCTION = [
   "This step defines where later validation should focus. Do not perform the validation itself, do not report findings, and do not make correctness judgments.",
   "",
-  "Based on the Overview, Dependencies & Boundaries, and Knowledge & Source of Truth in <current_review>, define the validation strategy for this file by identifying its most relevant high-risk areas and framing them as What-if scenarios for later investigation.",
+  "Based on the Overview, Dependencies & Boundaries, and Knowledge & Source of Truth in <review_state>, define the validation strategy for this file by identifying its most relevant high-risk areas and framing them as What-if scenarios for later investigation.",
   "",
   "Use prior steps as the primary input. Do not generate generic review heuristics. Each scenario must be grounded in the actual change, the file's role, the relevant dependency boundaries, and the applicable rules, versions, assumptions, and scope limits already established.",
   "",
@@ -76,7 +76,7 @@ const STEP4_JUDGE_CRITERIA = [
 ].join("\n");
 
 export interface Step4StrategyWhatIfScenariosStepOptions {
-  reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
@@ -84,10 +84,10 @@ export interface Step4StrategyWhatIfScenariosStepOptions {
  */
 export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
   readonly stepId = "step4-strategy-what-if-scenarios";
-  readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
   constructor(options: Step4StrategyWhatIfScenariosStepOptions) {
-    this.#reviewNoteFinalizer = options.reviewNoteFinalizer;
+    this.#promptSerializer = options.promptSerializer;
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
@@ -98,7 +98,7 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP4_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep4UserMessage(
           context,
-          this.#reviewNoteFinalizer.render(context)
+          this.#promptSerializer.serialize({ context, include: ["sections"] })
         )
       },
       reviewProfile: {
@@ -117,16 +117,14 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
 
 function buildStep4UserMessage(
   context: FileReviewContext,
-  currentReview: string
+  reviewState: string
 ): string {
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
     context.diffContent,
     "</diff>",
     "",
-    "<current_review>",
-    currentReview,
-    "</current_review>",
+    reviewState,
     "",
     STEP4_INSTRUCTION
   ].join("\n");

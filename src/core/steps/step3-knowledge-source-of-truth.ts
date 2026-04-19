@@ -1,6 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
-import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
 import { KNOWLEDGE_SOURCE_OF_TRUTH_SECTION_KEY } from "../review-section-contract.ts";
+import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createSectionResolve } from "./step-resolve-helpers.ts";
@@ -8,8 +8,8 @@ import { createSectionResolve } from "./step-resolve-helpers.ts";
 
 const STEP3_SYSTEM_ADDITION = [
   "## Current Step: Knowledge & Source of Truth",
-  "- Assess whether the context gathered in prior steps (Overview and Dependencies & Boundaries in <current_review>) leaves any knowledge gaps that must be resolved for later analysis.",
-  "- Facts already confirmed in <current_review> \u2014 such as project-wide version constraints, build configuration baselines, or platform boundaries \u2014 can be referenced directly. Each session is independent, but <current_review> carries forward verified context from prior steps.",
+  "- Assess whether the context gathered in prior steps (Overview and Dependencies & Boundaries in <review_state>) leaves any knowledge gaps that must be resolved for later analysis.",
+  "- Facts already confirmed in <review_state> \u2014 such as project-wide version constraints, build configuration baselines, or platform boundaries \u2014 can be referenced directly. Each session is independent, but <review_state> carries forward verified context from prior steps.",
   "- Use external retrieval only when genuine gaps remain that local context, repo-native evidence, or prior steps cannot resolve.",
   "- When retrieval is needed, prioritize source-of-truth material: repo-native documentation, version files, official docs, specs, standards, and version-specific API references.",
   "- Use supplementary material only when source-of-truth material is insufficient, and label it accordingly.",
@@ -21,9 +21,9 @@ const STEP3_SYSTEM_ADDITION = [
 const STEP3_INSTRUCTION = [
   "This step is for knowledge convergence only. Do not perform bug finding, general advice, or broad research.",
   "",
-  "Review the Overview and Dependencies & Boundaries in <current_review>, then determine what additional knowledge is required to support later analysis of this change.",
+  "Review the Overview and Dependencies & Boundaries in <review_state>, then determine what additional knowledge is required to support later analysis of this change.",
   "",
-  "Use <current_review> as the primary input. Retrieve additional repo or external context only when needed to resolve a concrete knowledge gap.",
+  "Use <review_state> as the primary input. Retrieve additional repo or external context only when needed to resolve a concrete knowledge gap.",
   "",
   "1. Assess whether any knowledge gaps remain that matter for this review, such as:",
   "   - technologies, frameworks, or libraries directly involved in the change",
@@ -67,7 +67,7 @@ const STEP3_JUDGE_CRITERIA = [
 ].join("\n");
 
 export interface Step3KnowledgeSourceOfTruthStepOptions {
-  reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
@@ -75,10 +75,10 @@ export interface Step3KnowledgeSourceOfTruthStepOptions {
  */
 export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
   readonly stepId = "step3-knowledge-source-of-truth";
-  readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
   constructor(options: Step3KnowledgeSourceOfTruthStepOptions) {
-    this.#reviewNoteFinalizer = options.reviewNoteFinalizer;
+    this.#promptSerializer = options.promptSerializer;
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
@@ -89,7 +89,7 @@ export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP3_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep3UserMessage(
           context,
-          this.#reviewNoteFinalizer.render(context)
+          this.#promptSerializer.serialize({ context, include: ["sections"] })
         )
       },
       reviewProfile: {
@@ -109,16 +109,14 @@ export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
 
 function buildStep3UserMessage(
   context: FileReviewContext,
-  currentReview: string
+  reviewState: string
 ): string {
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
     context.diffContent,
     "</diff>",
     "",
-    "<current_review>",
-    currentReview,
-    "</current_review>",
+    reviewState,
     "",
     STEP3_INSTRUCTION
   ].join("\n");

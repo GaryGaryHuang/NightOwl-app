@@ -1,6 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
-import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
 import { SUMMARY_SECTION_KEY } from "../review-section-contract.ts";
+import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import { buildRiskSnapshot, type RiskSnapshot } from "../risk-level.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
@@ -17,7 +17,7 @@ const STEP7_SYSTEM_ADDITION = [
 ].join("\n");
 
 export interface Step7SummaryStepOptions {
-  reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
@@ -25,10 +25,10 @@ export interface Step7SummaryStepOptions {
  */
 export class Step7SummaryStep implements StepDefinition {
   readonly stepId = "step7-summary";
-  readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
   constructor(options: Step7SummaryStepOptions) {
-    this.#reviewNoteFinalizer = options.reviewNoteFinalizer;
+    this.#promptSerializer = options.promptSerializer;
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
@@ -39,7 +39,7 @@ export class Step7SummaryStep implements StepDefinition {
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep7UserMessage(
-          this.#reviewNoteFinalizer.render(context),
+          this.#promptSerializer.serialize({ context, include: ["sections", "findings"] }),
           snapshot
         )
       },
@@ -58,11 +58,9 @@ export class Step7SummaryStep implements StepDefinition {
   }
 }
 
-function buildStep7UserMessage(currentReview: string, snapshot: RiskSnapshot): string {
+function buildStep7UserMessage(reviewState: string, snapshot: RiskSnapshot): string {
   return [
-    "<current_review>",
-    currentReview,
-    "</current_review>",
+    reviewState,
     "",
     "<risk_snapshot>",
     JSON.stringify(snapshot),
@@ -76,7 +74,7 @@ function buildStep7Instruction(): string {
   return [
     "This summary is the section readers check first. Every sentence must earn its place.",
     "",
-    "Read <current_review> and write a structured summary with the following three sections:",
+    "Read <review_state> and write a structured summary with the following three sections:",
     "",
     "1. 審查基礎: Give the reader just enough context to judge whether the review's conclusions are well grounded.",
     "   - 改動概要: One sentence describing this file's specific before→after transformation, based on Overview. Do not repeat content that will appear in 行為變更提醒.",

@@ -1,5 +1,5 @@
 import type { FileReviewContext, Finding } from "../file-review-context.ts";
-import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
+import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createStep6DispositionResolve } from "./step-resolve-helpers.ts";
@@ -92,7 +92,7 @@ const STEP6_INSTRUCTION = [
 ].join("\n");
 
 export interface Step6CognitiveSimulationStepOptions {
-  reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
@@ -100,10 +100,10 @@ export interface Step6CognitiveSimulationStepOptions {
  */
 export class Step6CognitiveSimulationStep implements StepDefinition {
   readonly stepId = "step6-cognitive-simulation";
-  readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
   constructor(options: Step6CognitiveSimulationStepOptions) {
-    this.#reviewNoteFinalizer = options.reviewNoteFinalizer;
+    this.#promptSerializer = options.promptSerializer;
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
@@ -116,7 +116,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP6_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep6UserMessage(
           context,
-          this.#reviewNoteFinalizer.render(context),
+          this.#promptSerializer.serialize({ context, include: ["sections"] }),
           candidateFindings
         )
       },
@@ -135,7 +135,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
 
 function buildStep6UserMessage(
   context: FileReviewContext,
-  currentReview: string,
+  reviewState: string,
   candidateFindings: Finding[]
 ): string {
   const compactCandidates = candidateFindings.map((f) => ({
@@ -150,9 +150,7 @@ function buildStep6UserMessage(
     context.diffContent,
     "</diff>",
     "",
-    "<current_review>",
-    currentReview,
-    "</current_review>",
+    reviewState,
     "",
     "<candidate_findings>",
     JSON.stringify(compactCandidates, null, 2),

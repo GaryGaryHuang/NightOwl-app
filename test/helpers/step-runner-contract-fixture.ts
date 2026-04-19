@@ -339,7 +339,7 @@ export async function assertPromptRebuildOnRetry(input: {
 
   assert.equal(prompts.length, 2);
   assert.equal(prompts[0], prompts[1]);
-  assert.match(prompts[0] ?? "", /<current_review>/u);
+  assert.match(prompts[0] ?? "", /<review_state>/u);
   assert.match(prompts[0] ?? "", input.expectedPromptLandmark);
   assert.doesNotMatch(prompts[0] ?? "", /Review not yet generated/u);
   assert.doesNotMatch(

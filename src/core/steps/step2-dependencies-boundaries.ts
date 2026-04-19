@@ -1,5 +1,5 @@
 import type { FileReviewContext } from "../file-review-context.ts";
-import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
+import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import { DEPENDENCIES_BOUNDARIES_SECTION_KEY } from "../review-section-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
@@ -20,7 +20,7 @@ const STEP2_SYSTEM_ADDITION = [
 const STEP2_INSTRUCTION = [
   "This step gathers information only. Do not look for bugs, make correctness judgments, or perform full risk analysis.",
   "",
-  "Based on the diff and the Overview in <current_review>, map out this file's dependency relationships and interaction boundaries that are directly relevant to this change.",
+  "Based on the diff and the Overview in <review_state>, map out this file's dependency relationships and interaction boundaries that are directly relevant to this change.",
   "",
   "Use the diff and the Overview as the primary inputs. Retrieve additional repo context only when needed to clarify a dependency's role, contract boundary, or direct downstream touch points. Do not enumerate unrelated imports, utilities, or general architecture background.",
   "",
@@ -66,7 +66,7 @@ const STEP2_JUDGE_CRITERIA = [
 ].join("\n");
 
 export interface Step2DependenciesBoundariesStepOptions {
-  reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
@@ -74,10 +74,10 @@ export interface Step2DependenciesBoundariesStepOptions {
  */
 export class Step2DependenciesBoundariesStep implements StepDefinition {
   readonly stepId = "step2-dependencies-boundaries";
-  readonly #reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
   constructor(options: Step2DependenciesBoundariesStepOptions) {
-    this.#reviewNoteFinalizer = options.reviewNoteFinalizer;
+    this.#promptSerializer = options.promptSerializer;
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
@@ -86,7 +86,7 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
       stepId,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP2_SYSTEM_ADDITION].join("\n\n"),
-        userMessage: buildStep2UserMessage(context, this.#reviewNoteFinalizer.render(context))
+        userMessage: buildStep2UserMessage(context, this.#promptSerializer.serialize({ context, include: ["sections"] }))
       },
       reviewProfile: {
         model: "gpt-5.4-mini",
@@ -104,17 +104,14 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
 
 function buildStep2UserMessage(
   context: FileReviewContext,
-  currentReview: string
+  reviewState: string
 ): string {
-  // Re-render the current note so this step can extend the prior Overview instead of re-deriving it from scratch.
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
     context.diffContent,
     "</diff>",
     "",
-    "<current_review>",
-    currentReview,
-    "</current_review>",
+    reviewState,
     "",
     STEP2_INSTRUCTION
   ].join("\n");

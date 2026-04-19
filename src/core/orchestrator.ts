@@ -35,6 +35,7 @@ import {
   type OutputTarget,
   type PlannedNoteFile
 } from "./review-path-resolver.ts";
+import { ReviewStatePromptSerializer } from "./review-state-prompt-serializer.ts";
 import { Step5ValidationInterrogationStep } from "./steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "./steps/step6-cognitive-simulation.ts";
 import { Step7SummaryStep } from "./steps/step7-summary.ts";
@@ -76,6 +77,7 @@ export interface ReviewRunSummary {
 export interface ReviewPerFileStepsFactoryInput {
   runContext: RunContext;
   reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 export type ReviewPerFileStepsFactory = (
@@ -121,6 +123,7 @@ export class ReviewOrchestrator {
   readonly #onProgressEvent?: RunProgressEventHandler;
   readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
   readonly #perFileStepsFactory: ReviewPerFileStepsFactory;
+  readonly #promptSerializer: ReviewStatePromptSerializer;
 
   constructor(options: ReviewOrchestratorOptions) {
     if (
@@ -153,6 +156,7 @@ export class ReviewOrchestrator {
     this.#onOutputTargetReady = options.onOutputTargetReady;
     this.#perFileStepsFactory =
       options.perFileStepsFactory ?? buildDefaultPerFileSteps;
+    this.#promptSerializer = new ReviewStatePromptSerializer();
   }
 
   async run(
@@ -276,10 +280,11 @@ export class ReviewOrchestrator {
     });
     abortGuard.throwIfAborted();
 
-    // Steps 2–7 each receive the progressively rendered note via <current_review> so each step builds on prior output.
+    // Steps 2–7 each receive the progressively built review state via <review_state> so each step builds on prior output.
     const steps = this.#perFileStepsFactory({
       runContext,
-      reviewNoteFinalizer: this.#finalizer
+      reviewNoteFinalizer: this.#finalizer,
+      promptSerializer: this.#promptSerializer
     });
     const outcomeSlots: (PlannedOutcomeSlot | undefined)[] = new Array(plannedNoteFiles.length);
 
@@ -702,22 +707,22 @@ function buildDefaultPerFileSteps(
   return [
     new Step1OverviewStep({ runContext: input.runContext }),
     new Step2DependenciesBoundariesStep({
-      reviewNoteFinalizer: input.reviewNoteFinalizer
+      promptSerializer: input.promptSerializer
     }),
     new Step3KnowledgeSourceOfTruthStep({
-      reviewNoteFinalizer: input.reviewNoteFinalizer
+      promptSerializer: input.promptSerializer
     }),
     new Step4StrategyWhatIfScenariosStep({
-      reviewNoteFinalizer: input.reviewNoteFinalizer
+      promptSerializer: input.promptSerializer
     }),
     new Step5ValidationInterrogationStep({
-      reviewNoteFinalizer: input.reviewNoteFinalizer
+      promptSerializer: input.promptSerializer
     }),
     new Step6CognitiveSimulationStep({
-      reviewNoteFinalizer: input.reviewNoteFinalizer
+      promptSerializer: input.promptSerializer
     }),
     new Step7SummaryStep({
-      reviewNoteFinalizer: input.reviewNoteFinalizer
+      promptSerializer: input.promptSerializer
     })
   ];
 }

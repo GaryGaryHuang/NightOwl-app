@@ -9,6 +9,7 @@ import {
 } from "../../../src/core/steps/step-resolve-helpers.ts";
 import type { StepResolveServices } from "../../../src/core/step-runner.ts";
 import { StructuredOutputValidator } from "../../../src/core/structured-output-validator.ts";
+import { ReviewStatePromptSerializer } from "../../../src/core/review-state-prompt-serializer.ts";
 
 const DEFAULT_CONTEXT = {
   filePath: "src/app.ts",
@@ -47,11 +48,7 @@ function createFinding(
   };
 }
 
-const FAKE_FINALIZER = {
-  render(_ctx: FileReviewContext): string {
-    return "## Overview\ntest overview\n## Findings\n- 無";
-  }
-};
+const FAKE_SERIALIZER = new ReviewStatePromptSerializer();
 
 // --- parseRiskLevelFromResponse tests ---
 
@@ -213,7 +210,7 @@ test("createStep7HybridResolve does not call judge when risk mismatches", async 
 // --- Step 7 prepare() prompt tests ---
 
 test("Step7SummaryStep.prepare() includes <risk_snapshot> in user message when findings exist", () => {
-  const step = new Step7SummaryStep({ reviewNoteFinalizer: FAKE_FINALIZER });
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("must", 90, "F1")]);
   const plan = step.prepare(context);
 
@@ -225,7 +222,7 @@ test("Step7SummaryStep.prepare() includes <risk_snapshot> in user message when f
 });
 
 test("Step7SummaryStep.prepare() includes <risk_snapshot> with None when no findings", () => {
-  const step = new Step7SummaryStep({ reviewNoteFinalizer: FAKE_FINALIZER });
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([]);
   const plan = step.prepare(context);
 
@@ -234,7 +231,7 @@ test("Step7SummaryStep.prepare() includes <risk_snapshot> with None when no find
 });
 
 test("Step7SummaryStep.prepare() risk_snapshot JSON is parseable", () => {
-  const step = new Step7SummaryStep({ reviewNoteFinalizer: FAKE_FINALIZER });
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("must", 96, "F1"), createFinding("nice", 91, "F2")]);
   const plan = step.prepare(context);
 
@@ -248,7 +245,7 @@ test("Step7SummaryStep.prepare() risk_snapshot JSON is parseable", () => {
 });
 
 test("Step7SummaryStep.prepare() system message references risk_snapshot", () => {
-  const step = new Step7SummaryStep({ reviewNoteFinalizer: FAKE_FINALIZER });
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([]);
   const plan = step.prepare(context);
 
@@ -256,17 +253,17 @@ test("Step7SummaryStep.prepare() system message references risk_snapshot", () =>
   assert.match(plan.prompt.systemMessage, /derivedRiskLevel/);
 });
 
-test("Step7SummaryStep.prepare() still includes <current_review>", () => {
-  const step = new Step7SummaryStep({ reviewNoteFinalizer: FAKE_FINALIZER });
+test("Step7SummaryStep.prepare() includes <review_state> in user message", () => {
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([]);
   const plan = step.prepare(context);
 
-  assert.match(plan.prompt.userMessage, /<current_review>/);
-  assert.match(plan.prompt.userMessage, /<\/current_review>/);
+  assert.match(plan.prompt.userMessage, /<review_state>/);
+  assert.match(plan.prompt.userMessage, /<\/review_state>/);
 });
 
 test("Step7SummaryStep.prepare() resolve uses expectedRiskLevel matching snapshot", () => {
-  const step = new Step7SummaryStep({ reviewNoteFinalizer: FAKE_FINALIZER });
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("must", 80, "F1")]);
   const plan = step.prepare(context);
 
