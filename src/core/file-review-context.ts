@@ -23,6 +23,18 @@ export type FindingTraceability =
   | FindingLineRangeTraceability
   | FindingDiffHunkTraceability;
 
+export interface EvidenceRef {
+  source: string;
+  content: string;
+}
+
+export interface Reachability {
+  credible: boolean;
+  description: string;
+}
+
+export type UncertaintyStatus = "supported" | "tentative" | "unsupported" | "out_of_scope";
+
 export interface DependencyAnchor {
   filePath: string;
   symbol?: string;
@@ -49,6 +61,11 @@ export interface Finding {
   suggestion: string;
   confidence: number;
   dependencyPathException?: DependencyPathException;
+  findingId: string;
+  supportingEvidence: EvidenceRef[];
+  reachability: Reachability;
+  uncertaintyStatus: UncertaintyStatus;
+  sourceHypothesisId?: string;
 }
 
 export interface FindingsPayload {
@@ -122,7 +139,9 @@ function cloneFinding(finding: Finding): Finding {
   const traceability = requireFindingTraceability(finding);
   const cloned: Finding = {
     ...finding,
-    traceability: { ...traceability }
+    traceability: { ...traceability },
+    supportingEvidence: finding.supportingEvidence.map((e) => ({ ...e })),
+    reachability: { ...finding.reachability }
   };
 
   if (finding.dependencyPathException) {

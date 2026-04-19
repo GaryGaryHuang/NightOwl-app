@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   type FileReviewContextInput,
+  type FindingsPayload,
   FileReviewContext
 } from "../../src/core/file-review-context.ts";
 import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
@@ -51,7 +52,7 @@ export function makePassingJudgeServices(): StepResolveServices {
       validate(_input) {
         return { findings: [] };
       },
-      filterByConfidence(payload) {
+      filterByAcceptance(payload: FindingsPayload) {
         return payload;
       }
     }
@@ -157,7 +158,7 @@ export function createStructuredTestStep(input: {
           const validated = services.validator.validate({
             responseText: response
           });
-          const payload = services.validator.filterByConfidence(validated);
+          const payload = services.validator.filterByAcceptance(validated);
 
           return (context: FileReviewContext) => {
             context.setFindings(payload.findings);

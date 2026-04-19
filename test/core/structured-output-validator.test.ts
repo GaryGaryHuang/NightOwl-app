@@ -37,6 +37,10 @@ function finding(overrides: Record<string, unknown> = {}): Record<string, unknow
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
     confidence: 88,
+    findingId: "F1",
+    supportingEvidence: [{ source: "diff:src/app.ts:14-18", content: "changed code" }],
+    reachability: { credible: true, description: "direct path" },
+    uncertaintyStatus: "supported",
     ...overrides
   };
 }
@@ -70,7 +74,7 @@ function validateAndFilter(input: {
     ...(input.diffContent === undefined ? {} : { diffContent: input.diffContent })
   });
 
-  return validator.filterByConfidence(payload);
+  return validator.filterByAcceptance(payload);
 }
 
 function assertValidationFails(input: {
@@ -158,12 +162,14 @@ test("StructuredOutputValidator rejects schema-invalid findings payloads", () =>
 
 test("StructuredOutputValidator validate returns all structurally valid findings without filtering", () => {
   const mustAbove = finding({
+    findingId: "F1",
     type: "must",
     title: "must above threshold",
     traceability: lineRangeTraceability(10, 12),
     confidence: 80
   });
   const mustBelow = finding({
+    findingId: "F2",
     type: "must",
     title: "must below threshold",
     traceability: lineRangeTraceability(15, 15),
@@ -178,8 +184,9 @@ test("StructuredOutputValidator validate returns all structurally valid findings
   );
 });
 
-test("StructuredOutputValidator filterByConfidence filters findings by default confidence thresholds", () => {
+test("StructuredOutputValidator filterByAcceptance filters findings by default acceptance gates", () => {
   const keptMust = finding({
+    findingId: "F1",
     type: "must",
     title: "保留 must",
     traceability: lineRangeTraceability(20, 22),
@@ -187,6 +194,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by default c
     confidence: 80
   });
   const keptNice = finding({
+    findingId: "F2",
     type: "nice",
     title: "保留 nice",
     traceability: diffHunkTraceability(DEFAULT_HUNK_HEADER),
@@ -201,6 +209,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by default c
       responseText: payload([
         keptMust,
         finding({
+          findingId: "F3",
           type: "must",
           title: "移除 must",
           traceability: lineRangeTraceability(20, 21),
@@ -209,6 +218,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by default c
         }),
         keptNice,
         finding({
+          findingId: "F4",
           type: "nice",
           title: "移除 nice",
           traceability: lineRangeTraceability(21, 21),
@@ -224,8 +234,9 @@ test("StructuredOutputValidator filterByConfidence filters findings by default c
   );
 });
 
-test("StructuredOutputValidator filterByConfidence filters findings by supplied confidence thresholds", () => {
+test("StructuredOutputValidator filterByAcceptance filters findings by supplied acceptance gates", () => {
   const keptMust = finding({
+    findingId: "F1",
     type: "must",
     title: "保留 must",
     traceability: lineRangeTraceability(30, 30),
@@ -233,6 +244,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by supplied 
     confidence: 70
   });
   const keptNice = finding({
+    findingId: "F2",
     type: "nice",
     title: "保留 nice",
     traceability: lineRangeTraceability(30, 31),
@@ -248,6 +260,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by supplied 
       responseText: payload([
         keptMust,
         finding({
+          findingId: "F3",
           type: "must",
           title: "移除 must",
           traceability: lineRangeTraceability(30, 30),
@@ -256,6 +269,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by supplied 
         }),
         keptNice,
         finding({
+          findingId: "F4",
           type: "nice",
           title: "移除 nice",
           traceability: diffHunkTraceability(customHunkHeader),
@@ -479,6 +493,37 @@ test("StructuredOutputValidator rejects dependencyPathException with empty depen
   );
 });
 
+test("StructuredOutputValidator rejects unknown fields in dependencyPathException", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        traceability: lineRangeTraceability(14, 18),
+        dependencyPathException: {
+          reason: "called from changed initializer",
+          dependencyAnchor: { filePath: "src/dep.ts" },
+          extra: true
+        }
+      })
+    ]),
+    diffContent: DEFAULT_DIFF
+  });
+});
+
+test("StructuredOutputValidator rejects unknown fields in dependencyAnchor", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        traceability: lineRangeTraceability(14, 18),
+        dependencyPathException: {
+          reason: "called from changed initializer",
+          dependencyAnchor: { filePath: "src/dep.ts", extra: true }
+        }
+      })
+    ]),
+    diffContent: DEFAULT_DIFF
+  });
+});
+
 test("StructuredOutputValidator falls back to legacy line-range check when diffContent is omitted", () => {
   const noDiffFinding = finding({
     traceability: lineRangeTraceability(14, 18)
@@ -487,4 +532,208 @@ test("StructuredOutputValidator falls back to legacy line-range check when diffC
   assert.deepEqual(validate({ responseText: payload([noDiffFinding]) }), {
     findings: [noDiffFinding]
   });
+});
+
+// --- V2 schema tests ---
+
+test("StructuredOutputValidator rejects missing findingId", () => {
+  assertValidationFails({
+    responseText: payload([finding({ findingId: undefined })])
+  });
+});
+
+test("StructuredOutputValidator rejects empty findingId", () => {
+  assertValidationFails({
+    responseText: payload([finding({ findingId: "" })])
+  });
+});
+
+test("StructuredOutputValidator rejects duplicate findingId in the same payload", () => {
+  assert.throws(
+    () =>
+      validate({
+        responseText: payload([
+          finding({ findingId: "F1" }),
+          finding({ findingId: "F1", title: "另一個 finding" })
+        ])
+      }),
+    /duplicate findingId 'F1'/u
+  );
+});
+
+test("StructuredOutputValidator rejects empty supportingEvidence array", () => {
+  assertValidationFails({
+    responseText: payload([finding({ supportingEvidence: [] })])
+  });
+});
+
+test("StructuredOutputValidator rejects supportingEvidence that is not an array", () => {
+  assertValidationFails({
+    responseText: payload([finding({ supportingEvidence: "not-array" })])
+  });
+});
+
+test("StructuredOutputValidator rejects evidence ref with empty source", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        supportingEvidence: [{ source: "", content: "some content" }]
+      })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects evidence ref with empty content", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        supportingEvidence: [{ source: "diff:src/app.ts:14", content: "" }]
+      })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects evidence ref with unknown fields", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        supportingEvidence: [
+          { source: "diff:src/app.ts:14", content: "excerpt", url: "http://x" }
+        ]
+      })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects missing reachability", () => {
+  assertValidationFails({
+    responseText: payload([finding({ reachability: undefined })])
+  });
+});
+
+test("StructuredOutputValidator rejects reachability with non-boolean credible", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({ reachability: { credible: "yes", description: "path" } })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects reachability with empty description", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({ reachability: { credible: true, description: "" } })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects reachability with unknown fields", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        reachability: { credible: true, description: "path", path: "a→b" }
+      })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects invalid uncertaintyStatus value", () => {
+  assertValidationFails({
+    responseText: payload([finding({ uncertaintyStatus: "maybe" })])
+  });
+});
+
+test("StructuredOutputValidator rejects missing uncertaintyStatus", () => {
+  assertValidationFails({
+    responseText: payload([finding({ uncertaintyStatus: undefined })])
+  });
+});
+
+test("StructuredOutputValidator accepts all valid uncertaintyStatus values", () => {
+  for (const status of ["supported", "tentative", "unsupported", "out_of_scope"]) {
+    const f = finding({ uncertaintyStatus: status });
+    assert.deepEqual(validate({ responseText: payload([f]) }), {
+      findings: [f]
+    });
+  }
+});
+
+test("StructuredOutputValidator accepts optional sourceHypothesisId when non-empty", () => {
+  const f = finding({ sourceHypothesisId: "W1" });
+  assert.deepEqual(validate({ responseText: payload([f]) }), {
+    findings: [f]
+  });
+});
+
+test("StructuredOutputValidator rejects empty sourceHypothesisId", () => {
+  assertValidationFails({
+    responseText: payload([finding({ sourceHypothesisId: "" })])
+  });
+});
+
+test("StructuredOutputValidator rejects unknown fields at finding top-level", () => {
+  assertValidationFails({
+    responseText: payload([finding({ extra: true })])
+  });
+});
+
+test("StructuredOutputValidator rejects unknown fields in traceability", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        traceability: { kind: "line-range", lineStart: 14, lineEnd: 18, extra: true }
+      })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects unknown fields in top-level payload", () => {
+  assertValidationFails({
+    responseText: JSON.stringify({
+      findings: [finding()],
+      metadata: {}
+    })
+  });
+});
+
+test("StructuredOutputValidator filterByAcceptance filters tentative findings regardless of confidence", () => {
+  const tentative = finding({
+    findingId: "F-tent",
+    uncertaintyStatus: "tentative",
+    confidence: 99
+  });
+  const supported = finding({
+    findingId: "F-supp",
+    uncertaintyStatus: "supported",
+    confidence: 85
+  });
+
+  assert.deepEqual(
+    validateAndFilter({
+      responseText: payload([tentative, supported])
+    }),
+    { findings: [supported] }
+  );
+});
+
+test("StructuredOutputValidator filterByAcceptance filters findings with credible=false", () => {
+  const unreachable = finding({
+    findingId: "F-unreach",
+    reachability: { credible: false, description: "not reachable" },
+    uncertaintyStatus: "supported",
+    confidence: 95
+  });
+  const reachable = finding({
+    findingId: "F-reach",
+    reachability: { credible: true, description: "direct path" },
+    uncertaintyStatus: "supported",
+    confidence: 85
+  });
+
+  assert.deepEqual(
+    validateAndFilter({
+      responseText: payload([unreachable, reachable])
+    }),
+    { findings: [reachable] }
+  );
 });

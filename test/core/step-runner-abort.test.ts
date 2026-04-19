@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { StepRunner } from "../../src/core/step-runner.ts";
+import type { FindingsPayload } from "../../src/core/file-review-context.ts";
 import {
   SessionExecutor,
   SessionTurnAbortedError
@@ -107,7 +108,7 @@ test("StepRunner does not consume retry budget or run deterministic validation w
         validateCalls += 1;
         return { findings: [] };
       },
-      filterByConfidence(payload) {
+      filterByAcceptance(payload: FindingsPayload) {
         return payload;
       }
     }

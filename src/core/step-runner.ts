@@ -21,7 +21,7 @@ export interface StepResolveServices {
       diffContent?: string;
       filePath?: string;
     }): FindingsPayload;
-    filterByConfidence(payload: FindingsPayload): FindingsPayload;
+    filterByAcceptance(payload: FindingsPayload): FindingsPayload;
   };
 }
 
@@ -84,7 +84,7 @@ export interface StepRunnerOptions {
       diffContent?: string;
       filePath?: string;
     }): FindingsPayload;
-    filterByConfidence(payload: FindingsPayload): FindingsPayload;
+    filterByAcceptance(payload: FindingsPayload): FindingsPayload;
   };
   onStepRetry?: (info: StepRetryInfo) => void;
 }

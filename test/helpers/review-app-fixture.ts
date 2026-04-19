@@ -76,7 +76,11 @@ export function buildSessionResponse(
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
           suggestion: "補上 guard",
-          confidence: 90
+          confidence: 90,
+          findingId: "F1",
+          supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+          reachability: { credible: true, description: "direct code path" },
+          uncertaintyStatus: "supported"
         }
       ]
     });
@@ -93,7 +97,11 @@ export function buildSessionResponse(
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
           suggestion: "補上 guard",
-          confidence: 91
+          confidence: 91,
+          findingId: "F1",
+          supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+          reachability: { credible: true, description: "direct code path" },
+          uncertaintyStatus: "supported"
         }
       ]
     });

@@ -41,7 +41,11 @@ function makeMustFinding(title: string): Finding {
     deviation: "test-deviation",
     impact: "test-impact",
     suggestion: "test-suggestion",
-    confidence: 0.9
+    confidence: 0.9,
+    findingId: "F1",
+    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+    reachability: { credible: true, description: "direct code path" },
+    uncertaintyStatus: "supported" as const
   };
 }
 
@@ -54,7 +58,11 @@ function makeNiceFinding(title: string): Finding {
     deviation: "test-deviation",
     impact: "test-impact",
     suggestion: "test-suggestion",
-    confidence: 0.8
+    confidence: 0.8,
+    findingId: "F2",
+    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+    reachability: { credible: true, description: "direct code path" },
+    uncertaintyStatus: "supported" as const
   };
 }
 
@@ -298,19 +306,31 @@ test("Finalizer renders traceability formats correctly", () => {
       type: "must",
       title: "line-range-single",
       traceability: { kind: "line-range", lineStart: 42, lineEnd: 42 },
-      context: "c", deviation: "d", impact: "i", suggestion: "s", confidence: 0.9
+      context: "c", deviation: "d", impact: "i", suggestion: "s", confidence: 0.9,
+      findingId: "F1",
+      supportingEvidence: [{ source: "diff:src/app.ts:42", content: "changed value" }],
+      reachability: { credible: true, description: "direct code path" },
+      uncertaintyStatus: "supported" as const
     },
     {
       type: "must",
       title: "line-range-multi",
       traceability: { kind: "line-range", lineStart: 10, lineEnd: 20 },
-      context: "c", deviation: "d", impact: "i", suggestion: "s", confidence: 0.9
+      context: "c", deviation: "d", impact: "i", suggestion: "s", confidence: 0.9,
+      findingId: "F2",
+      supportingEvidence: [{ source: "diff:src/app.ts:10", content: "changed value" }],
+      reachability: { credible: true, description: "direct code path" },
+      uncertaintyStatus: "supported" as const
     },
     {
       type: "must",
       title: "diff-hunk",
       traceability: { kind: "diff-hunk", hunkHeader: "@@ -5,7 +5,7 @@" },
-      context: "c", deviation: "d", impact: "i", suggestion: "s", confidence: 0.9
+      context: "c", deviation: "d", impact: "i", suggestion: "s", confidence: 0.9,
+      findingId: "F3",
+      supportingEvidence: [{ source: "diff:src/app.ts:5", content: "changed value" }],
+      reachability: { credible: true, description: "direct code path" },
+      uncertaintyStatus: "supported" as const
     }
   ];
 

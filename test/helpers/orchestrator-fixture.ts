@@ -122,7 +122,15 @@ export function buildStandardStep5JsonResponse(): string {
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        confidence: 88
+        confidence: 88,
+        findingId: "F1",
+        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+        reachability: { credible: true, description: "direct code path" },
+        uncertaintyStatus: "supported",
+        findingId: "F1",
+        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+        reachability: { credible: true, description: "direct code path" },
+        uncertaintyStatus: "supported"
       }
     ]
   });
@@ -135,11 +143,19 @@ export function buildStandardStep6JsonResponse(): string {
         type: "must",
         title: "問題標題",
         traceability: lineRangeTraceability(1, 1),
-        context: "具體情境",
+        context: "具體情境,
+        findingId: "F1",
+        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+        reachability: { credible: true, description: "direct code path" },
+        uncertaintyStatus: "supported"",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        confidence: 91
+        confidence: 91,
+        findingId: "F1",
+        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+        reachability: { credible: true, description: "direct code path" },
+        uncertaintyStatus: "supported"
       }
     ]
   });
@@ -163,7 +179,11 @@ export function buildStandardStep7SummaryResponse(filePath: string): string {
 export function buildSimulationStep5JsonResponse(): string {
   return JSON.stringify({
     findings: [
-      {
+      {,
+        findingId: "F1",
+        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+        reachability: { credible: true, description: "direct code path" },
+        uncertaintyStatus: "supported"
         type: "must",
         title: "初版 findings",
         traceability: lineRangeTraceability(1, 1),
@@ -171,12 +191,20 @@ export function buildSimulationStep5JsonResponse(): string {
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        confidence: 88
+        confidence: 88,
+        findingId: "F1",
+        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+        reachability: { credible: true, description: "direct code path" },
+        uncertaintyStatus: "supported"
       }
     ]
   });
 }
-
+,
+        findingId: "F1",
+        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "simulation confirmed" }],
+        reachability: { credible: true, description: "direct code path" },
+        uncertaintyStatus: "supported"
 export function buildSimulationStep6JsonResponse(): string {
   return JSON.stringify({
     findings: [
@@ -188,7 +216,11 @@ export function buildSimulationStep6JsonResponse(): string {
         deviation: "經 simulation 後確認最終落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 final guard",
-        confidence: 91
+        confidence: 91,
+        findingId: "F1",
+        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "simulation confirmed" }],
+        reachability: { credible: true, description: "direct code path" },
+        uncertaintyStatus: "supported"
       }
     ]
   });
@@ -252,7 +284,11 @@ export function createFinding(type: "must" | "nice", title: string, confidence =
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
-    confidence
+    confidence,
+    findingId: "F1",
+    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
+    reachability: { credible: true, description: "direct code path" },
+    uncertaintyStatus: "supported" as const
   };
 }
 

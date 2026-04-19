@@ -54,7 +54,7 @@ export function createStructuredResolve(input: {
         ? {}
         : { diffContent: input.diffContent })
     });
-    const payload = services.validator.filterByConfidence(validated);
+    const payload = services.validator.filterByAcceptance(validated);
 
     return (targetContext: FileReviewContext) => {
       targetContext.setFindings(payload.findings);
