@@ -23,6 +23,22 @@ export type FindingTraceability =
   | FindingLineRangeTraceability
   | FindingDiffHunkTraceability;
 
+export interface DependencyAnchor {
+  filePath: string;
+  symbol?: string;
+}
+
+/**
+ * Optional structural marker declaring that a finding's anchor intentionally
+ * sits outside the diff's changed lines because it points to a dependency path
+ * that is causally linked to the change. M2 carries the field shape only;
+ * deeper evidence semantics arrive in later milestones.
+ */
+export interface DependencyPathException {
+  reason: string;
+  dependencyAnchor: DependencyAnchor;
+}
+
 export interface Finding {
   type: "must" | "nice";
   title: string;
@@ -32,6 +48,7 @@ export interface Finding {
   impact: string;
   suggestion: string;
   confidence: number;
+  dependencyPathException?: DependencyPathException;
 }
 
 export interface FindingsPayload {
@@ -103,11 +120,19 @@ export class FileReviewContext {
 
 function cloneFinding(finding: Finding): Finding {
   const traceability = requireFindingTraceability(finding);
-
-  return {
+  const cloned: Finding = {
     ...finding,
     traceability: { ...traceability }
   };
+
+  if (finding.dependencyPathException) {
+    cloned.dependencyPathException = {
+      reason: finding.dependencyPathException.reason,
+      dependencyAnchor: { ...finding.dependencyPathException.dependencyAnchor }
+    };
+  }
+
+  return cloned;
 }
 
 function requireFindingTraceability(finding: Finding): FindingTraceability {
