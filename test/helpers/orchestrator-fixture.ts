@@ -117,7 +117,7 @@ export function buildStandardStep5JsonResponse(): string {
       {
         type: "must",
         title: "問題標題",
-        traceability: lineRangeTraceability(14, 18),
+        traceability: lineRangeTraceability(1, 1),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -134,7 +134,7 @@ export function buildStandardStep6JsonResponse(): string {
       {
         type: "must",
         title: "問題標題",
-        traceability: lineRangeTraceability(20, 22),
+        traceability: lineRangeTraceability(1, 1),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -166,7 +166,7 @@ export function buildSimulationStep5JsonResponse(): string {
       {
         type: "must",
         title: "初版 findings",
-        traceability: lineRangeTraceability(14, 18),
+        traceability: lineRangeTraceability(1, 1),
         context: "具體情境",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
@@ -183,7 +183,7 @@ export function buildSimulationStep6JsonResponse(): string {
       {
         type: "must",
         title: "最終 findings",
-        traceability: lineRangeTraceability(20, 22),
+        traceability: lineRangeTraceability(1, 1),
         context: "模擬後確認的具體情境",
         deviation: "經 simulation 後確認最終落差",
         impact: "會造成 correctness 問題",

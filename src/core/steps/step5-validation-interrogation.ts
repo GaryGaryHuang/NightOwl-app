@@ -94,7 +94,10 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },
-      resolve: createStructuredResolve(context.diffContent)
+      resolve: createStructuredResolve({
+        filePath: context.filePath,
+        diffContent: context.diffContent
+      })
     };
   }
 }

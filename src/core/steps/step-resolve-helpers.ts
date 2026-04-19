@@ -42,13 +42,17 @@ export function createSectionResolve(input: {
  * Runs deterministic validation + confidence filtering, then returns a
  * deferred mutation that writes the validated findings to the context.
  */
-export function createStructuredResolve(
-  diffContent?: string
-): StepExecutionPlan["resolve"] {
+export function createStructuredResolve(input: {
+  filePath: string;
+  diffContent?: string;
+}): StepExecutionPlan["resolve"] {
   return async (response, services) => {
     const validated = services.validator.validate({
       responseText: response,
-      diffContent
+      filePath: input.filePath,
+      ...(input.diffContent === undefined
+        ? {}
+        : { diffContent: input.diffContent })
     });
     const payload = services.validator.filterByConfidence(validated);
 

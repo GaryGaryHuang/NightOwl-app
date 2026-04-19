@@ -100,7 +100,10 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         timeoutMs: 300_000
       },
       // Step 6 replaces the provisional findings with the post-simulation final set.
-      resolve: createStructuredResolve(context.diffContent)
+      resolve: createStructuredResolve({
+        filePath: context.filePath,
+        diffContent: context.diffContent
+      })
     };
   }
 }

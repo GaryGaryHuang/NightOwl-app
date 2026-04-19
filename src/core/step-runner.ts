@@ -19,6 +19,7 @@ export interface StepResolveServices {
     validate(input: {
       responseText: string;
       diffContent?: string;
+      filePath?: string;
     }): FindingsPayload;
     filterByConfidence(payload: FindingsPayload): FindingsPayload;
   };
@@ -81,6 +82,7 @@ export interface StepRunnerOptions {
     validate(input: {
       responseText: string;
       diffContent?: string;
+      filePath?: string;
     }): FindingsPayload;
     filterByConfidence(payload: FindingsPayload): FindingsPayload;
   };

@@ -71,7 +71,7 @@ export function buildSessionResponse(
         {
           type: "must",
           title: "問題標題",
-          traceability: lineRangeTraceability(14, 18),
+          traceability: lineRangeTraceability(1, 1),
           context: "具體情境",
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
@@ -88,7 +88,7 @@ export function buildSessionResponse(
         {
           type: "must",
           title: "問題標題",
-          traceability: lineRangeTraceability(20, 22),
+          traceability: lineRangeTraceability(1, 1),
           context: "具體情境",
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",

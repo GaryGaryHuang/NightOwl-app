@@ -176,7 +176,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by default c
   const keptMust = finding({
     type: "must",
     title: "保留 must",
-    traceability: lineRangeTraceability(10, 12),
+    traceability: lineRangeTraceability(20, 22),
     impact: "影響 correctness",
     confidence: 80
   });
@@ -197,7 +197,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by default c
         finding({
           type: "must",
           title: "移除 must",
-          traceability: lineRangeTraceability(15, 15),
+          traceability: lineRangeTraceability(20, 21),
           impact: "影響 correctness",
           confidence: 79
         }),
@@ -205,7 +205,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by default c
         finding({
           type: "nice",
           title: "移除 nice",
-          traceability: lineRangeTraceability(30, 31),
+          traceability: lineRangeTraceability(20, 20),
           deviation: "可再調整",
           impact: "影響可維護性",
           suggestion: "補上整理",
@@ -222,14 +222,14 @@ test("StructuredOutputValidator filterByConfidence filters findings by supplied 
   const keptMust = finding({
     type: "must",
     title: "保留 must",
-    traceability: lineRangeTraceability(3, 3),
+    traceability: lineRangeTraceability(30, 30),
     impact: "影響 correctness",
     confidence: 70
   });
   const keptNice = finding({
     type: "nice",
     title: "保留 nice",
-    traceability: lineRangeTraceability(8, 10),
+    traceability: lineRangeTraceability(30, 31),
     deviation: "可再調整",
     impact: "影響可維護性",
     suggestion: "補上整理",
@@ -244,7 +244,7 @@ test("StructuredOutputValidator filterByConfidence filters findings by supplied 
         finding({
           type: "must",
           title: "移除 must",
-          traceability: lineRangeTraceability(4, 5),
+          traceability: lineRangeTraceability(30, 30),
           impact: "影響 correctness",
           confidence: 69
         }),
@@ -326,4 +326,82 @@ test("StructuredOutputValidator rejects invalid traceability payloads", () => {
       ...(testCase.diffContent === undefined ? {} : { diffContent: testCase.diffContent })
     });
   }
+});
+
+test("StructuredOutputValidator rejects line-range outside changed head lines with ANCHOR tag", () => {
+  const offsetFinding = finding({
+    traceability: lineRangeTraceability(14, 18)
+  });
+
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validate({
+        responseText: payload([offsetFinding]),
+        diffContent: DEFAULT_DIFF,
+        filePath: "src/foo.ts"
+      }),
+    /deterministic validation failed: 'traceability' \[ANCHOR\] line range 14-18/u
+  );
+});
+
+test("StructuredOutputValidator accepts line-range outside changed lines when dependencyPathException is supplied", () => {
+  const exceptionFinding = finding({
+    traceability: lineRangeTraceability(14, 18),
+    dependencyPathException: {
+      reason: "called from changed initializer",
+      dependencyAnchor: { filePath: "src/dep.ts" }
+    }
+  });
+
+  const result = new StructuredOutputValidator().validate({
+    responseText: payload([exceptionFinding]),
+    diffContent: DEFAULT_DIFF,
+    filePath: "src/foo.ts"
+  });
+
+  assert.equal(result.findings.length, 1);
+  assert.deepEqual(result.findings[0].dependencyPathException, {
+    reason: "called from changed initializer",
+    dependencyAnchor: { filePath: "src/dep.ts" }
+  });
+});
+
+test("StructuredOutputValidator rejects dependencyPathException with empty reason", () => {
+  const bad = finding({
+    traceability: lineRangeTraceability(14, 18),
+    dependencyPathException: {
+      reason: "",
+      dependencyAnchor: { filePath: "src/dep.ts" }
+    }
+  });
+
+  assertValidationFails({
+    responseText: payload([bad]),
+    diffContent: DEFAULT_DIFF
+  });
+});
+
+test("StructuredOutputValidator rejects dependencyPathException with empty dependencyAnchor.filePath", () => {
+  const bad = finding({
+    traceability: lineRangeTraceability(14, 18),
+    dependencyPathException: {
+      reason: "ok",
+      dependencyAnchor: { filePath: "" }
+    }
+  });
+
+  assertValidationFails({
+    responseText: payload([bad]),
+    diffContent: DEFAULT_DIFF
+  });
+});
+
+test("StructuredOutputValidator falls back to legacy line-range check when diffContent is omitted", () => {
+  const noDiffFinding = finding({
+    traceability: lineRangeTraceability(14, 18)
+  });
+
+  assert.deepEqual(validate({ responseText: payload([noDiffFinding]) }), {
+    findings: [noDiffFinding]
+  });
 });

@@ -2,11 +2,17 @@ import {
   DEFAULT_CONFIDENCE_THRESHOLDS,
   type ConfidenceThresholds
 } from "./confidence-thresholds.ts";
+import { buildDiffAnchorMap, type DiffAnchorMap } from "./diff-anchor-map.ts";
 import type {
+  DependencyPathException,
   Finding,
   FindingsPayload,
   FindingTraceability
 } from "./file-review-context.ts";
+import {
+  verifyFindingAnchor,
+  type AnchorVerificationFailure
+} from "./finding-anchor-verifier.ts";
 
 export interface StructuredOutputValidatorOptions {
   confidenceThresholds?: ConfidenceThresholds;
@@ -27,6 +33,7 @@ export class StructuredOutputValidator {
   validate(input: {
     responseText: string;
     diffContent?: string;
+    filePath?: string;
   }): FindingsPayload {
     let parsed: unknown;
 
@@ -57,9 +64,13 @@ export class StructuredOutputValidator {
       );
     }
 
+    const diffAnchorMap =
+      input.diffContent === undefined
+        ? undefined
+        : buildDiffAnchorMap(input.filePath ?? "<unknown>", input.diffContent);
     const hunkHeaders = collectUnifiedDiffHunkHeaders(input.diffContent);
     const validatedFindings = findings.map((finding) =>
-      validateFinding(finding, hunkHeaders)
+      validateFinding(finding, hunkHeaders, diffAnchorMap)
     );
 
     return { findings: validatedFindings };
@@ -78,7 +89,8 @@ export class StructuredOutputValidator {
 
 function validateFinding(
   input: unknown,
-  hunkHeaders: Set<string>
+  hunkHeaders: Set<string>,
+  diffAnchorMap: DiffAnchorMap | undefined
 ): Finding {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(
@@ -89,7 +101,15 @@ function validateFinding(
   const finding = input as Record<string, unknown>;
   const type = validateStringField(finding.type, "type");
   const title = validateStringField(finding.title, "title");
-  const traceability = validateTraceability(finding.traceability, hunkHeaders);
+  const dependencyPathException = validateDependencyPathException(
+    finding.dependencyPathException
+  );
+  const traceability = validateTraceability(
+    finding.traceability,
+    hunkHeaders,
+    diffAnchorMap,
+    dependencyPathException
+  );
   const context = validateStringField(finding.context, "context");
   const deviation = validateStringField(finding.deviation, "deviation");
   const impact = validateStringField(finding.impact, "impact");
@@ -113,7 +133,7 @@ function validateFinding(
     );
   }
 
-  return {
+  const result: Finding = {
     type,
     title,
     traceability,
@@ -123,11 +143,19 @@ function validateFinding(
     suggestion,
     confidence
   };
+
+  if (dependencyPathException) {
+    result.dependencyPathException = dependencyPathException;
+  }
+
+  return result;
 }
 
 function validateTraceability(
   input: unknown,
-  hunkHeaders: Set<string>
+  hunkHeaders: Set<string>,
+  diffAnchorMap: DiffAnchorMap | undefined,
+  dependencyPathException: DependencyPathException | undefined
 ): FindingTraceability {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(
@@ -154,11 +182,27 @@ function validateTraceability(
       );
     }
 
-    return {
+    const resolved: FindingTraceability = {
       kind,
       lineStart,
       lineEnd
     };
+
+    if (diffAnchorMap) {
+      const verdict = verifyFindingAnchor({
+        traceability: resolved,
+        diffAnchorMap,
+        ...(dependencyPathException === undefined
+          ? {}
+          : { dependencyPathException })
+      });
+
+      if (!verdict.ok) {
+        throw new Error(formatAnchorFailure("traceability", verdict));
+      }
+    }
+
+    return resolved;
   }
 
   if (kind === "diff-hunk") {
@@ -182,6 +226,65 @@ function validateTraceability(
   throw new Error(
     "deterministic validation failed: unsupported traceability kind"
   );
+}
+
+function validateDependencyPathException(
+  input: unknown
+): DependencyPathException | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      "deterministic validation failed: 'dependencyPathException' must be a non-null object"
+    );
+  }
+
+  const exception = input as Record<string, unknown>;
+  const reason = validateStringField(
+    exception.reason,
+    "dependencyPathException.reason"
+  );
+
+  const dependencyAnchor = exception.dependencyAnchor;
+  if (
+    !dependencyAnchor ||
+    typeof dependencyAnchor !== "object" ||
+    Array.isArray(dependencyAnchor)
+  ) {
+    throw new Error(
+      "deterministic validation failed: 'dependencyPathException.dependencyAnchor' must be a non-null object"
+    );
+  }
+
+  const anchor = dependencyAnchor as Record<string, unknown>;
+  const filePath = validateStringField(
+    anchor.filePath,
+    "dependencyPathException.dependencyAnchor.filePath"
+  );
+
+  const result: DependencyPathException = {
+    reason,
+    dependencyAnchor: { filePath }
+  };
+
+  if (anchor.symbol !== undefined) {
+    const symbol = validateStringField(
+      anchor.symbol,
+      "dependencyPathException.dependencyAnchor.symbol"
+    );
+    result.dependencyAnchor.symbol = symbol;
+  }
+
+  return result;
+}
+
+function formatAnchorFailure(
+  fieldName: string,
+  failure: AnchorVerificationFailure
+): string {
+  return `deterministic validation failed: '${fieldName}' [${failure.tag}] ${failure.detail}`;
 }
 
 function validatePositiveInteger(value: unknown, fieldName: string): number {
