@@ -30,7 +30,7 @@ export interface StepResolveServices {
     validateDispositionCompleteness(input: {
       dispositions: FindingDisposition[];
       candidateFindingIds: readonly string[];
-      finalFindingIds: readonly string[];
+      acceptedFindingIds: readonly string[];
     }): void;
   };
 }
@@ -103,7 +103,7 @@ export interface StepRunnerOptions {
     validateDispositionCompleteness(input: {
       dispositions: FindingDisposition[];
       candidateFindingIds: readonly string[];
-      finalFindingIds: readonly string[];
+      acceptedFindingIds: readonly string[];
     }): void;
   };
   onStepRetry?: (info: StepRetryInfo) => void;

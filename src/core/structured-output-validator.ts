@@ -210,12 +210,12 @@ export class StructuredOutputValidator {
   validateDispositionCompleteness(input: {
     dispositions: FindingDisposition[];
     candidateFindingIds: readonly string[];
-    finalFindingIds: readonly string[];
+    acceptedFindingIds: readonly string[];
   }): void {
     const dispositionMap = new Map(
       input.dispositions.map((d) => [d.findingId, d])
     );
-    const finalIdSet = new Set(input.finalFindingIds);
+    const acceptedIdSet = new Set(input.acceptedFindingIds);
     const candidateIdSet = new Set(input.candidateFindingIds);
 
     // Every candidate must have a disposition
@@ -229,7 +229,7 @@ export class StructuredOutputValidator {
 
     // Check for unknown dispositions (not a candidate AND not a new finding)
     for (const d of input.dispositions) {
-      if (!candidateIdSet.has(d.findingId) && !finalIdSet.has(d.findingId)) {
+      if (!candidateIdSet.has(d.findingId) && !acceptedIdSet.has(d.findingId)) {
         throw new Error(
           `deterministic validation failed: disposition references unknown candidate findingId '${d.findingId}'`
         );
@@ -244,14 +244,14 @@ export class StructuredOutputValidator {
 
       if (
         (d.status === "retained" || d.status === "modified") &&
-        !finalIdSet.has(d.findingId)
+        !acceptedIdSet.has(d.findingId)
       ) {
         throw new Error(
           `deterministic validation failed: ${d.status} candidate '${d.findingId}' must appear in findings`
         );
       }
 
-      if (d.status === "retired" && finalIdSet.has(d.findingId)) {
+      if (d.status === "retired" && acceptedIdSet.has(d.findingId)) {
         throw new Error(
           `deterministic validation failed: retired candidate '${d.findingId}' must not appear in findings`
         );

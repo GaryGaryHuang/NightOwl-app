@@ -957,7 +957,7 @@ test("validateDispositionCompleteness passes when all candidates accounted for",
       { findingId: "F2", status: "retired", reason: "REACHABILITY", explanation: "not reachable" }
     ],
     candidateFindingIds: ["F1", "F2"],
-    finalFindingIds: ["F1"]
+    acceptedFindingIds: ["F1"]
   });
 });
 
@@ -970,7 +970,7 @@ test("validateDispositionCompleteness throws when candidate is missing from disp
           { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "ok" }
         ],
         candidateFindingIds: ["F1", "F2"],
-        finalFindingIds: ["F1"]
+        acceptedFindingIds: ["F1"]
       }),
     /missing disposition.*F2/u
   );
@@ -985,7 +985,7 @@ test("validateDispositionCompleteness throws when disposition references unknown
           { findingId: "F99", status: "retired", reason: "ANCHOR", explanation: "bogus" }
         ],
         candidateFindingIds: [],
-        finalFindingIds: []
+        acceptedFindingIds: []
       }),
     /unknown candidate.*F99/u
   );
@@ -1000,7 +1000,7 @@ test("validateDispositionCompleteness throws when retained candidate missing fro
           { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "ok" }
         ],
         candidateFindingIds: ["F1"],
-        finalFindingIds: []
+        acceptedFindingIds: []
       }),
     /retained.*F1.*must appear in findings/u
   );
@@ -1015,7 +1015,7 @@ test("validateDispositionCompleteness throws when modified candidate missing fro
           { findingId: "F1", status: "modified", reason: "EVIDENCE", explanation: "updated" }
         ],
         candidateFindingIds: ["F1"],
-        finalFindingIds: []
+        acceptedFindingIds: []
       }),
     /modified.*F1.*must appear in findings/u
   );
@@ -1028,7 +1028,7 @@ test("validateDispositionCompleteness passes when retired candidate absent from 
       { findingId: "F1", status: "retired", reason: "REACHABILITY", explanation: "gone" }
     ],
     candidateFindingIds: ["F1"],
-    finalFindingIds: []
+    acceptedFindingIds: []
   });
 });
 
@@ -1041,7 +1041,7 @@ test("validateDispositionCompleteness throws when retired candidate appears in f
           { findingId: "F1", status: "retired", reason: "REACHABILITY", explanation: "gone" }
         ],
         candidateFindingIds: ["F1"],
-        finalFindingIds: ["F1"]
+        acceptedFindingIds: ["F1"]
       }),
     /retired.*F1.*must not appear in findings/u
   );
@@ -1054,6 +1054,6 @@ test("validateDispositionCompleteness allows new findings without disposition en
       { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "ok" }
     ],
     candidateFindingIds: ["F1"],
-    finalFindingIds: ["F1", "F3"]
+    acceptedFindingIds: ["F1", "F3"]
   });
 });

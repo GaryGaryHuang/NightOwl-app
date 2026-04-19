@@ -83,15 +83,14 @@ export function createStep6DispositionResolve(input: {
         : { diffContent: input.diffContent })
     });
 
-    const finalFindingIds = verified.findings.map((f) => f.findingId);
+    const accepted = services.validator.filterByAcceptance(verified);
+    const acceptedFindingIds = accepted.findings.map((f) => f.findingId);
 
     services.validator.validateDispositionCompleteness({
       dispositions: verified.dispositions,
       candidateFindingIds: input.candidateFindingIds,
-      finalFindingIds
+      acceptedFindingIds
     });
-
-    const accepted = services.validator.filterByAcceptance(verified);
 
     return (targetContext: FileReviewContext) => {
       targetContext.setFindings(accepted.findings);
