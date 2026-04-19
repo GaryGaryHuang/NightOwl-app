@@ -171,8 +171,8 @@ export function buildStandardStep7SummaryResponse(filePath: string): string {
     "### 行為變更提醒",
     "- 無",
     "### 風險評估",
-    "- 整體風險等級：Medium",
-    "- 風險理由：final findings 仍需留意。"
+    "- 整體風險等級：High",
+    "- 風險理由：至少一個 must-fix finding 通過高信心門檻。"
   ].join("\n");
 }
 
@@ -260,7 +260,7 @@ export function buildSummaryResponse(
   options: { label?: string; riskLevel?: Step7NarrativeRiskLevel } = {}
 ): string {
   const label = options.label ?? filePath;
-  const riskLevel = options.riskLevel ?? "Medium";
+  const riskLevel = options.riskLevel ?? "High";
   return [
     "## Summary",
     "### 審查基礎",

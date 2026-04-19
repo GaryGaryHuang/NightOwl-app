@@ -81,14 +81,8 @@ export function buildSessionResponse(
           supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
           reachability: { credible: true, description: "direct code path" },
           uncertaintyStatus: "supported"
-        }      ],
-      dispositions: [
-        {
-          findingId: "F1",
-          status: "retained",
-          reason: "SUPPORTED",
-          explanation: "simulation confirms the finding"
-        }      ]
+        }
+      ]
     });
   }
 
@@ -131,8 +125,8 @@ export function buildSessionResponse(
       "### 行為變更提醒",
       "- 無",
       "### 風險評估",
-      "- 整體風險等級：Medium",
-      "- 風險理由：final findings 仍需留意。"
+      "- 整體風險等級：High",
+      "- 風險理由：至少一個 must-fix finding 通過高信心門檻。"
     ].join("\n");
   }
 

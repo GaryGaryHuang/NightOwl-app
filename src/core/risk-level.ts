@@ -48,3 +48,50 @@ export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel 
 
   return "None";
 }
+
+export interface RiskSnapshot {
+  schemaVersion: 1;
+  derivedRiskLevel: RiskLevel;
+  mustCount: number;
+  niceCount: number;
+  acceptedFindingIds: string[];
+  retiredFindingCount: number;
+  riskBasis: string;
+}
+
+/**
+ * Build a deterministic risk snapshot from finalized findings.
+ *
+ * Delegates to `deriveFileRiskLevel()` for the risk label so the snapshot
+ * is guaranteed to agree with manifests, indexes, and run summaries.
+ */
+export function buildRiskSnapshot(findings: Finding[] | undefined): RiskSnapshot {
+  const derivedRiskLevel = deriveFileRiskLevel(findings);
+  const safe = findings ?? [];
+  const mustCount = safe.filter((f) => f.type === "must").length;
+  const niceCount = safe.filter((f) => f.type === "nice").length;
+  const acceptedFindingIds = safe.map((f) => f.findingId);
+
+  return {
+    schemaVersion: 1,
+    derivedRiskLevel,
+    mustCount,
+    niceCount,
+    acceptedFindingIds,
+    retiredFindingCount: 0,
+    riskBasis: buildRiskBasis(derivedRiskLevel, mustCount, niceCount)
+  };
+}
+
+function buildRiskBasis(level: RiskLevel, mustCount: number, niceCount: number): string {
+  switch (level) {
+    case "High":
+      return `High: ${mustCount} must-fix finding(s) with at least one reaching the high-confidence threshold`;
+    case "Medium":
+      return `Medium: ${mustCount} must-fix finding(s) present but none reaches the high-confidence threshold`;
+    case "Low":
+      return `Low: ${niceCount} nice-to-have suggestion(s) only, no must-fix findings`;
+    case "None":
+      return "None: no accepted findings";
+  }
+}

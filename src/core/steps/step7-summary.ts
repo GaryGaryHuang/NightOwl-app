@@ -1,9 +1,10 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewNoteFinalizer } from "../finalizers/review-note-finalizer.ts";
 import { SUMMARY_SECTION_KEY } from "../review-section-contract.ts";
+import { buildRiskSnapshot, type RiskSnapshot } from "../risk-level.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
-import { createSectionResolve } from "./step-resolve-helpers.ts";
+import { createStep7HybridResolve } from "./step-resolve-helpers.ts";
 
 
 const STEP7_SYSTEM_ADDITION = [
@@ -11,7 +12,7 @@ const STEP7_SYSTEM_ADDITION = [
   "- Produce a structured summary based on the completed review note.",
   "- The summary is the section readers check first; every sentence must earn its place. Prefer precise conclusions over generic hedging. When uncertainty is real, tie it to the exact missing fact or unresolved evidence \u2014 do not append a vague disclaimer.",
   "- Do not list specific findings, must-fix items, or paraphrased finding details \u2014 those belong in the Findings section.",
-  "- Derive the risk level strictly from the Findings section: `[must]` findings \u2192 High or Medium; only `[nice]` findings \u2192 Low; no findings (Findings shows `\u7121`) \u2192 None. Do not override this rule based on your own assessment of the change's impact.",
+  "- The `<risk_snapshot>` block in the user message contains the host-computed `derivedRiskLevel`. You MUST use this exact value as the `整體風險等級` in your response. Do not override or recompute the risk level based on your own assessment.",
   "- Begin the response with `## Summary`."
 ].join("\n");
 
@@ -32,34 +33,40 @@ export class Step7SummaryStep implements StepDefinition {
 
   prepare(context: FileReviewContext): StepExecutionPlan {
     const { stepId } = this;
+    const snapshot = buildRiskSnapshot(context.getFindings());
     return {
       stepId,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep7UserMessage(
-          this.#reviewNoteFinalizer.render(context)
+          this.#reviewNoteFinalizer.render(context),
+          snapshot
         )
       },
       reviewProfile: {
         model: "gpt-5-mini",
         timeoutMs: 300_000
       },
-      resolve: createSectionResolve({
+      resolve: createStep7HybridResolve({
         stepId,
         filePath: context.filePath,
         sectionKey: SUMMARY_SECTION_KEY,
-        criteria: buildStep7JudgeCriteria()
+        criteria: buildStep7JudgeCriteria(),
+        expectedRiskLevel: snapshot.derivedRiskLevel
       })
     };
   }
 }
 
-function buildStep7UserMessage(currentReview: string): string {
-  // Summary is derived from the fully rendered note so it can synthesize the final findings context and all prior sections together.
+function buildStep7UserMessage(currentReview: string, snapshot: RiskSnapshot): string {
   return [
     "<current_review>",
     currentReview,
     "</current_review>",
+    "",
+    "<risk_snapshot>",
+    JSON.stringify(snapshot),
+    "</risk_snapshot>",
     "",
     buildStep7Instruction()
   ].join("\n");
@@ -81,13 +88,8 @@ function buildStep7Instruction(): string {
     "   - Do not restate findings or correctness judgments.",
     "   - If the change has no runtime behavioral impact (e.g. annotation-only removal), write `無行為變更`.",
     "",
-    "3. 風險評估: Determine the overall risk level strictly from the Findings section in <current_review>.",
-    "   - Classification rule (mandatory — do not override based on your own judgment):",
-    "     - High: at least one `[must]` finding exists and its described evidence and impact are strong",
-    "     - Medium: at least one `[must]` finding exists but evidence or impact is moderate",
-    "     - Low: only `[nice]` findings exist",
-    "     - None: no findings exist (the Findings section shows `無`)",
-    "   - 整體風險等級: One of High / Medium / Low / None.",
+    "3. 風險評估: Use the `derivedRiskLevel` from `<risk_snapshot>` as the `整體風險等級`. Do not recompute or override it.",
+    "   - 整體風險等級: Copy the exact value from `<risk_snapshot>` `derivedRiskLevel` field (High / Medium / Low / None).",
     "   - 風險理由: Reference the specific findings (or their absence) that determined the level. Do not add hedging qualifiers about residual uncertainty.",
     "",
     "Respond in the following format:",
@@ -108,7 +110,7 @@ function buildStep7Instruction(): string {
     "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、審查假設",
     "- 改動概要 is one sentence; 審查假設 has at most 3 items; 依據規範 omits generic build config",
     "- Contains `### 行為變更提醒` that adds information beyond 改動概要, or states `無行為變更`",
-    "- Contains `### 風險評估` with 整體風險等級 strictly derived from Findings, and 風險理由 free of hedging tails"
+    "- Contains `### 風險評估` with 整體風險等級 matching `<risk_snapshot>` derivedRiskLevel exactly, and 風險理由 free of hedging tails"
   ].join("\n");
 }
 
