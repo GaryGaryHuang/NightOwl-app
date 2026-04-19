@@ -5,12 +5,15 @@ import {
 import { buildDiffAnchorMap, type DiffAnchorMap } from "./diff-anchor-map.ts";
 import type {
   DependencyPathException,
+  DispositionStatus,
   EvidenceRef,
   Finding,
+  FindingDisposition,
   FindingsPayload,
   FindingTraceability,
   Reachability,
-  UncertaintyStatus
+  UncertaintyStatus,
+  VerifiedFindingsPayload
 } from "./file-review-context.ts";
 import {
   verifyFindingAnchor,
@@ -105,6 +108,155 @@ export class StructuredOutputValidator {
           : finding.confidence >= this.#confidenceThresholds.nice;
       })
     };
+  }
+
+  validateWithDispositions(input: {
+    responseText: string;
+    diffContent?: string;
+    filePath?: string;
+  }): VerifiedFindingsPayload {
+    let parsed: unknown;
+
+    try {
+      parsed = JSON.parse(input.responseText);
+    } catch {
+      throw new Error(
+        "deterministic validation failed: response is not valid JSON"
+      );
+    }
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      throw new Error(
+        "deterministic validation failed: top-level payload must be an object with 'findings' and 'dispositions' arrays"
+      );
+    }
+
+    const record = parsed as Record<string, unknown>;
+
+    if (!("findings" in record)) {
+      throw new Error(
+        "deterministic validation failed: top-level payload must be an object with 'findings' and 'dispositions' arrays"
+      );
+    }
+
+    if (!("dispositions" in record)) {
+      throw new Error(
+        "deterministic validation failed: top-level payload must contain a 'dispositions' array"
+      );
+    }
+
+    rejectUnknownFields(
+      record,
+      ALLOWED_VERIFIED_TOP_LEVEL_KEYS,
+      "top-level payload"
+    );
+
+    const findings = record.findings;
+
+    if (!Array.isArray(findings)) {
+      throw new Error(
+        "deterministic validation failed: top-level payload must be an object with 'findings' and 'dispositions' arrays"
+      );
+    }
+
+    const dispositionsRaw = record.dispositions;
+
+    if (!Array.isArray(dispositionsRaw)) {
+      throw new Error(
+        "deterministic validation failed: top-level payload must contain a 'dispositions' array"
+      );
+    }
+
+    const diffAnchorMap =
+      input.diffContent === undefined
+        ? undefined
+        : buildDiffAnchorMap(input.filePath ?? "<unknown>", input.diffContent);
+    const hunkHeaders = collectUnifiedDiffHunkHeaders(input.diffContent);
+    const validatedFindings = findings.map((finding) =>
+      validateFinding(finding, hunkHeaders, diffAnchorMap)
+    );
+
+    const seenFindingIds = new Set<string>();
+    for (const f of validatedFindings) {
+      if (seenFindingIds.has(f.findingId)) {
+        throw new Error(
+          `deterministic validation failed: duplicate findingId '${f.findingId}'`
+        );
+      }
+      seenFindingIds.add(f.findingId);
+    }
+
+    const validatedDispositions = dispositionsRaw.map((d, index) =>
+      validateDisposition(d, index)
+    );
+
+    const seenDispositionIds = new Set<string>();
+    for (const d of validatedDispositions) {
+      if (seenDispositionIds.has(d.findingId)) {
+        throw new Error(
+          `deterministic validation failed: duplicate findingId '${d.findingId}' in dispositions`
+        );
+      }
+      seenDispositionIds.add(d.findingId);
+    }
+
+    return { findings: validatedFindings, dispositions: validatedDispositions };
+  }
+
+  validateDispositionCompleteness(input: {
+    dispositions: FindingDisposition[];
+    candidateFindingIds: readonly string[];
+    finalFindingIds: readonly string[];
+  }): void {
+    const dispositionMap = new Map(
+      input.dispositions.map((d) => [d.findingId, d])
+    );
+    const finalIdSet = new Set(input.finalFindingIds);
+    const candidateIdSet = new Set(input.candidateFindingIds);
+
+    // Every candidate must have a disposition
+    for (const candidateId of input.candidateFindingIds) {
+      if (!dispositionMap.has(candidateId)) {
+        throw new Error(
+          `deterministic validation failed: missing disposition for candidate findingId '${candidateId}'`
+        );
+      }
+    }
+
+    // Check for unknown dispositions (not a candidate AND not a new finding)
+    for (const d of input.dispositions) {
+      if (!candidateIdSet.has(d.findingId) && !finalIdSet.has(d.findingId)) {
+        throw new Error(
+          `deterministic validation failed: disposition references unknown candidate findingId '${d.findingId}'`
+        );
+      }
+    }
+
+    // Retained/modified must appear in findings; retired must not
+    for (const d of input.dispositions) {
+      if (!candidateIdSet.has(d.findingId)) {
+        continue; // new-finding dispositions are not subject to these checks
+      }
+
+      if (
+        (d.status === "retained" || d.status === "modified") &&
+        !finalIdSet.has(d.findingId)
+      ) {
+        throw new Error(
+          `deterministic validation failed: ${d.status} candidate '${d.findingId}' must appear in findings`
+        );
+      }
+
+      if (d.status === "retired" && finalIdSet.has(d.findingId)) {
+        throw new Error(
+          `deterministic validation failed: retired candidate '${d.findingId}' must not appear in findings`
+        );
+      }
+    }
   }
 }
 
@@ -459,6 +611,21 @@ const VALID_UNCERTAINTY_STATUSES: readonly string[] = [
   "out_of_scope"
 ];
 
+const ALLOWED_VERIFIED_TOP_LEVEL_KEYS = ["findings", "dispositions"] as const;
+
+const ALLOWED_DISPOSITION_KEYS = [
+  "findingId",
+  "status",
+  "reason",
+  "explanation"
+] as const;
+
+const VALID_DISPOSITION_STATUSES: readonly string[] = [
+  "retained",
+  "modified",
+  "retired"
+];
+
 // --- Helper functions ---
 
 function rejectUnknownFields(
@@ -547,4 +714,38 @@ function validateUncertaintyStatus(input: unknown): UncertaintyStatus {
   }
 
   return input as UncertaintyStatus;
+}
+
+function validateDisposition(
+  input: unknown,
+  index: number
+): FindingDisposition {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      `deterministic validation failed: dispositions[${index}] must be a non-null object`
+    );
+  }
+
+  const record = input as Record<string, unknown>;
+
+  rejectUnknownFields(record, ALLOWED_DISPOSITION_KEYS, `dispositions[${index}]`);
+
+  const findingId = validateStringField(record.findingId, `dispositions[${index}].findingId`);
+  const status = record.status;
+
+  if (typeof status !== "string" || !VALID_DISPOSITION_STATUSES.includes(status)) {
+    throw new Error(
+      `deterministic validation failed: 'dispositions[${index}].status' must be one of 'retained', 'modified', 'retired'`
+    );
+  }
+
+  const reason = validateStringField(record.reason, `dispositions[${index}].reason`);
+  const explanation = validateStringField(record.explanation, `dispositions[${index}].explanation`);
+
+  return {
+    findingId,
+    status: status as DispositionStatus,
+    reason,
+    explanation
+  };
 }

@@ -54,7 +54,11 @@ export function makePassingJudgeServices(): StepResolveServices {
       },
       filterByAcceptance(payload: FindingsPayload) {
         return payload;
-      }
+      },
+      validateWithDispositions(_input) {
+        return { findings: [], dispositions: [] };
+      },
+      validateDispositionCompleteness(_input) {}
     }
   };
 }

@@ -72,6 +72,20 @@ export interface FindingsPayload {
   findings: Finding[];
 }
 
+export type DispositionStatus = "retained" | "modified" | "retired";
+
+export interface FindingDisposition {
+  findingId: string;
+  status: DispositionStatus;
+  reason: string;
+  explanation: string;
+}
+
+export interface VerifiedFindingsPayload {
+  findings: Finding[];
+  dispositions: FindingDisposition[];
+}
+
 export interface ReviewInterruption {
   stepId: string;
   reason: string;
@@ -89,6 +103,7 @@ export class FileReviewContext {
   readonly headRef: string;
   readonly #sections = new Map<string, string>();
   #findings?: Finding[];
+  #dispositions?: FindingDisposition[];
   #interruption?: ReviewInterruption;
   #findingsInsertionIndex?: number;
 
@@ -126,6 +141,14 @@ export class FileReviewContext {
     return this.#findings ? [...this.#findings] : undefined;
   }
 
+  setDispositions(dispositions: FindingDisposition[]): void {
+    this.#dispositions = dispositions.map(cloneDisposition);
+  }
+
+  getDispositions(): FindingDisposition[] | undefined {
+    return this.#dispositions ? this.#dispositions.map(cloneDisposition) : undefined;
+  }
+
   markInterrupted(stepId: string, reason: string): void {
     this.#interruption = { stepId, reason };
   }
@@ -152,6 +175,10 @@ function cloneFinding(finding: Finding): Finding {
   }
 
   return cloned;
+}
+
+function cloneDisposition(d: FindingDisposition): FindingDisposition {
+  return { ...d };
 }
 
 function requireFindingTraceability(finding: Finding): FindingTraceability {

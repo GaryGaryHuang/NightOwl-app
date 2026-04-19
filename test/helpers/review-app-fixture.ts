@@ -81,8 +81,14 @@ export function buildSessionResponse(
           supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
           reachability: { credible: true, description: "direct code path" },
           uncertaintyStatus: "supported"
-        }
-      ]
+        }      ],
+      dispositions: [
+        {
+          findingId: "F1",
+          status: "retained",
+          reason: "SUPPORTED",
+          explanation: "simulation confirms the finding"
+        }      ]
     });
   }
 
@@ -102,6 +108,14 @@ export function buildSessionResponse(
           supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
           reachability: { credible: true, description: "direct code path" },
           uncertaintyStatus: "supported"
+        }
+      ],
+      dispositions: [
+        {
+          findingId: "F1",
+          status: "retained",
+          reason: "SUPPORTED",
+          explanation: "simulation confirms the finding"
         }
       ]
     });

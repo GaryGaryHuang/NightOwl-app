@@ -4,7 +4,7 @@ import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
 import { retryOnce } from "./session-retry.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
-import type { FindingsPayload } from "./file-review-context.ts";
+import type { FindingsPayload, FindingDisposition, VerifiedFindingsPayload } from "./file-review-context.ts";
 
 export interface StepResolveServices {
   judgeService?: {
@@ -22,6 +22,16 @@ export interface StepResolveServices {
       filePath?: string;
     }): FindingsPayload;
     filterByAcceptance(payload: FindingsPayload): FindingsPayload;
+    validateWithDispositions(input: {
+      responseText: string;
+      diffContent?: string;
+      filePath?: string;
+    }): VerifiedFindingsPayload;
+    validateDispositionCompleteness(input: {
+      dispositions: FindingDisposition[];
+      candidateFindingIds: readonly string[];
+      finalFindingIds: readonly string[];
+    }): void;
   };
 }
 
@@ -85,6 +95,16 @@ export interface StepRunnerOptions {
       filePath?: string;
     }): FindingsPayload;
     filterByAcceptance(payload: FindingsPayload): FindingsPayload;
+    validateWithDispositions(input: {
+      responseText: string;
+      diffContent?: string;
+      filePath?: string;
+    }): VerifiedFindingsPayload;
+    validateDispositionCompleteness(input: {
+      dispositions: FindingDisposition[];
+      candidateFindingIds: readonly string[];
+      finalFindingIds: readonly string[];
+    }): void;
   };
   onStepRetry?: (info: StepRetryInfo) => void;
 }

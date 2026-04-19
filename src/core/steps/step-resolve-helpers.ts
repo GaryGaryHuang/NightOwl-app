@@ -61,3 +61,41 @@ export function createStructuredResolve(input: {
     };
   };
 }
+
+/**
+ * Factory for the resolve() closure used by Step 6 when disposition semantics are active.
+ *
+ * Validates findings + dispositions, checks disposition completeness against
+ * candidate finding IDs, filters by acceptance, then defers writing both
+ * findings and dispositions to the context.
+ */
+export function createStep6DispositionResolve(input: {
+  filePath: string;
+  diffContent?: string;
+  candidateFindingIds: readonly string[];
+}): StepExecutionPlan["resolve"] {
+  return async (response, services) => {
+    const verified = services.validator.validateWithDispositions({
+      responseText: response,
+      filePath: input.filePath,
+      ...(input.diffContent === undefined
+        ? {}
+        : { diffContent: input.diffContent })
+    });
+
+    const finalFindingIds = verified.findings.map((f) => f.findingId);
+
+    services.validator.validateDispositionCompleteness({
+      dispositions: verified.dispositions,
+      candidateFindingIds: input.candidateFindingIds,
+      finalFindingIds
+    });
+
+    const accepted = services.validator.filterByAcceptance(verified);
+
+    return (targetContext: FileReviewContext) => {
+      targetContext.setFindings(accepted.findings);
+      targetContext.setDispositions(verified.dispositions);
+    };
+  };
+}

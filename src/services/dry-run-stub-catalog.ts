@@ -138,7 +138,7 @@ W3: 若並行呼叫競爭同一資源 → 競態條件可能導致狀態不一�
 
 const STUB_VALIDATION_INTERROGATION = '{"findings": []}';
 
-const STUB_COGNITIVE_SIMULATION = '{"findings": []}';
+const STUB_COGNITIVE_SIMULATION = '{"findings": [], "dispositions": []}';
 
 const STUB_SUMMARY = `## Summary
 

@@ -110,7 +110,11 @@ test("StepRunner does not consume retry budget or run deterministic validation w
       },
       filterByAcceptance(payload: FindingsPayload) {
         return payload;
-      }
+      },
+      validateWithDispositions() {
+        return { findings: [], dispositions: [] };
+      },
+      validateDispositionCompleteness() {}
     }
   });
 

@@ -149,6 +149,14 @@ export function buildStandardStep6JsonResponse(): string {
         reachability: { credible: true, description: "direct code path" },
         uncertaintyStatus: "supported"
       }
+    ],
+    dispositions: [
+      {
+        findingId: "F1",
+        status: "retained",
+        reason: "SUPPORTED",
+        explanation: "simulation confirms the finding"
+      }
     ]
   });
 }
@@ -205,6 +213,14 @@ export function buildSimulationStep6JsonResponse(): string {
         supportingEvidence: [{ source: "diff:src/app.ts:1", content: "simulation confirmed" }],
         reachability: { credible: true, description: "direct code path" },
         uncertaintyStatus: "supported"
+      }
+    ],
+    dispositions: [
+      {
+        findingId: "F1",
+        status: "retained",
+        reason: "SUPPORTED",
+        explanation: "simulation confirms the finding"
       }
     ]
   });
@@ -368,7 +384,16 @@ export function buildSuccessfulStepResult(
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {
-        targetContext.setFindings(options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath));
+        const findings = options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath);
+        targetContext.setFindings(findings);
+        targetContext.setDispositions(
+          findings.map((f) => ({
+            findingId: f.findingId,
+            status: "retained" as const,
+            reason: "SUPPORTED",
+            explanation: "simulation confirms the finding"
+          }))
+        );
       }
     };
   }

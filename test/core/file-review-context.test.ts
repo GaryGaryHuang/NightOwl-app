@@ -4,7 +4,8 @@ import test from "node:test";
 import {
   FileReviewContext,
   type FileReviewContextInput,
-  type Finding
+  type Finding,
+  type FindingDisposition
 } from "../../src/core/file-review-context.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
@@ -160,6 +161,64 @@ test("FileReviewContext setFindings deep-clones v2 fields so mutations do not le
   assert.equal(f.reachability.description, "direct path");
   assert.equal(f.supportingEvidence[0]!.source, "diff:src/app.ts:1-2");
   assert.equal(f.supportingEvidence[0]!.content, "original content");
+});
+
+test("FileReviewContext getDispositions returns undefined before set", () => {
+  const context = createContext();
+
+  assert.equal(context.getDispositions(), undefined);
+});
+
+test("FileReviewContext setDispositions stores and getDispositions returns deep-cloned copy", () => {
+  const context = createContext();
+
+  const dispositions: FindingDisposition[] = [
+    {
+      findingId: "F1",
+      status: "retained",
+      reason: "SUPPORTED",
+      explanation: "simulation confirms"
+    },
+    {
+      findingId: "F2",
+      status: "retired",
+      reason: "REACHABILITY",
+      explanation: "path is not reachable"
+    }
+  ];
+
+  context.setDispositions(dispositions);
+
+  const stored = context.getDispositions()!;
+  assert.equal(stored.length, 2);
+  assert.deepEqual(stored[0], dispositions[0]);
+  assert.deepEqual(stored[1], dispositions[1]);
+
+  // Mutate original — should not affect stored
+  dispositions[0]!.findingId = "MUTATED";
+  dispositions[0]!.status = "modified";
+  dispositions[0]!.reason = "MUTATED";
+  dispositions[0]!.explanation = "MUTATED";
+
+  const fresh = context.getDispositions()!;
+  assert.equal(fresh[0]!.findingId, "F1");
+  assert.equal(fresh[0]!.status, "retained");
+  assert.equal(fresh[0]!.reason, "SUPPORTED");
+  assert.equal(fresh[0]!.explanation, "simulation confirms");
+});
+
+test("FileReviewContext getDispositions returns defensively cloned copies", () => {
+  const context = createContext();
+
+  context.setDispositions([
+    { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "ok" }
+  ]);
+
+  const first = context.getDispositions()!;
+  first[0]!.findingId = "MUTATED";
+
+  const second = context.getDispositions()!;
+  assert.equal(second[0]!.findingId, "F1");
 });
 
 function createContext(
