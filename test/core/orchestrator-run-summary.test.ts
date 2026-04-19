@@ -40,12 +40,14 @@ type OutputCall = "initializeRun"
   | "publishSkippedFile"
   | "publishRunSummary"
   | "publishReviewIndex"
+  | "publishVerifierReport"
   | "publishRunManifest"
   | "publishChangesetOverview";
 
 const RUN_LEVEL_FINALIZER_CALLS: OutputCall[] = [
   "publishRunSummary",
   "publishReviewIndex",
+  "publishVerifierReport",
   "publishRunManifest"
 ];
 
@@ -308,10 +310,14 @@ test("ReviewOrchestrator publishes artifacts in deterministic order and does not
       assertCallAfter(outputSink.calls, "publishReviewIndex", "publishRunSummary");
       assertCallAfter(outputSink.calls, "publishReviewIndex", "publishSkippedFile");
       assertCallAfter(outputSink.calls, "publishReviewIndex", "publishFileReview");
+      assertCallAfter(outputSink.calls, "publishVerifierReport", "publishReviewIndex");
+      assertCallAfter(outputSink.calls, "publishVerifierReport", "publishSkippedFile");
       assertCallAfter(outputSink.calls, "publishRunManifest", "publishReviewIndex");
+      assertCallAfter(outputSink.calls, "publishRunManifest", "publishVerifierReport");
       assert.equal(outputSink.afterManifest.publishFileReview, 0);
       assert.equal(outputSink.afterManifest.publishRunSummary, 0);
       assert.equal(outputSink.afterManifest.publishReviewIndex, 0);
+      assert.equal(outputSink.afterManifest.publishVerifierReport, 0);
     }
   );
 });
@@ -462,7 +468,8 @@ class RecordingOutputSink {
   afterManifest = {
     publishFileReview: 0,
     publishRunSummary: 0,
-    publishReviewIndex: 0
+    publishReviewIndex: 0,
+    publishVerifierReport: 0
   };
   #manifestPublished = false;
 
@@ -509,6 +516,15 @@ class RecordingOutputSink {
 
     writeFileSync(this.outputTarget.indexPath, indexResult.content);
     this.record("publishReviewIndex", this.outputTarget.indexPath);
+  }
+
+  async publishVerifierReport(result: Parameters<RunOutputPublisher["publishVerifierReport"]>[0]): Promise<void> {
+    if (this.#manifestPublished) {
+      this.afterManifest.publishVerifierReport += 1;
+    }
+
+    writeFileSync(this.outputTarget.verifierReportPath, result.content);
+    this.record("publishVerifierReport", this.outputTarget.verifierReportPath);
   }
 
   async publishRunManifest(manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]): Promise<void> {
@@ -577,6 +593,11 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
     writeFileSync(this.outputTarget.indexPath, indexResult.content);
   }
 
+  override async publishVerifierReport(result: Parameters<RunOutputPublisher["publishVerifierReport"]>[0]): Promise<void> {
+    this.record("publishVerifierReport", this.outputTarget.verifierReportPath);
+    writeFileSync(this.outputTarget.verifierReportPath, result.content);
+  }
+
   override async publishRunManifest(manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]): Promise<void> {
     this.record("publishRunManifest", this.outputTarget.manifestPath);
     if (this.#failures.manifest) {
@@ -595,6 +616,7 @@ function writeArtifact(filePath: string, content: string): void {
 function assertOutputArtifactsExist(outputTarget: OutputTarget): void {
   assert.equal(existsSync(outputTarget.summaryPath), true);
   assert.equal(existsSync(outputTarget.indexPath), true);
+  assert.equal(existsSync(outputTarget.verifierReportPath), true);
   assert.equal(existsSync(outputTarget.manifestPath), true);
 }
 
@@ -613,6 +635,7 @@ function assertOutputTargetPaths(outputTarget: OutputTarget, repoRoot: string): 
     skippedPath: path.join(basePath, "skipped.md"),
     summaryPath: path.join(basePath, "summary.md"),
     indexPath: path.join(basePath, "index.md"),
+    verifierReportPath: path.join(basePath, "verifier-report.jsonl"),
     manifestPath: path.join(basePath, "manifest.json"),
     toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   });

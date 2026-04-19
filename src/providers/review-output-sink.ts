@@ -5,6 +5,7 @@ export interface ReviewOutputTarget {
   skippedPath: string;
   summaryPath: string;
   indexPath: string;
+  verifierReportPath: string;
   manifestPath: string;
   toolAuditPath: string;
 }
@@ -15,6 +16,7 @@ export type ReviewOutputBoundaryOperation =
   | "publishSkippedFile"
   | "publishRunSummary"
   | "publishReviewIndex"
+  | "publishVerifierReport"
   | "publishRunManifest"
   | "publishChangesetOverview";
 
@@ -51,6 +53,7 @@ export interface ContentResult {
 
 export type RunSummaryResult = ContentResult;
 export type ReviewIndexResult = ContentResult;
+export type VerifierReportResult = ContentResult;
 export type RunManifestResult = ContentResult;
 export type ChangesetOverviewResult = ContentResult;
 
@@ -59,6 +62,7 @@ export interface RunOutputPublisher {
   publishSkippedFile(skipRecord: SkipRecord): Promise<void>;
   publishRunSummary(summaryResult: RunSummaryResult): Promise<void>;
   publishReviewIndex(indexResult: ReviewIndexResult): Promise<void>;
+  publishVerifierReport(result: VerifierReportResult): Promise<void>;
   publishRunManifest(manifestResult: RunManifestResult): Promise<void>;
   publishChangesetOverview(result: ChangesetOverviewResult): Promise<void>;
 }

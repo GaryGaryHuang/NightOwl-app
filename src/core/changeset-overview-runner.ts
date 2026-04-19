@@ -1,4 +1,5 @@
 import { extractChangedPathsFromNameStatus } from "./change-map.ts";
+import { getReviewStepCapability } from "./review-step-capability-manifest.ts";
 import { createRunContext, type RunContext } from "./run-context.ts";
 import { retryOnce } from "./session-retry.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
@@ -39,12 +40,13 @@ export class ChangesetOverviewRunner {
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
     const expectedChangedPaths = extractChangedPathsFromNameStatus(input.changedFilesList);
+    const capability = getReviewStepCapability("changeset-overview");
 
     return retryOnce({
       execute: async () => {
         const session = await this.#reviewSessionFactory.createSession({
           stepId: "changeset-overview",
-          knowledgeMode: "built-in-context7",
+          knowledgeMode: capability.knowledgeMode,
           model: input.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,

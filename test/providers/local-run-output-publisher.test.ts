@@ -137,6 +137,14 @@ test("run-scoped output publisher publishes run-level artifact content to the co
       },
       {
         async publish(targetPublisher, content) {
+          await targetPublisher.publishVerifierReport({ content });
+        },
+        outputPath: fixture.outputTarget.verifierReportPath,
+        content:
+          '{"filePath":"src/app.ts","stepId":"step5-validation-interrogation","findingId":"F1","taxonomy":"OK","outcome":"accepted","gate":"acceptance","reason":"passed all acceptance gates"}'
+      },
+      {
+        async publish(targetPublisher, content) {
           await targetPublisher.publishRunManifest({ content });
         },
         outputPath: fixture.outputTarget.manifestPath,

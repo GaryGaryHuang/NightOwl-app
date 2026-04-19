@@ -49,7 +49,7 @@ test("StepRunner returns an apply-able result without mutating state or writing 
       "createSession",
       {
         stepId: "step1-overview",
-        knowledgeMode: "built-in-context7",
+        knowledgeMode: "disabled",
         model: "gpt-5-mini",
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo",
@@ -60,6 +60,57 @@ test("StepRunner returns an apply-able result without mutating state or writing 
     ["sendAndWait", { prompt: "user prompt" }, 300_000],
     ["disconnect"]
   ]);
+});
+
+test("StepRunner keeps built-in-context7 for Step 3 review sessions", async () => {
+  const lifecycle: unknown[] = [];
+  const context = createStepRunnerContext();
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onCreateSession(profile) {
+        lifecycle.push(["createSession", profile]);
+      },
+      onSendAndWait() {
+        return "## Knowledge & Source of Truth\n- 版本／文件參考：\n  - 無";
+      },
+      onDisconnect() {
+        lifecycle.push(["disconnect"]);
+      }
+    })
+  });
+
+  const result = await runner.run({
+    step: createSectionTestStep({
+      stepId: "step3-knowledge-source-of-truth",
+      sectionKey: "knowledge-source-of-truth"
+    }),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo",
+    workingDirectory: "/workspace/repo"
+  });
+
+  result.applyTo(context);
+
+  assert.deepEqual(lifecycle, [
+    [
+      "createSession",
+      {
+        stepId: "step3-knowledge-source-of-truth",
+        knowledgeMode: "built-in-context7",
+        model: "gpt-5-mini",
+        outputBaseDir: "/workspace/output",
+        repoRoot: "/workspace/repo",
+        systemMessage: "system prompt",
+        workingDirectory: "/workspace/repo"
+      }
+    ],
+    ["disconnect"]
+  ]);
+  assert.equal(
+    context.getSection("knowledge-source-of-truth"),
+    "## Knowledge & Source of Truth\n- 版本／文件參考：\n  - 無"
+  );
 });
 
 test("StepRunner fails on blank responses and does not apply any state", async () => {

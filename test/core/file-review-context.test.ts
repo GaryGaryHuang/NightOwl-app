@@ -7,6 +7,7 @@ import {
   type Finding,
   type FindingDisposition
 } from "../../src/core/file-review-context.ts";
+import type { VerifierReportArtifactEntry } from "../../src/core/verifier-report.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
   filePath: "src/app.ts",
@@ -219,6 +220,82 @@ test("FileReviewContext getDispositions returns defensively cloned copies", () =
 
   const second = context.getDispositions()!;
   assert.equal(second[0]!.findingId, "F1");
+});
+
+test("FileReviewContext getVerifierReportEntries returns undefined before any entries are appended", () => {
+  const context = createContext();
+
+  assert.equal(context.getVerifierReportEntries(), undefined);
+});
+
+test("FileReviewContext appends verifier report entries preserving order and deep-clones input", () => {
+  const context = createContext();
+  const first: VerifierReportArtifactEntry = {
+    filePath: "src/app.ts",
+    stepId: "step5-validation-interrogation",
+    findingId: "F1",
+    taxonomy: "OK",
+    outcome: "accepted",
+    gate: "acceptance",
+    reason: "passed all acceptance gates"
+  };
+  const second: VerifierReportArtifactEntry = {
+    filePath: "src/app.ts",
+    stepId: "step6-cognitive-simulation",
+    findingId: "F2",
+    taxonomy: "REACHABILITY",
+    outcome: "rejected",
+    gate: "acceptance",
+    reason: "reachability is not credible"
+  };
+
+  context.appendVerifierReportEntries([first]);
+  context.appendVerifierReportEntries([second]);
+
+  first.stepId = "MUTATED";
+  second.reason = "MUTATED";
+
+  assert.deepEqual(context.getVerifierReportEntries(), [
+    {
+      filePath: "src/app.ts",
+      stepId: "step5-validation-interrogation",
+      findingId: "F1",
+      taxonomy: "OK",
+      outcome: "accepted",
+      gate: "acceptance",
+      reason: "passed all acceptance gates"
+    },
+    {
+      filePath: "src/app.ts",
+      stepId: "step6-cognitive-simulation",
+      findingId: "F2",
+      taxonomy: "REACHABILITY",
+      outcome: "rejected",
+      gate: "acceptance",
+      reason: "reachability is not credible"
+    }
+  ]);
+});
+
+test("FileReviewContext getVerifierReportEntries returns defensive snapshot copies", () => {
+  const context = createContext();
+
+  context.appendVerifierReportEntries([
+    {
+      filePath: "src/app.ts",
+      stepId: "step5-validation-interrogation",
+      findingId: "F1",
+      taxonomy: "OK",
+      outcome: "accepted",
+      gate: "acceptance",
+      reason: "passed all acceptance gates"
+    }
+  ]);
+
+  const snapshot = context.getVerifierReportEntries()!;
+  snapshot[0]!.findingId = "MUTATED";
+
+  assert.equal(context.getVerifierReportEntries()![0]!.findingId, "F1");
 });
 
 function createContext(

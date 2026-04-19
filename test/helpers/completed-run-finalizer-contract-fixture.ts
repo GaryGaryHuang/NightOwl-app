@@ -3,6 +3,7 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "../../src/core/review-path-resolver.ts";
+import type { VerifierReportArtifactEntry } from "../../src/core/verifier-report.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../../src/core/run-outcomes.ts";
 
 // Stable fake path used as the default base for all output target fixtures;
@@ -33,17 +34,33 @@ export function createFinding(
 
 export function createSuccessfulFile(
   filePath: string,
-  findings: Finding[]
+  findings: Finding[],
+  verifierReportEntries: VerifierReportArtifactEntry[] = []
 ): SuccessfulFileOutcome {
-  return { filePath, findings };
+  return { filePath, findings, verifierReportEntries };
 }
 
 export function createSkippedFile(
   filePath: string,
   stepId: string,
-  reason: string
+  reason: string,
+  verifierReportEntries: VerifierReportArtifactEntry[] = []
 ): SkippedFileOutcome {
-  return { filePath, stepId, reason };
+  return { filePath, stepId, reason, verifierReportEntries };
+}
+
+export function createVerifierReportArtifactEntry(
+  overrides: Partial<VerifierReportArtifactEntry> = {}
+): VerifierReportArtifactEntry {
+  return {
+    filePath: overrides.filePath ?? "src/app.ts",
+    stepId: overrides.stepId ?? "step5-validation-interrogation",
+    findingId: overrides.findingId ?? "F1",
+    taxonomy: overrides.taxonomy ?? "OK",
+    outcome: overrides.outcome ?? "accepted",
+    gate: overrides.gate ?? "acceptance",
+    reason: overrides.reason ?? "passed all acceptance gates"
+  };
 }
 
 // Builds a complete OutputTarget from the given basePath (or DEFAULT_BASE_PATH
@@ -62,6 +79,8 @@ export function createOutputTarget(
     skippedPath: overrides.skippedPath ?? `${basePath}/skipped.md`,
     summaryPath: overrides.summaryPath ?? `${basePath}/summary.md`,
     indexPath: overrides.indexPath ?? `${basePath}/index.md`,
+    verifierReportPath:
+      overrides.verifierReportPath ?? `${basePath}/verifier-report.jsonl`,
     manifestPath: overrides.manifestPath ?? `${basePath}/manifest.json`,
     toolAuditPath: overrides.toolAuditPath ?? `${basePath}/tool-audit.jsonl`
   };

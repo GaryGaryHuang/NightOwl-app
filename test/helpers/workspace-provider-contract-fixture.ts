@@ -15,6 +15,7 @@ export function createWorkspaceProviderFixture() {
     skippedPath: path.join(basePath, "skipped.md"),
     summaryPath: path.join(basePath, "summary.md"),
     indexPath: path.join(basePath, "index.md"),
+    verifierReportPath: path.join(basePath, "verifier-report.jsonl"),
     manifestPath: path.join(basePath, "manifest.json"),
     toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   };

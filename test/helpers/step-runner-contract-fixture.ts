@@ -5,6 +5,7 @@ import {
   type FindingsPayload,
   FileReviewContext
 } from "../../src/core/file-review-context.ts";
+import type { VerifierReportEntry } from "../../src/core/verifier-report.ts";
 import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
 import {
   type StepDefinition,
@@ -42,6 +43,8 @@ export function makeSectionResolve(sectionKey: ReviewSectionKey): StepExecutionP
 }
 
 export function makePassingJudgeServices(): StepResolveServices {
+  const emptyReport: VerifierReportEntry[] = [];
+
   return {
     judgeService: {
       async evaluate(_input) {
@@ -52,8 +55,14 @@ export function makePassingJudgeServices(): StepResolveServices {
       validate(_input) {
         return { findings: [] };
       },
+      validateWithReport(_input) {
+        return { payload: { findings: [] }, report: emptyReport };
+      },
       filterByAcceptance(payload: FindingsPayload) {
         return payload;
+      },
+      filterByAcceptanceWithReport(payload: FindingsPayload) {
+        return { payload, report: emptyReport };
       },
       validateWithDispositions(_input) {
         return { findings: [], dispositions: [] };

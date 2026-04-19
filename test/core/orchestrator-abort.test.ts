@@ -98,6 +98,9 @@ function createTrackingOutputSink(): TrackingOutputSink {
     async publishReviewIndex(_result) {
       calls.push("publishReviewIndex");
     },
+    async publishVerifierReport(_result) {
+      calls.push("publishVerifierReport");
+    },
     async publishRunManifest(_result) {
       calls.push("publishRunManifest");
     },
@@ -186,6 +189,7 @@ function assertNoRunLevelArtifactsPublished(sink: TrackingOutputSink): void {
   for (const call of [
     "publishRunSummary",
     "publishReviewIndex",
+    "publishVerifierReport",
     "publishRunManifest"
   ]) {
     assert.equal(

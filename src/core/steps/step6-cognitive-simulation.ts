@@ -125,6 +125,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         timeoutMs: 300_000
       },
       resolve: createStep6DispositionResolve({
+        stepId: this.stepId,
         filePath: context.filePath,
         diffContent: context.diffContent,
         candidateFindingIds

@@ -1,10 +1,12 @@
 import type { FileReviewContext } from "./file-review-context.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
+import { resolveReviewKnowledgeMode } from "./review-step-capability-manifest.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
 import { retryOnce } from "./session-retry.ts";
 import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload, FindingDisposition, VerifiedFindingsPayload } from "./file-review-context.ts";
+import type { VerifierReportEntry } from "./verifier-report.ts";
 
 export interface StepResolveServices {
   judgeService?: {
@@ -21,7 +23,16 @@ export interface StepResolveServices {
       diffContent?: string;
       filePath?: string;
     }): FindingsPayload;
+    validateWithReport(input: {
+      responseText: string;
+      diffContent?: string;
+      filePath?: string;
+    }): { payload: FindingsPayload; report: VerifierReportEntry[] };
     filterByAcceptance(payload: FindingsPayload): FindingsPayload;
+    filterByAcceptanceWithReport(payload: FindingsPayload): {
+      payload: FindingsPayload;
+      report: VerifierReportEntry[];
+    };
     validateWithDispositions(input: {
       responseText: string;
       diffContent?: string;
@@ -94,7 +105,16 @@ export interface StepRunnerOptions {
       diffContent?: string;
       filePath?: string;
     }): FindingsPayload;
+    validateWithReport(input: {
+      responseText: string;
+      diffContent?: string;
+      filePath?: string;
+    }): { payload: FindingsPayload; report: VerifierReportEntry[] };
     filterByAcceptance(payload: FindingsPayload): FindingsPayload;
+    filterByAcceptanceWithReport(payload: FindingsPayload): {
+      payload: FindingsPayload;
+      report: VerifierReportEntry[];
+    };
     validateWithDispositions(input: {
       responseText: string;
       diffContent?: string;
@@ -132,7 +152,10 @@ export class StepRunner {
         const plan = input.step.prepare(input.context);
         const sessionProfile = {
           stepId: plan.stepId,
-          knowledgeMode: plan.reviewProfile.knowledgeMode ?? "built-in-context7",
+          knowledgeMode: resolveReviewKnowledgeMode(
+            plan.stepId,
+            plan.reviewProfile.knowledgeMode
+          ),
           model: plan.reviewProfile.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,

@@ -2,6 +2,10 @@ import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { RiskLevel } from "../risk-level.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
+import type {
+  VerifierReportArtifactEntry,
+  VerifierReportEntry
+} from "../verifier-report.ts";
 
 /**
  * Factory for the resolve() closure shared by all section steps (Step 1–4, 7).
@@ -44,21 +48,28 @@ export function createSectionResolve(input: {
  * deferred mutation that writes the validated findings to the context.
  */
 export function createStructuredResolve(input: {
+  stepId?: string;
   filePath: string;
   diffContent?: string;
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
-    const validated = services.validator.validate({
+    const validated = services.validator.validateWithReport({
       responseText: response,
       filePath: input.filePath,
       ...(input.diffContent === undefined
         ? {}
         : { diffContent: input.diffContent })
     });
-    const payload = services.validator.filterByAcceptance(validated);
+    const accepted = services.validator.filterByAcceptanceWithReport(validated.payload);
+    const reportEntries = toVerifierArtifactEntries({
+      filePath: input.filePath,
+      stepId: input.stepId ?? "step5-validation-interrogation",
+      report: [...validated.report, ...accepted.report]
+    });
 
     return (targetContext: FileReviewContext) => {
-      targetContext.setFindings(payload.findings);
+      targetContext.setFindings(accepted.payload.findings);
+      targetContext.appendVerifierReportEntries(reportEntries);
     };
   };
 }
@@ -71,6 +82,7 @@ export function createStructuredResolve(input: {
  * findings and dispositions to the context.
  */
 export function createStep6DispositionResolve(input: {
+  stepId?: string;
   filePath: string;
   diffContent?: string;
   candidateFindingIds: readonly string[];
@@ -84,8 +96,17 @@ export function createStep6DispositionResolve(input: {
         : { diffContent: input.diffContent })
     });
 
-    const accepted = services.validator.filterByAcceptance(verified);
-    const acceptedFindingIds = accepted.findings.map((f) => f.findingId);
+    const accepted = services.validator.filterByAcceptanceWithReport({
+      findings: verified.findings
+    });
+    const acceptedFindingIds = accepted.payload.findings.map((f) => f.findingId);
+    const schemaReport = verified.findings.map<VerifierReportEntry>((finding) => ({
+      findingId: finding.findingId,
+      taxonomy: "OK",
+      outcome: "accepted",
+      gate: "schema",
+      reason: "passed schema and anchor validation"
+    }));
 
     services.validator.validateDispositionCompleteness({
       dispositions: verified.dispositions,
@@ -93,11 +114,34 @@ export function createStep6DispositionResolve(input: {
       acceptedFindingIds
     });
 
+    const reportEntries = toVerifierArtifactEntries({
+      filePath: input.filePath,
+      stepId: input.stepId ?? "step6-cognitive-simulation",
+      report: [...schemaReport, ...accepted.report]
+    });
+
     return (targetContext: FileReviewContext) => {
-      targetContext.setFindings(accepted.findings);
+      targetContext.setFindings(accepted.payload.findings);
       targetContext.setDispositions(verified.dispositions);
+      targetContext.appendVerifierReportEntries(reportEntries);
     };
   };
+}
+
+function toVerifierArtifactEntries(input: {
+  filePath: string;
+  stepId: string;
+  report: VerifierReportEntry[];
+}): VerifierReportArtifactEntry[] {
+  return input.report.map((entry) => ({
+    filePath: input.filePath,
+    stepId: input.stepId,
+    findingId: entry.findingId,
+    taxonomy: entry.taxonomy,
+    outcome: entry.outcome,
+    gate: entry.gate,
+    reason: entry.reason
+  }));
 }
 
 const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(["High", "Medium", "Low", "None"]);

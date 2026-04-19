@@ -32,9 +32,11 @@ function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
 
 test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMap response", async () => {
   const prompts: string[] = [];
+  const profiles: unknown[] = [];
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
-      async createSession() {
+      async createSession(profile) {
+        profiles.push(profile);
         return {
           async sendAndWait(prompt) {
             prompts.push(prompt);
@@ -61,6 +63,14 @@ test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMa
     "## Changeset Overview\n- 調整範圍：feature\n"
   );
   assert.equal(prompts.length, 1);
+  assert.equal(profiles.length, 1);
+  assert.equal((profiles[0] as { stepId: string }).stepId, "changeset-overview");
+  assert.equal((profiles[0] as { knowledgeMode: string }).knowledgeMode, "built-in-context7");
+  assert.equal((profiles[0] as { model: string }).model, "gpt-5.4-mini");
+  assert.equal((profiles[0] as { outputBaseDir: string }).outputBaseDir, "/workspace/repo");
+  assert.equal((profiles[0] as { repoRoot: string }).repoRoot, "/workspace/repo");
+  assert.equal(typeof (profiles[0] as { systemMessage: unknown }).systemMessage, "string");
+  assert.equal((profiles[0] as { workingDirectory: undefined }).workingDirectory, undefined);
 });
 
 // A blank/undefined first response triggers a retry with a fresh session

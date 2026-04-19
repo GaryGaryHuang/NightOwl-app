@@ -1,4 +1,5 @@
 import type { ReviewSectionKey } from "./review-section-contract.ts";
+import type { VerifierReportArtifactEntry } from "./verifier-report.ts";
 
 export interface FileReviewContextInput {
   filePath: string;
@@ -104,6 +105,7 @@ export class FileReviewContext {
   readonly #sections = new Map<string, string>();
   #findings?: Finding[];
   #dispositions?: FindingDisposition[];
+  #verifierReportEntries?: VerifierReportArtifactEntry[];
   #interruption?: ReviewInterruption;
   #findingsInsertionIndex?: number;
 
@@ -149,6 +151,22 @@ export class FileReviewContext {
     return this.#dispositions ? this.#dispositions.map(cloneDisposition) : undefined;
   }
 
+  appendVerifierReportEntries(entries: VerifierReportArtifactEntry[]): void {
+    if (entries.length === 0) {
+      return;
+    }
+
+    const existing = this.#verifierReportEntries ?? [];
+    this.#verifierReportEntries = [
+      ...existing.map(cloneVerifierReportArtifactEntry),
+      ...entries.map(cloneVerifierReportArtifactEntry)
+    ];
+  }
+
+  getVerifierReportEntries(): VerifierReportArtifactEntry[] | undefined {
+    return this.#verifierReportEntries?.map(cloneVerifierReportArtifactEntry);
+  }
+
   markInterrupted(stepId: string, reason: string): void {
     this.#interruption = { stepId, reason };
   }
@@ -179,6 +197,12 @@ function cloneFinding(finding: Finding): Finding {
 
 function cloneDisposition(d: FindingDisposition): FindingDisposition {
   return { ...d };
+}
+
+function cloneVerifierReportArtifactEntry(
+  entry: VerifierReportArtifactEntry
+): VerifierReportArtifactEntry {
+  return { ...entry };
 }
 
 function requireFindingTraceability(finding: Finding): FindingTraceability {

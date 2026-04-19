@@ -81,9 +81,14 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     "summaryPath",
     "indexPath",
     "skippedPath",
+    "verifierReportPath",
     "manifestPath",
     "toolAuditPath"
   ]);
+  assert.equal(
+    parsed.artifacts.verifierReportPath,
+    "/workspace/.nightowl/review/feature-branch_03131430/verifier-report.jsonl"
+  );
   assert.equal(
     parsed.artifacts.manifestPath,
     "/workspace/.nightowl/review/feature-branch_03131430/manifest.json"
@@ -152,6 +157,10 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
 
 test("RunManifestFinalizer renders an empty files array for zero-file runs", () => {
   assert.deepEqual(renderManifest().files, []);
+});
+
+test("RunManifestFinalizer uses schema version 3", () => {
+  assert.equal(renderManifest().schemaVersion, 3);
 });
 
 test("RunManifestFinalizer throws with an identifying message when a planned file is absent from both outcome sets", () => {

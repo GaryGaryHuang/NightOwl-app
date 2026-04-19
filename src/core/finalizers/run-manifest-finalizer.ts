@@ -7,7 +7,7 @@ import type {
 import { resolveFileOutcomes } from "../run-outcome-resolver.ts";
 import type { SuccessfulFileOutcome, SkippedFileOutcome } from "../run-outcomes.ts";
 
-export const MANIFEST_SCHEMA_VERSION = 2 as const;
+export const MANIFEST_SCHEMA_VERSION = 3 as const;
 
 export interface SuccessfulFileEntry {
   filePath: string;
@@ -108,6 +108,7 @@ export class RunManifestFinalizer {
         summaryPath: input.outputTarget.summaryPath,
         indexPath: input.outputTarget.indexPath,
         skippedPath: input.outputTarget.skippedPath,
+        verifierReportPath: input.outputTarget.verifierReportPath,
         manifestPath: input.outputTarget.manifestPath,
         toolAuditPath: input.outputTarget.toolAuditPath
       },

@@ -48,6 +48,10 @@ export function createWritableOutputSink(): ReviewOutputBootstrapAndPublisher {
       await writeFile(outputTarget.indexPath, indexResult.content);
     },
 
+    async publishVerifierReport(result) {
+      await writeFile(outputTarget.verifierReportPath, result.content);
+    },
+
     async publishRunManifest(manifestResult) {
       await writeFile(outputTarget.manifestPath, manifestResult.content);
     },

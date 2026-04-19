@@ -23,6 +23,7 @@ test("LocalWorkspaceProvider initializes the run directories, skipped.md, and yi
     // only when the corresponding publish method is called.
     assert.equal(existsSync(fixture.outputTarget.summaryPath), false);
     assert.equal(existsSync(fixture.outputTarget.indexPath), false);
+    assert.equal(existsSync(fixture.outputTarget.verifierReportPath), false);
     assert.equal(existsSync(fixture.outputTarget.manifestPath), false);
     assert.equal(existsSync(fixture.outputTarget.changesetOverviewPath), false);
     assert.equal(
@@ -96,6 +97,26 @@ test("LocalWorkspaceProvider yields a run-scoped publisher whose publishRunManif
     assert.equal(
       fixture.readFile(fixture.outputTarget.manifestPath),
       '{\n  "schemaVersion": 1\n}'
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("LocalWorkspaceProvider keeps verifier-report lazy under the run basePath", async () => {
+  const fixture = createWorkspaceProviderFixture();
+
+  try {
+    await fixture.provider.initializeRun(fixture.outputTarget);
+
+    assert.equal(existsSync(fixture.outputTarget.verifierReportPath), false);
+    assert.ok(
+      fixture.outputTarget.verifierReportPath.startsWith(fixture.outputTarget.basePath),
+      "verifierReportPath must be under basePath"
+    );
+    assert.ok(
+      fixture.outputTarget.verifierReportPath.endsWith("verifier-report.jsonl"),
+      "verifierReportPath must end with verifier-report.jsonl"
     );
   } finally {
     fixture.cleanup();

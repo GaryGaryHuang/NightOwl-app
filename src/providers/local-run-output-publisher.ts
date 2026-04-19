@@ -11,6 +11,7 @@ import {
   type RunOutputPublisher,
   type RunSummaryResult,
   type SkipRecord,
+  type VerifierReportResult,
   type ReviewOutputTarget
 } from "./review-output-sink.ts";
 import { wrapBoundaryError } from "./boundary-error-helper.ts";
@@ -71,6 +72,17 @@ export class LocalRunOutputPublisher implements RunOutputPublisher {
         "publishReviewIndex",
         cause,
         this.#outputTarget.indexPath
+      )
+    );
+  }
+
+  async publishVerifierReport(result: VerifierReportResult): Promise<void> {
+    return wrapBoundaryError(
+      () => writeFile(this.#outputTarget.verifierReportPath, result.content),
+      (cause) => toOutputBoundaryError(
+        "publishVerifierReport",
+        cause,
+        this.#outputTarget.verifierReportPath
       )
     );
   }

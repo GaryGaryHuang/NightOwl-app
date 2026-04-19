@@ -25,6 +25,7 @@ import { RunSummaryFinalizer } from "./finalizers/run-summary-finalizer.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
 import { ReviewIndexFinalizer } from "./finalizers/review-index-finalizer.ts";
 import { RunManifestFinalizer } from "./finalizers/run-manifest-finalizer.ts";
+import { VerifierReportFinalizer } from "./finalizers/verifier-report-finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";
@@ -59,7 +60,7 @@ import type { ReviewSourceProvider } from "../providers/review-source-provider.t
 import { SessionTurnAbortedError } from "./session-turn-aborted-error.ts";
 
 export interface FinalizerFailure {
-  artifact: "summary" | "index" | "manifest";
+  artifact: "summary" | "index" | "verifier-report" | "manifest";
   message: string;
 }
 
@@ -95,6 +96,7 @@ export interface ReviewOrchestratorOptions {
   reviewIndexFinalizer?: Pick<ReviewIndexFinalizer, "render">;
   runManifestFinalizer?: Pick<RunManifestFinalizer, "render">;
   runSummaryFinalizer?: Pick<RunSummaryFinalizer, "render">;
+  verifierReportFinalizer?: Pick<VerifierReportFinalizer, "render">;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor?: SuccessfulSnapshotOutputHealthAssessor;
@@ -118,6 +120,7 @@ export class ReviewOrchestrator {
   readonly #finalizer: Pick<ReviewNoteFinalizer, "render">;
   readonly #runSummaryFinalizer: Pick<RunSummaryFinalizer, "render">;
   readonly #reviewIndexFinalizer: Pick<ReviewIndexFinalizer, "render">;
+  readonly #verifierReportFinalizer: Pick<VerifierReportFinalizer, "render">;
   readonly #runManifestFinalizer: Pick<RunManifestFinalizer, "render">;
   readonly #maxConcurrentFiles: number;
   readonly #onProgressEvent?: RunProgressEventHandler;
@@ -150,6 +153,7 @@ export class ReviewOrchestrator {
     this.#finalizer = options.reviewNoteFinalizer ?? new ReviewNoteFinalizer();
     this.#runSummaryFinalizer = options.runSummaryFinalizer ?? new RunSummaryFinalizer();
     this.#reviewIndexFinalizer = options.reviewIndexFinalizer ?? new ReviewIndexFinalizer();
+    this.#verifierReportFinalizer = options.verifierReportFinalizer ?? new VerifierReportFinalizer();
     this.#runManifestFinalizer = options.runManifestFinalizer ?? new RunManifestFinalizer();
     this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
     this.#onProgressEvent = options.onProgressEvent;
@@ -339,6 +343,16 @@ export class ReviewOrchestrator {
           skippedFiles,
           outputTarget,
           plannedNotes: plannedNoteFiles
+        })
+      })
+    );
+
+    await this.#tryPublishFinalizer("verifier-report", finalizerFailures, () =>
+      outputPublisher.publishVerifierReport({
+        content: this.#verifierReportFinalizer.render({
+          plannedNotes: plannedNoteFiles,
+          successfulFiles,
+          skippedFiles
         })
       })
     );
@@ -607,7 +621,8 @@ export class ReviewOrchestrator {
       kind: "successful",
       outcome: {
         filePath: fileContext.filePath,
-        findings: fileContext.getFindings() ?? []
+        findings: fileContext.getFindings() ?? [],
+        verifierReportEntries: fileContext.getVerifierReportEntries() ?? []
       }
     };
 
@@ -654,7 +669,8 @@ export class ReviewOrchestrator {
       plannedIndex: input.plannedIndex,
       filePath: input.fileContext.filePath,
       stepId: input.stepId,
-      reason: input.reason
+      reason: input.reason,
+      verifierReportEntries: input.fileContext.getVerifierReportEntries() ?? []
     });
   }
 
@@ -664,13 +680,15 @@ export class ReviewOrchestrator {
     filePath: string;
     stepId: string;
     reason: string;
+    verifierReportEntries: SuccessfulFileOutcome["verifierReportEntries"];
   }): void {
     input.outcomeSlots[input.plannedIndex] = {
       kind: "skipped",
       outcome: {
         filePath: input.filePath,
         stepId: input.stepId,
-        reason: input.reason
+        reason: input.reason,
+        verifierReportEntries: input.verifierReportEntries
       }
     };
 

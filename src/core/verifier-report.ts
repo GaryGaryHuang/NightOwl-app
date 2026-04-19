@@ -25,6 +25,11 @@ export interface VerifierReportEntry {
   readonly reason: string;
 }
 
+export interface VerifierReportArtifactEntry extends VerifierReportEntry {
+  readonly filePath: string;
+  readonly stepId: string;
+}
+
 export interface VerifierReportSummary {
   readonly total: number;
   readonly accepted: number;

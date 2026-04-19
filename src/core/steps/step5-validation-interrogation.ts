@@ -111,6 +111,7 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
         timeoutMs: 300_000
       },
       resolve: createStructuredResolve({
+        stepId: this.stepId,
         filePath: context.filePath,
         diffContent: context.diffContent
       })

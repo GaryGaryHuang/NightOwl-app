@@ -21,6 +21,7 @@ function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): Revi
       skippedPath: `${base}/skipped.md`,
       summaryPath: `${base}/summary.md`,
       indexPath: `${base}/index.md`,
+      verifierReportPath: `${base}/verifier-report.jsonl`,
       manifestPath: `${base}/manifest.json`,
       toolAuditPath: `${base}/tool-audit.jsonl`
     },
