@@ -238,7 +238,7 @@ export class ReviewOrchestrator {
     const outputPublisher = await this.#outputSink.initializeRun(providerOutputTarget);
     abortGuard.throwIfAborted();
 
-    await outputPublisher.publishChangesetOverview({ content: runContext.changesetOverview });
+    await outputPublisher.publishChangesetOverview({ content: runContext.changesetOverviewMarkdown });
     abortGuard.throwIfAborted();
 
     this.#onOutputTargetReady?.(outputTarget);

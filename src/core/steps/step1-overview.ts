@@ -106,7 +106,7 @@ function buildStep1UserMessage(
   // Keep Step 0's shared changeset framing adjacent to the file diff so the model can situate this file before deeper analysis starts.
   return [
     "<changeset_context>",
-    runContext.changesetOverview,
+    runContext.changesetOverviewMarkdown,
     "</changeset_context>",
     "",
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,

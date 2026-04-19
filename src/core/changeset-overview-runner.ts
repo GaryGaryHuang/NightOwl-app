@@ -1,6 +1,8 @@
+import { extractChangedPathsFromNameStatus } from "./change-map.ts";
 import { createRunContext, type RunContext } from "./run-context.ts";
 import { retryOnce } from "./session-retry.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
+import { Step0OutputValidator } from "./step0-output-validator.ts";
 import {
   STEP0_SYSTEM_MESSAGE,
   STEP0_TIMEOUT_MS,
@@ -19,6 +21,8 @@ export interface ChangesetOverviewRunnerInput {
 
 export interface ChangesetOverviewRunnerOptions {
   reviewSessionFactory: ReviewSessionFactoryLike;
+  /** Optional injection point; defaults to a fresh `Step0OutputValidator`. */
+  step0OutputValidator?: Step0OutputValidator;
 }
 
 /**
@@ -26,12 +30,16 @@ export interface ChangesetOverviewRunnerOptions {
  */
 export class ChangesetOverviewRunner {
   readonly #reviewSessionFactory: ReviewSessionFactoryLike;
+  readonly #validator: Step0OutputValidator;
 
   constructor(options: ChangesetOverviewRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
+    this.#validator = options.step0OutputValidator ?? new Step0OutputValidator();
   }
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
+    const expectedChangedPaths = extractChangedPathsFromNameStatus(input.changedFilesList);
+
     return retryOnce({
       execute: async () => {
         const session = await this.#reviewSessionFactory.createSession({
@@ -57,8 +65,13 @@ export class ChangesetOverviewRunner {
           );
         }
 
+        const changeMap = this.#validator.validate({
+          responseText: response,
+          expectedChangedPaths
+        });
+
         return createRunContext({
-          changesetOverview: response,
+          changesetOverview: changeMap,
           userContext: input.userContext
         });
       },

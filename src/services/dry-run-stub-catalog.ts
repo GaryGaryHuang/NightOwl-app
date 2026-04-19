@@ -1,7 +1,7 @@
 export const GENERIC_DRY_RUN_STUB =
   "[dry-run] No built-in stub template for this step.";
 
-const STUB_CHANGESET_OVERVIEW = `## Changeset Overview
+const STUB_CHANGESET_OVERVIEW_MARKDOWN = `## Changeset Overview
 
 ### 調整範圍
 本次變更涉及主要業務邏輯調整，影響核心模組的介面設計與行為契約。
@@ -14,6 +14,48 @@ const STUB_CHANGESET_OVERVIEW = `## Changeset Overview
 
 ### 測試覆蓋觀察
 [dry-run] 測試覆蓋狀態待真實 run 驗證。`;
+
+/**
+ * Build a deterministic ChangeMap JSON for dry-run Step 0 by parsing the
+ * `<changed_files>` block out of the prompt. Uses the head-side path field
+ * for rename/copy entries (last tab-separated field).
+ */
+export function buildDryRunChangesetOverviewResponse(prompt: string): string {
+  const paths = extractChangedFilesBlockPaths(prompt);
+  const changedFiles = paths.map((path) => ({
+    path,
+    status: "M" as const,
+    category: "feature" as const,
+    basis: "name-status" as const
+  }));
+
+  return JSON.stringify({
+    schemaVersion: 1,
+    overviewMarkdown: STUB_CHANGESET_OVERVIEW_MARKDOWN,
+    changedFiles,
+    behaviorChanges: [],
+    unresolvedUnknowns: []
+  });
+}
+
+function extractChangedFilesBlockPaths(prompt: string): string[] {
+  const startIdx = prompt.indexOf("<changed_files>");
+  const endIdx = prompt.indexOf("</changed_files>");
+  if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) {
+    return [];
+  }
+  const block = prompt.slice(startIdx + "<changed_files>".length, endIdx);
+  const paths: string[] = [];
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.trim();
+    if (line.length === 0) continue;
+    const fields = line.split("\t");
+    if (fields.length < 2) continue;
+    const path = fields[fields.length - 1];
+    if (path.length > 0) paths.push(path);
+  }
+  return paths;
+}
 
 const STUB_OVERVIEW = `## Overview
 
@@ -88,7 +130,6 @@ const STUB_SUMMARY = `## Summary
 [dry-run] 此為 dry-run 模式產出，不反映真實風險評估結果。`;
 
 const DRY_RUN_STUB_RESPONSES: Record<string, string> = {
-  "changeset-overview": STUB_CHANGESET_OVERVIEW,
   "step1-overview": STUB_OVERVIEW,
   "step2-dependencies-boundaries": STUB_DEPENDENCIES_BOUNDARIES,
   "step3-knowledge-source-of-truth": STUB_KNOWLEDGE_SOURCE_OF_TRUTH,

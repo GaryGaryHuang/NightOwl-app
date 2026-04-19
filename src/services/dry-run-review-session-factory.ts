@@ -1,4 +1,5 @@
 import {
+  buildDryRunChangesetOverviewResponse,
   getDryRunStubResponse,
   GENERIC_DRY_RUN_STUB
 } from "./dry-run-stub-catalog.ts";
@@ -8,10 +9,12 @@ import type {
 } from "../core/session-factory-contracts.ts";
 import { SessionExecutor } from "./session-executor.ts";
 
-function buildStubSessionExecutor(response: string): SessionExecutor {
+function buildStubSessionExecutor(
+  responseProvider: (prompt: string) => string
+): SessionExecutor {
   return new SessionExecutor({
-    async sendAndWait(_options: { prompt: string }, _timeout?: number) {
-      return { data: { content: response } };
+    async sendAndWait(options: { prompt: string }, _timeout?: number) {
+      return { data: { content: responseProvider(options.prompt) } };
     },
     async abort() {},
     async disconnect() {}
@@ -29,10 +32,17 @@ export class DryRunReviewSessionFactory implements ReviewSessionFactoryLike {
   async createSession(
     profile: ReviewSessionProfileLike
   ): Promise<SessionExecutor> {
+    if (profile.stepId === "changeset-overview") {
+      // Step 0 must produce a structurally-valid ChangeMap whose changedFiles[]
+      // exactly matches the run's actual changed paths, so we derive the JSON
+      // from the prompt's <changed_files> block at send time.
+      return buildStubSessionExecutor(buildDryRunChangesetOverviewResponse);
+    }
+
     const response = profile.stepId !== undefined
       ? getDryRunStubResponse(profile.stepId) ?? GENERIC_DRY_RUN_STUB
       : GENERIC_DRY_RUN_STUB;
 
-    return buildStubSessionExecutor(response);
+    return buildStubSessionExecutor(() => response);
   }
 }

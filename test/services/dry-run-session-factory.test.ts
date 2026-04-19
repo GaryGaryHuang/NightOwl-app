@@ -8,6 +8,7 @@ import {
   DryRunJudgeSessionFactory
 } from "../../src/services/dry-run-judge-session-factory.ts";
 import {
+  buildDryRunChangesetOverviewResponse,
   getDryRunStubResponse,
   GENERIC_DRY_RUN_STUB
 } from "../../src/services/dry-run-stub-catalog.ts";
@@ -75,7 +76,6 @@ describe("DryRunJudgeSessionFactory dry-run behavior", () => {
 describe("Dry-run stub catalog completeness", () => {
   test("covers all built-in step IDs", () => {
     const builtInStepIds = [
-      "changeset-overview",
       "step1-overview",
       "step2-dependencies-boundaries",
       "step3-knowledge-source-of-truth",
@@ -90,5 +90,25 @@ describe("Dry-run stub catalog completeness", () => {
       assert.ok(stub !== undefined, `Missing stub catalog entry for stepId "${stepId}"`);
       assert.ok(stub.length > 0, `Empty stub response for stepId "${stepId}"`);
     }
+  });
+
+  test("Step 0 (changeset-overview) is generated dynamically from the prompt", () => {
+    const prompt = [
+      "<changed_files>",
+      "M\tsrc/foo.ts",
+      "R100\tsrc/old.ts\tsrc/new.ts",
+      "</changed_files>"
+    ].join("\n");
+
+    const response = buildDryRunChangesetOverviewResponse(prompt);
+    const parsed = JSON.parse(response) as {
+      schemaVersion: number;
+      changedFiles: { path: string }[];
+    };
+    assert.equal(parsed.schemaVersion, 1);
+    assert.deepEqual(
+      parsed.changedFiles.map((entry) => entry.path),
+      ["src/foo.ts", "src/new.ts"]
+    );
   });
 });

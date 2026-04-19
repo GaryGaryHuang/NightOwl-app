@@ -1,15 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  ChangesetOverviewRunner
-} from "../../src/core/changeset-overview-runner.ts";
+import { ChangesetOverviewRunner } from "../../src/core/changeset-overview-runner.ts";
 import {
   SessionExecutor,
   SessionTurnAbortedError
 } from "../../src/services/session-executor.ts";
 
-function createRecordingRunner(response = "## Changeset Overview\n- 調整範圍：feature") {
+interface ChangeMapJsonOptions {
+  readonly overviewMarkdown?: string;
+  readonly paths?: readonly string[];
+  readonly behaviorChanges?: readonly { description: string; files: readonly string[] }[];
+}
+
+function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
+  const paths = options.paths ?? ["src/app.ts"];
+  return JSON.stringify({
+    schemaVersion: 1,
+    overviewMarkdown:
+      options.overviewMarkdown ?? "## Changeset Overview\n- 調整範圍：feature",
+    changedFiles: paths.map((path) => ({
+      path,
+      status: "M",
+      category: "feature",
+      basis: "diff-inspected"
+    })),
+    behaviorChanges: options.behaviorChanges ?? [],
+    unresolvedUnknowns: []
+  });
+}
+
+test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMap response", async () => {
   const prompts: string[] = [];
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
@@ -17,18 +38,30 @@ function createRecordingRunner(response = "## Changeset Overview\n- 調整範圍
         return {
           async sendAndWait(prompt) {
             prompts.push(prompt);
-            return response;
+            return buildChangeMapJson();
           }
         };
       }
     }
   });
 
-  return {
-    prompts,
-    runner
-  };
-}
+  const runContext = await runner.run({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changedFilesList: ["M\tsrc/app.ts"],
+    userContext: []
+  });
+
+  assert.equal(runContext.changesetOverview.schemaVersion, 1);
+  assert.equal(runContext.changesetOverview.changedFiles.length, 1);
+  assert.equal(runContext.changesetOverview.changedFiles[0].path, "src/app.ts");
+  assert.equal(
+    runContext.changesetOverviewMarkdown,
+    "## Changeset Overview\n- 調整範圍：feature\n"
+  );
+  assert.equal(prompts.length, 1);
+});
 
 // A blank/undefined first response triggers a retry with a fresh session
 // (a new `createSession` call), not a re-send on the same session.
@@ -43,7 +76,11 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
         return {
           async sendAndWait(prompt) {
             prompts.push(prompt);
-            return createCalls === 1 ? undefined : "## Changeset Overview\n- 調整範圍：retry";
+            return createCalls === 1
+              ? undefined
+              : buildChangeMapJson({
+                  overviewMarkdown: "## Changeset Overview\n- 調整範圍：retry"
+                });
           }
         };
       }
@@ -59,8 +96,71 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   });
 
   assert.equal(createCalls, 2);
-  assert.equal(runContext.changesetOverview, "## Changeset Overview\n- 調整範圍：retry\n");
+  assert.equal(
+    runContext.changesetOverviewMarkdown,
+    "## Changeset Overview\n- 調整範圍：retry\n"
+  );
   assert.equal(prompts.length, 2);
+});
+
+test("ChangesetOverviewRunner retries once when the first response fails ChangeMap validation", async () => {
+  let createCalls = 0;
+  const runner = new ChangesetOverviewRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        createCalls += 1;
+
+        return {
+          async sendAndWait() {
+            return createCalls === 1
+              ? "## Changeset Overview\n- not JSON" // legacy Markdown
+              : buildChangeMapJson();
+          }
+        };
+      }
+    }
+  });
+
+  const runContext = await runner.run({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changedFilesList: ["M\tsrc/app.ts"],
+    userContext: []
+  });
+
+  assert.equal(createCalls, 2);
+  assert.equal(runContext.changesetOverview.schemaVersion, 1);
+});
+
+test("ChangesetOverviewRunner aborts after two consecutive validation failures", async () => {
+  let createCalls = 0;
+  const runner = new ChangesetOverviewRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        createCalls += 1;
+
+        return {
+          async sendAndWait() {
+            return "## not json";
+          }
+        };
+      }
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      runner.run({
+        model: "gpt-5.4-mini",
+        outputBaseDir: "/workspace/repo",
+        repoRoot: "/workspace/repo",
+        changedFilesList: ["M\tsrc/app.ts"],
+        userContext: []
+      }),
+    /Step 0 ChangeMap validation failed \[PARSE\]/
+  );
+  assert.equal(createCalls, 2);
 });
 
 test("ChangesetOverviewRunner fails after two empty responses", async () => {
@@ -91,6 +191,57 @@ test("ChangesetOverviewRunner fails after two empty responses", async () => {
     /changeset overview/i
   );
   assert.equal(createCalls, 2);
+});
+
+test("ChangesetOverviewRunner accepts a renamed path via R-style name-status entry", async () => {
+  const runner = new ChangesetOverviewRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return {
+          async sendAndWait() {
+            return buildChangeMapJson({ paths: ["src/new.ts"] });
+          }
+        };
+      }
+    }
+  });
+
+  const runContext = await runner.run({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changedFilesList: ["R100\tsrc/old.ts\tsrc/new.ts"],
+    userContext: []
+  });
+
+  assert.equal(runContext.changesetOverview.changedFiles[0].path, "src/new.ts");
+});
+
+test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
+  const runner = new ChangesetOverviewRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return {
+          async sendAndWait() {
+            return buildChangeMapJson({
+              overviewMarkdown: "## Changeset Overview\n- 無檔案異動",
+              paths: []
+            });
+          }
+        };
+      }
+    }
+  });
+
+  const runContext = await runner.run({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changedFilesList: [],
+    userContext: []
+  });
+
+  assert.equal(runContext.changesetOverview.changedFiles.length, 0);
 });
 
 test("ChangesetOverviewRunner aborts an in-flight Step 0 turn without consuming the retry budget", async () => {
