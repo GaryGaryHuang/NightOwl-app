@@ -13,8 +13,7 @@ import {
   buildSessionResponse,
   isChangesetOverviewSystemMessage,
   isJudgeSystemMessage,
-  isKnowledgeSourceOfTruthSystemMessage,
-  isStrategyWhatIfSystemMessage
+  isKnowledgeSourceOfTruthSystemMessage
 } from "../helpers/review-app-fixture.ts";
 
 test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the existing retry-and-abort path", async () => {
@@ -75,6 +74,7 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
         async publishSkippedFile() {},
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       })
@@ -194,6 +194,7 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       })
@@ -271,14 +272,14 @@ const perFileMcpFailureCases = [
     mcpType: "custom",
     serverName: "demo",
     mcpConfig: { type: "local" as const, command: "npx", args: ["-y", "@example/demo-mcp"], tools: ["*"] },
-    stepMatcher: isStrategyWhatIfSystemMessage,
+    stepMatcher: isKnowledgeSourceOfTruthSystemMessage,
     errorMessage: "custom mcp startup failed"
   },
   {
     mcpType: "remote",
     serverName: "my-remote",
     mcpConfig: { type: "http" as const, url: "https://mcp.example.com/v1", tools: ["*"] },
-    stepMatcher: isStrategyWhatIfSystemMessage,
+    stepMatcher: isKnowledgeSourceOfTruthSystemMessage,
     errorMessage: "remote mcp startup failed"
   }
 ];
@@ -444,6 +445,7 @@ async function assertPerFileMcpStartupFailureSkipsOneFile(input: {
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       })

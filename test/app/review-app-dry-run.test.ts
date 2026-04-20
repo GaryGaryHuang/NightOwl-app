@@ -116,7 +116,8 @@ function createDryRunOnlyStep(
           userMessage: `custom prompt for ${context.filePath}`
         },
         reviewProfile: {
-          model: "gpt-5-mini"
+          model: "gpt-5-mini",
+          knowledgeMode: "disabled"
         },
         async resolve(actualResponse: string) {
           assert.ok(actualResponse.length > 0, "dry-run should produce a non-empty response");
