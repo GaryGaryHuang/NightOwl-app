@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import test from "node:test";
 
+import { reviewConfigPath } from "../../src/core/nightowl-namespace.ts";
 import { ReviewConfigProviderError } from "../../src/providers/config/review-config-provider.ts";
 import {
   buildExpectedReviewConfig,
   createReviewConfigProviderFixture
 } from "../helpers/review-config-provider-contract-fixture.ts";
+
+const requireFromTest = createRequire(import.meta.url);
+const fsPromises = requireFromTest("node:fs/promises") as typeof import("node:fs/promises");
 
 test("LocalReviewConfigProvider falls back to the documented default review config when repo-local config is missing", async () => {
   const configFixture = createReviewConfigProviderFixture();
@@ -13,6 +18,32 @@ test("LocalReviewConfigProvider falls back to the documented default review conf
   try {
     assert.deepEqual(await configFixture.loadReviewConfig(), buildExpectedReviewConfig());
   } finally {
+    configFixture.cleanup();
+  }
+});
+
+test("LocalReviewConfigProvider falls back to the documented default review config when canonical config disappears during read", async () => {
+  const configFixture = createReviewConfigProviderFixture();
+  const configPath = reviewConfigPath(configFixture.fixture.repoDir);
+  const originalReadFile = fsPromises.readFile;
+
+  try {
+    configFixture.writeReviewConfig({
+      maxConcurrentFiles: 2
+    });
+    fsPromises.readFile = (async (filePath: unknown, options?: unknown) => {
+      if (filePath === configPath) {
+        throw createErrnoError("ENOENT", "config disappeared during read");
+      }
+
+      return originalReadFile(filePath as never, options as never);
+    }) as typeof fsPromises.readFile;
+    syncBuiltinESMExports();
+
+    assert.deepEqual(await configFixture.loadReviewConfig(), buildExpectedReviewConfig());
+  } finally {
+    fsPromises.readFile = originalReadFile;
+    syncBuiltinESMExports();
     configFixture.cleanup();
   }
 });
@@ -105,3 +136,11 @@ test("LocalReviewConfigProvider wraps invalid repo-local config with path-aware 
     configFixture.cleanup();
   }
 });
+
+function createErrnoError(code: string, message: string): NodeJS.ErrnoException {
+  const error = new Error(message) as NodeJS.ErrnoException;
+
+  error.code = code;
+
+  return error;
+}
