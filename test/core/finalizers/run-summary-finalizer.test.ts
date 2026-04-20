@@ -2,25 +2,34 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  RunSummaryFinalizer,
+  renderRunSummary,
   type RunSummaryRenderInput
 } from "../../../src/core/finalizers/run-summary-finalizer.ts";
 import {
   createFinding,
   createPlannedNotesFromPaths,
+  createResolvedOutcomes,
   createSkippedFile,
   createSuccessfulFile
 } from "../../helpers/completed-run-finalizer-contract-fixture.ts";
 
-function renderSummary(overrides: Partial<RunSummaryRenderInput> = {}): string {
-  return new RunSummaryFinalizer().render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    plannedNotes: [],
-    successfulFiles: [],
-    skippedFiles: [],
-    ...overrides
+function renderSummary(overrides: {
+  plannedNotes?: ReturnType<typeof createPlannedNotesFromPaths>;
+  successfulFiles?: ReturnType<typeof createSuccessfulFile>[];
+  skippedFiles?: ReturnType<typeof createSkippedFile>[];
+  repoRoot?: string;
+  baseRef?: string;
+  headRef?: string;
+} = {}): string {
+  const plannedNotes = overrides.plannedNotes ?? [];
+  const successfulFiles = overrides.successfulFiles ?? [];
+  const skippedFiles = overrides.skippedFiles ?? [];
+
+  return renderRunSummary({
+    repoRoot: overrides.repoRoot ?? "/workspace/repo",
+    baseRef: overrides.baseRef ?? "main",
+    headRef: overrides.headRef ?? "feature-branch",
+    resolvedOutcomes: createResolvedOutcomes(plannedNotes, successfulFiles, skippedFiles)
   });
 }
 

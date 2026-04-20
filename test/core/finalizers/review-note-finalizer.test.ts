@@ -6,7 +6,7 @@ import {
   type FileReviewContextInput,
   type Finding
 } from "../../../src/core/file-review-context.ts";
-import { ReviewNoteFinalizer } from "../../../src/core/finalizers/review-note-finalizer.ts";
+import { renderReviewNote } from "../../../src/core/finalizers/review-note-finalizer.ts";
 import {
   assertBootstrapShape,
   assertFindingsStats,
@@ -85,7 +85,7 @@ function makeNiceFinding(title: string): Finding {
   };
 }
 
-const finalizer = new ReviewNoteFinalizer();
+const finalizer = renderReviewNote;
 
 // 5.2: sections render in insertion order
 test("Finalizer renders sections in insertion order", () => {
@@ -96,7 +96,7 @@ test("Finalizer renders sections in insertion order", () => {
   context.setSection("custom-analysis", "## Custom Analysis\nCustom content");
   context.setSection("summary", "## Summary\nSummary content");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
     "## Overview",
@@ -115,7 +115,7 @@ test("Finalizer renders custom section before findings when written before setFi
   context.setFindings([]);
   context.setSection("summary", "## Summary\nSummary content");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
     "## Overview",
@@ -133,7 +133,7 @@ test("Finalizer renders custom section after findings when written after setFind
   context.setSection("custom-post", "## Custom Post\nAfter findings");
   context.setSection("summary", "## Summary\nSummary content");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
     "## Overview",
@@ -155,7 +155,7 @@ test("Finalizer default SOP topology: overview → deps → knowledge → strate
   context.setFindings([makeMustFinding("issue-1")]); // second call, index unchanged
   context.setSection("summary", "## Summary\nSummary content");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
     "## Overview",
@@ -176,7 +176,7 @@ test("Finalizer splits sections at findingsInsertionIndex", () => {
   context.setFindings([makeNiceFinding("suggestion-1")]);
   context.setSection("c", "## C\nContent C");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
     "## A",
@@ -193,7 +193,7 @@ test("Finalizer renders no Findings block when setFindings never called", () => 
   context.setSection("overview", "## Overview\nOverview content");
   context.setSection("custom", "## Custom\nCustom content");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
     "## Overview",
@@ -206,7 +206,7 @@ test("Finalizer renders no Findings block when setFindings never called", () => 
 test("Finalizer renders bootstrap snapshot when empty", () => {
   const context = createContext();
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertBootstrapShape(result, FILE_PATH);
   assert.match(result, /Review not yet generated/u);
@@ -219,7 +219,7 @@ test("Finalizer renders bootstrap with interruption warning", () => {
 
   context.markInterrupted("step-1-overview", "model-timeout");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertBootstrapShape(result, FILE_PATH);
   assert.match(result, /Review not yet generated/u);
@@ -233,7 +233,7 @@ test("Finalizer renders partial state with some sections", () => {
 
   context.setSection("overview", "## Overview\nPartial content");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertBootstrapShape(result, FILE_PATH);
   assertTextContainsInOrder(result, ["## Overview", "Partial content"]);
@@ -248,7 +248,7 @@ test("Finalizer filters out whitespace-only and empty sections", () => {
   context.setSection("whitespace", "   \n  ");
   context.setSection("valid", "## Valid\nReal content");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, ["## Valid"]);
   assertTextExcludesAll(result, ["## empty", "## whitespace"]);
@@ -263,7 +263,7 @@ test("Finalizer renders interruption warning after all content", () => {
   context.setSection("summary", "## Summary\nSummary content");
   context.markInterrupted("step-7-summary", "context-length");
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
     "## Overview",
@@ -281,7 +281,7 @@ test("Finalizer renders empty findings as - 無", () => {
   context.setSection("overview", "## Overview\nContent");
   context.setFindings([]);
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextContainsInOrder(result, ["## Findings", "- 無"]);
 });
@@ -296,7 +296,7 @@ test("Finalizer renders findings stats and must before nice", () => {
     makeMustFinding("must-fix-2")
   ]);
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertFindingsStats(result, { must: 2, nice: 1 });
   assertFindingsTitlesInOrder(result, [
@@ -312,7 +312,7 @@ test("Finalizer excludes confidence from rendered findings", () => {
   context.setSection("overview", "## Overview\nContent");
   context.setFindings([makeMustFinding("issue-1")]);
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextExcludesAll(result, ["confidence", "0.9"]);
 });
@@ -323,7 +323,7 @@ test("Finalizer excludes v2 internal fields from rendered findings", () => {
   context.setSection("overview", "## Overview\nContent");
   context.setFindings([makeMustFinding("v2-exclusion-test")]);
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTextExcludesAll(result, [
     "findingId",
@@ -374,7 +374,7 @@ test("Finalizer renders traceability formats correctly", () => {
   context.setSection("overview", "## Overview\nContent");
   context.setFindings(findings);
 
-  const result = finalizer.render(context);
+  const result = finalizer(context);
 
   assertTraceabilityForms(result, ["L42", "L10-L20", "@@ -5,7 +5,7 @@"]);
 });

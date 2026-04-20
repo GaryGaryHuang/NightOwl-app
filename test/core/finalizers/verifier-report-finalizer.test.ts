@@ -1,16 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { VerifierReportFinalizer } from "../../../src/core/finalizers/verifier-report-finalizer.ts";
+import { renderVerifierReport } from "../../../src/core/finalizers/verifier-report-finalizer.ts";
 import {
   createPlannedNotes,
+  createResolvedOutcomes,
   createSkippedFile,
   createSuccessfulFile,
   createVerifierReportArtifactEntry
 } from "../../helpers/completed-run-finalizer-contract-fixture.ts";
 
+function renderReport(input: {
+  plannedNotes: ReturnType<typeof createPlannedNotes>;
+  successfulFiles: ReturnType<typeof createSuccessfulFile>[];
+  skippedFiles: ReturnType<typeof createSkippedFile>[];
+}): string {
+  return renderVerifierReport({
+    resolvedOutcomes: createResolvedOutcomes(input.plannedNotes, input.successfulFiles, input.skippedFiles)
+  });
+}
+
 test("VerifierReportFinalizer renders the exact JSONL contract for mixed-result runs", () => {
-  const rendered = new VerifierReportFinalizer().render({
+  const rendered = renderReport({
     plannedNotes: createPlannedNotes([
       ["src/a.ts", "/workspace/.nightowl/review/feature/files/src__a.ts.md"],
       ["src/b.ts", "/workspace/.nightowl/review/feature/files/src__b.ts.md"]
@@ -61,7 +72,7 @@ test("VerifierReportFinalizer renders the exact JSONL contract for mixed-result 
 });
 
 test("VerifierReportFinalizer preserves planned file order and per-file step order", () => {
-  const rendered = new VerifierReportFinalizer().render({
+  const rendered = renderReport({
     plannedNotes: createPlannedNotes([
       ["src/a.ts", "/workspace/.nightowl/review/feature/files/src__a.ts.md"],
       ["src/b.ts", "/workspace/.nightowl/review/feature/files/src__b.ts.md"]
@@ -85,7 +96,7 @@ test("VerifierReportFinalizer preserves planned file order and per-file step ord
 });
 
 test("VerifierReportFinalizer persists retired disposition audit fields", () => {
-  const rendered = new VerifierReportFinalizer().render({
+  const rendered = renderReport({
     plannedNotes: createPlannedNotes([
       ["src/a.ts", "/workspace/.nightowl/review/feature/files/src__a.ts.md"]
     ]),
@@ -123,7 +134,7 @@ test("VerifierReportFinalizer persists retired disposition audit fields", () => 
 });
 
 test("VerifierReportFinalizer renders empty content for zero-file runs", () => {
-  const rendered = new VerifierReportFinalizer().render({
+  const rendered = renderReport({
     plannedNotes: [],
     successfulFiles: [],
     skippedFiles: []

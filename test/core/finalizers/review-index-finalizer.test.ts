@@ -1,23 +1,39 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { ReviewIndexFinalizer } from "../../../src/core/finalizers/review-index-finalizer.ts";
+import { renderReviewIndex } from "../../../src/core/finalizers/review-index-finalizer.ts";
+import type { PlannedNoteFile } from "../../../src/core/review-path-resolver.ts";
+import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../../../src/core/run-outcomes.ts";
 import {
   createFinding,
   createOutputTarget,
   createPlannedNotes,
+  createResolvedOutcomes,
   createSkippedFile,
   createSuccessfulFile
 } from "../../helpers/completed-run-finalizer-contract-fixture.ts";
 
-test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links", () => {
-  const finalizer = new ReviewIndexFinalizer();
+function renderIndex(input: {
+  repoRoot?: string;
+  baseRef?: string;
+  headRef?: string;
+  outputTarget?: ReturnType<typeof createOutputTarget>;
+  plannedNotes: PlannedNoteFile[];
+  successfulFiles: SuccessfulFileOutcome[];
+  skippedFiles: SkippedFileOutcome[];
+}): string {
+  return renderReviewIndex({
+    repoRoot: input.repoRoot ?? "/workspace/repo",
+    baseRef: input.baseRef ?? "main",
+    headRef: input.headRef ?? "feature-branch",
+    outputTarget: input.outputTarget ?? createOutputTarget(),
+    plannedNotes: input.plannedNotes,
+    resolvedOutcomes: createResolvedOutcomes(input.plannedNotes, input.successfulFiles, input.skippedFiles)
+  });
+}
 
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    outputTarget: createOutputTarget(),
+test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links", () => {
+  const rendered = renderIndex({
     plannedNotes: createPlannedNotes([
       plannedNote("README.md", "README.md.md"),
       plannedNote("src/app.ts", "src__app.ts.md"),
@@ -65,13 +81,7 @@ test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links"
 });
 
 test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs", () => {
-  const finalizer = new ReviewIndexFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    outputTarget: createOutputTarget(),
+  const rendered = renderIndex({
     plannedNotes: [],
     successfulFiles: [],
     skippedFiles: []
@@ -85,9 +95,7 @@ test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs"
 });
 
 test("ReviewIndexFinalizer preserves collision-resolved note targets and forward slashes", () => {
-  const finalizer = new ReviewIndexFinalizer();
-
-  const rendered = finalizer.render({
+  const rendered = renderIndex({
     repoRoot: String.raw`C:\workspace\repo`,
     baseRef: "main",
     headRef: "feature-branch",
@@ -121,9 +129,7 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
 });
 
 test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => {
-  const finalizer = new ReviewIndexFinalizer();
-
-  const rendered = finalizer.render({
+  const rendered = renderIndex({
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
@@ -146,9 +152,7 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
 });
 
 test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None with skipped files last", () => {
-  const finalizer = new ReviewIndexFinalizer();
-
-  const rendered = finalizer.render({
+  const rendered = renderIndex({
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
@@ -185,9 +189,7 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
 });
 
 test("ReviewIndexFinalizer preserves planned order within the same risk level", () => {
-  const finalizer = new ReviewIndexFinalizer();
-
-  const rendered = finalizer.render({
+  const rendered = renderIndex({
     repoRoot: "/workspace/repo",
     baseRef: "main",
     headRef: "feature-branch",
@@ -213,15 +215,9 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
 });
 
 test("ReviewIndexFinalizer throws with identifying message when a planned file is absent from both outcome sets", () => {
-  const finalizer = new ReviewIndexFinalizer();
-
   assert.throws(
     () =>
-      finalizer.render({
-        repoRoot: "/workspace/repo",
-        baseRef: "main",
-        headRef: "feature-branch",
-        outputTarget: createOutputTarget(),
+      renderIndex({
         plannedNotes: createPlannedNotes([
           plannedNote("src/missing.ts", "src__missing.ts.md")
         ]),
@@ -240,13 +236,7 @@ test("ReviewIndexFinalizer throws with identifying message when a planned file i
 });
 
 test("ReviewIndexFinalizer labels a file present in both outcome sets as its risk level (successfulFiles wins)", () => {
-  const finalizer = new ReviewIndexFinalizer();
-
-  const rendered = finalizer.render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    outputTarget: createOutputTarget(),
+  const rendered = renderIndex({
     plannedNotes: createPlannedNotes([
       plannedNote("src/both.ts", "src__both.ts.md")
     ]),

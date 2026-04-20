@@ -3,6 +3,7 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "../../src/core/review-path-resolver.ts";
+import { resolveFileOutcomes, type ResolvedFileOutcome } from "../../src/core/run-outcome-resolver.ts";
 import type { VerifierReportArtifactEntry } from "../../src/core/verifier-report.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../../src/core/run-outcomes.ts";
 
@@ -129,4 +130,12 @@ export function createPlannedNotesFromPaths(
       `${DEFAULT_BASE_PATH}/files/${filePath.replace(/\//gu, "__")}.md`
     )
   );
+}
+
+export function createResolvedOutcomes(
+  plannedNotes: PlannedNoteFile[],
+  successfulFiles: SuccessfulFileOutcome[],
+  skippedFiles: SkippedFileOutcome[]
+): ResolvedFileOutcome[] {
+  return resolveFileOutcomes(plannedNotes, successfulFiles, skippedFiles);
 }

@@ -3,33 +3,45 @@ import test from "node:test";
 
 import {
   MANIFEST_SCHEMA_VERSION,
-  RunManifestFinalizer
+  renderRunManifest
 } from "../../../src/core/finalizers/run-manifest-finalizer.ts";
 import type {
   ManifestSchema,
-  RunManifestRenderInput,
   SuccessfulFileEntry
 } from "../../../src/core/finalizers/run-manifest-finalizer.ts";
+import type { PlannedNoteFile } from "../../../src/core/review-path-resolver.ts";
+import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../../../src/core/run-outcomes.ts";
 import {
   createFinding,
   createOutputTarget,
   createPlannedNotes,
+  createResolvedOutcomes,
   createSkippedFile,
   createSuccessfulFile
 } from "../../helpers/completed-run-finalizer-contract-fixture.ts";
 
 function renderManifest(
-  overrides: Partial<RunManifestRenderInput> = {}
+  overrides: {
+    repoRoot?: string;
+    baseRef?: string;
+    headRef?: string;
+    outputTarget?: ReturnType<typeof createOutputTarget>;
+    plannedNotes?: PlannedNoteFile[];
+    successfulFiles?: SuccessfulFileOutcome[];
+    skippedFiles?: SkippedFileOutcome[];
+  } = {}
 ): ManifestSchema {
-  const rendered = new RunManifestFinalizer().render({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
-    outputTarget: createOutputTarget(),
-    plannedNotes: [],
-    successfulFiles: [],
-    skippedFiles: [],
-    ...overrides
+  const plannedNotes = overrides.plannedNotes ?? [];
+  const successfulFiles = overrides.successfulFiles ?? [];
+  const skippedFiles = overrides.skippedFiles ?? [];
+
+  const rendered = renderRunManifest({
+    repoRoot: overrides.repoRoot ?? "/workspace/repo",
+    baseRef: overrides.baseRef ?? "main",
+    headRef: overrides.headRef ?? "feature-branch",
+    outputTarget: overrides.outputTarget ?? createOutputTarget(),
+    plannedNotes,
+    resolvedOutcomes: createResolvedOutcomes(plannedNotes, successfulFiles, skippedFiles)
   });
 
   return JSON.parse(rendered) as ManifestSchema;
