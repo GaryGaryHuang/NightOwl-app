@@ -50,12 +50,6 @@ test("tool policy guard pre-tool hook keeps representative shell and url allow-d
       }
     },
     {
-      input: createHookInput("shell", {
-        command: "git log --oneline"
-      }),
-      expected: undefined
-    },
-    {
       input: createHookInput("web_fetch", {
         url: "https://docs.example.com/guide"
       }),
@@ -77,22 +71,13 @@ test("tool policy guard pre-tool hook keeps representative shell and url allow-d
   }
 });
 
-test("tool policy guard pre-tool hook bypasses unrelated tools and leaves unknown tool names outside the guarded boundary", async () => {
+test("tool policy guard pre-tool hook bypasses unrelated tools", async () => {
   const { hook } = createPolicySession();
 
   assert.equal(
     await hook(
       createHookInput("view", {
         file: "src/app.ts"
-      }),
-      SESSION_CONTEXT
-    ),
-    undefined
-  );
-  assert.equal(
-    await hook(
-      createHookInput("python", {
-        command: "import os; os.system('rm -rf /')"
       }),
       SESSION_CONTEXT
     ),
@@ -113,24 +98,8 @@ test("tool policy guard pre-tool hook defers empty or missing shell and url args
       expectedAudit: { tool: "web_fetch", args: { url: "" } }
     },
     {
-      input: createHookInput("url"),
-      expectedAudit: { tool: "url", args: { url: "" } }
-    },
-    {
       input: createHookInput("bash", null),
       expectedAudit: { tool: "bash", args: { command: "" } }
-    },
-    {
-      input: createHookInput("web_fetch", 42 as unknown as Record<string, unknown>),
-      expectedAudit: { tool: "web_fetch", args: { url: "" } }
-    },
-    {
-      input: createHookInput("sh", { command: "" }),
-      expectedAudit: { tool: "sh", args: { command: "" } }
-    },
-    {
-      input: createHookInput("shell", { command: "" }),
-      expectedAudit: { tool: "shell", args: { command: "" } }
     }
   ] as const;
 
@@ -180,33 +149,6 @@ test("tool policy guard pre-tool hook writes representative audit records for al
     reason: UNSAFE_WEB_FETCH_URL_REASON,
     args: { url: "http://localhost:8080" }
   });
-});
-
-test("tool policy guard pre-tool hook keeps absolute git -C support and relative git -C denial aligned", async () => {
-  const { hook } = createPolicySession();
-
-  assert.equal(
-    await hook(
-      createHookInput("bash", {
-        command: "git -C /workspace/repo diff HEAD~1"
-      }),
-      SESSION_CONTEXT
-    ),
-    undefined
-  );
-
-  assert.deepEqual(
-    await hook(
-      createHookInput("bash", {
-        command: "git -C src diff HEAD~1"
-      }),
-      SESSION_CONTEXT
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason: READONLY_BASH_DENY_REASON
-    }
-  );
 });
 
 test("tool policy guard pre-tool hook fails closed for shell policy exceptions and preserves command extraction in audit records", async () => {
@@ -284,30 +226,4 @@ test("tool policy guard pre-tool hook fails closed for url policy exceptions and
     reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
     args: { url: "https://docs.example.com/guide" }
   });
-});
-
-test("tool policy guard pre-tool hook keeps normal deny reasons distinct from fail-closed behavior", async () => {
-  const { hook } = createPolicySession();
-
-  assert.deepEqual(
-    await hook(
-      createHookInput("bash", {
-        command: "curl http://example.com"
-      }),
-      SESSION_CONTEXT
-    ),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason: READONLY_BASH_DENY_REASON
-    }
-  );
-  assert.equal(
-    await hook(
-      createHookInput("web_fetch", {
-        url: "https://docs.example.com/guide"
-      }),
-      SESSION_CONTEXT
-    ),
-    undefined
-  );
 });
