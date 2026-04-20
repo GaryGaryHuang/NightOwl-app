@@ -15,6 +15,7 @@ function assertMcpConfigError(input: {
 
       if (input.serverName) {
         assert.match(err.message, new RegExp(`mcpServers\\.${input.serverName}:`, "u"));
+        assert.ok(err.cause instanceof Error);
       } else {
         assert.ok(err.message.includes("mcpServers"));
         assert.ok(!err.message.startsWith("mcpServers."));
@@ -22,6 +23,9 @@ function assertMcpConfigError(input: {
 
       if (input.fieldOrValue) {
         assert.ok(err.message.includes(input.fieldOrValue));
+        if (err.cause instanceof Error) {
+          assert.ok(err.cause.message.includes(input.fieldOrValue));
+        }
       }
 
       return true;
