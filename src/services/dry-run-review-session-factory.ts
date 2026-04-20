@@ -5,19 +5,8 @@ import type {
   ReviewSessionFactoryLike,
   ReviewSessionProfileLike
 } from "../core/session-factory-contracts.ts";
+import { buildStubSessionExecutor } from "./dry-run-session-executor.ts";
 import { SessionExecutor } from "./session-executor.ts";
-
-function buildStubSessionExecutor(
-  responseProvider: (prompt: string) => string
-): SessionExecutor {
-  return new SessionExecutor({
-    async sendAndWait(options: { prompt: string }, _timeout?: number) {
-      return { data: { content: responseProvider(options.prompt) } };
-    },
-    async abort() {},
-    async disconnect() {}
-  });
-}
 
 /**
  * A session factory that returns deterministic stub responses for each review step.

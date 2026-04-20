@@ -45,6 +45,29 @@ describe("DryRunJudgeSessionFactory dry-run behavior", () => {
     assert.equal(await firstSession.sendAndWait("please evaluate"), "Y");
     assert.equal(await secondSession.sendAndWait("N"), "Y");
   });
+
+  test("honors a custom responseProvider override (e.g., simulate denial)", async () => {
+    const seenProfiles: { model: string; systemMessage: string }[] = [];
+    const factory = new DryRunJudgeSessionFactory({
+      responseProvider: (prompt, profile) => {
+        seenProfiles.push({
+          model: profile.model,
+          systemMessage: profile.systemMessage
+        });
+        return prompt.includes("deny") ? "N" : "Y";
+      }
+    });
+
+    const session = await factory.createSession({
+      model: "gpt-5.4-mini",
+      systemMessage: "judge system"
+    });
+
+    assert.equal(await session.sendAndWait("please deny this"), "N");
+    assert.deepEqual(seenProfiles, [
+      { model: "gpt-5.4-mini", systemMessage: "judge system" }
+    ]);
+  });
 });
 
 describe("Dry-run stub catalog completeness", () => {
