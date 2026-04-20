@@ -1,22 +1,11 @@
-import type { PlannedNoteFile } from "../review-path-resolver.ts";
-import { resolveFileOutcomes } from "../run-outcome-resolver.ts";
-import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../run-outcomes.ts";
+import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 
 export interface VerifierReportRenderInput {
-  plannedNotes: PlannedNoteFile[];
-  successfulFiles: SuccessfulFileOutcome[];
-  skippedFiles: SkippedFileOutcome[];
+  resolvedOutcomes: ResolvedFileOutcome[];
 }
 
-export class VerifierReportFinalizer {
-  render(input: VerifierReportRenderInput): string {
-    const resolved = resolveFileOutcomes(
-      input.plannedNotes,
-      input.successfulFiles,
-      input.skippedFiles
-    );
-
-    return resolved
+export function renderVerifierReport(input: VerifierReportRenderInput): string {
+    return input.resolvedOutcomes
       .flatMap((item) => item.outcome.verifierReportEntries)
       .map((entry) =>
         JSON.stringify({
@@ -39,5 +28,6 @@ export class VerifierReportFinalizer {
         })
       )
       .join("\n");
-  }
 }
+
+export type VerifierReportRenderer = typeof renderVerifierReport;

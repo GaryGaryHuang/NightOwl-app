@@ -21,12 +21,13 @@ import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
 import { FileReviewContext } from "./file-review-context.ts";
 import { DEFAULT_MAX_CONCURRENT_FILES } from "./max-concurrent-files.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
-import { ReviewNoteFinalizer } from "./finalizers/review-note-finalizer.ts";
-import { RunSummaryFinalizer } from "./finalizers/run-summary-finalizer.ts";
+import { renderReviewNote, type ReviewNoteRenderer } from "./finalizers/review-note-finalizer.ts";
+import { renderRunSummary, type RunSummaryRenderer } from "./finalizers/run-summary-finalizer.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
-import { ReviewIndexFinalizer } from "./finalizers/review-index-finalizer.ts";
-import { RunManifestFinalizer } from "./finalizers/run-manifest-finalizer.ts";
-import { VerifierReportFinalizer } from "./finalizers/verifier-report-finalizer.ts";
+import { renderReviewIndex, type ReviewIndexRenderer } from "./finalizers/review-index-finalizer.ts";
+import { renderRunManifest, type RunManifestRenderer } from "./finalizers/run-manifest-finalizer.ts";
+import { renderVerifierReport, type VerifierReportRenderer } from "./finalizers/verifier-report-finalizer.ts";
+import { resolveFileOutcomes } from "./run-outcome-resolver.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";
@@ -79,7 +80,7 @@ export interface ReviewRunSummary {
 
 export interface ReviewPerFileStepsFactoryInput {
   runContext: RunContext;
-  reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
+  renderReviewNote: ReviewNoteRenderer;
   promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
@@ -94,11 +95,11 @@ export interface ReviewOrchestratorOptions {
   onOutputTargetReady?: (outputTarget: OutputTarget) => void;
   perFileStepsFactory?: ReviewPerFileStepsFactory;
   reviewFileFilter: ReviewFileFilter;
-  reviewNoteFinalizer?: Pick<ReviewNoteFinalizer, "render">;
-  reviewIndexFinalizer?: Pick<ReviewIndexFinalizer, "render">;
-  runManifestFinalizer?: Pick<RunManifestFinalizer, "render">;
-  runSummaryFinalizer?: Pick<RunSummaryFinalizer, "render">;
-  verifierReportFinalizer?: Pick<VerifierReportFinalizer, "render">;
+  renderReviewNote?: ReviewNoteRenderer;
+  renderReviewIndex?: ReviewIndexRenderer;
+  renderRunManifest?: RunManifestRenderer;
+  renderRunSummary?: RunSummaryRenderer;
+  renderVerifierReport?: VerifierReportRenderer;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor?: OutputWriteHealthAssessor;
@@ -119,11 +120,11 @@ export class ReviewOrchestrator {
   readonly #stepRunner: Pick<StepRunner, "run">;
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
-  readonly #finalizer: Pick<ReviewNoteFinalizer, "render">;
-  readonly #runSummaryFinalizer: Pick<RunSummaryFinalizer, "render">;
-  readonly #reviewIndexFinalizer: Pick<ReviewIndexFinalizer, "render">;
-  readonly #verifierReportFinalizer: Pick<VerifierReportFinalizer, "render">;
-  readonly #runManifestFinalizer: Pick<RunManifestFinalizer, "render">;
+  readonly #renderReviewNote: ReviewNoteRenderer;
+  readonly #renderRunSummary: RunSummaryRenderer;
+  readonly #renderReviewIndex: ReviewIndexRenderer;
+  readonly #renderVerifierReport: VerifierReportRenderer;
+  readonly #renderRunManifest: RunManifestRenderer;
   readonly #maxConcurrentFiles: number;
   readonly #onProgressEvent?: RunProgressEventHandler;
   readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
@@ -152,11 +153,11 @@ export class ReviewOrchestrator {
     this.#stepRunner = options.stepRunner;
     this.#workingDirectory = options.workingDirectory;
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
-    this.#finalizer = options.reviewNoteFinalizer ?? new ReviewNoteFinalizer();
-    this.#runSummaryFinalizer = options.runSummaryFinalizer ?? new RunSummaryFinalizer();
-    this.#reviewIndexFinalizer = options.reviewIndexFinalizer ?? new ReviewIndexFinalizer();
-    this.#verifierReportFinalizer = options.verifierReportFinalizer ?? new VerifierReportFinalizer();
-    this.#runManifestFinalizer = options.runManifestFinalizer ?? new RunManifestFinalizer();
+    this.#renderReviewNote = options.renderReviewNote ?? renderReviewNote;
+    this.#renderRunSummary = options.renderRunSummary ?? renderRunSummary;
+    this.#renderReviewIndex = options.renderReviewIndex ?? renderReviewIndex;
+    this.#renderVerifierReport = options.renderVerifierReport ?? renderVerifierReport;
+    this.#renderRunManifest = options.renderRunManifest ?? renderRunManifest;
     this.#maxConcurrentFiles =
       options.maxConcurrentFiles ?? DEFAULT_MAX_CONCURRENT_FILES;
     this.#onProgressEvent = options.onProgressEvent;
@@ -268,7 +269,7 @@ export class ReviewOrchestrator {
       abortGuard.throwIfAborted();
       await outputPublisher.publishFileReview({
         filePath: plannedNote.filePath,
-        content: this.#finalizer.render(
+        content: this.#renderReviewNote(
           new FileReviewContext({
             filePath: plannedNote.filePath,
             noteFilePath: plannedNote.noteFilePath,
@@ -290,7 +291,7 @@ export class ReviewOrchestrator {
     // Steps 2–7 each receive the progressively built review state via <review_state> so each step builds on prior output.
     const steps = this.#perFileStepsFactory({
       runContext,
-      reviewNoteFinalizer: this.#finalizer,
+      renderReviewNote: this.#renderReviewNote,
       promptSerializer: this.#promptSerializer
     });
     const outcomeSlots: (PlannedOutcomeSlot | undefined)[] = new Array(plannedNoteFiles.length);
@@ -314,6 +315,12 @@ export class ReviewOrchestrator {
       slot?.kind === "skipped" ? [slot.outcome] : []
     );
 
+    const resolvedOutcomes = resolveFileOutcomes(
+      plannedNoteFiles,
+      successfulFiles,
+      skippedFiles
+    );
+
     this.#emitProgressEvent({
       type: "run-finalizing",
       plannedFileCount: plannedNoteFiles.length,
@@ -325,25 +332,22 @@ export class ReviewOrchestrator {
 
     await this.#tryPublishFinalizer("summary", finalizerFailures, () =>
       outputPublisher.publishArtifact("summary", {
-        content: this.#runSummaryFinalizer.render({
+        content: this.#renderRunSummary({
           repoRoot,
           baseRef: request.baseRef,
           headRef: request.headRef,
-          plannedNotes: plannedNoteFiles,
-          successfulFiles,
-          skippedFiles
+          resolvedOutcomes
         })
       })
     );
 
     await this.#tryPublishFinalizer("index", finalizerFailures, () =>
       outputPublisher.publishArtifact("index", {
-        content: this.#reviewIndexFinalizer.render({
+        content: this.#renderReviewIndex({
           repoRoot,
           baseRef: request.baseRef,
           headRef: request.headRef,
-          successfulFiles,
-          skippedFiles,
+          resolvedOutcomes,
           outputTarget,
           plannedNotes: plannedNoteFiles
         })
@@ -352,22 +356,19 @@ export class ReviewOrchestrator {
 
     await this.#tryPublishFinalizer("verifier-report", finalizerFailures, () =>
       outputPublisher.publishArtifact("verifier-report", {
-        content: this.#verifierReportFinalizer.render({
-          plannedNotes: plannedNoteFiles,
-          successfulFiles,
-          skippedFiles
+        content: this.#renderVerifierReport({
+          resolvedOutcomes
         })
       })
     );
 
     await this.#tryPublishFinalizer("manifest", finalizerFailures, () =>
       outputPublisher.publishArtifact("manifest", {
-        content: this.#runManifestFinalizer.render({
+        content: this.#renderRunManifest({
           repoRoot,
           baseRef: request.baseRef,
           headRef: request.headRef,
-          successfulFiles,
-          skippedFiles,
+          resolvedOutcomes,
           outputTarget,
           plannedNotes: plannedNoteFiles
         })
@@ -572,7 +573,7 @@ export class ReviewOrchestrator {
       try {
         await input.outputPublisher.publishFileReview({
           filePath: fileContext.filePath,
-          content: this.#finalizer.render(fileContext)
+          content: this.#renderReviewNote(fileContext)
         });
       } catch (outputError) {
         // A snapshot write failure is classified before deciding whether the run should abort or the file should skip.
@@ -649,7 +650,7 @@ export class ReviewOrchestrator {
     try {
       await input.outputPublisher.publishFileReview({
         filePath: input.fileContext.filePath,
-        content: this.#finalizer.render(input.fileContext)
+        content: this.#renderReviewNote(input.fileContext)
       });
     } catch (outputError) {
       input.abortGuard.markAborted(outputError);

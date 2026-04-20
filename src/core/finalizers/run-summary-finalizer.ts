@@ -1,44 +1,35 @@
-import type { PlannedNoteFile } from "../review-path-resolver.ts";
-import { deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "../risk-level.ts";
-import { resolveFileOutcomes } from "../run-outcome-resolver.ts";
-import type { SuccessfulFileOutcome, SkippedFileOutcome } from "../run-outcomes.ts";
+import { countMustFindings, countNiceFindings, deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "../risk-level.ts";
+import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 
 export interface RunSummaryRenderInput {
   repoRoot: string;
   baseRef: string;
   headRef: string;
-  plannedNotes: PlannedNoteFile[];
-  successfulFiles: SuccessfulFileOutcome[];
-  skippedFiles: SkippedFileOutcome[];
+  resolvedOutcomes: ResolvedFileOutcome[];
 }
 
 /**
  * Render the run-level summary from finalized per-file outcomes and derived risk levels.
  */
-export class RunSummaryFinalizer {
-  render(input: RunSummaryRenderInput): string {
-    // Validate that every planned file has a finalized outcome before rendering.
-    resolveFileOutcomes(
-      input.plannedNotes,
-      input.successfulFiles,
-      input.skippedFiles
-    );
+export function renderRunSummary(input: RunSummaryRenderInput): string {
+    const plannedFileCount = input.resolvedOutcomes.length;
+    const successfulFiles = input.resolvedOutcomes
+      .filter((r): r is Extract<ResolvedFileOutcome, { status: "successful" }> => r.status === "successful")
+      .map((r) => r.outcome);
+    const skippedFiles = input.resolvedOutcomes
+      .filter((r): r is Extract<ResolvedFileOutcome, { status: "skipped" }> => r.status === "skipped")
+      .map((r) => r.outcome);
 
-    const plannedFileCount = input.plannedNotes.length;
-    const totalMust = input.successfulFiles.reduce(
-      (count, file) =>
-        count +
-        file.findings.filter((finding) => finding.type === "must").length,
+    const totalMust = successfulFiles.reduce(
+      (count, file) => count + countMustFindings(file.findings),
       0
     );
-    const totalNice = input.successfulFiles.reduce(
-      (count, file) =>
-        count +
-        file.findings.filter((finding) => finding.type === "nice").length,
+    const totalNice = successfulFiles.reduce(
+      (count, file) => count + countNiceFindings(file.findings),
       0
     );
 
-    const successfulFilesWithRisk = input.successfulFiles.map((file) => ({
+    const successfulFilesWithRisk = successfulFiles.map((file) => ({
       file,
       risk: deriveFileRiskLevel(file.findings)
     }));
@@ -61,19 +52,15 @@ export class RunSummaryFinalizer {
       sortedSuccessfulFiles.length === 0
         ? ["- 無"]
         : sortedSuccessfulFiles.map(({ file, risk }) => {
-            const mustCount = file.findings.filter(
-              (finding) => finding.type === "must"
-            ).length;
-            const niceCount = file.findings.filter(
-              (finding) => finding.type === "nice"
-            ).length;
+            const mustCount = countMustFindings(file.findings);
+            const niceCount = countNiceFindings(file.findings);
 
             return `- [${risk}] \`${file.filePath}\` — must=${mustCount}, nice=${niceCount}`;
           });
     const skippedLines =
-      input.skippedFiles.length === 0
+      skippedFiles.length === 0
         ? ["- 無"]
-        : input.skippedFiles.map(
+        : skippedFiles.map(
             (file) => `- \`${file.filePath}\` — ${file.stepId} — ${file.reason}`
           );
 
@@ -84,8 +71,8 @@ export class RunSummaryFinalizer {
       `- Base ref: \`${input.baseRef}\``,
       `- Head ref: \`${input.headRef}\``,
       `- Planned files: ${plannedFileCount}`,
-      `- Successful files: ${input.successfulFiles.length}`,
-      `- Skipped files: ${input.skippedFiles.length}`,
+      `- Successful files: ${successfulFiles.length}`,
+      `- Skipped files: ${skippedFiles.length}`,
       `- Final findings totals: must=${totalMust}, nice=${totalNice}`,
       "",
       "## Risk Distribution",
@@ -100,5 +87,6 @@ export class RunSummaryFinalizer {
       "## Skipped Files",
       ...skippedLines
     ].join("\n");
-  }
 }
+
+export type RunSummaryRenderer = typeof renderRunSummary;

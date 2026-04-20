@@ -5,8 +5,7 @@ import type {
   PlannedNoteFile
 } from "../review-path-resolver.ts";
 import { deriveFileRiskLevel, RISK_ORDER } from "../risk-level.ts";
-import { resolveFileOutcomes } from "../run-outcome-resolver.ts";
-import type { SuccessfulFileOutcome, SkippedFileOutcome } from "../run-outcomes.ts";
+import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 
 // Derives from RISK_ORDER key count so skipped items always sort after every known risk level.
 const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;
@@ -17,20 +16,17 @@ export interface ReviewIndexRenderInput {
   headRef: string;
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
-  successfulFiles: SuccessfulFileOutcome[];
-  skippedFiles: SkippedFileOutcome[];
+  resolvedOutcomes: ResolvedFileOutcome[];
 }
 
 /**
  * Render the run index with deterministic artifact links and severity-ordered file notes.
  */
-export class ReviewIndexFinalizer {
-  render(input: ReviewIndexRenderInput): string {
-    const resolvedOutcomes = resolveFileOutcomes(
-      input.plannedNotes,
-      input.successfulFiles,
-      input.skippedFiles
-    );
+export function renderReviewIndex(input: ReviewIndexRenderInput): string {
+    const resolvedOutcomes = input.resolvedOutcomes;
+
+    const successfulCount = resolvedOutcomes.filter((r) => r.status === "successful").length;
+    const skippedCount = resolvedOutcomes.filter((r) => r.status === "skipped").length;
 
     const indexedOutcomes = input.plannedNotes.map((note, index) => ({
       note,
@@ -71,8 +67,8 @@ export class ReviewIndexFinalizer {
       `- Base ref: \`${input.baseRef}\``,
       `- Head ref: \`${input.headRef}\``,
       `- Planned files: ${input.plannedNotes.length}`,
-      `- Successful files: ${input.successfulFiles.length}`,
-      `- Skipped files: ${input.skippedFiles.length}`,
+      `- Successful files: ${successfulCount}`,
+      `- Skipped files: ${skippedCount}`,
       "",
       "## Run Artifacts",
       `- [changeset-overview.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.changesetOverviewPath)})`,
@@ -82,8 +78,9 @@ export class ReviewIndexFinalizer {
       "## File Notes",
       ...fileNoteLines
     ].join("\n");
-  }
 }
+
+export type ReviewIndexRenderer = typeof renderReviewIndex;
 
 function toRelativeLink(basePath: string, targetPath: string): string {
   const normalizedBasePath = normalizeForLink(basePath);

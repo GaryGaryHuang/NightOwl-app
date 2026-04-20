@@ -7,13 +7,12 @@ import type {
 /**
  * Render the canonical in-memory file state into the Markdown review note shape.
  */
-export class ReviewNoteFinalizer {
-  render(
-    context: Pick<
-      FileReviewContext,
-      "filePath" | "getSectionEntries" | "getFindingsInsertionIndex" | "getFindings" | "getInterruption"
-    >
-  ): string {
+export function renderReviewNote(
+  context: Pick<
+    FileReviewContext,
+    "filePath" | "getSectionEntries" | "getFindingsInsertionIndex" | "getFindings" | "getInterruption"
+  >
+): string {
     const allEntries = context.getSectionEntries();
     const findingsInsertionIndex = context.getFindingsInsertionIndex();
     const findingsSection = renderFindingsSection(
@@ -79,8 +78,9 @@ export class ReviewNoteFinalizer {
         index === 0 ? [section] : ["", section]
       )
     ].join("\n");
-  }
 }
+
+export type ReviewNoteRenderer = typeof renderReviewNote;
 
 function renderFileHeader(filePath: string): string[] {
   return [`# ${filePath}`, "", `- Source file: \`${filePath}\``];

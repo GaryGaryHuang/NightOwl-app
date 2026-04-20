@@ -1,11 +1,10 @@
-import { deriveFileRiskLevel } from "../risk-level.ts";
+import { countMustFindings, countNiceFindings, deriveFileRiskLevel } from "../risk-level.ts";
 import type { RiskLevel } from "../risk-level.ts";
 import type {
   OutputTarget,
   PlannedNoteFile
 } from "../review-path-resolver.ts";
-import { resolveFileOutcomes } from "../run-outcome-resolver.ts";
-import type { SuccessfulFileOutcome, SkippedFileOutcome } from "../run-outcomes.ts";
+import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 
 export const MANIFEST_SCHEMA_VERSION = 3 as const;
 
@@ -46,32 +45,25 @@ export interface RunManifestRenderInput {
   headRef: string;
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
-  successfulFiles: SuccessfulFileOutcome[];
-  skippedFiles: SkippedFileOutcome[];
+  resolvedOutcomes: ResolvedFileOutcome[];
 }
 
 /**
  * Render a deterministic machine-readable manifest of the completed review run.
  */
-export class RunManifestFinalizer {
-  render(input: RunManifestRenderInput): string {
-    const resolvedOutcomes = resolveFileOutcomes(
-      input.plannedNotes,
-      input.successfulFiles,
-      input.skippedFiles
-    );
+export function renderRunManifest(input: RunManifestRenderInput): string {
+    const resolvedOutcomes = input.resolvedOutcomes;
+
+    const successfulCount = resolvedOutcomes.filter((r) => r.status === "successful").length;
+    const skippedCount = resolvedOutcomes.filter((r) => r.status === "skipped").length;
 
     const files: ManifestFileEntry[] = input.plannedNotes.map(
       (plannedNote, index): ManifestFileEntry => {
         const resolved = resolvedOutcomes[index];
 
         if (resolved.status === "successful") {
-          const mustCount = resolved.outcome.findings.filter(
-            (finding) => finding.type === "must"
-          ).length;
-          const niceCount = resolved.outcome.findings.filter(
-            (finding) => finding.type === "nice"
-          ).length;
+          const mustCount = countMustFindings(resolved.outcome.findings);
+          const niceCount = countNiceFindings(resolved.outcome.findings);
 
           return {
             filePath: plannedNote.filePath,
@@ -99,8 +91,8 @@ export class RunManifestFinalizer {
       baseRef: input.baseRef,
       headRef: input.headRef,
       plannedFileCount: input.plannedNotes.length,
-      successfulFileCount: input.successfulFiles.length,
-      skippedFileCount: input.skippedFiles.length,
+      successfulFileCount: successfulCount,
+      skippedFileCount: skippedCount,
       artifacts: {
         basePath: input.outputTarget.basePath,
         changesetOverviewPath: input.outputTarget.changesetOverviewPath,
@@ -116,5 +108,6 @@ export class RunManifestFinalizer {
     };
 
     return JSON.stringify(manifest, null, 2);
-  }
 }
+
+export type RunManifestRenderer = typeof renderRunManifest;
