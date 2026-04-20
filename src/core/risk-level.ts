@@ -1,5 +1,8 @@
 import type { Finding, FindingDisposition } from "./file-review-context.ts";
 
+// "Medium" is retained for downstream output contract compatibility.
+// The current deterministic mapping in `deriveFileRiskLevel` never emits it.
+// If future risk heuristics need a Medium tier, the plumbing is already in place.
 export type RiskLevel = "High" | "Medium" | "Low" | "None";
 
 // Shared severity ordering for run-level outputs: strong must-fix findings rank above weaker musts, then nice-to-haves.
@@ -10,13 +13,20 @@ export const RISK_ORDER: Record<RiskLevel, number> = {
   None: 3
 };
 
+export function countMustFindings(findings: Finding[] | undefined): number {
+  return findings?.filter((f) => f.type === "must").length ?? 0;
+}
+
+export function countNiceFindings(findings: Finding[] | undefined): number {
+  return findings?.filter((f) => f.type === "nice").length ?? 0;
+}
+
 /**
  * Collapse finalized findings into the run-level risk label shown in summaries, indexes, and manifests.
  *
  * Risk semantics are intentionally independent of model-authored confidence.
  * Any accepted must-fix finding escalates the file to High; nice-only findings map to Low;
- * and no accepted findings maps to None. The Medium enum value is retained for compatibility
- * with downstream output contracts even though the current deterministic mapping does not emit it.
+ * and no accepted findings maps to None.
  */
 export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel {
   if (!findings || findings.length === 0) {
@@ -57,8 +67,8 @@ export function buildRiskSnapshot(
   const derivedRiskLevel = deriveFileRiskLevel(findings);
   const safe = findings ?? [];
   const safeDispositions = dispositions ?? [];
-  const mustCount = safe.filter((f) => f.type === "must").length;
-  const niceCount = safe.filter((f) => f.type === "nice").length;
+  const mustCount = countMustFindings(findings);
+  const niceCount = countNiceFindings(findings);
   const acceptedFindingIds = safe.map((f) => f.findingId);
   const retiredFindingCount = safeDispositions.filter(
     (disposition) => disposition.status === "retired"
