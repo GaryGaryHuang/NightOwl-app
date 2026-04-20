@@ -251,6 +251,43 @@ test("resolveMcpServersFromConfigObject rejects invalid remote MCP shapes with e
   }
 });
 
+test("resolveMcpServersFromConfigObject rejects unknown non-context7 MCP fields before value parsing", () => {
+  const cases: Array<{ definition: Record<string, unknown>; fieldOrValue: string }> = [
+    {
+      definition: { type: "local", command: "npx", timeOut: 1000 },
+      fieldOrValue: "timeOut"
+    },
+    {
+      definition: { type: "stdio", command: "node", url: "https://mcp.example.com/v1" },
+      fieldOrValue: "url"
+    },
+    {
+      definition: {
+        type: "http",
+        url: "https://mcp.example.com/v1",
+        command: "npx"
+      },
+      fieldOrValue: "command"
+    },
+    {
+      definition: {
+        type: "sse",
+        url: "https://mcp.example.com/v1",
+        headerz: { Authorization: "Bearer tok123" }
+      },
+      fieldOrValue: "headerz"
+    }
+  ];
+
+  for (const { definition, fieldOrValue } of cases) {
+    assertMcpConfigError({
+      config: { mcpServers: { demo: definition } },
+      fieldOrValue,
+      serverName: "demo"
+    });
+  }
+});
+
 test("resolveMcpServersFromConfigObject rejects invalid context7 override boundaries with enriched error context", () => {
   const cases: Array<{ definition: Record<string, unknown>; fieldOrValue: string }> = [
     { definition: { type: "sse", tools: ["resolve-library-id"] }, fieldOrValue: "type" },

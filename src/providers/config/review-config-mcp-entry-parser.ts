@@ -16,6 +16,24 @@ const CONTEXT7_ALLOWED_KEYS: ReadonlySet<string> = new Set([
   "timeout"
 ]);
 
+const LOCAL_ALLOWED_KEYS: ReadonlySet<string> = new Set([
+  "type",
+  "command",
+  "args",
+  "env",
+  "tools",
+  "cwd",
+  "timeout"
+]);
+
+const REMOTE_ALLOWED_KEYS: ReadonlySet<string> = new Set([
+  "type",
+  "url",
+  "headers",
+  "tools",
+  "timeout"
+]);
+
 type ReviewNonContext7McpType = "local" | "stdio" | "http" | "sse";
 
 export function resolveMcpServerEntry(
@@ -64,6 +82,8 @@ function resolveRemoteMcpEntry(
   rawDefinition: Record<string, unknown>,
   type: "http" | "sse"
 ): ReviewMcpServerConfig {
+  assertSupportedFields(rawDefinition, REMOTE_ALLOWED_KEYS);
+
   const url = readRequiredField(rawDefinition, "url", readNonEmptyString, "'url' must be a non-empty string");
 
   let parsedUrl: URL;
@@ -94,6 +114,8 @@ function resolveLocalMcpEntry(
   rawDefinition: Record<string, unknown>,
   type: "local" | "stdio"
 ): ReviewMcpServerConfig {
+  assertSupportedFields(rawDefinition, LOCAL_ALLOWED_KEYS);
+
   const command = readRequiredField(rawDefinition, "command", readNonBlankString, "'command' must be a non-blank string");
   const args = readOptionalField(rawDefinition, "args", readStringArray, "'args' must be an array of strings");
   const env = readOptionalField(rawDefinition, "env", readStringRecord, "'env' must be a string record");
