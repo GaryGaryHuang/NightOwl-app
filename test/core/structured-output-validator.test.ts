@@ -72,13 +72,8 @@ function validate(input: {
 function validateAndFilter(input: {
   responseText: string;
   diffContent?: string;
-  thresholds?: { must: number; nice: number };
 }) {
-  const validator = new StructuredOutputValidator(
-    input.thresholds === undefined
-      ? {}
-      : { confidenceThresholds: input.thresholds }
-  );
+  const validator = new StructuredOutputValidator();
   const payload = validator.validate({
     responseText: input.responseText,
     ...(input.diffContent === undefined ? {} : { diffContent: input.diffContent })
@@ -296,7 +291,7 @@ test("StructuredOutputValidator filterByAcceptance keeps supported credible find
   );
 });
 
-test("StructuredOutputValidator filterByAcceptance ignores supplied confidence thresholds once deterministic gates pass", () => {
+test("StructuredOutputValidator filterByAcceptance keeps low-confidence findings once deterministic gates pass", () => {
   const keptMust = finding({
     findingId: "F1",
     type: "must",
@@ -347,8 +342,7 @@ test("StructuredOutputValidator filterByAcceptance ignores supplied confidence t
           }
         })
       ]),
-      diffContent: `${customHunkHeader}\n-old\n+new\n`,
-      thresholds: { must: 70, nice: 85 }
+      diffContent: `${customHunkHeader}\n-old\n+new\n`
     }),
     { schemaVersion: 2, findings: [keptMust, keptNice] }
   );
@@ -1452,7 +1446,7 @@ test("filterByAcceptanceWithReport rejects non-credible reachability with REACHA
 });
 
 test("filterByAcceptanceWithReport accepts low modelConfidence finding once deterministic gates pass", () => {
-  const validator = new StructuredOutputValidator({ confidenceThresholds: { must: 80, nice: 90 } });
+  const validator = new StructuredOutputValidator();
   const f = finding({ traceability: lineRangeTraceability(21, 22), modelConfidence: 0 });
   const validated = validator.validate({
     responseText: payload([f]),

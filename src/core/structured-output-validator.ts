@@ -1,4 +1,3 @@
-import type { ConfidenceThresholds } from "./confidence-thresholds.ts";
 import { buildDiffAnchorMap, type DiffAnchorMap } from "./diff-anchor-map.ts";
 import type {
   DependencyPathException,
@@ -21,16 +20,10 @@ import {
 } from "./finding-anchor-verifier.ts";
 import type { VerifierReportEntry } from "./verifier-report.ts";
 
-export interface StructuredOutputValidatorOptions {
-  confidenceThresholds?: ConfidenceThresholds;
-}
-
 /**
  * Deterministically validate structured findings JSON before it is written into review state.
  */
 export class StructuredOutputValidator {
-  constructor(_options: StructuredOutputValidatorOptions = {}) {}
-
   validate(input: {
     responseText: string;
     diffContent?: string;

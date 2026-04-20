@@ -3,8 +3,8 @@ export interface ConfidenceThresholds {
   nice: number;
 }
 
-// Baseline thresholds: must findings require 80%+ confidence; nice findings require 90%+ to reduce noise.
-// Overridable per-repo via .nightowl/reviewconfig.json confidenceThresholds.
+// Legacy compatibility thresholds accepted via .nightowl/reviewconfig.json.
+// They remain part of the parsed config surface but do not affect canonical acceptance filtering.
 export const DEFAULT_CONFIDENCE_THRESHOLDS: ConfidenceThresholds = Object.freeze({
   must: 80,
   nice: 90

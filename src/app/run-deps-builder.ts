@@ -193,9 +193,7 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     new StepRunner({
       reviewSessionFactory,
       judgeService,
-      structuredOutputValidator: new StructuredOutputValidator({
-        confidenceThresholds: reviewConfig.confidenceThresholds
-      })
+      structuredOutputValidator: new StructuredOutputValidator()
     });
 
   return new ReviewOrchestrator({
