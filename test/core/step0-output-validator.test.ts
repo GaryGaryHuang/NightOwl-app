@@ -18,13 +18,34 @@ function makeValid(overrides: Record<string, unknown> = {}): string {
         path: "src/app.ts",
         status: "M",
         category: "feature",
+        group: "review-flow",
         basis: "diff-inspected"
       }
     ],
+    fileGroups: [
+      {
+        id: "G1",
+        label: "review-flow",
+        files: ["src/app.ts"],
+        observedChange: "shared review flow behavior changed"
+      }
+    ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
     behaviorChanges: [
       {
         description: "新增 review CLI 入口參數",
-        files: ["src/app.ts"]
+        files: ["src/app.ts"],
+        evidenceRefs: ["R1"]
+      }
+    ],
+    evidenceRefs: [
+      {
+        id: "R1",
+        sourceKind: "diff",
+        pathOrUrl: "src/app.ts",
+        anchor: "@@ -1,2 +1,3 @@",
+        summary: "CLI entrypoint signature changed"
       }
     ],
     unresolvedUnknowns: [],
@@ -61,7 +82,10 @@ test("Step0OutputValidator accepts a happy minimal-core ChangeMap", () => {
   assert.equal(changeMap.schemaVersion, 1);
   assert.equal(changeMap.changedFiles.length, 1);
   assert.equal(changeMap.changedFiles[0].path, "src/app.ts");
+  assert.equal(changeMap.fileGroups.length, 1);
+  assert.equal(changeMap.fileGroups[0].label, "review-flow");
   assert.equal(changeMap.behaviorChanges.length, 1);
+  assert.equal(changeMap.evidenceRefs.length, 1);
   assert.equal(changeMap.unresolvedUnknowns.length, 0);
   assert.ok(changeMap.overviewMarkdown.startsWith("## Changeset Overview"));
 });
@@ -76,9 +100,15 @@ test("Step0OutputValidator returns a deeply frozen ChangeMap", () => {
   assert.ok(Object.isFrozen(changeMap));
   assert.ok(Object.isFrozen(changeMap.changedFiles));
   assert.ok(Object.isFrozen(changeMap.changedFiles[0]));
+  assert.ok(Object.isFrozen(changeMap.fileGroups));
+  assert.ok(Object.isFrozen(changeMap.fileGroups[0]));
+  assert.ok(Object.isFrozen(changeMap.fileGroups[0].files));
   assert.ok(Object.isFrozen(changeMap.behaviorChanges));
   assert.ok(Object.isFrozen(changeMap.behaviorChanges[0]));
   assert.ok(Object.isFrozen(changeMap.behaviorChanges[0].files));
+  assert.ok(Object.isFrozen(changeMap.behaviorChanges[0].evidenceRefs));
+  assert.ok(Object.isFrozen(changeMap.evidenceRefs));
+  assert.ok(Object.isFrozen(changeMap.evidenceRefs[0]));
   assert.ok(Object.isFrozen(changeMap.unresolvedUnknowns));
 
   assert.throws(() => {
@@ -138,7 +168,7 @@ test("Step0OutputValidator rejects unknown top-level fields", () => {
   expectFailure(
     () =>
       validator.validate({
-        responseText: makeValid({ fileGroups: [] }),
+        responseText: makeValid({ extraField: [] }),
         expectedChangedPaths: expectedSinglePath
       }),
     "SCHEMA"
@@ -155,11 +185,23 @@ test("Step0OutputValidator rejects extra changedFiles[] fields", () => {
         path: "src/app.ts",
         status: "M",
         category: "feature",
+        group: "review-flow",
         basis: "diff-inspected",
         notes: "extra"
       }
     ],
+    fileGroups: [
+      {
+        id: "G1",
+        label: "review-flow",
+        files: ["src/app.ts"],
+        observedChange: "changed"
+      }
+    ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
     behaviorChanges: [],
+    evidenceRefs: [],
     unresolvedUnknowns: []
   });
   expectFailure(
@@ -222,16 +264,29 @@ test("Step0OutputValidator fails with COVERAGE on extra paths not in changeset",
         path: "src/app.ts",
         status: "M",
         category: "feature",
+        group: "review-flow",
         basis: "diff-inspected"
       },
       {
         path: "src/extra.ts",
         status: "M",
         category: "feature",
+        group: "review-flow",
         basis: "name-status"
       }
     ],
+    fileGroups: [
+      {
+        id: "G1",
+        label: "review-flow",
+        files: ["src/app.ts", "src/extra.ts"],
+        observedChange: "changed"
+      }
+    ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
     behaviorChanges: [],
+    evidenceRefs: [],
     unresolvedUnknowns: []
   });
   expectFailure(
@@ -254,16 +309,29 @@ test("Step0OutputValidator fails with COVERAGE on duplicate path entries", () =>
         path: "src/app.ts",
         status: "M",
         category: "feature",
+        group: "review-flow",
         basis: "diff-inspected"
       },
       {
         path: "src/app.ts",
         status: "M",
         category: "feature",
+        group: "review-flow",
         basis: "diff-inspected"
       }
     ],
+    fileGroups: [
+      {
+        id: "G1",
+        label: "review-flow",
+        files: ["src/app.ts"],
+        observedChange: "changed"
+      }
+    ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
     behaviorChanges: [],
+    evidenceRefs: [],
     unresolvedUnknowns: []
   });
   expectFailure(
@@ -294,7 +362,11 @@ test("Step0OutputValidator accepts a zero-file changeset when both sides are emp
     schemaVersion: 1,
     overviewMarkdown: "## Changeset Overview\n- 無檔案異動",
     changedFiles: [],
+    fileGroups: [],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
     behaviorChanges: [],
+    evidenceRefs: [],
     unresolvedUnknowns: []
   });
 
@@ -322,6 +394,7 @@ test("Step0OutputValidator rejects placeholder markers", () => {
           responseText: makeValid({
             behaviorChanges: [
               { description: testCase.value, files: ["src/app.ts"] }
+              
             ]
           }),
           expectedChangedPaths: expectedSinglePath
@@ -348,7 +421,9 @@ test("Step0OutputValidator rejects correctness judgments in behaviorChanges", ()
       () =>
         validator.validate({
           responseText: makeValid({
-            behaviorChanges: [{ description, files: ["src/app.ts"] }]
+            behaviorChanges: [
+              { description, files: ["src/app.ts"], evidenceRefs: ["R1"] }
+            ]
           }),
           expectedChangedPaths: expectedSinglePath
         }),
@@ -364,7 +439,8 @@ test("Step0OutputValidator accepts neutral observation descriptions", () => {
       behaviorChanges: [
         {
           description: "Step 0 改為輸出結構化 JSON 並由 host validator 把關",
-          files: ["src/app.ts"]
+          files: ["src/app.ts"],
+          evidenceRefs: ["R1"]
         }
       ]
     }),
@@ -392,7 +468,8 @@ test("Step0OutputValidator rejects behaviorChanges files not in changedFiles", (
           behaviorChanges: [
             {
               description: "影響跨檔案",
-              files: ["src/not-in-changeset.ts"]
+              files: ["src/not-in-changeset.ts"],
+              evidenceRefs: ["R1"]
             }
           ]
         }),
@@ -413,11 +490,23 @@ test("Step0OutputValidator rejects invalid status / category / basis enums", () 
           path: "src/app.ts",
           status: "M",
           category: "feature",
+          group: "review-flow",
           basis: "diff-inspected",
           [field]: value
         }
       ],
+      fileGroups: [
+        {
+          id: "G1",
+          label: "review-flow",
+          files: ["src/app.ts"],
+          observedChange: "changed"
+        }
+      ],
+      crossFileBoundaries: [],
+      testCoverageObservations: [],
       behaviorChanges: [],
+      evidenceRefs: [],
       unresolvedUnknowns: []
     });
   // Note: tweak overrides via spread, so build manually
@@ -429,10 +518,22 @@ test("Step0OutputValidator rejects invalid status / category / basis enums", () 
         path: "src/app.ts",
         status: "X",
         category: "feature",
+        group: "review-flow",
         basis: "diff-inspected"
       }
     ],
+    fileGroups: [
+      {
+        id: "G1",
+        label: "review-flow",
+        files: ["src/app.ts"],
+        observedChange: "changed"
+      }
+    ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
     behaviorChanges: [],
+    evidenceRefs: [],
     unresolvedUnknowns: []
   });
   expectFailure(

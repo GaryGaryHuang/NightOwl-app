@@ -37,20 +37,34 @@ describe("resolveHypothesisCountClass", () => {
 function makeChangeMap(
   files: { path: string; category: ChangeMapCategory }[]
 ): ChangeMap {
+  const changedFiles = Object.freeze(
+    files.map((f) =>
+      Object.freeze({
+        path: f.path,
+        status: "M" as const,
+        category: f.category,
+        group: "count-class",
+        basis: "diff-inspected" as const
+      })
+    )
+  );
+
   return Object.freeze({
     schemaVersion: 1 as const,
     overviewMarkdown: "## Changeset Overview\n",
-    changedFiles: Object.freeze(
-      files.map((f) =>
-        Object.freeze({
-          path: f.path,
-          status: "M" as const,
-          category: f.category,
-          basis: "diff-inspected" as const
-        })
-      )
-    ),
+    changedFiles,
+    fileGroups: Object.freeze([
+      Object.freeze({
+        id: "G1",
+        label: "count-class",
+        files: Object.freeze(files.map((f) => f.path)),
+        observedChange: "count class fixture groups reviewed files"
+      })
+    ]),
+    crossFileBoundaries: Object.freeze([]),
+    testCoverageObservations: Object.freeze([]),
     behaviorChanges: Object.freeze([]),
+    evidenceRefs: Object.freeze([]),
     unresolvedUnknowns: Object.freeze([])
   });
 }

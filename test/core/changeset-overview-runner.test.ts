@@ -10,7 +10,11 @@ import {
 interface ChangeMapJsonOptions {
   readonly overviewMarkdown?: string;
   readonly paths?: readonly string[];
-  readonly behaviorChanges?: readonly { description: string; files: readonly string[] }[];
+  readonly behaviorChanges?: readonly {
+    description: string;
+    files: readonly string[];
+    evidenceRefs: readonly string[];
+  }[];
 }
 
 function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
@@ -23,9 +27,24 @@ function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
       path,
       status: "M",
       category: "feature",
+      group: "review-flow",
       basis: "diff-inspected"
     })),
+    fileGroups:
+      paths.length === 0
+        ? []
+        : [
+            {
+              id: "G1",
+              label: "review-flow",
+              files: paths,
+              observedChange: "review flow updates shared run context"
+            }
+          ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
     behaviorChanges: options.behaviorChanges ?? [],
+    evidenceRefs: [],
     unresolvedUnknowns: []
   });
 }

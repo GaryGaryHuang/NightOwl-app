@@ -1,5 +1,4 @@
-import type { Finding } from "./file-review-context.ts";
-import { DEFAULT_CONFIDENCE_THRESHOLDS } from "./confidence-thresholds.ts";
+import type { Finding, FindingDisposition } from "./file-review-context.ts";
 
 export type RiskLevel = "High" | "Medium" | "Low" | "None";
 
@@ -14,32 +13,18 @@ export const RISK_ORDER: Record<RiskLevel, number> = {
 /**
  * Collapse finalized findings into the run-level risk label shown in summaries, indexes, and manifests.
  *
- * The High-risk threshold is sourced from `DEFAULT_CONFIDENCE_THRESHOLDS.nice`. This value is
- * intentionally independent of user-configurable `ReviewConfig.confidenceThresholds`: risk labels
- * express fixed quality semantics and must not drift with per-repo filtering preferences.
- *
- * The rationale for using the nice default threshold as the High-risk boundary: the nice threshold
- * represents the high-conviction bar — the same bar used to filter noise from nice-to-have
- * suggestions. Only must findings whose confidence reaches this level should escalate to the
- * strongest risk signal.
+ * Risk semantics are intentionally independent of model-authored confidence.
+ * Any accepted must-fix finding escalates the file to High; nice-only findings map to Low;
+ * and no accepted findings maps to None. The Medium enum value is retained for compatibility
+ * with downstream output contracts even though the current deterministic mapping does not emit it.
  */
 export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel {
   if (!findings || findings.length === 0) {
     return "None";
   }
 
-  if (
-    findings.some(
-      (finding) =>
-        finding.type === "must" &&
-        finding.confidence >= DEFAULT_CONFIDENCE_THRESHOLDS.nice
-    )
-  ) {
-    return "High";
-  }
-
   if (findings.some((finding) => finding.type === "must")) {
-    return "Medium";
+    return "High";
   }
 
   if (findings.some((finding) => finding.type === "nice")) {
@@ -60,17 +45,24 @@ export interface RiskSnapshot {
 }
 
 /**
- * Build a deterministic risk snapshot from finalized findings.
+ * Build a deterministic risk snapshot from finalized findings and dispositions.
  *
  * Delegates to `deriveFileRiskLevel()` for the risk label so the snapshot
  * is guaranteed to agree with manifests, indexes, and run summaries.
  */
-export function buildRiskSnapshot(findings: Finding[] | undefined): RiskSnapshot {
+export function buildRiskSnapshot(
+  findings: Finding[] | undefined,
+  dispositions?: FindingDisposition[]
+): RiskSnapshot {
   const derivedRiskLevel = deriveFileRiskLevel(findings);
   const safe = findings ?? [];
+  const safeDispositions = dispositions ?? [];
   const mustCount = safe.filter((f) => f.type === "must").length;
   const niceCount = safe.filter((f) => f.type === "nice").length;
   const acceptedFindingIds = safe.map((f) => f.findingId);
+  const retiredFindingCount = safeDispositions.filter(
+    (disposition) => disposition.status === "retired"
+  ).length;
 
   return {
     schemaVersion: 1,
@@ -78,20 +70,32 @@ export function buildRiskSnapshot(findings: Finding[] | undefined): RiskSnapshot
     mustCount,
     niceCount,
     acceptedFindingIds,
-    retiredFindingCount: 0,
-    riskBasis: buildRiskBasis(derivedRiskLevel, mustCount, niceCount)
+    retiredFindingCount,
+    riskBasis: buildRiskBasis(
+      derivedRiskLevel,
+      mustCount,
+      niceCount,
+      retiredFindingCount
+    )
   };
 }
 
-function buildRiskBasis(level: RiskLevel, mustCount: number, niceCount: number): string {
+function buildRiskBasis(
+  level: RiskLevel,
+  mustCount: number,
+  niceCount: number,
+  retiredFindingCount: number
+): string {
   switch (level) {
     case "High":
-      return `High: ${mustCount} must-fix finding(s) with at least one reaching the high-confidence threshold`;
+      return `High: ${mustCount} must-fix finding(s) remain after verification`;
     case "Medium":
-      return `Medium: ${mustCount} must-fix finding(s) present but none reaches the high-confidence threshold`;
+      return `Medium: compatibility-only risk label; current deterministic mapping did not emit this state`;
     case "Low":
-      return `Low: ${niceCount} nice-to-have suggestion(s) only, no must-fix findings`;
+      return `Low: ${niceCount} nice-to-have finding(s) remain after verification; no must-fix findings`;
     case "None":
-      return "None: no accepted findings";
+      return retiredFindingCount > 0
+        ? `None: no accepted findings remain after verification; ${retiredFindingCount} candidate finding(s) were retired`
+        : "None: no accepted findings";
   }
 }

@@ -76,7 +76,7 @@ export function buildSessionResponse(
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
           suggestion: "補上 guard",
-          confidence: 90,
+          modelConfidence: 90,
           findingId: "F1",
           supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
           reachability: { credible: true, description: "direct code path" },
@@ -97,7 +97,7 @@ export function buildSessionResponse(
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
           suggestion: "補上 guard",
-          confidence: 91,
+          modelConfidence: 91,
           findingId: "F1",
           supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
           reachability: { credible: true, description: "direct code path" },
@@ -126,7 +126,7 @@ export function buildSessionResponse(
       "- 無",
       "### 風險評估",
       "- 整體風險等級：High",
-      "- 風險理由：至少一個 must-fix finding 通過高信心門檻。"
+      "- 風險理由：至少一個 must-fix finding 經驗證後仍成立。"
     ].join("\n");
   }
 

@@ -36,7 +36,7 @@ function finding(overrides: Record<string, unknown> = {}): Record<string, unknow
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
-    confidence: 88,
+    modelConfidence: 88,
     findingId: "F1",
     supportingEvidence: [{ source: "diff:src/app.ts:14-18", content: "changed code" }],
     reachability: { credible: true, description: "direct path" },
@@ -139,16 +139,16 @@ test("StructuredOutputValidator rejects schema-invalid findings payloads", () =>
       invalidFinding: finding({ title: "" })
     },
     {
-      label: "missing confidence",
-      invalidFinding: finding({ confidence: undefined })
+      label: "missing modelConfidence",
+      invalidFinding: finding({ modelConfidence: undefined })
     },
     {
-      label: "confidence above 100",
-      invalidFinding: finding({ confidence: 101 })
+      label: "modelConfidence above 100",
+      invalidFinding: finding({ modelConfidence: 101 })
     },
     {
-      label: "string confidence",
-      invalidFinding: finding({ confidence: "88" })
+      label: "string modelConfidence",
+      invalidFinding: finding({ modelConfidence: "88" })
     }
   ];
 
@@ -166,14 +166,14 @@ test("StructuredOutputValidator validate returns all structurally valid findings
     type: "must",
     title: "must above threshold",
     traceability: lineRangeTraceability(10, 12),
-    confidence: 80
+    modelConfidence: 80
   });
   const mustBelow = finding({
     findingId: "F2",
     type: "must",
     title: "must below threshold",
     traceability: lineRangeTraceability(15, 15),
-    confidence: 50
+    modelConfidence: 50
   });
 
   assert.deepEqual(
@@ -184,14 +184,14 @@ test("StructuredOutputValidator validate returns all structurally valid findings
   );
 });
 
-test("StructuredOutputValidator filterByAcceptance filters findings by default acceptance gates", () => {
+test("StructuredOutputValidator filterByAcceptance keeps supported credible findings regardless of modelConfidence", () => {
   const keptMust = finding({
     findingId: "F1",
     type: "must",
     title: "保留 must",
     traceability: lineRangeTraceability(20, 22),
     impact: "影響 correctness",
-    confidence: 80
+    modelConfidence: 5
   });
   const keptNice = finding({
     findingId: "F2",
@@ -201,7 +201,7 @@ test("StructuredOutputValidator filterByAcceptance filters findings by default a
     deviation: "可再調整",
     impact: "影響可維護性",
     suggestion: "補上整理",
-    confidence: 90
+    modelConfidence: 10
   });
 
   assert.deepEqual(
@@ -214,7 +214,8 @@ test("StructuredOutputValidator filterByAcceptance filters findings by default a
           title: "移除 must",
           traceability: lineRangeTraceability(20, 21),
           impact: "影響 correctness",
-          confidence: 79
+          modelConfidence: 99,
+          uncertaintyStatus: "tentative"
         }),
         keptNice,
         finding({
@@ -225,7 +226,8 @@ test("StructuredOutputValidator filterByAcceptance filters findings by default a
           deviation: "可再調整",
           impact: "影響可維護性",
           suggestion: "補上整理",
-          confidence: 89
+          modelConfidence: 99,
+          reachability: { credible: false, description: "not reachable" }
         })
       ]),
       diffContent: DEFAULT_DIFF
@@ -234,14 +236,14 @@ test("StructuredOutputValidator filterByAcceptance filters findings by default a
   );
 });
 
-test("StructuredOutputValidator filterByAcceptance filters findings by supplied acceptance gates", () => {
+test("StructuredOutputValidator filterByAcceptance ignores supplied confidence thresholds once deterministic gates pass", () => {
   const keptMust = finding({
     findingId: "F1",
     type: "must",
     title: "保留 must",
     traceability: lineRangeTraceability(30, 30),
     impact: "影響 correctness",
-    confidence: 70
+    modelConfidence: 1
   });
   const keptNice = finding({
     findingId: "F2",
@@ -251,7 +253,7 @@ test("StructuredOutputValidator filterByAcceptance filters findings by supplied 
     deviation: "可再調整",
     impact: "影響可維護性",
     suggestion: "補上整理",
-    confidence: 85
+    modelConfidence: 2
   });
   const customHunkHeader = "@@ -30,1 +30,2 @@";
 
@@ -265,7 +267,8 @@ test("StructuredOutputValidator filterByAcceptance filters findings by supplied 
           title: "移除 must",
           traceability: lineRangeTraceability(30, 30),
           impact: "影響 correctness",
-          confidence: 69
+          modelConfidence: 99,
+          uncertaintyStatus: "unsupported"
         }),
         keptNice,
         finding({
@@ -276,7 +279,8 @@ test("StructuredOutputValidator filterByAcceptance filters findings by supplied 
           deviation: "可再調整",
           impact: "影響可維護性",
           suggestion: "補上整理",
-          confidence: 84
+          modelConfidence: 99,
+          reachability: { credible: false, description: "not reachable" }
         })
       ]),
       diffContent: `${customHunkHeader}\n-old\n+new\n`,
@@ -715,12 +719,12 @@ test("StructuredOutputValidator filterByAcceptance filters tentative findings re
   const tentative = finding({
     findingId: "F-tent",
     uncertaintyStatus: "tentative",
-    confidence: 99
+    modelConfidence: 99
   });
   const supported = finding({
     findingId: "F-supp",
     uncertaintyStatus: "supported",
-    confidence: 85
+    modelConfidence: 1
   });
 
   assert.deepEqual(
@@ -736,13 +740,13 @@ test("StructuredOutputValidator filterByAcceptance filters findings with credibl
     findingId: "F-unreach",
     reachability: { credible: false, description: "not reachable" },
     uncertaintyStatus: "supported",
-    confidence: 95
+    modelConfidence: 95
   });
   const reachable = finding({
     findingId: "F-reach",
     reachability: { credible: true, description: "direct path" },
     uncertaintyStatus: "supported",
-    confidence: 85
+    modelConfidence: 0
   });
 
   assert.deepEqual(
@@ -1080,7 +1084,7 @@ test("validateWithReport returns payload and per-finding schema-pass report entr
 test("validateWithReport with multiple findings returns per-finding entries", () => {
   const validator = new StructuredOutputValidator();
   const f1 = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22) });
-  const f2 = finding({ findingId: "F2", traceability: lineRangeTraceability(21, 22), type: "nice", confidence: 75 });
+  const f2 = finding({ findingId: "F2", traceability: lineRangeTraceability(21, 22), type: "nice", modelConfidence: 75 });
   const result = validator.validateWithReport({
     responseText: payload([f1, f2]),
     diffContent: DEFAULT_DIFF,
@@ -1103,7 +1107,7 @@ test("validateWithReport throws on schema error (same as validate)", () => {
 
 // --- filterByAcceptanceWithReport ---
 
-test("filterByAcceptanceWithReport accepts supported/credible/high-confidence finding with OK taxonomy", () => {
+test("filterByAcceptanceWithReport accepts supported credible finding with OK taxonomy", () => {
   const validator = new StructuredOutputValidator();
   const f = finding({ traceability: lineRangeTraceability(21, 22) });
   const validated = validator.validate({
@@ -1154,9 +1158,9 @@ test("filterByAcceptanceWithReport rejects non-credible reachability with REACHA
   assert.equal(result.report[0].outcome, "rejected");
 });
 
-test("filterByAcceptanceWithReport rejects low-confidence must finding with ACCEPTANCE taxonomy", () => {
+test("filterByAcceptanceWithReport accepts low modelConfidence finding once deterministic gates pass", () => {
   const validator = new StructuredOutputValidator({ confidenceThresholds: { must: 80, nice: 90 } });
-  const f = finding({ traceability: lineRangeTraceability(21, 22), confidence: 50 });
+  const f = finding({ traceability: lineRangeTraceability(21, 22), modelConfidence: 0 });
   const validated = validator.validate({
     responseText: payload([f]),
     diffContent: DEFAULT_DIFF,
@@ -1164,10 +1168,10 @@ test("filterByAcceptanceWithReport rejects low-confidence must finding with ACCE
   });
 
   const result = validator.filterByAcceptanceWithReport(validated);
-  assert.equal(result.payload.findings.length, 0);
+  assert.equal(result.payload.findings.length, 1);
   assert.equal(result.report.length, 1);
-  assert.equal(result.report[0].taxonomy, "ACCEPTANCE");
-  assert.equal(result.report[0].outcome, "rejected");
+  assert.equal(result.report[0].taxonomy, "OK");
+  assert.equal(result.report[0].outcome, "accepted");
 });
 
 test("filterByAcceptanceWithReport with mixed accepted and rejected findings", () => {

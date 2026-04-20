@@ -33,13 +33,16 @@ export class Step7SummaryStep implements StepDefinition {
 
   prepare(context: FileReviewContext): StepExecutionPlan {
     const { stepId } = this;
-    const snapshot = buildRiskSnapshot(context.getFindings());
+    const snapshot = buildRiskSnapshot(
+      context.getFindings(),
+      context.getDispositions()
+    );
     return {
       stepId,
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep7UserMessage(
-          this.#promptSerializer.serialize({ context, include: ["sections", "findings"] }),
+          this.#promptSerializer.serialize({ context, include: ["sections", "verified-findings"] }),
           snapshot
         )
       },

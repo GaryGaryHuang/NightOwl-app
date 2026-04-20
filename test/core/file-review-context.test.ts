@@ -133,7 +133,7 @@ test("FileReviewContext setFindings deep-clones v2 fields so mutations do not le
     deviation: "dev",
     impact: "imp",
     suggestion: "sug",
-    confidence: 90,
+    modelConfidence: 90,
     findingId: "F1",
     supportingEvidence: [
       { source: "diff:src/app.ts:1-2", content: "original content" }
@@ -252,8 +252,8 @@ test("FileReviewContext appends verifier report entries preserving order and dee
   context.appendVerifierReportEntries([first]);
   context.appendVerifierReportEntries([second]);
 
-  first.stepId = "MUTATED";
-  second.reason = "MUTATED";
+  (first as { stepId: string }).stepId = "MUTATED";
+  (second as { reason: string }).reason = "MUTATED";
 
   assert.deepEqual(context.getVerifierReportEntries(), [
     {
@@ -293,7 +293,7 @@ test("FileReviewContext getVerifierReportEntries returns defensive snapshot copi
   ]);
 
   const snapshot = context.getVerifierReportEntries()!;
-  snapshot[0]!.findingId = "MUTATED";
+  (snapshot[0] as { findingId: string }).findingId = "MUTATED";
 
   assert.equal(context.getVerifierReportEntries()![0]!.findingId, "F1");
 });

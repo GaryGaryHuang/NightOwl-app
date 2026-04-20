@@ -47,7 +47,11 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMap v1 JSON contract", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /schemaVersion/);
   assert.match(STEP0_SYSTEM_MESSAGE, /JSON-only/);
   assert.match(STEP0_SYSTEM_MESSAGE, /changedFiles/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /fileGroups/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /crossFileBoundaries/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /testCoverageObservations/);
   assert.match(STEP0_SYSTEM_MESSAGE, /behaviorChanges/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /evidenceRefs/);
   assert.match(STEP0_SYSTEM_MESSAGE, /unresolvedUnknowns/);
 });
 

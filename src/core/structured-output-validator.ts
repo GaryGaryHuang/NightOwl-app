@@ -1,7 +1,4 @@
-import {
-  DEFAULT_CONFIDENCE_THRESHOLDS,
-  type ConfidenceThresholds
-} from "./confidence-thresholds.ts";
+import type { ConfidenceThresholds } from "./confidence-thresholds.ts";
 import { buildDiffAnchorMap, type DiffAnchorMap } from "./diff-anchor-map.ts";
 import type {
   DependencyPathException,
@@ -29,13 +26,7 @@ export interface StructuredOutputValidatorOptions {
  * Deterministically validate structured findings JSON before it is written into review state.
  */
 export class StructuredOutputValidator {
-  readonly #confidenceThresholds: ConfidenceThresholds;
-
-  constructor(options: StructuredOutputValidatorOptions = {}) {
-    this.#confidenceThresholds = options.confidenceThresholds ?? {
-      ...DEFAULT_CONFIDENCE_THRESHOLDS
-    };
-  }
+  constructor(_options: StructuredOutputValidatorOptions = {}) {}
 
   validate(input: {
     responseText: string;
@@ -167,19 +158,6 @@ export class StructuredOutputValidator {
         accepted: false,
         taxonomy: "REACHABILITY",
         reason: "reachability is not credible"
-      };
-    }
-
-    const threshold =
-      finding.type === "must"
-        ? this.#confidenceThresholds.must
-        : this.#confidenceThresholds.nice;
-
-    if (finding.confidence < threshold) {
-      return {
-        accepted: false,
-        taxonomy: "ACCEPTANCE",
-        reason: `confidence ${finding.confidence} below ${finding.type} threshold ${threshold}`
       };
     }
 
@@ -370,7 +348,7 @@ function validateFinding(
   const deviation = validateStringField(finding.deviation, "deviation");
   const impact = validateStringField(finding.impact, "impact");
   const suggestion = validateStringField(finding.suggestion, "suggestion");
-  const confidence = finding.confidence;
+  const modelConfidence = validateModelConfidence(finding);
   const findingId = validateStringField(finding.findingId, "findingId");
   const validatedEvidence = validateSupportingEvidence(finding.supportingEvidence);
   const validatedReachability = validateReachability(finding.reachability);
@@ -382,17 +360,6 @@ function validateFinding(
     );
   }
 
-  if (
-    typeof confidence !== "number" ||
-    Number.isNaN(confidence) ||
-    confidence < 0 ||
-    confidence > 100
-  ) {
-    throw new Error(
-      "deterministic validation failed: 'confidence' must be a number between 0 and 100"
-    );
-  }
-
   const result: Finding = {
     type,
     title,
@@ -401,7 +368,7 @@ function validateFinding(
     deviation,
     impact,
     suggestion,
-    confidence,
+    modelConfidence,
     findingId,
     supportingEvidence: validatedEvidence,
     reachability: validatedReachability,
@@ -420,6 +387,31 @@ function validateFinding(
   }
 
   return result;
+}
+
+function validateModelConfidence(finding: Record<string, unknown>): number {
+  const canonical = finding.modelConfidence;
+  const legacy = finding.confidence;
+
+  if (canonical !== undefined && legacy !== undefined && canonical !== legacy) {
+    throw new Error(
+      "deterministic validation failed: 'modelConfidence' and legacy 'confidence' must match when both are provided"
+    );
+  }
+
+  const resolved = canonical ?? legacy;
+  if (
+    typeof resolved !== "number" ||
+    Number.isNaN(resolved) ||
+    resolved < 0 ||
+    resolved > 100
+  ) {
+    throw new Error(
+      "deterministic validation failed: 'modelConfidence' must be a number between 0 and 100"
+    );
+  }
+
+  return resolved;
 }
 
 function validateTraceability(
@@ -656,6 +648,7 @@ const ALLOWED_FINDING_KEYS = [
   "deviation",
   "impact",
   "suggestion",
+  "modelConfidence",
   "confidence",
   "dependencyPathException",
   "findingId",

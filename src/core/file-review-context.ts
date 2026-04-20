@@ -60,7 +60,7 @@ export interface Finding {
   deviation: string;
   impact: string;
   suggestion: string;
-  confidence: number;
+  modelConfidence: number;
   dependencyPathException?: DependencyPathException;
   findingId: string;
   supportingEvidence: EvidenceRef[];

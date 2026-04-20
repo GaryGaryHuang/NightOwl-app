@@ -9,7 +9,11 @@ function makeChangeMap(overviewMarkdown: string): ChangeMap {
     schemaVersion: 1,
     overviewMarkdown,
     changedFiles: Object.freeze([]),
+    fileGroups: Object.freeze([]),
+    crossFileBoundaries: Object.freeze([]),
+    testCoverageObservations: Object.freeze([]),
     behaviorChanges: Object.freeze([]),
+    evidenceRefs: Object.freeze([]),
     unresolvedUnknowns: Object.freeze([])
   }) as ChangeMap;
 }

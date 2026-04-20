@@ -52,13 +52,13 @@ test("RunSummaryFinalizer renders the exact aggregate summary contract with reba
   assert.match(rendered, /- Skipped files: 1/u);
   assert.match(rendered, /- Final findings totals: must=2, nice=1/u);
   assert.match(rendered, /^## Risk Distribution$/mu);
-  assert.match(rendered, /- High: 1/u);
-  assert.match(rendered, /- Medium: 1/u);
+  assert.match(rendered, /- High: 2/u);
+  assert.match(rendered, /- Medium: 0/u);
   assert.match(rendered, /- Low: 0/u);
   assert.match(rendered, /- None: 0/u);
   assert.match(
     rendered,
-    /## Successful Files[\s\S]*- \[High\] `src\/a\.ts` — must=1, nice=1[\s\S]*- \[Medium\] `src\/c\.ts` — must=1, nice=0/u
+    /## Successful Files[\s\S]*- \[High\] `src\/a\.ts` — must=1, nice=1[\s\S]*- \[High\] `src\/c\.ts` — must=1, nice=0/u
   );
   assert.match(
     rendered,
@@ -144,8 +144,8 @@ test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, L
   });
 
   assert.match(rendered, /^## Risk Distribution$/mu);
-  assert.match(rendered, /- High: 1/u);
-  assert.match(rendered, /- Medium: 1/u);
+  assert.match(rendered, /- High: 2/u);
+  assert.match(rendered, /- Medium: 0/u);
   assert.match(rendered, /- Low: 1/u);
   assert.match(rendered, /- None: 1/u);
 });
@@ -163,8 +163,8 @@ test("RunSummaryFinalizer sorts successful files by risk level with planned-orde
   });
 
   assertTextContainsInOrder(rendered, [
+    "- [High] `c.ts` — must=1, nice=0",
     "- [High] `d.ts` — must=1, nice=0",
-    "- [Medium] `c.ts` — must=1, nice=0",
     "- [Low] `b.ts` — must=0, nice=1",
     "- [None] `a.ts` — must=0, nice=0",
     "- [None] `e.ts` — must=0, nice=0"

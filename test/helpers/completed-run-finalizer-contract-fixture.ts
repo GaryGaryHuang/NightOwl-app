@@ -24,7 +24,7 @@ export function createFinding(
     deviation: "dev",
     impact: "impact",
     suggestion: input.suggestion ?? "suggestion",
-    confidence,
+    modelConfidence: confidence,
     findingId: `${type}-${confidence}`,
     supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
     reachability: { credible: true, description: "direct code path" },

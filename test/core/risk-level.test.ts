@@ -11,25 +11,17 @@ test("deriveFileRiskLevel maps finalized findings to the documented risk levels"
     expected: RiskLevel;
   }> = [
     {
-      label: "must finding at the 90 confidence threshold",
-      findings: [createFinding("must", 90)],
+      label: "any must finding",
+      findings: [createFinding("must", 10)],
       expected: "High"
     },
     {
-      label: "any threshold-meeting must finding",
+      label: "mixed must findings still map to High",
       findings: [
-        createFinding("must", 82, { title: "lower-confidence must" }),
-        createFinding("must", 96, { title: "threshold-meeting must" })
+        createFinding("must", 1, { title: "lower-confidence must" }),
+        createFinding("must", 96, { title: "another must" })
       ],
       expected: "High"
-    },
-    {
-      label: "must findings below the 90 confidence threshold",
-      findings: [
-        createFinding("must", 89, { title: "must below threshold" }),
-        createFinding("nice", 95, { title: "nice context" })
-      ],
-      expected: "Medium"
     },
     {
       label: "nice-only findings regardless of confidence",

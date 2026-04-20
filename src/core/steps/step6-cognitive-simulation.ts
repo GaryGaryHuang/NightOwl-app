@@ -16,8 +16,8 @@ const STEP6_SYSTEM_ADDITION = [
   "- IMPORTANT: Apply the same evidence, reachability, and actionability standard used for first-pass findings. Do not retain, add, or modify findings based on theoretical speculation, weak inference, or implausible paths. This step is a verification and reconciliation pass, not a general bug hunt.",
   "- Every emitted finding must include a `traceability` object that anchors the finding to the reviewed file.",
   "- When <diff> can be validated, a `line-range` anchor must overlap at least one changed head-side line. If the correct anchor intentionally points outside the changed lines because it identifies a dependency path, include `dependencyPathException` with a non-empty `reason` and `dependencyAnchor.filePath`.",
-  "- Every finding must include `findingId`, `supportingEvidence`, `reachability`, and `uncertaintyStatus`. Only `\"supported\"` findings will be accepted.",
-  "- For every finding retained, modified, or added, assign a fresh `confidence` score (0–100) based on your own simulation evidence — do not carry over scores from the previous step.",
+  "- Every finding must include `findingId`, `supportingEvidence`, `reachability`, `uncertaintyStatus`, and `modelConfidence`. Only `\"supported\"` findings with credible reachability will be accepted.",
+  "- For every finding retained, modified, or added, assign a fresh `modelConfidence` score (0–100) as telemetry based on your own simulation evidence — do not carry over scores from the previous step. The host does not use this field as an acceptance gate.",
   "- You MUST produce a `dispositions` array that accounts for EVERY candidate finding from <candidate_findings>. Each disposition records whether the candidate was retained, modified, or retired, with a reason and explanation.",
   "- Output valid JSON only."
 ].join("\n");
@@ -51,7 +51,7 @@ const STEP6_INSTRUCTION = [
   "   - it is directly exposed by the simulation or by re-checking a path made necessary by a conflict, inconsistency, or uncertainty in the existing findings",
   "   - it satisfies the same evidence, reachability, and actionability standard expected of a retained finding",
   "",
-  "6. For every retained, modified, or newly added finding, assign a `confidence` score (0–100) based on the strength of evidence, path reachability, and clarity of the deviation and impact.",
+  "6. For every retained, modified, or newly added finding, assign a `modelConfidence` score (0–100) as telemetry based on the strength of evidence, path reachability, and clarity of the deviation and impact. The host does not use this field as an acceptance gate.",
   "",
   "7. Every retained, modified, or newly added finding must include a `traceability` object for the reviewed file:",
   "   - use `\"kind\": \"line-range\"` with positive integer `lineStart` and `lineEnd` for head-side 1-based file lines",
@@ -84,7 +84,7 @@ const STEP6_INSTRUCTION = [
   "",
   "Output the result as a single JSON object with this structure:",
   "",
-  "{\"findings\": [{\"findingId\": \"F1\", \"type\": \"must\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 21, \"lineEnd\": 22}, \"context\": \"具體程式位置、條件或情境脈絡\", \"deviation\": \"預期行為與實際行為的落差\", \"impact\": \"若不處理會造成的後果\", \"suggestion\": \"具體且可執行的修正或改善建議\", \"confidence\": 85, \"supportingEvidence\": [{\"source\": \"diff:src/app.ts:21-22\", \"content\": \"changed guard condition removes null check\"}], \"reachability\": {\"credible\": true, \"description\": \"called from main entry on every request\"}, \"uncertaintyStatus\": \"supported\", \"sourceHypothesisId\": \"W1\"}], \"dispositions\": [{\"findingId\": \"F1\", \"status\": \"retained\", \"reason\": \"SUPPORTED\", \"explanation\": \"simulation confirms the deviation is real and reachable\"}]}",
+  "{\"findings\": [{\"findingId\": \"F1\", \"type\": \"must\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 21, \"lineEnd\": 22}, \"context\": \"具體程式位置、條件或情境脈絡\", \"deviation\": \"預期行為與實際行為的落差\", \"impact\": \"若不處理會造成的後果\", \"suggestion\": \"具體且可執行的修正或改善建議\", \"modelConfidence\": 85, \"supportingEvidence\": [{\"source\": \"diff:src/app.ts:21-22\", \"content\": \"changed guard condition removes null check\"}], \"reachability\": {\"credible\": true, \"description\": \"called from main entry on every request\"}, \"uncertaintyStatus\": \"supported\", \"sourceHypothesisId\": \"W1\"}], \"dispositions\": [{\"findingId\": \"F1\", \"status\": \"retained\", \"reason\": \"SUPPORTED\", \"explanation\": \"simulation confirms the deviation is real and reachable\"}]}",
   "",
   "If no findings remain, return: {\"findings\": [], \"dispositions\": [{\"findingId\": \"F1\", \"status\": \"retired\", \"reason\": \"REACHABILITY\", \"explanation\": \"path is not credibly reachable\"}]}",
   "The `type` field must be either `\"must\"` or `\"nice\"`.",
@@ -92,7 +92,7 @@ const STEP6_INSTRUCTION = [
 ].join("\n");
 
 export interface Step6CognitiveSimulationStepOptions {
-  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize" | "serializeFindingsBlock">;
 }
 
 /**
@@ -100,7 +100,7 @@ export interface Step6CognitiveSimulationStepOptions {
  */
 export class Step6CognitiveSimulationStep implements StepDefinition {
   readonly stepId = "step6-cognitive-simulation";
-  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
+  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize" | "serializeFindingsBlock">;
 
   constructor(options: Step6CognitiveSimulationStepOptions) {
     this.#promptSerializer = options.promptSerializer;
@@ -117,6 +117,10 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         userMessage: buildStep6UserMessage(
           context,
           this.#promptSerializer.serialize({ context, include: ["sections"] }),
+          this.#promptSerializer.serializeFindingsBlock({
+            kind: "candidate-findings",
+            findings: candidateFindings
+          }),
           candidateFindings
         )
       },
@@ -137,15 +141,9 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
 function buildStep6UserMessage(
   context: FileReviewContext,
   reviewState: string,
+  candidateFindingsBlock: string,
   candidateFindings: Finding[]
 ): string {
-  const compactCandidates = candidateFindings.map((f) => ({
-    findingId: f.findingId,
-    type: f.type,
-    title: f.title,
-    traceability: f.traceability
-  }));
-
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
     context.diffContent,
@@ -153,9 +151,7 @@ function buildStep6UserMessage(
     "",
     reviewState,
     "",
-    "<candidate_findings>",
-    JSON.stringify(compactCandidates, null, 2),
-    "</candidate_findings>",
+    candidateFindingsBlock,
     "",
     STEP6_INSTRUCTION
   ].join("\n");

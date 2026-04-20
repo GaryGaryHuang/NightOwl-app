@@ -176,8 +176,8 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
   });
 
   assertTextContainsInOrder(rendered, [
+    "- [High] [`medium.ts`]",
     "- [High] [`high.ts`]",
-    "- [Medium] [`medium.ts`]",
     "- [Low] [`low.ts`]",
     "- [None] [`none.ts`]",
     "- [Skipped] [`skipped.ts`]"

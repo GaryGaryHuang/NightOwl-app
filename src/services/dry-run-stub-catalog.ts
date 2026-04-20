@@ -27,6 +27,7 @@ export function buildDryRunChangesetOverviewResponse(prompt: string): string {
     path: entry.path,
     status: entry.status,
     category: "feature" as const,
+    group: "dry-run" as const,
     basis: "name-status" as const
   }));
 
@@ -34,7 +35,20 @@ export function buildDryRunChangesetOverviewResponse(prompt: string): string {
     schemaVersion: 1,
     overviewMarkdown: STUB_CHANGESET_OVERVIEW_MARKDOWN,
     changedFiles,
+    fileGroups: changedFiles.length === 0
+      ? []
+      : [
+          {
+            id: "G1",
+            label: "dry-run",
+            files: changedFiles.map((entry) => entry.path),
+            observedChange: "[dry-run] 變更群組待真實 run 驗證。"
+          }
+        ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
     behaviorChanges: [],
+    evidenceRefs: [],
     unresolvedUnknowns: []
   });
 }

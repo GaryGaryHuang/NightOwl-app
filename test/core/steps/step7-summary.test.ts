@@ -40,7 +40,7 @@ function createFinding(
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    confidence,
+    modelConfidence: confidence,
     findingId,
     supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed" }],
     reachability: { credible: true, description: "reachable" },
@@ -242,6 +242,25 @@ test("Step7SummaryStep.prepare() risk_snapshot JSON is parseable", () => {
   assert.equal(snapshot.mustCount, 1);
   assert.equal(snapshot.niceCount, 1);
   assert.deepEqual(snapshot.acceptedFindingIds, ["F1", "F2"]);
+});
+
+test("Step7SummaryStep.prepare() includes retiredFindingCount from dispositions", () => {
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+  const context = createContext([createFinding("nice", 91, "F1")]);
+  context.setDispositions([
+    {
+      findingId: "F-retired",
+      status: "retired",
+      reason: "REACHABILITY",
+      explanation: "path is not reachable"
+    }
+  ]);
+
+  const plan = step.prepare(context);
+  const match = plan.prompt.userMessage.match(/<risk_snapshot>\n([\s\S]*?)\n<\/risk_snapshot>/);
+  assert.ok(match, "risk_snapshot block should be present");
+  const snapshot = JSON.parse(match[1]);
+  assert.equal(snapshot.retiredFindingCount, 1);
 });
 
 test("Step7SummaryStep.prepare() system message references risk_snapshot", () => {

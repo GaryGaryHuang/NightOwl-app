@@ -1,4 +1,13 @@
-import type { ChangeMap } from "./change-map.ts";
+import type {
+  BehaviorChangeEntry,
+  ChangeMap,
+  ChangeMapEvidenceSourceKind,
+  ChangeMapRelationship,
+  CrossFileBoundaryEntry,
+  EvidenceRefEntry,
+  FileGroupEntry,
+  TestCoverageObservationEntry
+} from "./change-map.ts";
 
 export type Step0ValidationCode =
   | "PARSE"
@@ -26,7 +35,11 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
   "schemaVersion",
   "overviewMarkdown",
   "changedFiles",
+  "fileGroups",
+  "crossFileBoundaries",
+  "testCoverageObservations",
   "behaviorChanges",
+  "evidenceRefs",
   "unresolvedUnknowns"
 ]);
 
@@ -34,10 +47,44 @@ const ALLOWED_CHANGED_FILE_KEYS = new Set([
   "path",
   "status",
   "category",
+  "group",
   "basis"
 ]);
 
-const ALLOWED_BEHAVIOR_CHANGE_KEYS = new Set(["description", "files"]);
+const ALLOWED_FILE_GROUP_KEYS = new Set([
+  "id",
+  "label",
+  "files",
+  "observedChange"
+]);
+
+const ALLOWED_CROSS_FILE_BOUNDARY_KEYS = new Set([
+  "from",
+  "to",
+  "relationship",
+  "evidenceRefs"
+]);
+
+const ALLOWED_TEST_COVERAGE_OBSERVATION_KEYS = new Set([
+  "sourceFile",
+  "testFile",
+  "observedExpectation",
+  "evidenceRefs"
+]);
+
+const ALLOWED_BEHAVIOR_CHANGE_KEYS = new Set([
+  "description",
+  "files",
+  "evidenceRefs"
+]);
+
+const ALLOWED_EVIDENCE_REF_KEYS = new Set([
+  "id",
+  "sourceKind",
+  "pathOrUrl",
+  "anchor",
+  "summary"
+]);
 
 const ALLOWED_UNRESOLVED_UNKNOWN_KEYS = new Set([
   "question",
@@ -58,6 +105,20 @@ const ALLOWED_BASES: ReadonlySet<string> = new Set([
   "name-status",
   "diff-inspected",
   "file-inspected"
+]);
+const ALLOWED_RELATIONSHIPS: ReadonlySet<string> = new Set([
+  "calls",
+  "imports",
+  "configures",
+  "tests",
+  "unknown"
+]);
+const ALLOWED_EVIDENCE_SOURCE_KINDS: ReadonlySet<string> = new Set([
+  "changed-files",
+  "diff",
+  "file",
+  "user-context",
+  "url"
 ]);
 
 const OVERVIEW_MARKDOWN_PREFIX = "## Changeset Overview";
@@ -123,7 +184,23 @@ export class Step0OutputValidator {
 
     const changedFiles = validateChangedFiles(obj.changedFiles);
     const knownPaths = new Set(changedFiles.map((entry) => entry.path));
-    const behaviorChanges = validateBehaviorChanges(obj.behaviorChanges, knownPaths);
+    const fileGroups = validateFileGroups(obj.fileGroups, changedFiles, knownPaths);
+    const evidenceRefs = validateEvidenceRefs(obj.evidenceRefs);
+    const knownEvidenceRefIds = new Set(evidenceRefs.map((entry) => entry.id));
+    const crossFileBoundaries = validateCrossFileBoundaries(
+      obj.crossFileBoundaries,
+      knownEvidenceRefIds
+    );
+    const testCoverageObservations = validateTestCoverageObservations(
+      obj.testCoverageObservations,
+      knownPaths,
+      knownEvidenceRefIds
+    );
+    const behaviorChanges = validateBehaviorChanges(
+      obj.behaviorChanges,
+      knownPaths,
+      knownEvidenceRefIds
+    );
     const unresolvedUnknowns = validateUnresolvedUnknowns(obj.unresolvedUnknowns);
 
     enforceCoverage(changedFiles, input.expectedChangedPaths);
@@ -132,7 +209,11 @@ export class Step0OutputValidator {
       schemaVersion: 1,
       overviewMarkdown,
       changedFiles,
+      fileGroups,
+      crossFileBoundaries,
+      testCoverageObservations,
       behaviorChanges,
+      evidenceRefs,
       unresolvedUnknowns
     };
 
@@ -200,6 +281,7 @@ function validateChangedFile(
     | "config"
     | "test"
     | "docs";
+  readonly group: string;
   readonly basis: "name-status" | "diff-inspected" | "file-inspected";
 } {
   const entry = ensurePlainObject(rawEntry, `changedFiles[${index}]`);
@@ -216,26 +298,233 @@ function validateChangedFile(
     ALLOWED_CATEGORIES,
     `changedFiles[${index}].category`
   ) as "feature" | "bugfix" | "refactor" | "config" | "test" | "docs";
+  const group = requireNonEmptyString(entry.group, `changedFiles[${index}].group`);
+  rejectPlaceholderText(group, `changedFiles[${index}].group`);
   const basis = requireEnum(
     entry.basis,
     ALLOWED_BASES,
     `changedFiles[${index}].basis`
   ) as "name-status" | "diff-inspected" | "file-inspected";
 
-  return { path, status, category, basis };
+  return { path, status, category, group, basis };
 }
 
 type ChangedFileArray = readonly {
   readonly path: string;
   readonly status: "A" | "M" | "D" | "R";
   readonly category: "feature" | "bugfix" | "refactor" | "config" | "test" | "docs";
+  readonly group: string;
   readonly basis: "name-status" | "diff-inspected" | "file-inspected";
 }[];
 
+function validateFileGroups(
+  value: unknown,
+  changedFiles: ChangedFileArray,
+  knownPaths: ReadonlySet<string>
+): readonly FileGroupEntry[] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError("SCHEMA", "fileGroups must be an array");
+  }
+
+  const groupLabels = new Set<string>();
+  const groupIds = new Set<string>();
+  const result = value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `fileGroups[${index}]`);
+    rejectUnknownKeys(entry, ALLOWED_FILE_GROUP_KEYS, `fileGroups[${index}]`);
+
+    const id = requireNonEmptyString(entry.id, `fileGroups[${index}].id`);
+    const label = requireNonEmptyString(entry.label, `fileGroups[${index}].label`);
+    const observedChange = requireNonEmptyString(
+      entry.observedChange,
+      `fileGroups[${index}].observedChange`
+    );
+
+    rejectPlaceholderText(label, `fileGroups[${index}].label`);
+    rejectPlaceholderText(observedChange, `fileGroups[${index}].observedChange`);
+    rejectCorrectnessJudgment(observedChange, `fileGroups[${index}].observedChange`);
+
+    if (groupIds.has(id)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `fileGroups[${index}].id duplicates an earlier id "${id}"`
+      );
+    }
+    if (groupLabels.has(label)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `fileGroups[${index}].label duplicates an earlier label "${label}"`
+      );
+    }
+    groupIds.add(id);
+    groupLabels.add(label);
+
+    const files = validateKnownPathsArray(
+      entry.files,
+      knownPaths,
+      `fileGroups[${index}].files`,
+      { allowEmpty: false }
+    );
+
+    return { id, label, files, observedChange };
+  });
+
+  for (const changedFile of changedFiles) {
+    if (!groupLabels.has(changedFile.group)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `changedFiles group "${changedFile.group}" does not match any fileGroups[].label`
+      );
+    }
+  }
+
+  return result;
+}
+
+function validateEvidenceRefs(value: unknown): readonly EvidenceRefEntry[] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError("SCHEMA", "evidenceRefs must be an array");
+  }
+
+  const seenIds = new Set<string>();
+  return value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `evidenceRefs[${index}]`);
+    rejectUnknownKeys(entry, ALLOWED_EVIDENCE_REF_KEYS, `evidenceRefs[${index}]`);
+
+    const id = requireNonEmptyString(entry.id, `evidenceRefs[${index}].id`);
+    const sourceKind = requireEnum(
+      entry.sourceKind,
+      ALLOWED_EVIDENCE_SOURCE_KINDS,
+      `evidenceRefs[${index}].sourceKind`
+    ) as ChangeMapEvidenceSourceKind;
+    const pathOrUrl = requireNonEmptyString(
+      entry.pathOrUrl,
+      `evidenceRefs[${index}].pathOrUrl`
+    );
+    const anchor = requireNonEmptyString(entry.anchor, `evidenceRefs[${index}].anchor`);
+    const summary = requireNonEmptyString(entry.summary, `evidenceRefs[${index}].summary`);
+
+    rejectPlaceholderText(pathOrUrl, `evidenceRefs[${index}].pathOrUrl`);
+    rejectPlaceholderText(anchor, `evidenceRefs[${index}].anchor`);
+    rejectPlaceholderText(summary, `evidenceRefs[${index}].summary`);
+
+    if (seenIds.has(id)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `evidenceRefs[${index}].id duplicates an earlier id "${id}"`
+      );
+    }
+    seenIds.add(id);
+
+    return { id, sourceKind, pathOrUrl, anchor, summary };
+  });
+}
+
+function validateCrossFileBoundaries(
+  value: unknown,
+  knownEvidenceRefIds: ReadonlySet<string>
+): readonly CrossFileBoundaryEntry[] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "crossFileBoundaries must be an array"
+    );
+  }
+
+  return value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `crossFileBoundaries[${index}]`);
+    rejectUnknownKeys(
+      entry,
+      ALLOWED_CROSS_FILE_BOUNDARY_KEYS,
+      `crossFileBoundaries[${index}]`
+    );
+
+    const from = requireNonEmptyString(entry.from, `crossFileBoundaries[${index}].from`);
+    const to = requireNonEmptyString(entry.to, `crossFileBoundaries[${index}].to`);
+    const relationship = requireEnum(
+      entry.relationship,
+      ALLOWED_RELATIONSHIPS,
+      `crossFileBoundaries[${index}].relationship`
+    ) as ChangeMapRelationship;
+    const evidenceRefs = validateEvidenceRefIds(
+      entry.evidenceRefs,
+      knownEvidenceRefIds,
+      `crossFileBoundaries[${index}].evidenceRefs`
+    );
+
+    return { from, to, relationship, evidenceRefs };
+  });
+}
+
+function validateTestCoverageObservations(
+  value: unknown,
+  knownPaths: ReadonlySet<string>,
+  knownEvidenceRefIds: ReadonlySet<string>
+): readonly TestCoverageObservationEntry[] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "testCoverageObservations must be an array"
+    );
+  }
+
+  return value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `testCoverageObservations[${index}]`);
+    rejectUnknownKeys(
+      entry,
+      ALLOWED_TEST_COVERAGE_OBSERVATION_KEYS,
+      `testCoverageObservations[${index}]`
+    );
+
+    const sourceFile = requireNonEmptyString(
+      entry.sourceFile,
+      `testCoverageObservations[${index}].sourceFile`
+    );
+    const testFile = requireNonEmptyString(
+      entry.testFile,
+      `testCoverageObservations[${index}].testFile`
+    );
+    const observedExpectation = requireNonEmptyString(
+      entry.observedExpectation,
+      `testCoverageObservations[${index}].observedExpectation`
+    );
+
+    if (!knownPaths.has(sourceFile)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `testCoverageObservations[${index}].sourceFile "${sourceFile}" is not present in changedFiles[].path`
+      );
+    }
+    if (!knownPaths.has(testFile)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `testCoverageObservations[${index}].testFile "${testFile}" is not present in changedFiles[].path`
+      );
+    }
+
+    rejectPlaceholderText(
+      observedExpectation,
+      `testCoverageObservations[${index}].observedExpectation`
+    );
+    rejectCorrectnessJudgment(
+      observedExpectation,
+      `testCoverageObservations[${index}].observedExpectation`
+    );
+
+    const evidenceRefs = validateEvidenceRefIds(
+      entry.evidenceRefs,
+      knownEvidenceRefIds,
+      `testCoverageObservations[${index}].evidenceRefs`
+    );
+
+    return { sourceFile, testFile, observedExpectation, evidenceRefs };
+  });
+}
+
 function validateBehaviorChanges(
   value: unknown,
-  knownPaths: ReadonlySet<string>
-): readonly { readonly description: string; readonly files: readonly string[] }[] {
+  knownPaths: ReadonlySet<string>,
+  knownEvidenceRefIds: ReadonlySet<string>
+): readonly BehaviorChangeEntry[] {
   if (!Array.isArray(value)) {
     throw new Step0OutputValidationError(
       "SCHEMA",
@@ -281,7 +570,78 @@ function validateBehaviorChanges(
       return filePath;
     });
 
-    return { description, files };
+    const evidenceRefs = validateEvidenceRefIds(
+      entry.evidenceRefs,
+      knownEvidenceRefIds,
+      `behaviorChanges[${index}].evidenceRefs`
+    );
+
+    return { description, files, evidenceRefs };
+  });
+}
+
+function validateEvidenceRefIds(
+  value: unknown,
+  knownEvidenceRefIds: ReadonlySet<string>,
+  label: string
+): readonly string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      `${label} must be a non-empty array`
+    );
+  }
+
+  const seen = new Set<string>();
+  return value.map((rawId, index) => {
+    const id = requireNonEmptyString(rawId, `${label}[${index}]`);
+    if (!knownEvidenceRefIds.has(id)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `${label}[${index}] "${id}" is not present in evidenceRefs[].id`
+      );
+    }
+    if (seen.has(id)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `${label}[${index}] duplicates evidence ref id "${id}"`
+      );
+    }
+    seen.add(id);
+    return id;
+  });
+}
+
+function validateKnownPathsArray(
+  value: unknown,
+  knownPaths: ReadonlySet<string>,
+  label: string,
+  options: { allowEmpty: boolean }
+): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError("SCHEMA", `${label} must be an array`);
+  }
+  if (!options.allowEmpty && value.length === 0) {
+    throw new Step0OutputValidationError("SCHEMA", `${label} must not be empty`);
+  }
+
+  const seen = new Set<string>();
+  return value.map((rawPath, index) => {
+    const path = requireNonEmptyString(rawPath, `${label}[${index}]`);
+    if (!knownPaths.has(path)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `${label}[${index}] "${path}" is not present in changedFiles[].path`
+      );
+    }
+    if (seen.has(path)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `${label}[${index}] duplicates path "${path}"`
+      );
+    }
+    seen.add(path);
+    return path;
   });
 }
 

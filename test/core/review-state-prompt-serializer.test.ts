@@ -26,7 +26,7 @@ function createFinding(findingId: string, type: "must" | "nice" = "must"): Findi
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    confidence: 85,
+    modelConfidence: 85,
     findingId,
     supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed" }],
     reachability: { credible: true, description: "reachable" },
@@ -99,37 +99,37 @@ test("RSP-2a: sections+findings include produces both blocks", () => {
   const ctx = createContext();
   ctx.setSection("overview", "## Overview\ncontent");
   ctx.setFindings([createFinding("F1")]);
-  const result = serializer.serialize({ context: ctx, include: ["sections", "findings"] });
+  const result = serializer.serialize({ context: ctx, include: ["sections", "verified-findings"] });
 
   assert.match(result, /<section key="overview">/);
-  assert.match(result, /<findings format="json">/);
-  assert.match(result, /<\/findings>/);
+  assert.match(result, /<verified_findings format="json">/);
+  assert.match(result, /<\/verified_findings>/);
 });
 
 test("RSP-2b: findings-only include produces findings block without sections", () => {
   const ctx = createContext();
   ctx.setSection("overview", "## Overview\ncontent");
   ctx.setFindings([createFinding("F1")]);
-  const result = serializer.serialize({ context: ctx, include: ["findings"] });
+  const result = serializer.serialize({ context: ctx, include: ["verified-findings"] });
 
   assert.equal(result.includes("<section"), false);
-  assert.match(result, /<findings format="json">/);
+  assert.match(result, /<verified_findings format="json">/);
 });
 
 test("RSP-2c: no findings set + findings include produces no findings block", () => {
   const ctx = createContext();
-  const result = serializer.serialize({ context: ctx, include: ["findings"] });
+  const result = serializer.serialize({ context: ctx, include: ["verified-findings"] });
 
-  assert.equal(result.includes("<findings"), false);
+  assert.equal(result.includes("<verified_findings"), false);
 });
 
 test("RSP-2d: empty findings array + findings include produces findings block with empty array", () => {
   const ctx = createContext();
   ctx.setFindings([]);
-  const result = serializer.serialize({ context: ctx, include: ["findings"] });
+  const result = serializer.serialize({ context: ctx, include: ["verified-findings"] });
 
-  assert.match(result, /<findings format="json">/);
-  const findingsMatch = result.match(/<findings format="json">\n([\s\S]*?)\n<\/findings>/);
+  assert.match(result, /<verified_findings format="json">/);
+  const findingsMatch = result.match(/<verified_findings format="json">\n([\s\S]*?)\n<\/verified_findings>/);
   assert.ok(findingsMatch);
   const parsed = JSON.parse(findingsMatch![1]);
   assert.deepEqual(parsed, []);
@@ -144,9 +144,9 @@ test("RSP-2e: finding JSON preserves all v2 typed fields", () => {
     dependencyAnchor: { filePath: "src/dep.ts", symbol: "helper" }
   };
   ctx.setFindings([finding]);
-  const result = serializer.serialize({ context: ctx, include: ["findings"] });
+  const result = serializer.serialize({ context: ctx, include: ["verified-findings"] });
 
-  const findingsMatch = result.match(/<findings format="json">\n([\s\S]*?)\n<\/findings>/);
+  const findingsMatch = result.match(/<verified_findings format="json">\n([\s\S]*?)\n<\/verified_findings>/);
   assert.ok(findingsMatch);
   const parsed = JSON.parse(findingsMatch![1]);
   assert.equal(parsed.length, 1);
@@ -165,7 +165,7 @@ test("RSP-2e: finding JSON preserves all v2 typed fields", () => {
 test("sections not requested means no section blocks even when context has sections", () => {
   const ctx = createContext();
   ctx.setSection("overview", "## Overview\ncontent");
-  const result = serializer.serialize({ context: ctx, include: ["findings"] });
+  const result = serializer.serialize({ context: ctx, include: ["verified-findings"] });
 
   assert.equal(result.includes("<section"), false);
 });
@@ -175,12 +175,26 @@ test("sections not requested means no section blocks even when context has secti
 test("multiple findings serialize as JSON array", () => {
   const ctx = createContext();
   ctx.setFindings([createFinding("F1", "must"), createFinding("F2", "nice")]);
-  const result = serializer.serialize({ context: ctx, include: ["findings"] });
+  const result = serializer.serialize({ context: ctx, include: ["verified-findings"] });
 
-  const findingsMatch = result.match(/<findings format="json">\n([\s\S]*?)\n<\/findings>/);
+  const findingsMatch = result.match(/<verified_findings format="json">\n([\s\S]*?)\n<\/verified_findings>/);
   assert.ok(findingsMatch);
   const parsed = JSON.parse(findingsMatch![1]);
   assert.equal(parsed.length, 2);
   assert.equal(parsed[0].findingId, "F1");
   assert.equal(parsed[1].findingId, "F2");
+});
+
+test("serializer can emit standalone candidate findings blocks", () => {
+  const result = serializer.serializeFindingsBlock({
+    kind: "candidate-findings",
+    findings: [createFinding("F1")]
+  });
+
+  assert.match(result, /<candidate_findings format="json">/);
+  assert.match(result, /<\/candidate_findings>/);
+  const findingsMatch = result.match(/<candidate_findings format="json">\n([\s\S]*?)\n<\/candidate_findings>/);
+  assert.ok(findingsMatch);
+  const parsed = JSON.parse(findingsMatch![1]);
+  assert.equal(parsed[0].findingId, "F1");
 });

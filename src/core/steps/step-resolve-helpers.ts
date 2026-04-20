@@ -44,7 +44,7 @@ export function createSectionResolve(input: {
 /**
  * Factory for the resolve() closure shared by all structured steps (Step 5, 6).
  *
- * Runs deterministic validation + confidence filtering, then returns a
+ * Runs deterministic validation + acceptance filtering, then returns a
  * deferred mutation that writes the validated findings to the context.
  */
 export function createStructuredResolve(input: {

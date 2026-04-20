@@ -78,7 +78,7 @@ export interface ReviewRunSummary {
 export interface ReviewPerFileStepsFactoryInput {
   runContext: RunContext;
   reviewNoteFinalizer: Pick<ReviewNoteFinalizer, "render">;
-  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize" | "serializeFindingsBlock">;
 }
 
 export type ReviewPerFileStepsFactory = (

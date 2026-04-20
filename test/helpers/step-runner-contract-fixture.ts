@@ -229,7 +229,7 @@ export const INITIAL_FINDING = {
   deviation: "初版落差",
   impact: "初版 impact",
   suggestion: "初版建議",
-  confidence: 88
+  modelConfidence: 88
 } as const;
 
 export const FINAL_FINDING = {
@@ -240,7 +240,7 @@ export const FINAL_FINDING = {
   deviation: "最終落差",
   impact: "最終 impact",
   suggestion: "最終建議",
-  confidence: 91
+  modelConfidence: 91
 } as const;
 
 export const NICE_FINAL_FINDING = {
@@ -251,7 +251,7 @@ export const NICE_FINAL_FINDING = {
   deviation: "最終落差",
   impact: "最終 impact",
   suggestion: "最終建議",
-  confidence: 93
+  modelConfidence: 93
 } as const;
 
 export const DEFAULT_JUDGE_RESOLVE = makeSectionResolveWithJudge(

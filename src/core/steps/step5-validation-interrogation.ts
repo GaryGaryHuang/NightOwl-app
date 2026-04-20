@@ -16,7 +16,7 @@ const STEP5_SYSTEM_ADDITION = [
   "- Keep the scope centered on scenario-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
   "- When determining whether a deviation exists, explicitly check against the rules, assumptions, and scope boundaries established in the Knowledge & Source of Truth section of <review_state>. Do not report deviations that fall within the declared out-of-scope boundaries.",
   "- IMPORTANT: Do not report findings based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a finding for every scenario.",
-  "- Every finding must include `findingId`, `supportingEvidence`, `reachability`, and `uncertaintyStatus`. Only `\"supported\"` findings will be accepted.",
+  "- Every finding must include `findingId`, `supportingEvidence`, `reachability`, `uncertaintyStatus`, and `modelConfidence`. Only `\"supported\"` findings with credible reachability will be accepted.",
   "- Output valid JSON only."
 ].join("\n");
 
@@ -43,7 +43,7 @@ const STEP5_INSTRUCTION = [
   "   - `must`: a concrete, actionable problem with meaningful correctness, consistency, safety, compatibility, or operational impact",
   "   - `nice`: a lower-severity but still evidence-backed improvement opportunity that is useful to address",
   "",
-  "5. For each finding, assign a `confidence` score (0–100) based on the strength of evidence, path reachability, and clarity of the deviation and impact.",
+  "5. For each finding, assign a `modelConfidence` score (0–100) as telemetry based on the strength of evidence, path reachability, and clarity of the deviation and impact. The host does not use this field as an acceptance gate.",
   "",
   "6. Every finding must include a `traceability` object for the reviewed file:",
   "   - use `\"kind\": \"line-range\"` with positive integer `lineStart` and `lineEnd` for head-side 1-based file lines",
@@ -74,7 +74,7 @@ const STEP5_INSTRUCTION = [
   "",
   "Output the result as a single JSON object with this structure:",
   "",
-  "{\"findings\": [{\"findingId\": \"F1\", \"type\": \"must\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 21, \"lineEnd\": 22}, \"context\": \"具體程式位置、條件或情境脈絡\", \"deviation\": \"預期行為與實際行為的落差\", \"impact\": \"若不處理會造成的後果\", \"suggestion\": \"具體且可執行的修正或改善建議\", \"confidence\": 85, \"supportingEvidence\": [{\"source\": \"diff:src/app.ts:21-22\", \"content\": \"changed guard condition removes null check\"}], \"reachability\": {\"credible\": true, \"description\": \"called from main entry on every request\"}, \"uncertaintyStatus\": \"supported\", \"sourceHypothesisId\": \"W1\"}]}",
+  "{\"findings\": [{\"findingId\": \"F1\", \"type\": \"must\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 21, \"lineEnd\": 22}, \"context\": \"具體程式位置、條件或情境脈絡\", \"deviation\": \"預期行為與實際行為的落差\", \"impact\": \"若不處理會造成的後果\", \"suggestion\": \"具體且可執行的修正或改善建議\", \"modelConfidence\": 85, \"supportingEvidence\": [{\"source\": \"diff:src/app.ts:21-22\", \"content\": \"changed guard condition removes null check\"}], \"reachability\": {\"credible\": true, \"description\": \"called from main entry on every request\"}, \"uncertaintyStatus\": \"supported\", \"sourceHypothesisId\": \"W1\"}]}",
   "",
   "If no findings remain, return: {\"findings\": []}",
   "The `type` field must be either `\"must\"` or `\"nice\"`.",

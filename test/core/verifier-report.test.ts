@@ -83,7 +83,22 @@ describe("VerifierReportBuilder", () => {
 
   it("VR-3.2 summarize counts all taxonomy codes correctly", () => {
     const builder = new VerifierReportBuilder();
-    const codes: VerifierTaxonomyCode[] = ["PARSE", "SCHEMA", "ANCHOR", "EVIDENCE", "REACHABILITY", "ACCEPTANCE", "OK"];
+    const codes: VerifierTaxonomyCode[] = [
+      "PARSE",
+      "SCHEMA",
+      "ANCHOR",
+      "EVIDENCE",
+      "REACHABILITY",
+      "OUT_OF_SCOPE",
+      "DUPLICATE",
+      "CONTRADICTION",
+      "STALE_CONTEXT",
+      "CONFIDENCE_MISUSE",
+      "GENERIC_HYPOTHESIS",
+      "UNVERIFIABLE_INDIRECT",
+      "ACCEPTANCE",
+      "OK"
+    ];
     for (const code of codes) {
       builder.addEntry({
         findingId: `F-${code}`,
@@ -95,9 +110,9 @@ describe("VerifierReportBuilder", () => {
     }
 
     const summary = builder.summarize();
-    assert.equal(summary.total, 7);
+    assert.equal(summary.total, codes.length);
     assert.equal(summary.accepted, 1);
-    assert.equal(summary.rejected, 6);
+    assert.equal(summary.rejected, codes.length - 1);
 
     for (const code of codes) {
       assert.equal(summary.byTaxonomy[code], 1, `byTaxonomy.${code} should be 1`);

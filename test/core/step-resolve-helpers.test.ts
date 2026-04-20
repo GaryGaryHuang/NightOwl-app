@@ -256,7 +256,7 @@ function finding(overrides: Partial<Finding> = {}): Finding {
     deviation: "deviation",
     impact: "impact",
     suggestion: "suggestion",
-    confidence: 90,
+    modelConfidence: 90,
     findingId: "F1",
     supportingEvidence: [{ source: "diff:src/app.ts:1", content: "value changed" }],
     reachability: { credible: true, description: "reachable" },

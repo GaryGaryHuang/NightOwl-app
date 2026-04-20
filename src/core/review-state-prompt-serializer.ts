@@ -1,6 +1,8 @@
-import type { FileReviewContext } from "./file-review-context.ts";
+import type { FileReviewContext, Finding } from "./file-review-context.ts";
 
-export type ReviewStateBlock = "sections" | "findings";
+export type FindingsBlockKind = "candidate-findings" | "verified-findings";
+
+export type ReviewStateBlock = "sections" | FindingsBlockKind;
 
 export interface ReviewStateSerializeInput {
   context: Pick<FileReviewContext, "getSectionEntries" | "getFindings">;
@@ -24,17 +26,42 @@ export class ReviewStatePromptSerializer {
       }
     }
 
-    if (input.include.includes("findings")) {
-      const findings = input.context.getFindings();
+    const findings = input.context.getFindings();
 
-      if (findings !== undefined) {
-        parts.push('<findings format="json">');
-        parts.push(JSON.stringify(findings, null, 2));
-        parts.push("</findings>");
-      }
+    if (input.include.includes("candidate-findings") && findings !== undefined) {
+      parts.push(
+        this.serializeFindingsBlock({
+          kind: "candidate-findings",
+          findings
+        })
+      );
+    }
+
+    if (input.include.includes("verified-findings") && findings !== undefined) {
+      parts.push(
+        this.serializeFindingsBlock({
+          kind: "verified-findings",
+          findings
+        })
+      );
     }
 
     parts.push("</review_state>");
     return parts.join("\n");
+  }
+
+  serializeFindingsBlock(input: {
+    kind: FindingsBlockKind;
+    findings: readonly Finding[];
+  }): string {
+    const tagName = input.kind === "candidate-findings"
+      ? "candidate_findings"
+      : "verified_findings";
+
+    return [
+      `<${tagName} format="json">`,
+      JSON.stringify(input.findings, null, 2),
+      `</${tagName}>`
+    ].join("\n");
   }
 }
