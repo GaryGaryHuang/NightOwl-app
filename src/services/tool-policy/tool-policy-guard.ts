@@ -1,5 +1,6 @@
 import {
   type PermissionHandler,
+  type PermissionRequest,
   type SessionConfig
 } from "@github/copilot-sdk";
 
@@ -342,34 +343,40 @@ export class ToolPolicyGuard {
     profile: ToolPolicyBoundaryContext,
     auditWriter?: ToolAuditSink
   ): PermissionHandler {
-    return async (request) => {
-      let record: HandlerDecisionRecord;
+    type PermissionEvaluator = (
+      request: PermissionRequest
+    ) => HandlerDecisionRecord | Promise<HandlerDecisionRecord>;
 
-      if (request.kind === "read") {
-        record = this.#evaluateRead(request, profile);
-      } else if (request.kind === "write") {
-        record = this.#evaluateWrite(request);
-      } else if (request.kind === "shell") {
-        record = this.#evaluateShell(request, profile);
-      } else if (request.kind === "url") {
-        record = await this.#evaluateUrl(request);
-      } else if (request.kind === "mcp") {
-        record = this.#evaluateMcp(request);
-      } else if (request.kind === "custom-tool") {
-        record = this.#evaluateCustomTool(request);
-      } else if (request.kind === "memory") {
-        record = this.#evaluateMemory(request);
-      } else if (request.kind === "hook") {
-        record = this.#evaluateHook(request);
-      } else {
-        // Unknown kind — fail-closed.
-        // Exhaustive check: if the SDK adds a new kind to the PermissionRequest.kind
-        // union and a dedicated branch is not added above, TypeScript reports a type
-        // error on the next line. This assertion does not execute at runtime.
-        const _exhaustiveCheck: never = request.kind;
-        void _exhaustiveCheck;
-        record = { tool: request.kind as string, decision: "deny", reason: UNKNOWN_KIND_DENY_REASON, args: {} };
-      }
+    // Registry of per-kind evaluators. The `satisfies` clause covers every kind
+    // in the SDK PermissionRequest union; if the SDK adds a new kind, TypeScript
+    // reports a compile error here until a matching entry is added.
+    const sdkEvaluators = {
+      read: (request) => this.#evaluateRead(request, profile),
+      write: (request) => this.#evaluateWrite(request),
+      shell: (request) => this.#evaluateShell(request, profile),
+      url: (request) => this.#evaluateUrl(request),
+      mcp: (request) => this.#evaluateMcp(request),
+      "custom-tool": (request) => this.#evaluateCustomTool(request)
+    } satisfies Record<PermissionRequest["kind"], PermissionEvaluator>;
+
+    // Defensive entries for kinds observed in session-events.d.ts but absent
+    // from the SDK PermissionRequest.kind union. Lookup is by string at runtime.
+    const evaluators: { [kind: string]: PermissionEvaluator | undefined } = {
+      ...sdkEvaluators,
+      memory: (request) => this.#evaluateMemory(request),
+      hook: (request) => this.#evaluateHook(request)
+    };
+
+    return async (request) => {
+      const evaluator = evaluators[request.kind];
+      const record: HandlerDecisionRecord = evaluator
+        ? await evaluator(request)
+        : {
+            tool: request.kind as string,
+            decision: "deny",
+            reason: UNKNOWN_KIND_DENY_REASON,
+            args: {}
+          };
 
       // Post-dispatch: write the single audit record and return the SDK result.
       // Audit assembly is centralised in #buildAuditEntry so any future field
@@ -387,31 +394,42 @@ export class ToolPolicyGuard {
     auditWriter?: ToolAuditSink
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
-      const urlResult = await this.#handlePreToolUseStringPolicy({
-        input,
-        auditWriter,
-        toolNames: URL_TOOL_NAMES,
-        argName: "url",
-        evaluate: (url) => this.#evaluateUrlPolicyDecision(url),
-        failClosedReason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON
-      });
+      // Per-call registry: ordered list of string-arg policies. First matching
+      // toolName short-circuits. Adding a new pre-tool-use kind requires only
+      // one additional entry. Closures capture `profile` and `input.cwd`.
+      const policies: ReadonlyArray<{
+        toolNames: ReadonlySet<string>;
+        argName: string;
+        evaluate: (value: string) =>
+          | ToolPolicyDecision
+          | Promise<ToolPolicyDecision>;
+        failClosedReason: string;
+      }> = [
+        {
+          toolNames: URL_TOOL_NAMES,
+          argName: "url",
+          evaluate: (url) => this.#evaluateUrlPolicyDecision(url),
+          failClosedReason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON
+        },
+        {
+          toolNames: SHELL_TOOL_NAMES,
+          argName: "command",
+          evaluate: (command) =>
+            this.#evaluateShellPolicyDecision(command, profile, input.cwd),
+          failClosedReason: SHELL_POLICY_FAIL_CLOSED_REASON
+        }
+      ];
 
-      if (urlResult !== PRE_TOOL_USE_NOT_HANDLED) {
-        return urlResult;
-      }
+      for (const policy of policies) {
+        const result = await this.#handlePreToolUseStringPolicy({
+          input,
+          auditWriter,
+          ...policy
+        });
 
-      const shellResult = await this.#handlePreToolUseStringPolicy({
-        input,
-        auditWriter,
-        toolNames: SHELL_TOOL_NAMES,
-        argName: "command",
-        evaluate: (command) =>
-          this.#evaluateShellPolicyDecision(command, profile, input.cwd),
-        failClosedReason: SHELL_POLICY_FAIL_CLOSED_REASON
-      });
-
-      if (shellResult !== PRE_TOOL_USE_NOT_HANDLED) {
-        return shellResult;
+        if (result !== PRE_TOOL_USE_NOT_HANDLED) {
+          return result;
+        }
       }
 
       return;
