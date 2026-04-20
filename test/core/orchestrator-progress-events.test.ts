@@ -153,5 +153,7 @@ function renderProgressEvent(event: RunProgressEvent): string {
       return `finalizing:${event.plannedFileCount}:${event.successfulFileCount}:${event.skippedFileCount}`;
     case "finalizer-failed":
       return `finalizer-failed:${event.artifact}:${event.message}`;
+    case "tool-audit-write-failed":
+      return `tool-audit-write-failed:${event.message}`;
   }
 }

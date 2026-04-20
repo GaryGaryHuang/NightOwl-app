@@ -16,6 +16,11 @@ export interface ToolAuditOutputTarget {
   toolAuditPath: string;
 }
 
+export interface ToolAuditWriteFailure {
+  auditFilePath: string | undefined;
+  error: unknown;
+}
+
 export class AuditWriterStateError extends Error {
   constructor(message: string) {
     super(message);
@@ -39,9 +44,12 @@ export class ToolAuditWriter implements ToolAuditSink {
   #buffer: ToolAuditRecord[] | undefined;
   #writeChain: Promise<void> = Promise.resolve();
   #writeFailureLogged = false;
-  readonly #onWriteFailure?: (error: unknown) => void;
+  readonly #onWriteFailure?: (failure: ToolAuditWriteFailure) => void;
 
-  constructor(auditFilePath?: string, options?: { onWriteFailure?: (error: unknown) => void }) {
+  constructor(
+    auditFilePath?: string,
+    options?: { onWriteFailure?: (failure: ToolAuditWriteFailure) => void }
+  ) {
     if (auditFilePath !== undefined) {
       this.#auditFilePath = auditFilePath;
     } else {
@@ -91,7 +99,10 @@ export class ToolAuditWriter implements ToolAuditSink {
         // to avoid flooding output during a review session.
         if (!this.#writeFailureLogged) {
           this.#writeFailureLogged = true;
-          this.#onWriteFailure?.(error);
+          this.#onWriteFailure?.({
+            auditFilePath: this.#auditFilePath,
+            error
+          });
         }
       }
     });
@@ -105,7 +116,9 @@ export class ToolAuditWriter implements ToolAuditSink {
 export class ReviewRunToolAudit {
   readonly #writer: ToolAuditWriter;
 
-  constructor(options?: { onWriteFailure?: (error: unknown) => void }) {
+  constructor(
+    options?: { onWriteFailure?: (failure: ToolAuditWriteFailure) => void }
+  ) {
     this.#writer = new ToolAuditWriter(undefined, options);
   }
 

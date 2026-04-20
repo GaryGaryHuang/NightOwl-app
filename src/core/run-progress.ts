@@ -43,6 +43,10 @@ export type RunProgressEvent =
       type: "finalizer-failed";
       artifact: "summary" | "index" | "verifier-report" | "manifest";
       message: string;
+    }
+  | {
+      type: "tool-audit-write-failed";
+      message: string;
     };
 
 export type RunProgressEventHandler = (event: RunProgressEvent) => void;

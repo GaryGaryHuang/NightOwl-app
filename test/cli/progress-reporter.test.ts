@@ -144,6 +144,31 @@ test("CliProgressReporter pins skipped-file events above the TTY live line and k
   assert.doesNotMatch(stdout.writes.at(-1) ?? "", /src\/app\.ts/u);
 });
 
+test("CliProgressReporter pins tool-audit warnings above the TTY live line and keeps progress at the bottom", () => {
+  const { stdout, reporter } = createInitializedReporter({
+    isTTY: true,
+    plannedFileCount: 2
+  });
+
+  reporter.handleEvent({ type: "phase-changed", phase: "reviewing" });
+  reporter.handleEvent({
+    type: "file-claimed",
+    filePath: "src/app.ts",
+    claimOrder: 1
+  });
+  reporter.handleEvent({
+    type: "tool-audit-write-failed",
+    message: "tool-audit.jsonl write failed at /workspace/repo/.nightowl/review/run/tool-audit.jsonl: EISDIR"
+  });
+
+  assert.match(
+    stdout.logs.at(-1) ?? "",
+    /Warning: tool-audit\.jsonl write failed at .*tool-audit\.jsonl: EISDIR/u
+  );
+  assert.match(stdout.writes.at(-1) ?? "", /0\/2/u);
+  assert.match(stdout.writes.at(-1) ?? "", /src\/app\.ts/u);
+});
+
 test("CliProgressReporter falls back to append-only snapshots when stdout is not a TTY", () => {
   const { stdout, reporter } = createInitializedReporter({
     isTTY: false,
@@ -224,6 +249,25 @@ test("CliProgressReporter renders a final non-TTY snapshot using the counts carr
   });
 
   assert.equal(stdout.logs.at(-1), "Progress 4/4 | active 0");
+});
+
+test("CliProgressReporter appends tool-audit warnings in non-TTY mode without affecting progress state", () => {
+  const { stdout, reporter } = createInitializedReporter({
+    isTTY: false,
+    plannedFileCount: 2
+  });
+
+  reporter.handleEvent({
+    type: "tool-audit-write-failed",
+    message: "tool-audit.jsonl write failed at /workspace/repo/.nightowl/review/run/tool-audit.jsonl: EISDIR"
+  });
+
+  assert.deepEqual(stdout.writes, []);
+  assert.equal(
+    stdout.logs.at(-1),
+    "Warning: tool-audit.jsonl write failed at /workspace/repo/.nightowl/review/run/tool-audit.jsonl: EISDIR"
+  );
+  assert.equal(stdout.logs.at(-2), "Progress 0/2 | active 0");
 });
 
 test("CliProgressReporter clears the TTY live line during finalize so the final summary does not leave a stale progress row", () => {

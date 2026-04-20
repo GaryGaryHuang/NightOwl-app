@@ -110,6 +110,35 @@ test("ToolAuditWriter.append() silently ignores write failures and never throws"
   }
 });
 
+test("ToolAuditWriter reports only the first write failure to the callback with audit path context", async () => {
+  const auditFixture = createAuditFileFixture();
+  const failures: Array<{ auditFilePath: string | undefined; message: string }> = [];
+
+  try {
+    const writer = new ToolAuditWriter(auditFixture.tempDir, {
+      onWriteFailure(failure) {
+        failures.push({
+          auditFilePath: failure.auditFilePath,
+          message: failure.error instanceof Error
+            ? failure.error.message
+            : String(failure.error)
+        });
+      }
+    });
+
+    writer.append(createToolAuditRecord({ tool: "shell" }));
+    writer.append(createToolAuditRecord({ tool: "read" }));
+
+    await writer.flush();
+
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0]?.auditFilePath, auditFixture.tempDir);
+    assert.match(failures[0]?.message ?? "", /EISDIR|illegal operation on a directory/u);
+  } finally {
+    auditFixture.cleanup();
+  }
+});
+
 // --- Buffered audit writer tests ---
 
 test("ToolAuditWriter constructed without path enters buffering mode and does not create a file", () => {
@@ -277,6 +306,35 @@ test("ReviewRunToolAudit binds buffered sink records to outputTarget.toolAuditPa
 
     const lines = readAuditLines(auditFixture.read());
     assert.deepEqual(lines, [shellRecord, readRecord]);
+  } finally {
+    auditFixture.cleanup();
+  }
+});
+
+test("ReviewRunToolAudit reports buffered flush failures with the bound audit path", async () => {
+  const auditFixture = createAuditFileFixture();
+  const failures: Array<{ auditFilePath: string | undefined; message: string }> = [];
+
+  try {
+    const toolAudit = new ReviewRunToolAudit({
+      onWriteFailure(failure) {
+        failures.push({
+          auditFilePath: failure.auditFilePath,
+          message: failure.error instanceof Error
+            ? failure.error.message
+            : String(failure.error)
+        });
+      }
+    });
+
+    toolAudit.sink.append(createToolAuditRecord({ tool: "shell" }));
+    toolAudit.bindOutputTarget({ toolAuditPath: auditFixture.tempDir });
+
+    await toolAudit.flush();
+
+    assert.equal(failures.length, 1);
+    assert.equal(failures[0]?.auditFilePath, auditFixture.tempDir);
+    assert.match(failures[0]?.message ?? "", /EISDIR|illegal operation on a directory/u);
   } finally {
     auditFixture.cleanup();
   }

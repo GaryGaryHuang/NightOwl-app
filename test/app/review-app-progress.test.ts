@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, before, test } from "node:test";
+import type { SessionConfig } from "@github/copilot-sdk";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
+import type { ReviewPerFileStepsFactory } from "../../src/core/orchestrator.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import type { RunProgressEvent } from "../../src/core/run-progress.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import type { StepDefinition } from "../../src/core/step-runner.ts";
 import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";
@@ -131,3 +138,150 @@ describe("createLocalReviewRunApp progress wiring", () => {
     );
   });
 });
+
+test("createLocalReviewRunApp emits a progress warning when tool-audit writes fail", async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "nightowl-audit-warning-"));
+  const events: RunProgressEvent[] = [];
+
+  try {
+    const app = createLocalReviewRunApp({
+      workingDirectory: repoRoot,
+      timestampProvider: () => "03131431",
+      sourceProvider: {
+        async resolveRepoRoot() {
+          return repoRoot;
+        },
+        async getChangesetEntries() {
+          return [{ status: "M" as const, path: "src/app.ts" }];
+        },
+        async getCurrentBranch() {
+          return "feature-branch";
+        },
+        async getChangedFiles() {
+          return ["src/app.ts"];
+        },
+        async getDiff(_repoRoot, _baseRef, _headRef, filePath) {
+          return `--- a/${filePath}\n+++ b/${filePath}\n@@ -1 +1 @@\n-old\n+new\n`;
+        }
+      },
+      reviewFileFilter: {
+        async filterReviewableFiles(_repoRoot: string, files: string[]) {
+          return files;
+        }
+      },
+      reviewConfigProvider: {
+        async loadReviewConfig() {
+          return {
+            maxConcurrentFiles: 1,
+            confidenceThresholds: { must: 80, nice: 90 },
+            mcpServers: {}
+          };
+        }
+      },
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              await config.hooks?.onPreToolUse?.(
+                {
+                  timestamp: 0,
+                  cwd: repoRoot,
+                  toolName: "bash",
+                  toolArgs: { command: "git log --oneline" }
+                } as never,
+                { sessionId: "s1" } as never
+              );
+
+              return {
+                async sendAndWait() {
+                  return {
+                    data: {
+                      content: "custom-step-ok"
+                    }
+                  };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      changesetOverviewRunner: {
+        async run() {
+          return createRunContext({
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
+            userContext: []
+          });
+        }
+      },
+      perFileStepsFactory: createSingleStepFactory(),
+      outputSink: defineOutputSinkDouble({
+        async initializeRun(outputPlan) {
+          await mkdir(outputPlan.outputTarget.toolAuditPath, { recursive: true });
+          return this;
+        },
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishVerifierReport() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
+      }),
+      onProgressEvent(event) {
+        events.push(event);
+      }
+    });
+
+    await app.run({
+      baseRef: "main",
+      headRef: "feature-branch",
+      repoPath: ".",
+      userContext: [],
+      dryRun: false
+    });
+
+    assert.ok(
+      events.some(
+        (event) =>
+          event.type === "tool-audit-write-failed" &&
+          event.message.includes(repoRoot)
+      ),
+      "expected tool-audit write failure warning to be emitted"
+    );
+  } finally {
+    rmSync(repoRoot, { force: true, recursive: true });
+  }
+});
+
+function createSingleStepFactory(): ReviewPerFileStepsFactory {
+  return (): StepDefinition[] => [
+    {
+      stepId: "step1-overview",
+      prepare(context) {
+        return {
+          stepId: "step1-overview",
+          prompt: {
+            systemMessage: "custom system",
+            userMessage: `review ${context.filePath}`
+          },
+          reviewProfile: {
+            knowledgeMode: "disabled",
+            model: "gpt-5.4-mini"
+          },
+          async resolve() {
+            return (fileContext) => {
+              buildSuccessfulStepResult("step1-overview", fileContext.filePath).applyTo(fileContext);
+            };
+          }
+        };
+      }
+    }
+  ];
+}

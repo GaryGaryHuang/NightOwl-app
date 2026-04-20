@@ -33,6 +33,7 @@ import { ReviewSessionFactory } from "../services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../services/tool-policy/tool-policy-guard.ts";
 import {
   ReviewRunToolAudit,
+  type ToolAuditWriteFailure,
   type ToolAuditOutputTarget,
   type ToolAuditSink
 } from "../services/tool-audit-writer.ts";
@@ -113,7 +114,14 @@ export function createLocalReviewRunApp(
       };
     }
 
-    const toolAudit = new ReviewRunToolAudit();
+    const toolAudit = new ReviewRunToolAudit({
+      onWriteFailure(failure) {
+        options.onProgressEvent?.({
+          type: "tool-audit-write-failed",
+          message: formatToolAuditWriteFailure(failure)
+        });
+      }
+    });
 
     return {
       auditWriterProvider: () => toolAudit.sink,
@@ -238,4 +246,17 @@ export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
   }
 
   return lines.join("\n");
+}
+
+function formatToolAuditWriteFailure(failure: ToolAuditWriteFailure): string {
+  const prefix =
+    failure.auditFilePath === undefined
+      ? "tool-audit.jsonl write failed"
+      : `tool-audit.jsonl write failed at ${failure.auditFilePath}`;
+
+  return `${prefix}: ${extractErrorMessage(failure.error)}`;
+}
+
+function extractErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

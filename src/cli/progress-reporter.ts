@@ -264,6 +264,14 @@ export function reduceProgressEvent(
         }
       };
 
+    case "tool-audit-write-failed":
+      return {
+        state: current,
+        instruction: {
+          appendMessage: `Warning: ${event.message}`
+        }
+      };
+
     default:
       return { state: current, instruction: {} };
   }
