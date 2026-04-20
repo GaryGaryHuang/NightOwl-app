@@ -16,7 +16,7 @@ export interface ReviewSessionLike {
  */
 export interface ReviewSessionProfileLike {
   stepId?: string;
-  knowledgeMode?: ReviewKnowledgeMode;
+  knowledgeMode: ReviewKnowledgeMode;
   model: string;
   outputBaseDir: string;
   repoRoot: string;

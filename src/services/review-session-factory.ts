@@ -12,7 +12,7 @@ import type { ToolAuditSink } from "./tool-audit-writer.ts";
 
 export interface ReviewSessionProfile {
   stepId?: string;
-  knowledgeMode?: ReviewKnowledgeMode;
+  knowledgeMode: ReviewKnowledgeMode;
   model: string;
   outputBaseDir: string;
   repoRoot: string;
@@ -59,6 +59,11 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
 
   async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
     const auditWriter = this.#auditWriterProvider?.();
+    if (profile.knowledgeMode === undefined) {
+      throw new Error(
+        "ReviewSessionFactory requires callers to provide an explicit knowledgeMode."
+      );
+    }
     const sessionConfig: SessionConfig = {
       availableTools: [...REVIEW_AVAILABLE_TOOLS],
       hooks: {
@@ -90,10 +95,7 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
       )
     };
 
-    // Default to built-in Context7 unless a step explicitly opts out of knowledge mode.
-    const mcpServers = this.#knowledgeSvc?.getMcpServers(
-      profile.knowledgeMode ?? "built-in-context7"
-    );
+    const mcpServers = this.#knowledgeSvc?.getMcpServers(profile.knowledgeMode);
 
     if (mcpServers && Object.keys(mcpServers).length > 0) {
       sessionConfig.mcpServers = mcpServers;

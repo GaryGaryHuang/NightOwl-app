@@ -210,6 +210,25 @@ test("ReviewSessionFactory injects MCP servers only when KnowledgeSvc returns th
   assert.equal(getRecordedConfig(receivedConfigs, 1).mcpServers, undefined);
 });
 
+test("ReviewSessionFactory rejects runtime profiles that omit knowledgeMode", async () => {
+  const { factory } = createReviewSessionFactoryHarness({
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  const profileWithoutKnowledgeMode = {
+    ...BASE_REVIEW_PROFILE
+  } as Omit<typeof BASE_REVIEW_PROFILE, "knowledgeMode">;
+  delete (profileWithoutKnowledgeMode as { knowledgeMode?: string }).knowledgeMode;
+
+  await assert.rejects(
+    () =>
+      factory.createSession(
+        profileWithoutKnowledgeMode as typeof BASE_REVIEW_PROFILE
+      ),
+    /requires callers to provide an explicit knowledgeMode/u
+  );
+});
+
 // auditWriterProvider is supplied at construction time; sessions created before the provider
 // starts returning a writer receive undefined, and those after receive the writer.
 test("ReviewSessionFactory threads audit writer via auditWriterProvider", async () => {

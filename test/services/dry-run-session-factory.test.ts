@@ -17,6 +17,7 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
   test("returns built-in stub for known stepId", async () => {
     const factory = new DryRunReviewSessionFactory();
     const session = await factory.createSession({
+      knowledgeMode: "disabled",
       model: "gpt-5.4-mini",
       outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
@@ -31,6 +32,7 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
   test("returns generic fallback for unknown stepId", async () => {
     const factory = new DryRunReviewSessionFactory();
     const session = await factory.createSession({
+      knowledgeMode: "disabled",
       model: "gpt-5.4-mini",
       outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
@@ -47,6 +49,7 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
   test("returns generic fallback when stepId is omitted", async () => {
     const factory = new DryRunReviewSessionFactory();
     const session = await factory.createSession({
+      knowledgeMode: "disabled",
       model: "gpt-5.4-mini",
       outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
