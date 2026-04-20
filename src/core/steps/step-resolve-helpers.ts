@@ -193,7 +193,7 @@ function dispositionReasonToTaxonomy(
 }
 
 const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(["High", "Medium", "Low", "None"]);
-const RISK_LEVEL_PATTERN = /整體風險等級[：:]\s*([\w]+)/;
+const RISK_LEVEL_PATTERN = /(?:整體風險等級|Overall risk level)[：:]\s*([\w]+)/i;
 
 /**
  * Parse the `整體風險等級` value from a Step 7 summary response.

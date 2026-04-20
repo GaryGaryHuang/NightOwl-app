@@ -1,7 +1,5 @@
 import {
-  buildDryRunChangesetOverviewResponse,
-  getDryRunStubResponse,
-  GENERIC_DRY_RUN_STUB
+  getDryRunResponseProvider
 } from "./dry-run-stub-catalog.ts";
 import type {
   ReviewSessionFactoryLike,
@@ -32,17 +30,6 @@ export class DryRunReviewSessionFactory implements ReviewSessionFactoryLike {
   async createSession(
     profile: ReviewSessionProfileLike
   ): Promise<SessionExecutor> {
-    if (profile.stepId === "changeset-overview") {
-      // Step 0 must produce a structurally-valid ChangeMap whose changedFiles[]
-      // exactly matches the run's actual changed paths, so we derive the JSON
-      // from the prompt's <changed_files> block at send time.
-      return buildStubSessionExecutor(buildDryRunChangesetOverviewResponse);
-    }
-
-    const response = profile.stepId !== undefined
-      ? getDryRunStubResponse(profile.stepId) ?? GENERIC_DRY_RUN_STUB
-      : GENERIC_DRY_RUN_STUB;
-
-    return buildStubSessionExecutor(() => response);
+    return buildStubSessionExecutor(getDryRunResponseProvider(profile.stepId));
   }
 }
