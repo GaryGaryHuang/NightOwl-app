@@ -78,13 +78,6 @@ export class ToolAuditWriter implements ToolAuditSink {
     }
   }
 
-  /**
-   * @deprecated Use attachAuditFile() or ReviewRunToolAudit.bindOutputTarget().
-   */
-  setPath(path: string): void {
-    this.attachAuditFile(path);
-  }
-
   flush(): Promise<void> {
     return this.#writeChain;
   }
