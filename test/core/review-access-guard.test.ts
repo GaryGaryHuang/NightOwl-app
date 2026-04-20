@@ -51,3 +51,17 @@ test("isAllowedReviewReadPath enforces the repo-source and review-output read bo
     assert.equal(isAllowedReviewReadPath(requestedPath, repoRoot), expected);
   }
 });
+
+test("isAllowedReviewReadPath throws when given a relative requestedPath", () => {
+  assert.throws(
+    () => isAllowedReviewReadPath("src/app.ts", "/workspace/repo"),
+    /requires absolute paths/u
+  );
+});
+
+test("isAllowedReviewReadPath throws when given a relative repoRoot", () => {
+  assert.throws(
+    () => isAllowedReviewReadPath("/workspace/repo/src/app.ts", "workspace/repo"),
+    /requires absolute paths/u
+  );
+});
