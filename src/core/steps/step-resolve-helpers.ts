@@ -1,4 +1,7 @@
-import type { FileReviewContext } from "../file-review-context.ts";
+import type {
+  DispositionReason,
+  FileReviewContext
+} from "../file-review-context.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { RiskLevel } from "../risk-level.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
@@ -97,6 +100,7 @@ export function createStep6DispositionResolve(input: {
     });
 
     const accepted = services.validator.filterByAcceptanceWithReport({
+      schemaVersion: verified.schemaVersion,
       findings: verified.findings
     });
     const acceptedFindingIds = accepted.payload.findings.map((f) => f.findingId);
@@ -114,10 +118,24 @@ export function createStep6DispositionResolve(input: {
       acceptedFindingIds
     });
 
+    const candidateIdSet = new Set(input.candidateFindingIds);
+    const dispositionReport = verified.dispositions
+      .filter((d) => d.status === "retired" && candidateIdSet.has(d.findingId))
+      .map<VerifierReportEntry>((d) => ({
+        findingId: d.findingId,
+        taxonomy: dispositionReasonToTaxonomy(d.reason),
+        outcome: "rejected",
+        gate: "disposition",
+        reason: `candidate retired: ${d.reason} - ${d.explanation}`,
+        dispositionStatus: d.status,
+        dispositionReason: d.reason,
+        dispositionExplanation: d.explanation
+      }));
+
     const reportEntries = toVerifierArtifactEntries({
       filePath: input.filePath,
       stepId: input.stepId ?? "step6-cognitive-simulation",
-      report: [...schemaReport, ...accepted.report]
+      report: [...schemaReport, ...accepted.report, ...dispositionReport]
     });
 
     return (targetContext: FileReviewContext) => {
@@ -140,8 +158,38 @@ function toVerifierArtifactEntries(input: {
     taxonomy: entry.taxonomy,
     outcome: entry.outcome,
     gate: entry.gate,
-    reason: entry.reason
+    reason: entry.reason,
+    ...(entry.dispositionStatus === undefined
+      ? {}
+      : { dispositionStatus: entry.dispositionStatus }),
+    ...(entry.dispositionReason === undefined
+      ? {}
+      : { dispositionReason: entry.dispositionReason }),
+    ...(entry.dispositionExplanation === undefined
+      ? {}
+      : { dispositionExplanation: entry.dispositionExplanation })
   }));
+}
+
+function dispositionReasonToTaxonomy(
+  reason: DispositionReason
+): VerifierReportEntry["taxonomy"] {
+  switch (reason) {
+    case "SUPPORTED":
+      return "OK";
+    case "ANCHOR":
+      return "ANCHOR";
+    case "EVIDENCE":
+      return "EVIDENCE";
+    case "REACHABILITY":
+      return "REACHABILITY";
+    case "OUT_OF_SCOPE":
+      return "OUT_OF_SCOPE";
+    case "DUPLICATE":
+      return "DUPLICATE";
+    case "CONTRADICTION":
+      return "CONTRADICTION";
+  }
 }
 
 const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(["High", "Medium", "Low", "None"]);

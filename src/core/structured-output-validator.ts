@@ -2,6 +2,7 @@ import type { ConfidenceThresholds } from "./confidence-thresholds.ts";
 import { buildDiffAnchorMap, type DiffAnchorMap } from "./diff-anchor-map.ts";
 import type {
   DependencyPathException,
+  DispositionReason,
   DispositionStatus,
   EvidenceRef,
   Finding,
@@ -10,6 +11,8 @@ import type {
   FindingTraceability,
   Reachability,
   UncertaintyStatus,
+  VerifierVerdict,
+  VerifierVerdictCheckName,
   VerifiedFindingsPayload
 } from "./file-review-context.ts";
 import {
@@ -67,6 +70,9 @@ export class StructuredOutputValidator {
       ALLOWED_TOP_LEVEL_KEYS,
       "top-level payload"
     );
+    const schemaVersion = validateSchemaVersion(
+      (parsed as Record<string, unknown>).schemaVersion
+    );
 
     const diffAnchorMap =
       input.diffContent === undefined
@@ -74,7 +80,9 @@ export class StructuredOutputValidator {
         : buildDiffAnchorMap(input.filePath ?? "<unknown>", input.diffContent);
     const hunkHeaders = collectUnifiedDiffHunkHeaders(input.diffContent);
     const validatedFindings = findings.map((finding) =>
-      validateFinding(finding, hunkHeaders, diffAnchorMap)
+      validateFinding(finding, hunkHeaders, diffAnchorMap, {
+        verifierVerdict: "disallow"
+      })
     );
 
     const seenIds = new Set<string>();
@@ -87,11 +95,15 @@ export class StructuredOutputValidator {
       seenIds.add(f.findingId);
     }
 
-    return { findings: validatedFindings };
+    return {
+      schemaVersion,
+      findings: validatedFindings
+    };
   }
 
   filterByAcceptance(payload: FindingsPayload): FindingsPayload {
     return {
+      schemaVersion: payload.schemaVersion,
       findings: payload.findings.filter((finding) =>
         this.#classifyAcceptance(finding).accepted
       )
@@ -137,7 +149,7 @@ export class StructuredOutputValidator {
       }
     }
 
-    return { payload: { findings: accepted }, report };
+    return { payload: { schemaVersion: payload.schemaVersion, findings: accepted }, report };
   }
 
   #classifyAcceptance(finding: Finding): {
@@ -212,6 +224,7 @@ export class StructuredOutputValidator {
       ALLOWED_VERIFIED_TOP_LEVEL_KEYS,
       "top-level payload"
     );
+    const schemaVersion = validateSchemaVersion(record.schemaVersion);
 
     const findings = record.findings;
 
@@ -234,9 +247,13 @@ export class StructuredOutputValidator {
         ? undefined
         : buildDiffAnchorMap(input.filePath ?? "<unknown>", input.diffContent);
     const hunkHeaders = collectUnifiedDiffHunkHeaders(input.diffContent);
-    const validatedFindings = findings.map((finding) =>
-      validateFinding(finding, hunkHeaders, diffAnchorMap)
-    );
+    const validatedFindings = findings.map((finding, index) => {
+      const validated = validateFinding(finding, hunkHeaders, diffAnchorMap, {
+        verifierVerdict: "require-accepted"
+      });
+      validateStep6AcceptedFinding(validated, index);
+      return validated;
+    });
 
     const seenFindingIds = new Set<string>();
     for (const f of validatedFindings) {
@@ -262,7 +279,11 @@ export class StructuredOutputValidator {
       seenDispositionIds.add(d.findingId);
     }
 
-    return { findings: validatedFindings, dispositions: validatedDispositions };
+    return {
+      schemaVersion,
+      findings: validatedFindings,
+      dispositions: validatedDispositions
+    };
   }
 
   validateDispositionCompleteness(input: {
@@ -321,7 +342,10 @@ export class StructuredOutputValidator {
 function validateFinding(
   input: unknown,
   hunkHeaders: Set<string>,
-  diffAnchorMap: DiffAnchorMap | undefined
+  diffAnchorMap: DiffAnchorMap | undefined,
+  options: { verifierVerdict: "disallow" | "require-accepted" } = {
+    verifierVerdict: "disallow"
+  }
 ): Finding {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(
@@ -331,7 +355,13 @@ function validateFinding(
 
   const finding = input as Record<string, unknown>;
 
-  rejectUnknownFields(finding, ALLOWED_FINDING_KEYS, "finding");
+  rejectUnknownFields(
+    finding,
+    options.verifierVerdict === "require-accepted"
+      ? ALLOWED_STEP6_FINDING_KEYS
+      : ALLOWED_FINDING_KEYS,
+    "finding"
+  );
 
   const type = validateStringField(finding.type, "type");
   const title = validateStringField(finding.title, "title");
@@ -344,7 +374,14 @@ function validateFinding(
     diffAnchorMap,
     dependencyPathException
   );
-  const context = validateStringField(finding.context, "context");
+  const expectedBehavior = validateStringField(
+    finding.expectedBehavior,
+    "expectedBehavior"
+  );
+  const actualBehavior = validateStringField(
+    finding.actualBehavior,
+    "actualBehavior"
+  );
   const deviation = validateStringField(finding.deviation, "deviation");
   const impact = validateStringField(finding.impact, "impact");
   const suggestion = validateStringField(finding.suggestion, "suggestion");
@@ -353,6 +390,10 @@ function validateFinding(
   const validatedEvidence = validateSupportingEvidence(finding.supportingEvidence);
   const validatedReachability = validateReachability(finding.reachability);
   const validatedUncertaintyStatus = validateUncertaintyStatus(finding.uncertaintyStatus);
+  const validatedVerifierVerdict =
+    options.verifierVerdict === "require-accepted"
+      ? validateAcceptedVerifierVerdict(finding.verifierVerdict)
+      : undefined;
 
   if (type !== "must" && type !== "nice") {
     throw new Error(
@@ -364,7 +405,8 @@ function validateFinding(
     type,
     title,
     traceability,
-    context,
+    expectedBehavior,
+    actualBehavior,
     deviation,
     impact,
     suggestion,
@@ -374,6 +416,10 @@ function validateFinding(
     reachability: validatedReachability,
     uncertaintyStatus: validatedUncertaintyStatus
   };
+
+  if (validatedVerifierVerdict) {
+    result.verifierVerdict = validatedVerifierVerdict;
+  }
 
   if (dependencyPathException) {
     result.dependencyPathException = dependencyPathException;
@@ -387,6 +433,71 @@ function validateFinding(
   }
 
   return result;
+}
+
+function validateStep6AcceptedFinding(finding: Finding, index: number): void {
+  if (finding.uncertaintyStatus !== "supported") {
+    throw new Error(
+      `deterministic validation failed: findings[${index}] must be accepted: uncertaintyStatus must be 'supported'`
+    );
+  }
+
+  if (!finding.reachability.credible) {
+    throw new Error(
+      `deterministic validation failed: findings[${index}] must be accepted: reachability.credible must be true`
+    );
+  }
+}
+
+function validateAcceptedVerifierVerdict(input: unknown): VerifierVerdict {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      "deterministic validation failed: 'verifierVerdict' must be a non-null object"
+    );
+  }
+
+  const record = input as Record<string, unknown>;
+  rejectUnknownFields(record, ALLOWED_VERIFIER_VERDICT_KEYS, "verifierVerdict");
+
+  if (record.status !== "accepted") {
+    throw new Error(
+      "deterministic validation failed: 'verifierVerdict.status' must be 'accepted'"
+    );
+  }
+
+  if (
+    !record.checks ||
+    typeof record.checks !== "object" ||
+    Array.isArray(record.checks)
+  ) {
+    throw new Error(
+      "deterministic validation failed: 'verifierVerdict.checks' must be a non-null object"
+    );
+  }
+
+  const checks = record.checks as Record<string, unknown>;
+  rejectUnknownFields(
+    checks,
+    ALLOWED_VERIFIER_VERDICT_CHECKS_KEYS,
+    "verifierVerdict.checks"
+  );
+
+  const validatedChecks = Object.fromEntries(
+    ALLOWED_VERIFIER_VERDICT_CHECKS_KEYS.map((checkName) => {
+      if (checks[checkName] !== "pass") {
+        throw new Error(
+          `deterministic validation failed: 'verifierVerdict.checks.${checkName}' must be 'pass'`
+        );
+      }
+
+      return [checkName, "pass"];
+    })
+  ) as VerifierVerdict["checks"];
+
+  return {
+    status: "accepted",
+    checks: validatedChecks
+  };
 }
 
 function validateModelConfidence(finding: Record<string, unknown>): number {
@@ -636,15 +747,26 @@ function validateStringField(value: unknown, fieldName: string): string {
   return trimmed;
 }
 
+function validateSchemaVersion(value: unknown): 2 {
+  if (value !== 2) {
+    throw new Error(
+      "deterministic validation failed: 'schemaVersion' must be 2"
+    );
+  }
+
+  return 2;
+}
+
 // --- Allowed-key constants ---
 
-const ALLOWED_TOP_LEVEL_KEYS = ["findings"] as const;
+const ALLOWED_TOP_LEVEL_KEYS = ["schemaVersion", "findings"] as const;
 
 const ALLOWED_FINDING_KEYS = [
   "type",
   "title",
   "traceability",
-  "context",
+  "expectedBehavior",
+  "actualBehavior",
   "deviation",
   "impact",
   "suggestion",
@@ -657,6 +779,22 @@ const ALLOWED_FINDING_KEYS = [
   "uncertaintyStatus",
   "sourceHypothesisId"
 ] as const;
+
+const ALLOWED_STEP6_FINDING_KEYS = [
+  ...ALLOWED_FINDING_KEYS,
+  "verifierVerdict"
+] as const;
+
+const ALLOWED_VERIFIER_VERDICT_KEYS = ["status", "checks"] as const;
+
+const ALLOWED_VERIFIER_VERDICT_CHECKS_KEYS = [
+  "anchor",
+  "evidence",
+  "reachability",
+  "impact",
+  "scope",
+  "duplicate"
+] as const satisfies readonly VerifierVerdictCheckName[];
 
 const ALLOWED_TRACEABILITY_LINE_RANGE_KEYS = [
   "kind",
@@ -673,9 +811,24 @@ const ALLOWED_DEPENDENCY_PATH_EXCEPTION_KEYS = [
 
 const ALLOWED_DEPENDENCY_ANCHOR_KEYS = ["filePath", "symbol"] as const;
 
-const ALLOWED_EVIDENCE_REF_KEYS = ["source", "content"] as const;
+const ALLOWED_EVIDENCE_REF_KEYS = ["evidenceRef", "supports"] as const;
 
-const ALLOWED_REACHABILITY_KEYS = ["credible", "description"] as const;
+const ALLOWED_REACHABILITY_KEYS = [
+  "credible",
+  "entryPoint",
+  "guardsChecked",
+  "description"
+] as const;
+
+const REQUIRED_EVIDENCE_SUPPORT_ROLES = [
+  "expectedBehavior",
+  "actualBehavior",
+  "reachability",
+  "impact"
+] as const;
+
+const VALID_EVIDENCE_SUPPORT_ROLES: readonly string[] =
+  REQUIRED_EVIDENCE_SUPPORT_ROLES;
 
 const VALID_UNCERTAINTY_STATUSES: readonly string[] = [
   "supported",
@@ -684,7 +837,11 @@ const VALID_UNCERTAINTY_STATUSES: readonly string[] = [
   "out_of_scope"
 ];
 
-const ALLOWED_VERIFIED_TOP_LEVEL_KEYS = ["findings", "dispositions"] as const;
+const ALLOWED_VERIFIED_TOP_LEVEL_KEYS = [
+  "schemaVersion",
+  "findings",
+  "dispositions"
+] as const;
 
 const ALLOWED_DISPOSITION_KEYS = [
   "findingId",
@@ -697,6 +854,16 @@ const VALID_DISPOSITION_STATUSES: readonly string[] = [
   "retained",
   "modified",
   "retired"
+];
+
+const VALID_DISPOSITION_REASONS: readonly string[] = [
+  "SUPPORTED",
+  "ANCHOR",
+  "EVIDENCE",
+  "REACHABILITY",
+  "OUT_OF_SCOPE",
+  "DUPLICATE",
+  "CONTRADICTION"
 ];
 
 // --- Helper functions ---
@@ -723,7 +890,7 @@ function validateSupportingEvidence(input: unknown): EvidenceRef[] {
     );
   }
 
-  return input.map((item, index) => {
+  const evidence = input.map((item, index) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) {
       throw new Error(
         `deterministic validation failed: 'supportingEvidence[${index}]' must be a non-null object`
@@ -738,17 +905,30 @@ function validateSupportingEvidence(input: unknown): EvidenceRef[] {
       `supportingEvidence[${index}]`
     );
 
-    const source = validateStringField(
-      record.source,
-      `supportingEvidence[${index}].source`
+    const evidenceRef = validateStringField(
+      record.evidenceRef,
+      `supportingEvidence[${index}].evidenceRef`
     );
-    const content = validateStringField(
-      record.content,
-      `supportingEvidence[${index}].content`
+    const supports = validateEvidenceSupportRole(
+      record.supports,
+      `supportingEvidence[${index}].supports`
     );
 
-    return { source, content };
+    return { evidenceRef, supports };
   });
+
+  const coveredRoles = new Set(evidence.map((item) => item.supports));
+  const missingRoles = REQUIRED_EVIDENCE_SUPPORT_ROLES.filter(
+    (role) => !coveredRoles.has(role)
+  );
+
+  if (missingRoles.length > 0) {
+    throw new Error(
+      `deterministic validation failed: 'supportingEvidence' missing support role(s): ${missingRoles.join(", ")}`
+    );
+  }
+
+  return evidence;
 }
 
 function validateReachability(input: unknown): Reachability {
@@ -768,12 +948,51 @@ function validateReachability(input: unknown): Reachability {
     );
   }
 
-  const description = validateStringField(
-    record.description,
-    "reachability.description"
+  const entryPoint = validateStringField(
+    record.entryPoint,
+    "reachability.entryPoint"
   );
 
-  return { credible: record.credible, description };
+  if (!Array.isArray(record.guardsChecked) || record.guardsChecked.length === 0) {
+    throw new Error(
+      "deterministic validation failed: 'reachability.guardsChecked' must be a non-empty array"
+    );
+  }
+
+  const guardsChecked = record.guardsChecked.map((guard, index) =>
+    validateStringField(guard, `reachability.guardsChecked[${index}]`)
+  );
+
+  const result: Reachability = {
+    credible: record.credible,
+    entryPoint,
+    guardsChecked
+  };
+
+  if (record.description !== undefined) {
+    result.description = validateStringField(
+      record.description,
+      "reachability.description"
+    );
+  }
+
+  return result;
+}
+
+function validateEvidenceSupportRole(
+  value: unknown,
+  fieldName: string
+): EvidenceRef["supports"] {
+  if (
+    typeof value !== "string" ||
+    !VALID_EVIDENCE_SUPPORT_ROLES.includes(value)
+  ) {
+    throw new Error(
+      `deterministic validation failed: '${fieldName}' must be one of 'expectedBehavior', 'actualBehavior', 'reachability', 'impact'`
+    );
+  }
+
+  return value as EvidenceRef["supports"];
 }
 
 function validateUncertaintyStatus(input: unknown): UncertaintyStatus {
@@ -812,7 +1031,10 @@ function validateDisposition(
     );
   }
 
-  const reason = validateStringField(record.reason, `dispositions[${index}].reason`);
+  const reason = validateDispositionReason(
+    record.reason,
+    `dispositions[${index}].reason`
+  );
   const explanation = validateStringField(record.explanation, `dispositions[${index}].explanation`);
 
   return {
@@ -821,4 +1043,20 @@ function validateDisposition(
     reason,
     explanation
   };
+}
+
+function validateDispositionReason(
+  value: unknown,
+  fieldName: string
+): DispositionReason {
+  if (
+    typeof value !== "string" ||
+    !VALID_DISPOSITION_REASONS.includes(value)
+  ) {
+    throw new Error(
+      `deterministic validation failed: '${fieldName}' must be one of 'SUPPORTED', 'ANCHOR', 'EVIDENCE', 'REACHABILITY', 'OUT_OF_SCOPE', 'DUPLICATE', 'CONTRADICTION'`
+    );
+  }
+
+  return value as DispositionReason;
 }

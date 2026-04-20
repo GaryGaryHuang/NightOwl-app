@@ -1,4 +1,4 @@
-import type { FileReviewContext, Finding } from "../file-review-context.ts";
+import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
@@ -8,7 +8,7 @@ import { createStep6DispositionResolve } from "./step-resolve-helpers.ts";
 const STEP6_SYSTEM_ADDITION = [
   "## Current Step: Cognitive Simulation",
   "- Verify and finalize this file's findings through end-to-end execution simulation. This step produces the complete final findings and a disposition record as a single JSON object.",
-  "- Use the candidate findings provided in <candidate_findings> as the starting point. Your primary job is to verify, refine, reconcile, or remove them through end-to-end simulation.",
+  "- Use the candidateFindings array in <review_state> as the starting point. Your primary job is to verify, refine, reconcile, or remove them through end-to-end simulation.",
   "- Perform an end-to-end simulation of the main execution path and the state transitions relevant to the existing findings.",
   "- Check edge and abnormal paths only when they are needed to confirm, falsify, or materially refine an existing finding, or when the simulation directly exposes a new concrete deviation on the path under review.",
   "- If findings conflict, trace the discrepancy back to the execution path, state transitions, assumptions, or source evidence, and resolve in favor of the conclusion with stronger support.",
@@ -16,16 +16,16 @@ const STEP6_SYSTEM_ADDITION = [
   "- IMPORTANT: Apply the same evidence, reachability, and actionability standard used for first-pass findings. Do not retain, add, or modify findings based on theoretical speculation, weak inference, or implausible paths. This step is a verification and reconciliation pass, not a general bug hunt.",
   "- Every emitted finding must include a `traceability` object that anchors the finding to the reviewed file.",
   "- When <diff> can be validated, a `line-range` anchor must overlap at least one changed head-side line. If the correct anchor intentionally points outside the changed lines because it identifies a dependency path, include `dependencyPathException` with a non-empty `reason` and `dependencyAnchor.filePath`.",
-  "- Every finding must include `findingId`, `supportingEvidence`, `reachability`, `uncertaintyStatus`, and `modelConfidence`. Only `\"supported\"` findings with credible reachability will be accepted.",
+  "- Every finding must include `findingId`, `supportingEvidence`, `reachability`, `uncertaintyStatus`, `verifierVerdict`, and `modelConfidence`. Only `\"supported\"` findings with credible reachability and an accepted verifierVerdict whose checks all pass will be accepted.",
   "- For every finding retained, modified, or added, assign a fresh `modelConfidence` score (0–100) as telemetry based on your own simulation evidence — do not carry over scores from the previous step. The host does not use this field as an acceptance gate.",
-  "- You MUST produce a `dispositions` array that accounts for EVERY candidate finding from <candidate_findings>. Each disposition records whether the candidate was retained, modified, or retired, with a reason and explanation.",
+  "- You MUST produce a `dispositions` array that accounts for EVERY finding in the <review_state> candidateFindings array. Each disposition records whether the candidate was retained, modified, or retired, with a taxonomy reason and explanation.",
   "- Output valid JSON only."
 ].join("\n");
 
 const STEP6_INSTRUCTION = [
-  "Perform a cognitive simulation of this file's changes to verify and finalize the candidate findings provided in <candidate_findings>.",
+  "Perform a cognitive simulation of this file's changes to verify and finalize the candidate findings provided in <review_state> candidateFindings.",
   "",
-  "1. Start from the candidate findings in <candidate_findings>.",
+  "1. Start from the candidateFindings array in <review_state>.",
   "   - These are the structured first-pass results from the previous step, with their findingIds.",
   "   - Your goal is to verify, refine, reconcile, or remove them through simulation.",
   "",
@@ -40,7 +40,7 @@ const STEP6_INSTRUCTION = [
   "     - the concern is already handled",
   "     - the deviation does not actually occur under the relevant execution semantics",
   "     - the impact is not supported after closer verification",
-  "   - Modify a finding if the core concern is valid but the type, context, deviation, impact, or suggestion needs correction. Keep the same findingId.",
+  "   - Modify a finding if the core concern is valid but the type, expected behavior, actual behavior, deviation, impact, or suggestion needs correction. Keep the same findingId.",
   "   - Retain a finding only if the simulated behavior still supports it as a real, actionable problem under the same evidence, reachability, and actionability standard used in the previous step.",
   "",
   "4. Resolve conflicts and inconsistencies.",
@@ -67,12 +67,15 @@ const STEP6_INSTRUCTION = [
   "",
   "9. Every finding must include:",
   "   - `findingId`: a unique string within this payload (e.g. \"F1\", \"F2\")",
-  "   - `supportingEvidence`: a non-empty array of evidence references, each with `source` and `content`",
-  "   - `reachability`: an object with boolean `credible` and string `description`",
+  "   - `expectedBehavior`: the specific correct behavior required by code, contract, or source-of-truth evidence",
+  "   - `actualBehavior`: the specific behavior observed from the changed code or simulation",
+  "   - `supportingEvidence`: a non-empty array of evidence references, each with `evidenceRef` and `supports`; the `supports` value must cover all of `expectedBehavior`, `actualBehavior`, `reachability`, and `impact` across the finding",
+  "   - `reachability`: an object with boolean `credible`, non-empty string `entryPoint`, and non-empty `guardsChecked` array",
+  "   - `verifierVerdict`: an object with `status: \"accepted\"` and `checks` values of `\"pass\"` for all of `anchor`, `evidence`, `reachability`, `impact`, `scope`, and `duplicate`",
   "   - `sourceHypothesisId` (optional): the W# scenario ID if applicable",
   "",
-  "10. Produce a `dispositions` array that accounts for EVERY candidate finding from <candidate_findings>.",
-  "   - Each disposition must include: `findingId` (matching the candidate), `status` (\"retained\", \"modified\", or \"retired\"), `reason` (compact category), and `explanation` (one-sentence justification).",
+  "10. Produce a `dispositions` array that accounts for EVERY finding in <review_state> candidateFindings.",
+  "   - Each disposition must include: `findingId` (matching the candidate), `status` (\"retained\", \"modified\", or \"retired\"), `reason` (one of \"SUPPORTED\", \"ANCHOR\", \"EVIDENCE\", \"REACHABILITY\", \"OUT_OF_SCOPE\", \"DUPLICATE\", or \"CONTRADICTION\"), and `explanation` (one-sentence justification).",
   "   - Retained or modified candidates MUST also appear in the `findings` array.",
   "   - Retired candidates MUST NOT appear in the `findings` array.",
   "   - New findings (not from candidates) do not need a disposition entry.",
@@ -84,7 +87,7 @@ const STEP6_INSTRUCTION = [
   "",
   "Output the result as a single JSON object with this structure:",
   "",
-  "{\"findings\": [{\"findingId\": \"F1\", \"type\": \"must\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 21, \"lineEnd\": 22}, \"context\": \"具體程式位置、條件或情境脈絡\", \"deviation\": \"預期行為與實際行為的落差\", \"impact\": \"若不處理會造成的後果\", \"suggestion\": \"具體且可執行的修正或改善建議\", \"modelConfidence\": 85, \"supportingEvidence\": [{\"source\": \"diff:src/app.ts:21-22\", \"content\": \"changed guard condition removes null check\"}], \"reachability\": {\"credible\": true, \"description\": \"called from main entry on every request\"}, \"uncertaintyStatus\": \"supported\", \"sourceHypothesisId\": \"W1\"}], \"dispositions\": [{\"findingId\": \"F1\", \"status\": \"retained\", \"reason\": \"SUPPORTED\", \"explanation\": \"simulation confirms the deviation is real and reachable\"}]}",
+  "{\"schemaVersion\": 2, \"findings\": [{\"findingId\": \"F1\", \"sourceHypothesisId\": \"W1\", \"type\": \"must\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 21, \"lineEnd\": 22}, \"expectedBehavior\": \"nullable input must return the existing fallback before dereference\", \"actualBehavior\": \"simulation reaches input.value before any null check\", \"deviation\": \"null input now throws instead of returning fallback\", \"impact\": \"requests with null input fail with a runtime TypeError\", \"suggestion\": \"restore the null guard before reading input.value\", \"uncertaintyStatus\": \"supported\", \"modelConfidence\": 85, \"supportingEvidence\": [{\"evidenceRef\": \"E1\", \"supports\": \"expectedBehavior\"}, {\"evidenceRef\": \"E2\", \"supports\": \"actualBehavior\"}, {\"evidenceRef\": \"E3\", \"supports\": \"reachability\"}, {\"evidenceRef\": \"E4\", \"supports\": \"impact\"}], \"reachability\": {\"entryPoint\": \"handleRequest(input)\", \"guardsChecked\": [\"public route passes nullable input\", \"no earlier null guard remains\"], \"credible\": true}, \"verifierVerdict\": {\"status\": \"accepted\", \"checks\": {\"anchor\": \"pass\", \"evidence\": \"pass\", \"reachability\": \"pass\", \"impact\": \"pass\", \"scope\": \"pass\", \"duplicate\": \"pass\"}}}], \"dispositions\": [{\"findingId\": \"F1\", \"status\": \"retained\", \"reason\": \"SUPPORTED\", \"explanation\": \"simulation confirms the deviation is real and reachable\"}]}",
   "",
   "If no findings remain, return: {\"findings\": [], \"dispositions\": [{\"findingId\": \"F1\", \"status\": \"retired\", \"reason\": \"REACHABILITY\", \"explanation\": \"path is not credibly reachable\"}]}",
   "The `type` field must be either `\"must\"` or `\"nice\"`.",
@@ -92,7 +95,7 @@ const STEP6_INSTRUCTION = [
 ].join("\n");
 
 export interface Step6CognitiveSimulationStepOptions {
-  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize" | "serializeFindingsBlock">;
+  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
@@ -100,7 +103,7 @@ export interface Step6CognitiveSimulationStepOptions {
  */
 export class Step6CognitiveSimulationStep implements StepDefinition {
   readonly stepId = "step6-cognitive-simulation";
-  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize" | "serializeFindingsBlock">;
+  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
   constructor(options: Step6CognitiveSimulationStepOptions) {
     this.#promptSerializer = options.promptSerializer;
@@ -116,12 +119,10 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP6_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep6UserMessage(
           context,
-          this.#promptSerializer.serialize({ context, include: ["sections"] }),
-          this.#promptSerializer.serializeFindingsBlock({
-            kind: "candidate-findings",
-            findings: candidateFindings
-          }),
-          candidateFindings
+          this.#promptSerializer.serialize({
+            context,
+            include: ["sections", "candidate-findings"]
+          })
         )
       },
       reviewProfile: {
@@ -140,9 +141,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
 
 function buildStep6UserMessage(
   context: FileReviewContext,
-  reviewState: string,
-  candidateFindingsBlock: string,
-  candidateFindings: Finding[]
+  reviewState: string
 ): string {
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
@@ -150,8 +149,6 @@ function buildStep6UserMessage(
     "</diff>",
     "",
     reviewState,
-    "",
-    candidateFindingsBlock,
     "",
     STEP6_INSTRUCTION
   ].join("\n");

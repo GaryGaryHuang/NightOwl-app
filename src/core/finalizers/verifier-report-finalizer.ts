@@ -26,7 +26,16 @@ export class VerifierReportFinalizer {
           taxonomy: entry.taxonomy,
           outcome: entry.outcome,
           gate: entry.gate,
-          reason: entry.reason
+          reason: entry.reason,
+          ...(entry.dispositionStatus === undefined
+            ? {}
+            : { dispositionStatus: entry.dispositionStatus }),
+          ...(entry.dispositionReason === undefined
+            ? {}
+            : { dispositionReason: entry.dispositionReason }),
+          ...(entry.dispositionExplanation === undefined
+            ? {}
+            : { dispositionExplanation: entry.dispositionExplanation })
         })
       )
       .join("\n");

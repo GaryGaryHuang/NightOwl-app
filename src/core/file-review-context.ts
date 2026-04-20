@@ -24,17 +24,40 @@ export type FindingTraceability =
   | FindingLineRangeTraceability
   | FindingDiffHunkTraceability;
 
+export type EvidenceSupportRole =
+  | "expectedBehavior"
+  | "actualBehavior"
+  | "reachability"
+  | "impact";
+
 export interface EvidenceRef {
-  source: string;
-  content: string;
+  evidenceRef: string;
+  supports: EvidenceSupportRole;
 }
 
 export interface Reachability {
   credible: boolean;
-  description: string;
+  entryPoint: string;
+  guardsChecked: string[];
+  description?: string;
 }
 
 export type UncertaintyStatus = "supported" | "tentative" | "unsupported" | "out_of_scope";
+
+export type VerifierVerdictCheckName =
+  | "anchor"
+  | "evidence"
+  | "reachability"
+  | "impact"
+  | "scope"
+  | "duplicate";
+
+export type VerifierVerdictCheckResult = "pass";
+
+export interface VerifierVerdict {
+  status: "accepted";
+  checks: Record<VerifierVerdictCheckName, VerifierVerdictCheckResult>;
+}
 
 export interface DependencyAnchor {
   filePath: string;
@@ -56,7 +79,8 @@ export interface Finding {
   type: "must" | "nice";
   title: string;
   traceability: FindingTraceability;
-  context: string;
+  expectedBehavior: string;
+  actualBehavior: string;
   deviation: string;
   impact: string;
   suggestion: string;
@@ -66,23 +90,35 @@ export interface Finding {
   supportingEvidence: EvidenceRef[];
   reachability: Reachability;
   uncertaintyStatus: UncertaintyStatus;
+  verifierVerdict?: VerifierVerdict;
   sourceHypothesisId?: string;
 }
 
 export interface FindingsPayload {
+  schemaVersion: 2;
   findings: Finding[];
 }
 
 export type DispositionStatus = "retained" | "modified" | "retired";
 
+export type DispositionReason =
+  | "SUPPORTED"
+  | "ANCHOR"
+  | "EVIDENCE"
+  | "REACHABILITY"
+  | "OUT_OF_SCOPE"
+  | "DUPLICATE"
+  | "CONTRADICTION";
+
 export interface FindingDisposition {
   findingId: string;
   status: DispositionStatus;
-  reason: string;
+  reason: DispositionReason;
   explanation: string;
 }
 
 export interface VerifiedFindingsPayload {
+  schemaVersion: 2;
   findings: Finding[];
   dispositions: FindingDisposition[];
 }
@@ -182,13 +218,23 @@ function cloneFinding(finding: Finding): Finding {
     ...finding,
     traceability: { ...traceability },
     supportingEvidence: finding.supportingEvidence.map((e) => ({ ...e })),
-    reachability: { ...finding.reachability }
+    reachability: {
+      ...finding.reachability,
+      guardsChecked: [...finding.reachability.guardsChecked]
+    }
   };
 
   if (finding.dependencyPathException) {
     cloned.dependencyPathException = {
       reason: finding.dependencyPathException.reason,
       dependencyAnchor: { ...finding.dependencyPathException.dependencyAnchor }
+    };
+  }
+
+  if (finding.verifierVerdict) {
+    cloned.verifierVerdict = {
+      status: finding.verifierVerdict.status,
+      checks: { ...finding.verifierVerdict.checks }
     };
   }
 

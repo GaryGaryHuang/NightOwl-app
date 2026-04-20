@@ -28,8 +28,11 @@ export interface VerifierReportEntry {
   readonly findingId: string;
   readonly taxonomy: VerifierTaxonomyCode;
   readonly outcome: "accepted" | "rejected";
-  readonly gate: "schema" | "anchor" | "acceptance";
+  readonly gate: "schema" | "anchor" | "acceptance" | "disposition";
   readonly reason: string;
+  readonly dispositionStatus?: "retained" | "modified" | "retired";
+  readonly dispositionReason?: string;
+  readonly dispositionExplanation?: string;
 }
 
 export interface VerifierReportArtifactEntry extends VerifierReportEntry {

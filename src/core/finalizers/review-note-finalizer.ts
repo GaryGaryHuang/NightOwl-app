@@ -108,7 +108,8 @@ function renderFindingsSection(
     ...[...mustFindings, ...niceFindings].flatMap((finding) => [
       `- [${finding.type}] ${finding.title}`,
       `  - Traceability: ${formatTraceability(finding.traceability)}`,
-      `  - Context：${finding.context}`,
+      `  - Expected Behavior：${finding.expectedBehavior}`,
+      `  - Actual Behavior：${finding.actualBehavior}`,
       `  - Deviation：${finding.deviation}`,
       `  - Impact：${finding.impact}`,
       `  - Suggestion：${finding.suggestion}`

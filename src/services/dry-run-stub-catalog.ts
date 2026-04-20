@@ -150,9 +150,9 @@ W2: 若輸入參數為 undefined 或 null → 潛在的 NullReferenceError。
 W3: 若並行呼叫競爭同一資源 → 競態條件可能導致狀態不一致。
 [dry-run] 緩解：審視並行存取保護機制。`;
 
-const STUB_VALIDATION_INTERROGATION = '{"findings": []}';
+const STUB_VALIDATION_INTERROGATION = '{"schemaVersion": 2, "findings": []}';
 
-const STUB_COGNITIVE_SIMULATION = '{"findings": [], "dispositions": []}';
+const STUB_COGNITIVE_SIMULATION = '{"schemaVersion": 2, "findings": [], "dispositions": []}';
 
 const STUB_SUMMARY = `## Summary
 
