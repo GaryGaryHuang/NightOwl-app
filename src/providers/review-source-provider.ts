@@ -12,8 +12,11 @@ export type ReviewChangesetStatus = "A" | "M" | "D" | "R" | "C";
  *
  * - `path` is always the head-side path for rename/copy entries.
  * - `previousPath` is populated only for rename/copy entries.
- * - `similarityScore` preserves Git's optional numeric suffix for rename/copy
- *   detection (for example `R100` / `C75`) when available.
+ * - `similarityScore` preserves Git's optional numeric suffix when available
+ *   (for example `R100`, `C75`, or rewrite-style `M100`).
+ * - Git-specific non-structural statuses that the review pipeline does not
+ *   model explicitly (for example `T`, `U`, `X`, `B`) are normalized by the
+ *   provider implementation onto the stable contract before reaching core.
  */
 export interface ReviewChangesetEntry {
   readonly status: ReviewChangesetStatus;

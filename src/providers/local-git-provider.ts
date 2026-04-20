@@ -36,24 +36,45 @@ function parseReviewChangesetStatus(statusToken: string): {
   status: ReviewChangesetStatus;
   similarityScore?: number;
 } {
-  const match = /^(A|M|D|R|C)(\d+)?$/u.exec(statusToken);
+  const match = /^(A|M|D|R|C|T|U|X|B)(\d+)?$/u.exec(statusToken);
 
   if (!match) {
     throw new Error(`Unsupported git changeset status token: ${statusToken}`);
   }
 
   const [, rawStatus, rawSimilarityScore] = match;
-  const status = rawStatus as ReviewChangesetStatus;
+  const normalizedStatus = normalizeReviewChangesetStatus(rawStatus);
 
   if (rawSimilarityScore === undefined) {
-    return { status };
+    return { status: normalizedStatus };
   }
 
-  if (status !== "R" && status !== "C") {
+  if (rawStatus !== "R" && rawStatus !== "C" && rawStatus !== "M") {
     throw new Error(`Unexpected similarity score for git changeset status: ${statusToken}`);
   }
 
-  return { status, similarityScore: Number(rawSimilarityScore) };
+  return { status: normalizedStatus, similarityScore: Number(rawSimilarityScore) };
+}
+
+function normalizeReviewChangesetStatus(rawStatus: string): ReviewChangesetStatus {
+  switch (rawStatus) {
+    case "A":
+    case "M":
+    case "D":
+    case "R":
+    case "C":
+      return rawStatus;
+    case "T":
+    case "U":
+    case "X":
+    case "B":
+      // Preserve compatibility with valid Git change kinds that the review
+      // pipeline does not model separately by collapsing them into generic
+      // file modifications.
+      return "M";
+    default:
+      throw new Error(`Unsupported git changeset status token: ${rawStatus}`);
+  }
 }
 
 function parseReviewChangesetEntry(line: string): ReviewChangesetEntry {
@@ -86,7 +107,9 @@ function parseReviewChangesetEntry(line: string): ReviewChangesetEntry {
     throw new Error(`Malformed git changeset entry: ${line}`);
   }
 
-  return { status, path };
+  return similarityScore === undefined
+    ? { status, path }
+    : { status, path, similarityScore };
 }
 
 /**

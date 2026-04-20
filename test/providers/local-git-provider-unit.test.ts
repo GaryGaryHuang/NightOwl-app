@@ -28,6 +28,30 @@ test("LocalGitProvider (unit) normalizes list-style git output", async () => {
   );
 });
 
+test("LocalGitProvider (unit) accepts valid git-only status tokens and normalizes them to the stable provider contract", async () => {
+  const provider = new LocalGitProvider(
+    async () =>
+      [
+        "T\tsrc/type-change.ts",
+        "U\tsrc/unmerged.ts",
+        "X\tsrc/unknown.ts",
+        "B\tsrc/broken-pair.ts",
+        "M100\tsrc/rewrite.ts"
+      ].join("\n")
+  );
+
+  assert.deepEqual(
+    await provider.getChangesetEntries("/repo", "main", "feature"),
+    [
+      { status: "M", path: "src/type-change.ts" },
+      { status: "M", path: "src/unmerged.ts" },
+      { status: "M", path: "src/unknown.ts" },
+      { status: "M", path: "src/broken-pair.ts" },
+      { status: "M", path: "src/rewrite.ts", similarityScore: 100 }
+    ]
+  );
+});
+
 test("LocalGitProvider (unit) normalizes empty git output", async () => {
   const provider = new LocalGitProvider(async () => "");
 
