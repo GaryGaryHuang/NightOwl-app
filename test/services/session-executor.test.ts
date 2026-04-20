@@ -82,6 +82,68 @@ test("SessionExecutor propagates sendAndWait failures and still disconnects", as
   assert.deepEqual(calls, [["sendAndWait"], ["disconnect"]]);
 });
 
+test("SessionExecutor rejects reuse after the first turn settles", async () => {
+  const calls: string[] = [];
+  const session = {
+    async sendAndWait() {
+      calls.push("sendAndWait");
+      return {
+        data: {
+          content: "first response"
+        }
+      };
+    },
+    async disconnect() {
+      calls.push("disconnect");
+    }
+  };
+
+  const executor = new SessionExecutor(session);
+
+  assert.equal(await executor.sendAndWait("first prompt"), "first response");
+  await assert.rejects(
+    () => executor.sendAndWait("second prompt"),
+    /single-use/u
+  );
+  assert.deepEqual(calls, ["sendAndWait", "disconnect"]);
+});
+
+test("SessionExecutor rejects a second call while the first turn is still in flight", async () => {
+  const calls: string[] = [];
+  let resolveSend:
+    | ((value: { data?: { content?: string } } | undefined) => void)
+    | undefined;
+
+  const session = {
+    async sendAndWait() {
+      calls.push("sendAndWait");
+      return await new Promise<{ data?: { content?: string } } | undefined>((resolve) => {
+        resolveSend = resolve;
+      });
+    },
+    async disconnect() {
+      calls.push("disconnect");
+    }
+  };
+
+  const executor = new SessionExecutor(session);
+  const pending = executor.sendAndWait("first prompt");
+
+  await assert.rejects(
+    () => executor.sendAndWait("second prompt"),
+    /single-use/u
+  );
+
+  resolveSend?.({
+    data: {
+      content: "first response"
+    }
+  });
+
+  assert.equal(await pending, "first response");
+  assert.deepEqual(calls, ["sendAndWait", "disconnect"]);
+});
+
 test("SessionExecutor requests session abort exactly once for an in-flight turn and rejects with SessionTurnAbortedError", async () => {
   const controller = new AbortController();
   const calls: string[] = [];

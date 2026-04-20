@@ -33,13 +33,17 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
 describe("DryRunJudgeSessionFactory dry-run behavior", () => {
   test("approves regardless of prompt wording", async () => {
     const factory = new DryRunJudgeSessionFactory();
-    const session = await factory.createSession({
+    const firstSession = await factory.createSession({
+      model: "gpt-5.4-mini",
+      systemMessage: "judge system"
+    });
+    const secondSession = await factory.createSession({
       model: "gpt-5.4-mini",
       systemMessage: "judge system"
     });
 
-    assert.equal(await session.sendAndWait("please evaluate"), "Y");
-    assert.equal(await session.sendAndWait("N"), "Y");
+    assert.equal(await firstSession.sendAndWait("please evaluate"), "Y");
+    assert.equal(await secondSession.sendAndWait("N"), "Y");
   });
 });
 

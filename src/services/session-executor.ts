@@ -25,8 +25,12 @@ const TurnState = {
 } as const;
 type TurnState = (typeof TurnState)[keyof typeof TurnState];
 
+const SESSION_EXECUTOR_REUSE_ERROR =
+  "SessionExecutor instances are single-use; create a new executor for each turn.";
+
 export class SessionExecutor {
   readonly #session: SessionLike;
+  #used = false;
 
   constructor(session: SessionLike) {
     this.#session = session;
@@ -37,6 +41,11 @@ export class SessionExecutor {
     timeoutMs?: number,
     signal?: AbortSignal
   ): Promise<string | undefined> {
+    if (this.#used) {
+      throw new Error(SESSION_EXECUTOR_REUSE_ERROR);
+    }
+    this.#used = true;
+
     let state: TurnState = TurnState.Idle;
     let abortRequested = false;
     let abortPromise: Promise<void> | undefined;
