@@ -315,6 +315,76 @@ test("RunLifecycleManager preserves the original callback error when forceStop f
   assert.deepEqual(calls, ["start", "stop", "forceStop"]);
 });
 
+test("RunLifecycleManager preserves the original callback error when stop() rejects during cleanup", async () => {
+  const signalSource = createFakeSignalSource();
+  const callbackError = new Error("callback failure");
+  const stopError = new Error("stop failed");
+  const { calls, clientManager } = createLifecycleTracker({
+    async stopImpl() {
+      throw stopError;
+    }
+  });
+  const manager = new RunLifecycleManager({ clientManager, signalSource });
+
+  await assert.rejects(
+    () =>
+      manager.run(async () => {
+        throw callbackError;
+      }),
+    (err: unknown) => err === callbackError
+  );
+
+  assert.deepEqual(calls, ["start", "stop"]);
+});
+
+test("RunLifecycleManager preserves the original callback error when forceStop() rejects after shutdown timeout", async () => {
+  const signalSource = createFakeSignalSource();
+  const callbackError = new Error("callback failure");
+  const forceStopError = new Error("forceStop failed");
+  const { calls, clientManager } = createLifecycleTracker({
+    stopImpl: () => new Promise(() => {}),
+    async forceStopImpl() {
+      throw forceStopError;
+    }
+  });
+  const manager = new RunLifecycleManager({
+    clientManager,
+    signalSource,
+    gracefulShutdownTimeoutMs: 10
+  });
+
+  await assert.rejects(
+    () =>
+      manager.run(async () => {
+        throw callbackError;
+      }),
+    (err: unknown) => err === callbackError
+  );
+
+  assert.deepEqual(calls, ["start", "stop", "forceStop"]);
+});
+
+test("RunLifecycleManager preserves a falsy callback rejection when cleanup also fails", async () => {
+  const signalSource = createFakeSignalSource();
+  const callbackError = 0;
+  const { calls, clientManager } = createLifecycleTracker({
+    async stopImpl() {
+      throw new Error("stop failed");
+    }
+  });
+  const manager = new RunLifecycleManager({ clientManager, signalSource });
+
+  await assert.rejects(
+    () =>
+      manager.run(async () => {
+        throw callbackError;
+      }),
+    (err: unknown) => err === callbackError
+  );
+
+  assert.deepEqual(calls, ["start", "stop"]);
+});
+
 // ─── Custom signalSource injection ──────────────────────────────────────────
 
 test("RunLifecycleManager does not touch process listeners with custom signalSource", async () => {

@@ -127,6 +127,25 @@ test("CopilotAvailabilityChecker preserves probe failures even if later cleanup 
   );
 });
 
+test("CopilotAvailabilityChecker preserves a falsy probe failure even if later cleanup also fails", async () => {
+  const probeError = 0;
+  const checker = new CopilotAvailabilityChecker({
+    clientManager: createAvailabilityClientManagerDouble({
+      async pingImpl() {
+        throw probeError;
+      },
+      async stopImpl() {
+        throw new Error("cleanup failed");
+      }
+    }).clientManager
+  });
+
+  await assert.rejects(
+    () => checker.check(),
+    (error: unknown) => error === probeError
+  );
+});
+
 test("CopilotAvailabilityChecker fails when cleanup fails after a successful probe", async () => {
   const stopError = new Error("stop failed");
   const fixture = createAvailabilityClientManagerDouble({

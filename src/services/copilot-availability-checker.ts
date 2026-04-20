@@ -59,13 +59,13 @@ export class CopilotAvailabilityChecker {
   }
 
   async check(): Promise<void> {
-    let primaryError: unknown;
+    let hasPrimaryError = false;
 
     try {
       await this.#clientManager.start();
       await this.#clientManager.getClient().ping(this.#pingMessage);
     } catch (error) {
-      primaryError = error;
+      hasPrimaryError = true;
       throw error;
     } finally {
       try {
@@ -74,7 +74,7 @@ export class CopilotAvailabilityChecker {
           this.#gracefulShutdownTimeoutMs
         );
       } catch (cleanupError) {
-        if (!primaryError) {
+        if (!hasPrimaryError) {
           throw cleanupError;
         }
       }

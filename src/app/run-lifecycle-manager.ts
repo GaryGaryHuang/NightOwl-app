@@ -33,6 +33,7 @@ export class RunLifecycleManager {
 
   async run<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
     let clientStarted = false;
+    let hasPrimaryError = false;
 
     if (this.#clientManager) {
       await this.#clientManager.start();
@@ -52,14 +53,23 @@ export class RunLifecycleManager {
 
     try {
       return await fn(controller.signal);
+    } catch (error) {
+      hasPrimaryError = true;
+      throw error;
     } finally {
       this.#signalSource.off("SIGINT", handleSigint);
       this.#signalSource.off("SIGTERM", handleSigterm);
       if (clientStarted) {
-        await stopClientManagerWithTimeout(
-          this.#clientManager!,
-          this.#gracefulShutdownTimeoutMs
-        );
+        try {
+          await stopClientManagerWithTimeout(
+            this.#clientManager!,
+            this.#gracefulShutdownTimeoutMs
+          );
+        } catch (cleanupError) {
+          if (!hasPrimaryError) {
+            throw cleanupError;
+          }
+        }
       }
     }
   }
