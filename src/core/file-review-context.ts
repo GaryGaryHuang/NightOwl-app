@@ -176,7 +176,7 @@ export class FileReviewContext {
   }
 
   getFindings(): Finding[] | undefined {
-    return this.#findings ? [...this.#findings] : undefined;
+    return this.#findings?.map(cloneFinding);
   }
 
   setDispositions(dispositions: FindingDisposition[]): void {

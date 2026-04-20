@@ -174,6 +174,49 @@ test("FileReviewContext setFindings deep-clones v2 fields so mutations do not le
   assert.equal(f.supportingEvidence[0]!.supports, "expectedBehavior");
 });
 
+test("FileReviewContext getFindings returns defensively cloned copies", () => {
+  const context = createContext();
+
+  context.setFindings([
+    {
+      type: "must",
+      title: "defensive clone",
+      traceability: { kind: "line-range", lineStart: 1, lineEnd: 2 },
+      expectedBehavior: "expected",
+      actualBehavior: "actual",
+      deviation: "dev",
+      impact: "impact",
+      suggestion: "suggestion",
+      modelConfidence: 90,
+      findingId: "F1",
+      supportingEvidence: [
+        { evidenceRef: "E1", supports: "expectedBehavior" },
+        { evidenceRef: "E2", supports: "actualBehavior" },
+        { evidenceRef: "E3", supports: "reachability" },
+        { evidenceRef: "E4", supports: "impact" }
+      ],
+      reachability: {
+        credible: true,
+        entryPoint: "handleRequest",
+        guardsChecked: ["guard checked"]
+      },
+      uncertaintyStatus: "supported"
+    }
+  ]);
+
+  const first = context.getFindings()!;
+  first[0]!.findingId = "MUTATED";
+  first[0]!.reachability.entryPoint = "MUTATED";
+  first[0]!.reachability.guardsChecked[0] = "MUTATED";
+  first[0]!.supportingEvidence[0]!.evidenceRef = "MUTATED";
+
+  const second = context.getFindings()!;
+  assert.equal(second[0]!.findingId, "F1");
+  assert.equal(second[0]!.reachability.entryPoint, "handleRequest");
+  assert.equal(second[0]!.reachability.guardsChecked[0], "guard checked");
+  assert.equal(second[0]!.supportingEvidence[0]!.evidenceRef, "E1");
+});
+
 test("FileReviewContext getDispositions returns undefined before set", () => {
   const context = createContext();
 
