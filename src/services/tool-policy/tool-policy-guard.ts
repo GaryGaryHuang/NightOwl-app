@@ -210,8 +210,15 @@ export class ToolPolicyGuard {
   ): HandlerDecisionRecord {
     const readPath = typeof request.path === "string" ? request.path : undefined;
 
-    if (readPath !== undefined && isAllowedReviewReadPath(readPath, profile.repoRoot)) {
-      return { tool: "read", decision: "allow", args: { path: readPath } };
+    if (readPath !== undefined) {
+      try {
+        if (isAllowedReviewReadPath(readPath, profile.repoRoot)) {
+          return { tool: "read", decision: "allow", args: { path: readPath } };
+        }
+      } catch {
+        // Fail closed when the shared read-boundary helper rejects invalid input
+        // or cannot canonicalize the path safely.
+      }
     }
 
     return {

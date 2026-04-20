@@ -42,3 +42,19 @@ test("isNightOwlNamespacePath classifies repo-relative namespace paths", () => {
     assert.equal(isNightOwlNamespacePath(filePath), expected);
   }
 });
+
+test("isNightOwlNamespacePath rejects absolute paths so callers do not silently mix path models", () => {
+  assert.throws(
+    () =>
+      isNightOwlNamespacePath("/workspace/repo/.nightowl/reviewconfig.json"),
+    /repo-relative path/u
+  );
+
+  assert.throws(
+    () =>
+      isNightOwlNamespacePath(
+        String.raw`C:\workspace\repo\.nightowl\reviewconfig.json`
+      ),
+    /repo-relative path/u
+  );
+});

@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import path from "node:path";
 
 import { nightowlRoot, reviewOutputRoot } from "./nightowl-namespace.ts";
@@ -23,18 +24,73 @@ export function isAllowedReviewReadPath(
 
   const resolvedPath = path.resolve(requestedPath);
   const resolvedRoot = path.resolve(repoRoot);
-  const nightowlRootPath = nightowlRoot(resolvedRoot);
-  const reviewRoot = reviewOutputRoot(resolvedRoot);
+  const nightowlRootPath = path.resolve(nightowlRoot(resolvedRoot));
+  const reviewRoot = path.resolve(reviewOutputRoot(resolvedRoot));
 
-  const isWithinRepoSourceTree =
-    resolvedPath === resolvedRoot ||
-    (resolvedPath.startsWith(`${resolvedRoot}${path.sep}`) &&
-      resolvedPath !== nightowlRootPath &&
-      !resolvedPath.startsWith(`${nightowlRootPath}${path.sep}`));
+  const isWithinLexicalRepo = isPathInsideOrEqual(resolvedPath, resolvedRoot);
+  const isWithinLexicalReview = isPathInsideOrEqual(resolvedPath, reviewRoot);
+
+  if (!isWithinLexicalRepo && !isWithinLexicalReview) {
+    return false;
+  }
+
+  const canonicalRoot = canonicalizeBoundaryPath(resolvedRoot);
+  const canonicalNightowlRoot = canonicalizeBoundaryPath(nightowlRootPath);
+  const canonicalReviewRoot = canonicalizeBoundaryPath(reviewRoot);
+  const canonicalRequested = canonicalizeBoundaryPath(resolvedPath);
+
+  const hasValidCanonicalReviewBoundary =
+    isPathInsideOrEqual(canonicalReviewRoot, canonicalRoot) &&
+    isPathInsideOrEqual(canonicalReviewRoot, canonicalNightowlRoot);
+
+  if (
+    hasValidCanonicalReviewBoundary &&
+    isPathInsideOrEqual(canonicalRequested, canonicalReviewRoot)
+  ) {
+    return true;
+  }
 
   return (
-    isWithinRepoSourceTree ||
-    resolvedPath === reviewRoot ||
-    resolvedPath.startsWith(`${reviewRoot}${path.sep}`)
+    isPathInsideOrEqual(canonicalRequested, canonicalRoot) &&
+    !isPathInsideOrEqual(canonicalRequested, canonicalNightowlRoot)
   );
+}
+
+function isPathInsideOrEqual(candidate: string, boundary: string): boolean {
+  return (
+    candidate === boundary || candidate.startsWith(`${boundary}${path.sep}`)
+  );
+}
+
+function canonicalizeBoundaryPath(absolutePath: string): string {
+  let current = absolutePath;
+  const missingSuffixSegments: string[] = [];
+
+  while (true) {
+    try {
+      const canonical = realpathSync.native(current);
+
+      return missingSuffixSegments.length === 0
+        ? canonical
+        : path.join(canonical, ...missingSuffixSegments.reverse());
+    } catch (error) {
+      const code =
+        error instanceof Error && "code" in error
+          ? (error as NodeJS.ErrnoException).code
+          : undefined;
+
+      if (code !== "ENOENT" && code !== "ENOTDIR") {
+        throw error;
+      }
+
+      const parent = path.dirname(current);
+
+      if (parent === current) {
+        throw error;
+      }
+
+      missingSuffixSegments.push(path.basename(current));
+      current = parent;
+    }
+  }
 }

@@ -40,6 +40,10 @@ test("tool policy guard permission handler enforces the read and write boundary 
       expected: DENIED
     },
     {
+      request: { kind: "read", path: "src/app.ts" },
+      expected: DENIED
+    },
+    {
       request: { kind: "write", fileName: "/workspace/repo/src/app.ts" },
       expected: DENIED
     }
@@ -49,7 +53,7 @@ test("tool policy guard permission handler enforces the read and write boundary 
     assert.deepEqual(await handler(testCase.request, SESSION_CONTEXT), testCase.expected);
   }
 
-  assert.equal(sink.records.length, 4);
+  assert.equal(sink.records.length, 5);
   assertAuditRecord(sink.records[0], { tool: "read", decision: "allow" });
   assertAuditRecord(sink.records[2], {
     tool: "read",
@@ -57,6 +61,11 @@ test("tool policy guard permission handler enforces the read and write boundary 
     reason: "Read path is outside the allowed boundary."
   });
   assertAuditRecord(sink.records[3], {
+    tool: "read",
+    decision: "deny",
+    reason: "Read path is outside the allowed boundary."
+  });
+  assertAuditRecord(sink.records[4], {
     tool: "write",
     decision: "deny",
     reason: "Write operations are not permitted in review sessions."
