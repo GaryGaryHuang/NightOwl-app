@@ -7,6 +7,7 @@ import type { ReviewSessionFactoryLike } from "../core/session-factory-contracts
 import type { CopilotClientLike } from "./copilot-client-manager.ts";
 import { SessionExecutor } from "./session-executor.ts";
 import type { KnowledgeSvc } from "./knowledge.ts";
+import { buildRemoveAllSectionsConfig } from "./review-system-message-sections.ts";
 import { ToolPolicyGuard } from "./tool-policy/tool-policy-guard.ts";
 import type { ToolAuditSink } from "./tool-audit-writer.ts";
 
@@ -85,16 +86,7 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
       streaming: false,
       systemMessage: {
         mode: "customize",
-        sections: {
-          identity: { action: "remove" },
-          tone: { action: "remove" },
-          tool_efficiency: { action: "remove" },
-          code_change_rules: { action: "remove" },
-          guidelines: { action: "remove" },
-          tool_instructions: { action: "remove" },
-          custom_instructions: { action: "remove" },
-          last_instructions: { action: "remove" }
-        },
+        sections: buildRemoveAllSectionsConfig(),
         content: profile.systemMessage
       },
       onPermissionRequest: this.#toolPolicyGuard.buildPermissionHandler(

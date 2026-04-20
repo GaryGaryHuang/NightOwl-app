@@ -90,6 +90,7 @@
     "test/scripts/build-script.test.ts",
     "test/scripts/test-tier-tooling-subprocess.test.ts",
     "test/services/review-session-factory.test.ts",
+    "test/services/review-system-message-sections.test.ts",
     "test/services/tool-audit-writer.test.ts",
     "test/services/tool-policy-guard-dual-path.test.ts",
     "test/services/tool-policy-guard-permission-handler.test.ts",
