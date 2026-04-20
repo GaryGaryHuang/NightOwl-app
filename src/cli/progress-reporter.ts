@@ -18,6 +18,7 @@ interface CliProgressState {
   activeFiles: Map<string, ActiveFileState>;
   eventSeq: number;
   plannedFileCount?: number;
+  resolvedFiles: Set<string>;
   skippedFileCount: number;
   successfulFileCount: number;
 }
@@ -179,6 +180,7 @@ function createInitialProgressState(): CliProgressState {
   return {
     activeFiles: new Map<string, ActiveFileState>(),
     eventSeq: 0,
+    resolvedFiles: new Set<string>(),
     skippedFileCount: 0,
     successfulFileCount: 0
   };
@@ -205,43 +207,29 @@ export function reduceProgressEvent(
       };
 
     case "file-claimed":
-      return {
-        state: withActiveFileProgress(current, event.filePath, event.claimOrder),
-        instruction: {
-          renderProgress: { significant: false }
-        }
-      };
+      return buildTransitionInstruction(
+        withClaimedFile(current, event.filePath, event.claimOrder),
+        { significant: false }
+      );
 
-    case "file-progressed": {
-      const existing = current.activeFiles.get(event.filePath);
-      return {
-        state: withActiveFileProgress(
-          current,
-          event.filePath,
-          existing?.claimOrder ?? Number.MAX_SAFE_INTEGER
-        ),
-        instruction: {
-          renderProgress: { significant: false }
-        }
-      };
-    }
+    case "file-progressed":
+      return buildTransitionInstruction(
+        withProgressedFile(current, event.filePath),
+        { significant: false }
+      );
 
     case "file-completed":
-      return {
-        state: withResolvedOutcome(current, event.filePath, "completed"),
-        instruction: {
-          renderProgress: { significant: true }
-        }
-      };
+      return buildTransitionInstruction(
+        withResolvedOutcome(current, event.filePath, "completed"),
+        { significant: true }
+      );
 
     case "file-skipped":
-      return {
-        state: withResolvedOutcome(current, event.filePath, "skipped"),
-        instruction: {
-          appendMessage: `Skipped: ${event.filePath} | ${event.stepId} | ${event.reason}`,
-          renderProgress: { significant: true }
-        }
-      };
+      return buildTransitionInstruction(
+        withResolvedOutcome(current, event.filePath, "skipped"),
+        { significant: true },
+        `Skipped: ${event.filePath} | ${event.stepId} | ${event.reason}`
+      );
 
     case "run-finalizing":
       return {
@@ -272,16 +260,50 @@ export function reduceProgressEvent(
         }
       };
 
-    default:
-      return { state: current, instruction: {} };
+    default: {
+      const unsupportedEvent: never = event;
+      return {
+        state: current,
+        instruction: {
+          appendMessage: progressContractWarning(
+            `ignored unsupported progress event type: ${String(
+          (event as { type?: unknown }).type
+            )}`
+          )
+        }
+      };
+    }
   }
 }
 
-export function withActiveFileProgress(
+interface ProgressStateTransition {
+  state: CliProgressState;
+  warning?: string;
+}
+
+export function withClaimedFile(
   current: CliProgressState,
   filePath: string,
   claimOrder: number
-): CliProgressState {
+): ProgressStateTransition {
+  if (current.activeFiles.has(filePath)) {
+    return {
+      state: current,
+      warning: progressContractWarning(
+        `ignored duplicate claim for active file "${filePath}"`
+      )
+    };
+  }
+
+  if (current.resolvedFiles.has(filePath)) {
+    return {
+      state: current,
+      warning: progressContractWarning(
+        `ignored claim for already resolved file "${filePath}"`
+      )
+    };
+  }
+
   const activeFiles = new Map(current.activeFiles);
   const nextEventSeq = current.eventSeq + 1;
 
@@ -291,9 +313,51 @@ export function withActiveFileProgress(
   });
 
   return {
-    ...current,
-    activeFiles,
-    eventSeq: nextEventSeq
+    state: {
+      ...current,
+      activeFiles,
+      eventSeq: nextEventSeq
+    }
+  };
+}
+
+export function withProgressedFile(
+  current: CliProgressState,
+  filePath: string
+): ProgressStateTransition {
+  const existing = current.activeFiles.get(filePath);
+
+  if (!existing) {
+    return {
+      state: current,
+      warning: progressContractWarning(
+        `ignored progress for non-active file "${filePath}"`
+      )
+    };
+  }
+
+  return withActiveFileProgress(current, filePath, existing.claimOrder);
+}
+
+export function withActiveFileProgress(
+  current: CliProgressState,
+  filePath: string,
+  claimOrder: number
+): ProgressStateTransition {
+  const activeFiles = new Map(current.activeFiles);
+  const nextEventSeq = current.eventSeq + 1;
+
+  activeFiles.set(filePath, {
+    claimOrder,
+    lastProgressSeq: nextEventSeq
+  });
+
+  return {
+    state: {
+      ...current,
+      activeFiles,
+      eventSeq: nextEventSeq
+    }
   };
 }
 
@@ -301,15 +365,29 @@ export function withResolvedOutcome(
   current: CliProgressState,
   filePath: string,
   outcome: "completed" | "skipped"
-): CliProgressState {
+): ProgressStateTransition {
+  if (!current.activeFiles.has(filePath)) {
+    return {
+      state: current,
+      warning: progressContractWarning(
+        `ignored ${outcome} for non-active file "${filePath}"`
+      )
+    };
+  }
+
   const activeFiles = new Map(current.activeFiles);
+  const resolvedFiles = new Set(current.resolvedFiles);
   activeFiles.delete(filePath);
+  resolvedFiles.add(filePath);
 
   return {
-    ...current,
-    activeFiles,
-    successfulFileCount: current.successfulFileCount + (outcome === "completed" ? 1 : 0),
-    skippedFileCount: current.skippedFileCount + (outcome === "skipped" ? 1 : 0)
+    state: {
+      ...current,
+      activeFiles,
+      resolvedFiles,
+      successfulFileCount: current.successfulFileCount + (outcome === "completed" ? 1 : 0),
+      skippedFileCount: current.skippedFileCount + (outcome === "skipped" ? 1 : 0)
+    }
   };
 }
 
@@ -350,4 +428,26 @@ export function buildActiveFileSummary(
   return hiddenCount > 0
     ? `${visibleSummary} | +${hiddenCount} more`
     : visibleSummary;
+}
+
+function buildTransitionInstruction(
+  transition: ProgressStateTransition,
+  renderProgress?: { significant: boolean },
+  appendMessage?: string
+): { state: CliProgressState; instruction: ProgressRenderInstruction } {
+  const messages = [appendMessage, transition.warning].filter(
+    (message): message is string => Boolean(message)
+  );
+
+  return {
+    state: transition.state,
+    instruction: {
+      appendMessage: messages.length > 0 ? messages.join("\n") : undefined,
+      renderProgress: transition.warning ? undefined : renderProgress
+    }
+  };
+}
+
+function progressContractWarning(message: string): string {
+  return `Warning: CliProgressReporter ${message}`;
 }

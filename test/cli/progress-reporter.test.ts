@@ -287,6 +287,24 @@ test("CliProgressReporter clears the TTY live line during finalize so the final 
   assert.equal(stdout.writes.at(-1), CLEAR_TTY_LIVE_LINE);
 });
 
+test("CliProgressReporter warns on unsupported progress event types instead of silently ignoring them", () => {
+  const { stdout, reporter } = createInitializedReporter({
+    isTTY: false,
+    plannedFileCount: 1
+  });
+
+  reporter.handleEvent(
+    {
+      type: "future-unsupported-event"
+    } as unknown as Parameters<CliProgressReporter["handleEvent"]>[0]
+  );
+
+  assert.match(
+    stdout.logs.at(-1) ?? "",
+    /warning: cliprogressreporter ignored unsupported progress event type/iu
+  );
+});
+
 function createInitializedReporter(options: {
   columns?: number;
   isTTY: boolean;
