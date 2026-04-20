@@ -34,6 +34,10 @@ interface ResolvedCliRuntime {
 
 /**
  * Thin CLI entrypoint: parse args, run the app, and translate failures into exit codes.
+ *
+ * progressReporter.finalize() is invoked once in the finally block. It is
+ * idempotent and clears any pending TTY live line before stdout/stderr writes
+ * complete in the surrounding shell.
  */
 export async function runCli(
   argv: string[],
@@ -47,7 +51,6 @@ export async function runCli(
 
     if (command.kind === "check") {
       await resolvedRuntime.availabilityChecker.check();
-      resolvedRuntime.progressReporter.finalize();
       resolvedRuntime.stdout.log("GitHub Copilot is available.");
       return 0;
     }
@@ -55,42 +58,34 @@ export async function runCli(
     const request = command.request;
     resolvedRuntime.stdout.log(formatStartupFeedback(request));
     const result = await resolvedRuntime.app.run(request);
-    resolvedRuntime.progressReporter.finalize();
     resolvedRuntime.stdout.log(formatLocalReviewRunSummary(result));
     return 0;
   } catch (error) {
     const stderr = resolvedRuntime?.stderr ?? runtime.stderr ?? console;
 
     if (error instanceof CliUsageError) {
-      resolvedRuntime?.progressReporter.finalize();
       stderr.error(error.message);
       return 1;
     }
 
     if (error instanceof ReviewRunInterruptedError) {
       if (error.signal === "SIGTERM") {
-        resolvedRuntime?.progressReporter.finalize();
         stderr.error("Review run terminated by SIGTERM.");
         return 143;
       }
       if (error.signal === "SIGINT") {
-        resolvedRuntime?.progressReporter.finalize();
         stderr.error("Review run interrupted by SIGINT.");
         return 130;
       }
-      resolvedRuntime?.progressReporter.finalize();
       stderr.error("Review run interrupted.");
       return 130;
     }
 
     const message =
       error instanceof Error ? error.message : "NightOwl CLI failed unexpectedly.";
-    resolvedRuntime?.progressReporter.finalize();
     stderr.error(message);
     return 1;
   } finally {
-    // Safety net: guarantees finalize() runs even if a future branch omits the
-    // explicit call above. CliProgressRenderer.finalize() is idempotent.
     resolvedRuntime?.progressReporter.finalize();
   }
 }
