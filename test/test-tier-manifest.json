@@ -31,6 +31,7 @@
     "test/core/step-runner-retry.test.ts",
     "test/core/step0-output-validator.test.ts",
     "test/core/steps/step0-changeset-overview.test.ts",
+    "test/core/steps/step4-hypothesis-count-class.test.ts",
     "test/core/steps/step7-summary.test.ts",
     "test/core/structured-output-validator.test.ts",
     "test/core/verifier-report.test.ts",
