@@ -10,6 +10,16 @@ export interface ReviewOutputTarget {
   toolAuditPath: string;
 }
 
+export interface ReviewOutputPlannedNote {
+  filePath: string;
+  noteFilePath: string;
+}
+
+export interface ReviewOutputPlan {
+  outputTarget: ReviewOutputTarget;
+  plannedNotes: ReviewOutputPlannedNote[];
+}
+
 export type ReviewOutputBoundaryOperation =
   | "initializeRun"
   | "publishFileReview"
@@ -37,7 +47,7 @@ export class ReviewOutputBoundaryError extends Error {
 }
 
 export interface FileReviewResult {
-  noteFilePath: string;
+  filePath: string;
   content: string;
 }
 
@@ -45,6 +55,10 @@ export interface SkipRecord {
   filePath: string;
   stepId: string;
   reason: string;
+}
+
+export function formatSkippedFileRecord(skipRecord: SkipRecord): string {
+  return `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`;
 }
 
 export interface ContentResult {
@@ -68,5 +82,5 @@ export interface RunOutputPublisher {
 }
 
 export interface ReviewOutputSink {
-  initializeRun(outputTarget: ReviewOutputTarget): Promise<RunOutputPublisher>;
+  initializeRun(outputPlan: ReviewOutputPlan): Promise<RunOutputPublisher>;
 }

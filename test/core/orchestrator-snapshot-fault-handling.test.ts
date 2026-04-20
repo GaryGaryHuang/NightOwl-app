@@ -20,6 +20,27 @@ import {
 type StepEvent = [string, string];
 type OutputCall = [string, string];
 
+function buildNotePathLookup(
+  plannedNotes: Array<{ filePath: string; noteFilePath: string }>
+): Map<string, string> {
+  return new Map(
+    plannedNotes.map((plannedNote) => [plannedNote.filePath, plannedNote.noteFilePath])
+  );
+}
+
+function requireNotePath(
+  notePathLookup: Map<string, string>,
+  filePath: string
+): string {
+  const noteFilePath = notePathLookup.get(filePath);
+
+  if (!noteFilePath) {
+    throw new Error(`Missing planned note path for ${filePath}`);
+  }
+
+  return noteFilePath;
+}
+
 test("ReviewOrchestrator aborts when a successful snapshot write is classified as a shared output target fault and later files do not continue", async () => {
   const fixture = createReviewRepoFixture();
 
@@ -35,6 +56,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
       path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       harness.reviewableFiles
     );
+    const notePathLookup = buildNotePathLookup(plannedNotes);
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
@@ -50,22 +72,23 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
+          outputCalls.push(["publishFileReview", noteFilePath]);
 
           if (
-            fileResult.noteFilePath === failedNotePath &&
+            noteFilePath === failedNotePath &&
             /^# .*[\s\S]*^## Overview/mu.test(fileResult.content) &&
             !/> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
             throw new Error("disk full");
           }
 
-          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+          writtenNotes.set(noteFilePath, fileResult.content);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
@@ -122,6 +145,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
       path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       harness.reviewableFiles
     );
+    const notePathLookup = buildNotePathLookup(plannedNotes);
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
@@ -137,15 +161,16 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
+          outputCalls.push(["publishFileReview", noteFilePath]);
 
           if (
-            fileResult.noteFilePath === failedNotePath &&
+            noteFilePath === failedNotePath &&
             /^# .*[\s\S]*^## Overview/mu.test(fileResult.content) &&
             !/> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
@@ -153,13 +178,13 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
           }
 
           if (
-            fileResult.noteFilePath === failedNotePath &&
+            noteFilePath === failedNotePath &&
             /> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
             throw new Error("interrupted snapshot write failed");
           }
 
-          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+          writtenNotes.set(noteFilePath, fileResult.content);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
@@ -214,6 +239,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
       path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       harness.reviewableFiles
     );
+    const notePathLookup = buildNotePathLookup(plannedNotes);
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
@@ -229,16 +255,17 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
-          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
+          outputCalls.push(["publishFileReview", noteFilePath]);
+          writtenNotes.set(noteFilePath, fileResult.content);
 
           if (
-            fileResult.noteFilePath === failedNotePath &&
+            noteFilePath === failedNotePath &&
             /^# .*[\s\S]*^## Overview/mu.test(fileResult.content) &&
             !/> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
@@ -305,6 +332,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
       path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       reviewableFiles
     );
+    const notePathLookup = buildNotePathLookup(plannedNotes);
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
@@ -324,22 +352,23 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
+          outputCalls.push(["publishFileReview", noteFilePath]);
 
           if (
-            fileResult.noteFilePath === failedNotePath &&
+            noteFilePath === failedNotePath &&
             /^# .*[\s\S]*^## Overview/mu.test(fileResult.content) &&
             !/> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
             throw new Error("note write failed");
           }
 
-          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+          writtenNotes.set(noteFilePath, fileResult.content);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
@@ -400,12 +429,12 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          outputCalls.push(["publishFileReview", fileResult.filePath]);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
@@ -467,6 +496,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       harness.reviewableFiles
     );
+    const notePathLookup = buildNotePathLookup(plannedNotes);
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
@@ -477,21 +507,22 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
+          outputCalls.push(["publishFileReview", noteFilePath]);
 
           if (
-            fileResult.noteFilePath === failedNotePath &&
+            noteFilePath === failedNotePath &&
             /> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
             throw new Error("note write failed");
           }
 
-          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+          writtenNotes.set(noteFilePath, fileResult.content);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
@@ -554,6 +585,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
       path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
       harness.reviewableFiles
     );
+    const notePathLookup = buildNotePathLookup(plannedNotes);
     const failedNotePath = plannedNotes.find(
       ({ filePath }) => filePath === failedFile
     )!.noteFilePath;
@@ -564,13 +596,14 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
-          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
+          outputCalls.push(["publishFileReview", noteFilePath]);
+          writtenNotes.set(noteFilePath, fileResult.content);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);

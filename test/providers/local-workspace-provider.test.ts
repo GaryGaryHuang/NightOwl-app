@@ -10,7 +10,7 @@ test("LocalWorkspaceProvider initializes the run directories, skipped.md, and yi
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = await fixture.provider.initializeRun(fixture.outputPlan);
 
     assert.equal(existsSync(fixture.outputTarget.basePath), true);
     assert.equal(existsSync(fixture.outputTarget.filesPath), true);
@@ -45,7 +45,7 @@ test("LocalWorkspaceProvider keeps changeset overview lazy under the run basePat
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    await fixture.provider.initializeRun(fixture.outputTarget);
+    await fixture.provider.initializeRun(fixture.outputPlan);
 
     assert.equal(existsSync(fixture.outputTarget.changesetOverviewPath), false);
     assert.ok(
@@ -65,11 +65,11 @@ test("LocalWorkspaceProvider re-initializing a run truncates skipped.md and tool
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    await fixture.provider.initializeRun(fixture.outputTarget);
+    await fixture.provider.initializeRun(fixture.outputPlan);
     writeFileSync(fixture.outputTarget.skippedPath, "stale skip line\n");
     writeFileSync(fixture.outputTarget.toolAuditPath, '{"stale":true}\n');
 
-    await fixture.provider.initializeRun(fixture.outputTarget);
+    await fixture.provider.initializeRun(fixture.outputPlan);
 
     assert.equal(existsSync(fixture.outputTarget.basePath), true);
     assert.equal(existsSync(fixture.outputTarget.filesPath), true);
@@ -84,7 +84,7 @@ test("LocalWorkspaceProvider yields a run-scoped publisher whose publishRunManif
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    const publisher = await fixture.provider.initializeRun(fixture.outputTarget);
+    const publisher = await fixture.provider.initializeRun(fixture.outputPlan);
     assert.equal(existsSync(fixture.outputTarget.manifestPath), false);
 
     await publisher.publishRunManifest({ content: '{\n  "schemaVersion": 1\n}' });
@@ -107,7 +107,7 @@ test("LocalWorkspaceProvider keeps verifier-report lazy under the run basePath",
   const fixture = createWorkspaceProviderFixture();
 
   try {
-    await fixture.provider.initializeRun(fixture.outputTarget);
+    await fixture.provider.initializeRun(fixture.outputPlan);
 
     assert.equal(existsSync(fixture.outputTarget.verifierReportPath), false);
     assert.ok(

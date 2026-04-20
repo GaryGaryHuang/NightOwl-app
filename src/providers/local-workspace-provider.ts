@@ -6,8 +6,8 @@ import {
 import { LocalRunOutputPublisher } from "./local-run-output-publisher.ts";
 import {
   ReviewOutputBoundaryError,
+  type ReviewOutputPlan,
   type ReviewOutputSink,
-  type ReviewOutputTarget,
   type RunOutputPublisher
 } from "./review-output-sink.ts";
 import { wrapBoundaryError } from "./boundary-error-helper.ts";
@@ -17,7 +17,9 @@ import { wrapBoundaryError } from "./boundary-error-helper.ts";
  * and yields a run-scoped publisher bound to the resolved OutputTarget.
  */
 export class LocalWorkspaceProvider implements ReviewOutputSink {
-  async initializeRun(outputTarget: ReviewOutputTarget): Promise<RunOutputPublisher> {
+  async initializeRun(outputPlan: ReviewOutputPlan): Promise<RunOutputPublisher> {
+    const { outputTarget } = outputPlan;
+
     return wrapBoundaryError(
       async () => {
         // Create shared run directories up front and truncate append-only artifacts before workers start.
@@ -25,7 +27,7 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
         await mkdir(outputTarget.filesPath, { recursive: true });
         await writeFile(outputTarget.skippedPath, "");
         await writeFile(outputTarget.toolAuditPath, "");
-        return new LocalRunOutputPublisher(outputTarget);
+        return new LocalRunOutputPublisher(outputPlan);
       },
       (cause) => new ReviewOutputBoundaryError(
         "initializeRun",

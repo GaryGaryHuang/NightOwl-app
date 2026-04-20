@@ -26,9 +26,9 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
       sourceProvider: new LocalGitProvider(),
       reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
+        async initializeRun(outputPlan) {
           callOrder.push("initializeRun");
-          callbackOutputTarget = outputTarget;
+          callbackOutputTarget = outputPlan.outputTarget;
           return this;
         },
         async publishFileReview() {

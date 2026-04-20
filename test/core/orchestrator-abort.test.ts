@@ -249,8 +249,8 @@ test("ReviewOrchestrator stops before per-file dispatch when signal aborts durin
   const orchestrator = createBaseOrchestrator({
     outputSink: defineOutputSinkDouble({
       ...sink,
-      async initializeRun(outputTarget) {
-        const publisher = await sink.initializeRun(outputTarget);
+      async initializeRun(outputPlan) {
+        const publisher = await sink.initializeRun(outputPlan);
         controller.abort("SIGINT");
         return publisher;
       }
@@ -354,7 +354,7 @@ test("ReviewOrchestrator does not publish a new per-file snapshot after abort si
       ...sink,
       async publishFileReview(result) {
         if (abortFired) {
-          fileReviewCallsAfterAbort.push(result.noteFilePath);
+          fileReviewCallsAfterAbort.push(result.filePath);
         }
         await sink.publishFileReview(result);
       }

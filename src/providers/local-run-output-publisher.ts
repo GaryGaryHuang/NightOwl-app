@@ -2,10 +2,12 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  formatSkippedFileRecord,
   ReviewOutputBoundaryError,
   type ReviewOutputBoundaryOperation,
   type ChangesetOverviewResult,
   type FileReviewResult,
+  type ReviewOutputPlan,
   type ReviewIndexResult,
   type RunManifestResult,
   type RunOutputPublisher,
@@ -22,19 +24,28 @@ import { AsyncMutex } from "./async-mutex.ts";
  */
 export class LocalRunOutputPublisher implements RunOutputPublisher {
   readonly #outputTarget: ReviewOutputTarget;
+  readonly #notePathByFilePath: Map<string, string>;
   readonly #skippedMutex = new AsyncMutex();
 
-  constructor(outputTarget: ReviewOutputTarget) {
-    this.#outputTarget = outputTarget;
+  constructor(outputPlan: ReviewOutputPlan) {
+    this.#outputTarget = outputPlan.outputTarget;
+    this.#notePathByFilePath = new Map(
+      outputPlan.plannedNotes.map((plannedNote) => [
+        plannedNote.filePath,
+        plannedNote.noteFilePath
+      ])
+    );
   }
 
   async publishFileReview(fileResult: FileReviewResult): Promise<void> {
+    const noteFilePath = this.#resolveNoteFilePath(fileResult.filePath);
+
     return wrapBoundaryError(
       async () => {
-        await mkdir(path.dirname(fileResult.noteFilePath), { recursive: true });
-        await writeFile(fileResult.noteFilePath, fileResult.content);
+        await mkdir(path.dirname(noteFilePath), { recursive: true });
+        await writeFile(noteFilePath, fileResult.content);
       },
-      (cause) => toOutputBoundaryError("publishFileReview", cause, fileResult.noteFilePath)
+      (cause) => toOutputBoundaryError("publishFileReview", cause, noteFilePath)
     );
   }
 
@@ -43,7 +54,7 @@ export class LocalRunOutputPublisher implements RunOutputPublisher {
       wrapBoundaryError(
         () => appendFile(
           this.#outputTarget.skippedPath,
-          `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
+          formatSkippedFileRecord(skipRecord)
         ),
         (cause) => toOutputBoundaryError(
           "publishSkippedFile",
@@ -107,6 +118,19 @@ export class LocalRunOutputPublisher implements RunOutputPublisher {
         this.#outputTarget.changesetOverviewPath
       )
     );
+  }
+
+  #resolveNoteFilePath(filePath: string): string {
+    const noteFilePath = this.#notePathByFilePath.get(filePath);
+
+    if (!noteFilePath) {
+      throw new ReviewOutputBoundaryError(
+        "publishFileReview",
+        `No planned note output path found for file: ${filePath}`
+      );
+    }
+
+    return noteFilePath;
   }
 }
 

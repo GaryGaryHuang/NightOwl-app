@@ -45,6 +45,7 @@ import { Step3KnowledgeSourceOfTruthStep } from "./steps/step3-knowledge-source-
 import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boundaries.ts";
 import { Step1OverviewStep } from "./steps/step1-overview.ts";
 import {
+  type ReviewOutputPlan,
   type ReviewOutputTarget,
   type ReviewOutputSink,
   type RunOutputPublisher
@@ -242,8 +243,8 @@ export class ReviewOrchestrator {
       timestamp: this.#timestampProvider()
     });
     const plannedNoteFiles = planNoteFiles(outputTarget.filesPath, reviewableFiles);
-    const providerOutputTarget = toReviewOutputTarget(outputTarget);
-    const outputPublisher = await this.#outputSink.initializeRun(providerOutputTarget);
+    const outputPlan = toReviewOutputPlan(outputTarget, plannedNoteFiles);
+    const outputPublisher = await this.#outputSink.initializeRun(outputPlan);
     abortGuard.throwIfAborted();
 
     await outputPublisher.publishChangesetOverview({ content: runContext.changesetOverviewMarkdown });
@@ -264,7 +265,7 @@ export class ReviewOrchestrator {
     for (const plannedNote of plannedNoteFiles) {
       abortGuard.throwIfAborted();
       await outputPublisher.publishFileReview({
-        noteFilePath: plannedNote.noteFilePath,
+        filePath: plannedNote.filePath,
         content: this.#finalizer.render(
           new FileReviewContext({
             filePath: plannedNote.filePath,
@@ -568,7 +569,7 @@ export class ReviewOrchestrator {
 
       try {
         await input.outputPublisher.publishFileReview({
-          noteFilePath: fileContext.noteFilePath,
+          filePath: fileContext.filePath,
           content: this.#finalizer.render(fileContext)
         });
       } catch (outputError) {
@@ -645,7 +646,7 @@ export class ReviewOrchestrator {
 
     try {
       await input.outputPublisher.publishFileReview({
-        noteFilePath: input.fileContext.noteFilePath,
+        filePath: input.fileContext.filePath,
         content: this.#finalizer.render(input.fileContext)
       });
     } catch (outputError) {
@@ -781,6 +782,16 @@ function defaultTimestampProvider(): string {
   const minute = String(now.getMinutes()).padStart(2, "0");
 
   return `${month}${day}${hour}${minute}`;
+}
+
+function toReviewOutputPlan(
+  outputTarget: OutputTarget,
+  plannedNoteFiles: PlannedNoteFile[]
+): ReviewOutputPlan {
+  return {
+    outputTarget: toReviewOutputTarget(outputTarget),
+    plannedNotes: plannedNoteFiles.map((plannedNote) => ({ ...plannedNote }))
+  };
 }
 
 function toReviewOutputTarget(outputTarget: OutputTarget): ReviewOutputTarget {

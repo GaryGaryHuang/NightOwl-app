@@ -18,6 +18,7 @@ import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import type {
+  ReviewOutputPlan,
   ReviewOutputTarget,
   RunOutputPublisher
 } from "../../src/providers/review-output-sink.ts";
@@ -462,6 +463,7 @@ function createDiffFailingSourceProvider(
 
 class RecordingOutputSink {
   protected outputTarget!: ReviewOutputTarget;
+  protected notePathByFilePath = new Map<string, string>();
   calls: OutputCall[] = [];
   records: Array<{ call: OutputCall; value: string }> = [];
   writtenFileReviews: string[] = [];
@@ -473,12 +475,18 @@ class RecordingOutputSink {
   };
   #manifestPublished = false;
 
-  async initializeRun(outputTarget: ReviewOutputTarget): Promise<RunOutputPublisher> {
-    mkdirSync(outputTarget.basePath, { recursive: true });
-    mkdirSync(outputTarget.filesPath, { recursive: true });
-    writeFileSync(outputTarget.skippedPath, "");
-    this.outputTarget = outputTarget;
-    this.record("initializeRun", outputTarget.basePath);
+  async initializeRun(outputPlan: ReviewOutputPlan): Promise<RunOutputPublisher> {
+    mkdirSync(outputPlan.outputTarget.basePath, { recursive: true });
+    mkdirSync(outputPlan.outputTarget.filesPath, { recursive: true });
+    writeFileSync(outputPlan.outputTarget.skippedPath, "");
+    this.outputTarget = outputPlan.outputTarget;
+    this.notePathByFilePath = new Map(
+      outputPlan.plannedNotes.map((plannedNote) => [
+        plannedNote.filePath,
+        plannedNote.noteFilePath
+      ])
+    );
+    this.record("initializeRun", outputPlan.outputTarget.basePath);
     return this;
   }
 
@@ -487,9 +495,10 @@ class RecordingOutputSink {
       this.afterManifest.publishFileReview += 1;
     }
 
-    writeArtifact(fileResult.noteFilePath, fileResult.content);
-    this.writtenFileReviews.push(fileResult.noteFilePath);
-    this.record("publishFileReview", fileResult.noteFilePath);
+    const noteFilePath = this.resolveNoteFilePath(fileResult.filePath);
+    writeArtifact(noteFilePath, fileResult.content);
+    this.writtenFileReviews.push(noteFilePath);
+    this.record("publishFileReview", noteFilePath);
   }
 
   async publishSkippedFile(skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]): Promise<void> {
@@ -542,20 +551,31 @@ class RecordingOutputSink {
     this.calls.push(call);
     this.records.push({ call, value });
   }
+
+  protected resolveNoteFilePath(filePath: string): string {
+    const noteFilePath = this.notePathByFilePath.get(filePath);
+
+    if (!noteFilePath) {
+      throw new Error(`Missing planned note output for ${filePath}`);
+    }
+
+    return noteFilePath;
+  }
 }
 
 class CorruptingDiskOutputSink extends RecordingOutputSink {
-  override async initializeRun(outputTarget: ReviewOutputTarget): Promise<RunOutputPublisher> {
-    const publisher = await super.initializeRun(outputTarget);
-    writeFileSync(outputTarget.skippedPath, "# CORRUPTED SKIPPED LOG\n");
+  override async initializeRun(outputPlan: ReviewOutputPlan): Promise<RunOutputPublisher> {
+    const publisher = await super.initializeRun(outputPlan);
+    writeFileSync(outputPlan.outputTarget.skippedPath, "# CORRUPTED SKIPPED LOG\n");
     return publisher;
   }
 
   override async publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): Promise<void> {
-    writeArtifact(fileResult.noteFilePath, "# CORRUPTED NOTE\n");
+    const noteFilePath = this.resolveNoteFilePath(fileResult.filePath);
+    writeArtifact(noteFilePath, "# CORRUPTED NOTE\n");
     writeFileSync(path.join(this.outputTarget.filesPath, "EXTRA DISK FILE.md"), "# extra\n");
-    this.writtenFileReviews.push(fileResult.noteFilePath);
-    this.record("publishFileReview", fileResult.noteFilePath);
+    this.writtenFileReviews.push(noteFilePath);
+    this.record("publishFileReview", noteFilePath);
   }
 
   override async publishSkippedFile(skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]): Promise<void> {

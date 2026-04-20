@@ -20,7 +20,7 @@ async function createSnapshotHealthAssessorFixture(): Promise<SnapshotHealthAsse
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
   const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
 
-  await fixture.provider.initializeRun(fixture.outputTarget);
+  await fixture.provider.initializeRun(fixture.outputPlan);
 
   return {
     fixture,

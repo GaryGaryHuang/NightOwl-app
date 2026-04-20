@@ -23,6 +23,27 @@ import {
 type StepEvent = [string, string];
 type OutputCall = [string, string];
 
+function buildNotePathLookup(
+  plannedNotes: Array<{ filePath: string; noteFilePath: string }>
+): Map<string, string> {
+  return new Map(
+    plannedNotes.map((plannedNote) => [plannedNote.filePath, plannedNote.noteFilePath])
+  );
+}
+
+function requireNotePath(
+  notePathLookup: Map<string, string>,
+  filePath: string
+): string {
+  const noteFilePath = notePathLookup.get(filePath);
+
+  if (!noteFilePath) {
+    throw new Error(`Missing planned note path for ${filePath}`);
+  }
+
+  return noteFilePath;
+}
+
 test("ReviewOrchestrator aborts when Step 0 fails before initializing local output and dispatching any per-file step", async () => {
   const calls: string[] = [];
   const fixture = createReviewRepoFixture();
@@ -164,12 +185,12 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           throw new Error("initialize failed");
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          outputCalls.push(["publishFileReview", fileResult.filePath]);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
@@ -231,12 +252,12 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
         }
       },
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          outputCalls.push(["publishFileReview", fileResult.filePath]);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
@@ -290,6 +311,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     const outputCalls: OutputCall[] = [];
     const writtenNotes = new Map<string, string>();
     const stepEvents: StepEvent[] = [];
+    const notePathLookup = buildNotePathLookup(plannedNotes);
     const failedNotePath = plannedNotes[1].noteFilePath;
     const successfulSnapshotOutputHealthAssessor = {
       async assess() {
@@ -300,18 +322,19 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
       sourceProvider: harness.sourceProvider,
       reviewFileFilter: harness.reviewFileFilter,
       outputSink: defineOutputSinkDouble({
-        async initializeRun(outputTarget) {
-          outputCalls.push(["initializeRun", outputTarget.basePath]);
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
           return this;
         },
         async publishFileReview(fileResult) {
-          outputCalls.push(["publishFileReview", fileResult.noteFilePath]);
+          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
+          outputCalls.push(["publishFileReview", noteFilePath]);
 
-          if (fileResult.noteFilePath === failedNotePath) {
+          if (noteFilePath === failedNotePath) {
             throw new Error("note write failed");
           }
 
-          writtenNotes.set(fileResult.noteFilePath, fileResult.content);
+          writtenNotes.set(noteFilePath, fileResult.content);
         },
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
@@ -361,4 +384,3 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     fixture.cleanup();
   }
 });
-

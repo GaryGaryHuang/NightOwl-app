@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { LocalWorkspaceProvider } from "../../src/providers/local-workspace-provider.ts";
-import type { ReviewOutputTarget } from "../../src/providers/review-output-sink.ts";
+import type {
+  ReviewOutputPlan,
+  ReviewOutputTarget
+} from "../../src/providers/review-output-sink.ts";
 
 export function createWorkspaceProviderFixture() {
   const tempDir = mkdtempSync(path.join(tmpdir(), "nightowl-output-"));
@@ -20,9 +23,14 @@ export function createWorkspaceProviderFixture() {
     toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   };
   const provider = new LocalWorkspaceProvider();
+  const outputPlan: ReviewOutputPlan = {
+    outputTarget,
+    plannedNotes: []
+  };
 
   return {
     tempDir,
+    outputPlan,
     outputTarget,
     provider,
     buildNoteFilePath(fileName: string) {

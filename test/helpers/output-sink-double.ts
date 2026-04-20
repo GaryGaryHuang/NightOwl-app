@@ -2,10 +2,11 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type {
+  ReviewOutputPlan,
   ReviewOutputSink,
-  ReviewOutputTarget,
   RunOutputPublisher
 } from "../../src/providers/review-output-sink.ts";
+import { formatSkippedFileRecord } from "../../src/providers/review-output-sink.ts";
 
 export type ReviewOutputBootstrapAndPublisher =
   ReviewOutputSink & RunOutputPublisher;
@@ -17,47 +18,59 @@ export function defineOutputSinkDouble(
 }
 
 export function createWritableOutputSink(): ReviewOutputBootstrapAndPublisher {
-  let outputTarget: ReviewOutputTarget;
+  let outputPlan: ReviewOutputPlan;
+  let notePathByFilePath = new Map<string, string>();
 
   const sink: ReviewOutputBootstrapAndPublisher = {
-    async initializeRun(target: ReviewOutputTarget): Promise<RunOutputPublisher> {
-      await mkdir(target.basePath, { recursive: true });
-      await mkdir(target.filesPath, { recursive: true });
-      await writeFile(target.skippedPath, "");
-      outputTarget = target;
+    async initializeRun(plan: ReviewOutputPlan): Promise<RunOutputPublisher> {
+      await mkdir(plan.outputTarget.basePath, { recursive: true });
+      await mkdir(plan.outputTarget.filesPath, { recursive: true });
+      await writeFile(plan.outputTarget.skippedPath, "");
+      outputPlan = plan;
+      notePathByFilePath = new Map(
+        plan.plannedNotes.map((plannedNote) => [
+          plannedNote.filePath,
+          plannedNote.noteFilePath
+        ])
+      );
       return sink;
     },
 
     async publishFileReview(fileResult) {
-      await mkdir(path.dirname(fileResult.noteFilePath), { recursive: true });
-      await writeFile(fileResult.noteFilePath, fileResult.content);
+      const noteFilePath = notePathByFilePath.get(fileResult.filePath);
+      if (!noteFilePath) {
+        throw new Error(`Missing planned note for ${fileResult.filePath}`);
+      }
+
+      await mkdir(path.dirname(noteFilePath), { recursive: true });
+      await writeFile(noteFilePath, fileResult.content);
     },
 
     async publishSkippedFile(skipRecord) {
       await appendFile(
-        outputTarget.skippedPath,
-        `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
+        outputPlan.outputTarget.skippedPath,
+        formatSkippedFileRecord(skipRecord)
       );
     },
 
     async publishRunSummary(summaryResult) {
-      await writeFile(outputTarget.summaryPath, summaryResult.content);
+      await writeFile(outputPlan.outputTarget.summaryPath, summaryResult.content);
     },
 
     async publishReviewIndex(indexResult) {
-      await writeFile(outputTarget.indexPath, indexResult.content);
+      await writeFile(outputPlan.outputTarget.indexPath, indexResult.content);
     },
 
     async publishVerifierReport(result) {
-      await writeFile(outputTarget.verifierReportPath, result.content);
+      await writeFile(outputPlan.outputTarget.verifierReportPath, result.content);
     },
 
     async publishRunManifest(manifestResult) {
-      await writeFile(outputTarget.manifestPath, manifestResult.content);
+      await writeFile(outputPlan.outputTarget.manifestPath, manifestResult.content);
     },
 
     async publishChangesetOverview(result) {
-      await writeFile(outputTarget.changesetOverviewPath, result.content);
+      await writeFile(outputPlan.outputTarget.changesetOverviewPath, result.content);
     }
   };
 
