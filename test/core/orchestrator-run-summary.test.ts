@@ -18,6 +18,7 @@ import { StepExecutionError } from "../../src/core/step-execution-error.ts";
 import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import type {
+  ReviewArtifactKind,
   ReviewOutputPlan,
   ReviewOutputTarget,
   RunOutputPublisher
@@ -39,17 +40,13 @@ import {
 type OutputCall = "initializeRun"
   | "publishFileReview"
   | "publishSkippedFile"
-  | "publishRunSummary"
-  | "publishReviewIndex"
-  | "publishVerifierReport"
-  | "publishRunManifest"
-  | "publishChangesetOverview";
+  | `publishArtifact:${ReviewArtifactKind}`;
 
 const RUN_LEVEL_FINALIZER_CALLS: OutputCall[] = [
-  "publishRunSummary",
-  "publishReviewIndex",
-  "publishVerifierReport",
-  "publishRunManifest"
+  "publishArtifact:summary",
+  "publishArtifact:index",
+  "publishArtifact:verifier-report",
+  "publishArtifact:manifest"
 ];
 
 test("ReviewOrchestrator dispatches every run-level finalizer for an all-successful run and writes their artifacts", async () => {
@@ -304,21 +301,21 @@ test("ReviewOrchestrator publishes artifacts in deterministic order and does not
         stepRunner: createMixedResultRunner(skippedFile)
       });
 
-      assert.equal(outputSink.calls.at(-1), "publishRunManifest");
+      assert.equal(outputSink.calls.at(-1), "publishArtifact:manifest");
       assert.equal(outputSink.calls.includes("publishSkippedFile"), true);
-      assertCallAfter(outputSink.calls, "publishRunSummary", "publishSkippedFile");
-      assertCallAfter(outputSink.calls, "publishRunSummary", "publishFileReview");
-      assertCallAfter(outputSink.calls, "publishReviewIndex", "publishRunSummary");
-      assertCallAfter(outputSink.calls, "publishReviewIndex", "publishSkippedFile");
-      assertCallAfter(outputSink.calls, "publishReviewIndex", "publishFileReview");
-      assertCallAfter(outputSink.calls, "publishVerifierReport", "publishReviewIndex");
-      assertCallAfter(outputSink.calls, "publishVerifierReport", "publishSkippedFile");
-      assertCallAfter(outputSink.calls, "publishRunManifest", "publishReviewIndex");
-      assertCallAfter(outputSink.calls, "publishRunManifest", "publishVerifierReport");
+      assertCallAfter(outputSink.calls, "publishArtifact:summary", "publishSkippedFile");
+      assertCallAfter(outputSink.calls, "publishArtifact:summary", "publishFileReview");
+      assertCallAfter(outputSink.calls, "publishArtifact:index", "publishArtifact:summary");
+      assertCallAfter(outputSink.calls, "publishArtifact:index", "publishSkippedFile");
+      assertCallAfter(outputSink.calls, "publishArtifact:index", "publishFileReview");
+      assertCallAfter(outputSink.calls, "publishArtifact:verifier-report", "publishArtifact:index");
+      assertCallAfter(outputSink.calls, "publishArtifact:verifier-report", "publishSkippedFile");
+      assertCallAfter(outputSink.calls, "publishArtifact:manifest", "publishArtifact:index");
+      assertCallAfter(outputSink.calls, "publishArtifact:manifest", "publishArtifact:verifier-report");
       assert.equal(outputSink.afterManifest.publishFileReview, 0);
-      assert.equal(outputSink.afterManifest.publishRunSummary, 0);
-      assert.equal(outputSink.afterManifest.publishReviewIndex, 0);
-      assert.equal(outputSink.afterManifest.publishVerifierReport, 0);
+      assert.equal(outputSink.afterManifest["publishArtifact:summary"], 0);
+      assert.equal(outputSink.afterManifest["publishArtifact:index"], 0);
+      assert.equal(outputSink.afterManifest["publishArtifact:verifier-report"], 0);
     }
   );
 });
@@ -467,11 +464,11 @@ class RecordingOutputSink {
   calls: OutputCall[] = [];
   records: Array<{ call: OutputCall; value: string }> = [];
   writtenFileReviews: string[] = [];
-  afterManifest = {
+  afterManifest: Record<string, number> = {
     publishFileReview: 0,
-    publishRunSummary: 0,
-    publishReviewIndex: 0,
-    publishVerifierReport: 0
+    "publishArtifact:summary": 0,
+    "publishArtifact:index": 0,
+    "publishArtifact:verifier-report": 0
   };
   #manifestPublished = false;
 
@@ -509,42 +506,33 @@ class RecordingOutputSink {
     this.record("publishSkippedFile", skipRecord.filePath);
   }
 
-  async publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): Promise<void> {
-    if (this.#manifestPublished) {
-      this.afterManifest.publishRunSummary += 1;
+  async publishArtifact(kind: ReviewArtifactKind, result: { content: string }): Promise<void> {
+    const callName: OutputCall = `publishArtifact:${kind}`;
+    const targetPath = this.#resolveArtifactPath(kind);
+
+    if (kind !== "manifest" && this.#manifestPublished) {
+      this.afterManifest[callName] = (this.afterManifest[callName] ?? 0) + 1;
     }
 
-    writeFileSync(this.outputTarget.summaryPath, summaryResult.content);
-    this.record("publishRunSummary", this.outputTarget.summaryPath);
-  }
+    writeFileSync(targetPath, result.content);
 
-  async publishReviewIndex(indexResult: Parameters<RunOutputPublisher["publishReviewIndex"]>[0]): Promise<void> {
-    if (this.#manifestPublished) {
-      this.afterManifest.publishReviewIndex += 1;
+    if (kind === "manifest") {
+      this.#manifestPublished = true;
     }
 
-    writeFileSync(this.outputTarget.indexPath, indexResult.content);
-    this.record("publishReviewIndex", this.outputTarget.indexPath);
+    this.record(callName, targetPath);
   }
 
-  async publishVerifierReport(result: Parameters<RunOutputPublisher["publishVerifierReport"]>[0]): Promise<void> {
-    if (this.#manifestPublished) {
-      this.afterManifest.publishVerifierReport += 1;
-    }
+  #resolveArtifactPath(kind: ReviewArtifactKind): string {
+    const pathMap: Record<ReviewArtifactKind, string> = {
+      "changeset-overview": this.outputTarget.changesetOverviewPath,
+      summary: this.outputTarget.summaryPath,
+      index: this.outputTarget.indexPath,
+      "verifier-report": this.outputTarget.verifierReportPath,
+      manifest: this.outputTarget.manifestPath
+    };
 
-    writeFileSync(this.outputTarget.verifierReportPath, result.content);
-    this.record("publishVerifierReport", this.outputTarget.verifierReportPath);
-  }
-
-  async publishRunManifest(manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]): Promise<void> {
-    writeFileSync(this.outputTarget.manifestPath, manifestResult.content);
-    this.#manifestPublished = true;
-    this.record("publishRunManifest", this.outputTarget.manifestPath);
-  }
-
-  async publishChangesetOverview(result: Parameters<RunOutputPublisher["publishChangesetOverview"]>[0]): Promise<void> {
-    writeFileSync(this.outputTarget.changesetOverviewPath, result.content);
-    this.record("publishChangesetOverview", this.outputTarget.changesetOverviewPath);
+    return pathMap[kind];
   }
 
   protected record(call: OutputCall, value: string): void {
@@ -595,36 +583,30 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
     this.#failures = failures;
   }
 
-  override async publishRunSummary(summaryResult: Parameters<RunOutputPublisher["publishRunSummary"]>[0]): Promise<void> {
-    this.record("publishRunSummary", this.outputTarget.summaryPath);
-    if (this.#failures.summary) {
-      throw new Error(this.#failures.summary);
+  override async publishArtifact(kind: ReviewArtifactKind, result: { content: string }): Promise<void> {
+    const callName: OutputCall = `publishArtifact:${kind}`;
+    const targetPath = this.#resolveOverridePath(kind);
+
+    this.record(callName, targetPath);
+
+    const failureKey = kind === "verifier-report" ? undefined : kind as "summary" | "index" | "manifest";
+    if (failureKey && this.#failures[failureKey]) {
+      throw new Error(this.#failures[failureKey]);
     }
 
-    writeFileSync(this.outputTarget.summaryPath, summaryResult.content);
+    writeFileSync(targetPath, result.content);
   }
 
-  override async publishReviewIndex(indexResult: Parameters<RunOutputPublisher["publishReviewIndex"]>[0]): Promise<void> {
-    this.record("publishReviewIndex", this.outputTarget.indexPath);
-    if (this.#failures.index) {
-      throw new Error(this.#failures.index);
-    }
+  #resolveOverridePath(kind: ReviewArtifactKind): string {
+    const pathMap: Record<ReviewArtifactKind, string> = {
+      "changeset-overview": this.outputTarget.changesetOverviewPath,
+      summary: this.outputTarget.summaryPath,
+      index: this.outputTarget.indexPath,
+      "verifier-report": this.outputTarget.verifierReportPath,
+      manifest: this.outputTarget.manifestPath
+    };
 
-    writeFileSync(this.outputTarget.indexPath, indexResult.content);
-  }
-
-  override async publishVerifierReport(result: Parameters<RunOutputPublisher["publishVerifierReport"]>[0]): Promise<void> {
-    this.record("publishVerifierReport", this.outputTarget.verifierReportPath);
-    writeFileSync(this.outputTarget.verifierReportPath, result.content);
-  }
-
-  override async publishRunManifest(manifestResult: Parameters<RunOutputPublisher["publishRunManifest"]>[0]): Promise<void> {
-    this.record("publishRunManifest", this.outputTarget.manifestPath);
-    if (this.#failures.manifest) {
-      throw new Error(this.#failures.manifest);
-    }
-
-    writeFileSync(this.outputTarget.manifestPath, manifestResult.content);
+    return pathMap[kind];
   }
 }
 

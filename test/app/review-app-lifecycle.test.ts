@@ -76,11 +76,7 @@ function createSignalTestApp(options: {
       },
       async publishFileReview() {},
       async publishSkippedFile() {},
-      async publishRunSummary() {},
-      async publishReviewIndex() {},
-      async publishVerifierReport() {},
-      async publishRunManifest() {},
-      async publishChangesetOverview() {}
+      async publishArtifact() {}
     }),
     changesetOverviewRunner: {
       async run() {

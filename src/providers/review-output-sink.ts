@@ -20,15 +20,18 @@ export interface ReviewOutputPlan {
   plannedNotes: ReviewOutputPlannedNote[];
 }
 
+export type ReviewArtifactKind =
+  | "changeset-overview"
+  | "summary"
+  | "index"
+  | "verifier-report"
+  | "manifest";
+
 export type ReviewOutputBoundaryOperation =
   | "initializeRun"
   | "publishFileReview"
   | "publishSkippedFile"
-  | "publishRunSummary"
-  | "publishReviewIndex"
-  | "publishVerifierReport"
-  | "publishRunManifest"
-  | "publishChangesetOverview";
+  | `publishArtifact:${ReviewArtifactKind}`;
 
 export class ReviewOutputBoundaryError extends Error {
   readonly operation: ReviewOutputBoundaryOperation;
@@ -65,20 +68,10 @@ export interface ContentResult {
   content: string;
 }
 
-export type RunSummaryResult = ContentResult;
-export type ReviewIndexResult = ContentResult;
-export type VerifierReportResult = ContentResult;
-export type RunManifestResult = ContentResult;
-export type ChangesetOverviewResult = ContentResult;
-
 export interface RunOutputPublisher {
   publishFileReview(fileResult: FileReviewResult): Promise<void>;
   publishSkippedFile(skipRecord: SkipRecord): Promise<void>;
-  publishRunSummary(summaryResult: RunSummaryResult): Promise<void>;
-  publishReviewIndex(indexResult: ReviewIndexResult): Promise<void>;
-  publishVerifierReport(result: VerifierReportResult): Promise<void>;
-  publishRunManifest(manifestResult: RunManifestResult): Promise<void>;
-  publishChangesetOverview(result: ChangesetOverviewResult): Promise<void>;
+  publishArtifact(kind: ReviewArtifactKind, result: ContentResult): Promise<void>;
 }
 
 export interface ReviewOutputSink {

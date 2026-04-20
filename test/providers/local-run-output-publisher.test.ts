@@ -119,14 +119,12 @@ test("run-scoped output publisher publishes run-level artifact content to the co
   try {
     const publisher = createPublisher(fixture.outputPlan);
     const cases: Array<{
-      publish(publisher: LocalRunOutputPublisher, content: string): Promise<void>;
+      kind: import("../../src/providers/review-output-sink.ts").ReviewArtifactKind;
       outputPath: string;
       content: string;
     }> = [
       {
-        async publish(targetPublisher, content) {
-          await targetPublisher.publishRunSummary({ content });
-        },
+        kind: "summary",
         outputPath: fixture.outputTarget.summaryPath,
         content: [
           "# Review Summary",
@@ -137,9 +135,7 @@ test("run-scoped output publisher publishes run-level artifact content to the co
         ].join("\n")
       },
       {
-        async publish(targetPublisher, content) {
-          await targetPublisher.publishReviewIndex({ content });
-        },
+        kind: "index",
         outputPath: fixture.outputTarget.indexPath,
         content: [
           "# Review Index",
@@ -151,31 +147,25 @@ test("run-scoped output publisher publishes run-level artifact content to the co
         ].join("\n")
       },
       {
-        async publish(targetPublisher, content) {
-          await targetPublisher.publishVerifierReport({ content });
-        },
+        kind: "verifier-report",
         outputPath: fixture.outputTarget.verifierReportPath,
         content:
           '{"filePath":"src/app.ts","stepId":"step5-validation-interrogation","findingId":"F1","taxonomy":"OK","outcome":"accepted","gate":"acceptance","reason":"passed all acceptance gates"}'
       },
       {
-        async publish(targetPublisher, content) {
-          await targetPublisher.publishRunManifest({ content });
-        },
+        kind: "manifest",
         outputPath: fixture.outputTarget.manifestPath,
         content: '{\n  "schemaVersion": 1\n}'
       },
       {
-        async publish(targetPublisher, content) {
-          await targetPublisher.publishChangesetOverview({ content });
-        },
+        kind: "changeset-overview",
         outputPath: fixture.outputTarget.changesetOverviewPath,
         content: "## Changeset Overview\n\n- Modified `src/app.ts`\n"
       }
     ];
 
-    for (const { publish, outputPath, content } of cases) {
-      await publish(publisher, content);
+    for (const { kind, outputPath, content } of cases) {
+      await publisher.publishArtifact(kind, { content });
       assert.equal(fixture.readFile(outputPath), content);
     }
   } finally {
@@ -191,8 +181,8 @@ test("run-scoped output publishers do not share output state across distinct Out
     const publisherA = createPublisher(fixtureA.outputPlan);
     const publisherB = createPublisher(fixtureB.outputPlan);
 
-    await publisherA.publishRunSummary({ content: "summary A\n" });
-    await publisherB.publishRunSummary({ content: "summary B\n" });
+    await publisherA.publishArtifact("summary", { content: "summary A\n" });
+    await publisherB.publishArtifact("summary", { content: "summary B\n" });
 
     assert.equal(fixtureA.readFile(fixtureA.outputTarget.summaryPath), "summary A\n");
     assert.equal(fixtureB.readFile(fixtureB.outputTarget.summaryPath), "summary B\n");

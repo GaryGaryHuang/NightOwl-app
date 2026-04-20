@@ -2,8 +2,10 @@ import { appendFile, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type {
+  ReviewArtifactKind,
   ReviewOutputPlan,
   ReviewOutputSink,
+  ReviewOutputTarget,
   RunOutputPublisher
 } from "../../src/providers/review-output-sink.ts";
 import { formatSkippedFileRecord } from "../../src/providers/review-output-sink.ts";
@@ -53,24 +55,15 @@ export function createWritableOutputSink(): ReviewOutputBootstrapAndPublisher {
       );
     },
 
-    async publishRunSummary(summaryResult) {
-      await writeFile(outputPlan.outputTarget.summaryPath, summaryResult.content);
-    },
-
-    async publishReviewIndex(indexResult) {
-      await writeFile(outputPlan.outputTarget.indexPath, indexResult.content);
-    },
-
-    async publishVerifierReport(result) {
-      await writeFile(outputPlan.outputTarget.verifierReportPath, result.content);
-    },
-
-    async publishRunManifest(manifestResult) {
-      await writeFile(outputPlan.outputTarget.manifestPath, manifestResult.content);
-    },
-
-    async publishChangesetOverview(result) {
-      await writeFile(outputPlan.outputTarget.changesetOverviewPath, result.content);
+    async publishArtifact(kind: ReviewArtifactKind, result) {
+      const pathMap: Record<ReviewArtifactKind, string> = {
+        "changeset-overview": outputPlan.outputTarget.changesetOverviewPath,
+        "summary": outputPlan.outputTarget.summaryPath,
+        "index": outputPlan.outputTarget.indexPath,
+        "verifier-report": outputPlan.outputTarget.verifierReportPath,
+        "manifest": outputPlan.outputTarget.manifestPath,
+      };
+      await writeFile(pathMap[kind], result.content);
     }
   };
 

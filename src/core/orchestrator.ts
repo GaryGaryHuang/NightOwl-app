@@ -247,7 +247,7 @@ export class ReviewOrchestrator {
     const outputPublisher = await this.#outputSink.initializeRun(outputPlan);
     abortGuard.throwIfAborted();
 
-    await outputPublisher.publishChangesetOverview({ content: runContext.changesetOverviewMarkdown });
+    await outputPublisher.publishArtifact("changeset-overview", { content: runContext.changesetOverviewMarkdown });
     abortGuard.throwIfAborted();
 
     this.#onOutputTargetReady?.(outputTarget);
@@ -322,7 +322,7 @@ export class ReviewOrchestrator {
     const finalizerFailures: FinalizerFailure[] = [];
 
     await this.#tryPublishFinalizer("summary", finalizerFailures, () =>
-      outputPublisher.publishRunSummary({
+      outputPublisher.publishArtifact("summary", {
         content: this.#runSummaryFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,
@@ -335,7 +335,7 @@ export class ReviewOrchestrator {
     );
 
     await this.#tryPublishFinalizer("index", finalizerFailures, () =>
-      outputPublisher.publishReviewIndex({
+      outputPublisher.publishArtifact("index", {
         content: this.#reviewIndexFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,
@@ -349,7 +349,7 @@ export class ReviewOrchestrator {
     );
 
     await this.#tryPublishFinalizer("verifier-report", finalizerFailures, () =>
-      outputPublisher.publishVerifierReport({
+      outputPublisher.publishArtifact("verifier-report", {
         content: this.#verifierReportFinalizer.render({
           plannedNotes: plannedNoteFiles,
           successfulFiles,
@@ -359,7 +359,7 @@ export class ReviewOrchestrator {
     );
 
     await this.#tryPublishFinalizer("manifest", finalizerFailures, () =>
-      outputPublisher.publishRunManifest({
+      outputPublisher.publishArtifact("manifest", {
         content: this.#runManifestFinalizer.render({
           repoRoot,
           baseRef: request.baseRef,

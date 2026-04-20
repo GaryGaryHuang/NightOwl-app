@@ -72,11 +72,7 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
         },
         async publishFileReview() {},
         async publishSkippedFile() {},
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       })
     });
 
@@ -192,11 +188,7 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
         async publishSkippedFile(skipRecord) {
           skippedRecords.push(skipRecord);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       })
     });
 
@@ -443,11 +435,7 @@ async function assertPerFileMcpStartupFailureSkipsOneFile(input: {
         async publishSkippedFile(skipRecord) {
           skippedRecords.push(skipRecord);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       })
     });
 

@@ -98,20 +98,8 @@ function createTrackingOutputSink(): TrackingOutputSink {
     async publishSkippedFile(_record) {
       calls.push("publishSkippedFile");
     },
-    async publishRunSummary(_result) {
-      calls.push("publishRunSummary");
-    },
-    async publishReviewIndex(_result) {
-      calls.push("publishReviewIndex");
-    },
-    async publishVerifierReport(_result) {
-      calls.push("publishVerifierReport");
-    },
-    async publishRunManifest(_result) {
-      calls.push("publishRunManifest");
-    },
-    async publishChangesetOverview(_result) {
-      calls.push("publishChangesetOverview");
+    async publishArtifact(kind, _result) {
+      calls.push(`publishArtifact:${kind}`);
     }
   };
 }
@@ -192,12 +180,13 @@ function recordStep1Calls(step1Calls: string[]): StepRunnerDouble {
 }
 
 function assertNoRunLevelArtifactsPublished(sink: TrackingOutputSink): void {
-  for (const call of [
-    "publishRunSummary",
-    "publishReviewIndex",
-    "publishVerifierReport",
-    "publishRunManifest"
+  for (const kind of [
+    "summary",
+    "index",
+    "verifier-report",
+    "manifest"
   ]) {
+    const call = `publishArtifact:${kind}`;
     assert.equal(
       sink.calls.includes(call),
       false,

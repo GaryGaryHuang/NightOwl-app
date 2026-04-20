@@ -64,11 +64,7 @@ test("ReviewOrchestrator aborts when Step 0 fails before initializing local outp
         async publishSkippedFile() {
           calls.push("publishSkippedFile");
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       stepRunner: {
         async run() {
@@ -124,13 +120,11 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
           calls.push("publishFileReview");
         },
         async publishSkippedFile() {},
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {
-          calls.push("publishChangesetOverview");
-          throw new Error("changeset overview write failed");
+        async publishArtifact(kind) {
+          if (kind === "changeset-overview") {
+            calls.push("publishChangesetOverview");
+            throw new Error("changeset overview write failed");
+          }
         }
       }),
       stepRunner: {
@@ -195,11 +189,7 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -262,11 +252,7 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -339,11 +325,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: {

@@ -114,11 +114,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -213,11 +209,7 @@ test("ReviewOrchestrator waits for successful snapshot assessment before writing
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -327,11 +319,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -417,11 +405,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
             throw new Error("skipped log write failed");
           }
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -511,11 +495,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       successfulSnapshotOutputHealthAssessor,
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
@@ -577,11 +557,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       stepRunner: {
         async run({ context, step }: RunStepInput): Promise<StepResult> {
@@ -665,11 +641,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
         async publishSkippedFile(skipRecord) {
           outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       stepRunner: createStepFailureRunner({
         stepEvents,
@@ -750,11 +722,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
             throw new Error("skipped log write failed");
           }
         },
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       stepRunner: createStepFailureRunner({
         stepEvents,

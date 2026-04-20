@@ -5,15 +5,12 @@ import {
   formatSkippedFileRecord,
   ReviewOutputBoundaryError,
   type ReviewOutputBoundaryOperation,
-  type ChangesetOverviewResult,
+  type ContentResult,
   type FileReviewResult,
+  type ReviewArtifactKind,
   type ReviewOutputPlan,
-  type ReviewIndexResult,
-  type RunManifestResult,
   type RunOutputPublisher,
-  type RunSummaryResult,
   type SkipRecord,
-  type VerifierReportResult,
   type ReviewOutputTarget
 } from "./review-output-sink.ts";
 import { wrapBoundaryError } from "./boundary-error-helper.ts";
@@ -65,59 +62,25 @@ export class LocalRunOutputPublisher implements RunOutputPublisher {
     );
   }
 
-  async publishRunSummary(summaryResult: RunSummaryResult): Promise<void> {
+  async publishArtifact(kind: ReviewArtifactKind, result: ContentResult): Promise<void> {
+    const outputPath = this.#resolveArtifactPath(kind);
+
     return wrapBoundaryError(
-      () => writeFile(this.#outputTarget.summaryPath, summaryResult.content),
-      (cause) => toOutputBoundaryError(
-        "publishRunSummary",
-        cause,
-        this.#outputTarget.summaryPath
-      )
+      () => writeFile(outputPath, result.content),
+      (cause) => toOutputBoundaryError(`publishArtifact:${kind}`, cause, outputPath)
     );
   }
 
-  async publishReviewIndex(indexResult: ReviewIndexResult): Promise<void> {
-    return wrapBoundaryError(
-      () => writeFile(this.#outputTarget.indexPath, indexResult.content),
-      (cause) => toOutputBoundaryError(
-        "publishReviewIndex",
-        cause,
-        this.#outputTarget.indexPath
-      )
-    );
-  }
+  #resolveArtifactPath(kind: ReviewArtifactKind): string {
+    const pathMap: Record<ReviewArtifactKind, string> = {
+      "changeset-overview": this.#outputTarget.changesetOverviewPath,
+      "summary": this.#outputTarget.summaryPath,
+      "index": this.#outputTarget.indexPath,
+      "verifier-report": this.#outputTarget.verifierReportPath,
+      "manifest": this.#outputTarget.manifestPath,
+    };
 
-  async publishVerifierReport(result: VerifierReportResult): Promise<void> {
-    return wrapBoundaryError(
-      () => writeFile(this.#outputTarget.verifierReportPath, result.content),
-      (cause) => toOutputBoundaryError(
-        "publishVerifierReport",
-        cause,
-        this.#outputTarget.verifierReportPath
-      )
-    );
-  }
-
-  async publishRunManifest(manifestResult: RunManifestResult): Promise<void> {
-    return wrapBoundaryError(
-      () => writeFile(this.#outputTarget.manifestPath, manifestResult.content),
-      (cause) => toOutputBoundaryError(
-        "publishRunManifest",
-        cause,
-        this.#outputTarget.manifestPath
-      )
-    );
-  }
-
-  async publishChangesetOverview(result: ChangesetOverviewResult): Promise<void> {
-    return wrapBoundaryError(
-      () => writeFile(this.#outputTarget.changesetOverviewPath, result.content),
-      (cause) => toOutputBoundaryError(
-        "publishChangesetOverview",
-        cause,
-        this.#outputTarget.changesetOverviewPath
-      )
-    );
+    return pathMap[kind];
   }
 
   #resolveNoteFilePath(filePath: string): string {

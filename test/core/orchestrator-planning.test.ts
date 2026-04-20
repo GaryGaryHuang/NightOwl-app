@@ -35,11 +35,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
           callOrder.push("publishFileReview");
         },
         async publishSkippedFile() {},
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {}
+        async publishArtifact() {}
       }),
       stepRunner: {
         async run(input) {
@@ -140,12 +136,10 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
           callOrder.push("publishFileReview");
         },
         async publishSkippedFile() {},
-        async publishRunSummary() {},
-        async publishReviewIndex() {},
-        async publishVerifierReport() {},
-        async publishRunManifest() {},
-        async publishChangesetOverview() {
-          callOrder.push("publishChangesetOverview");
+        async publishArtifact(kind) {
+          if (kind === "changeset-overview") {
+            callOrder.push("publishChangesetOverview");
+          }
         }
       }),
       stepRunner: {
