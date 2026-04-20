@@ -731,7 +731,8 @@ function buildDefaultPerFileSteps(
       promptSerializer: input.promptSerializer
     }),
     new Step4StrategyWhatIfScenariosStep({
-      promptSerializer: input.promptSerializer
+      promptSerializer: input.promptSerializer,
+      changeMap: input.runContext.changesetOverview
     }),
     new Step5ValidationInterrogationStep({
       promptSerializer: input.promptSerializer
