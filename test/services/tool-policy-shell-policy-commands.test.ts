@@ -52,7 +52,8 @@ const READONLY_REVIEW_COMMAND_GROUPS = [
       "rg TODO src/",
       "grep 'a|b' src/app.ts",
       "sed -n '1,10p' src/app.ts",
-      "wc -l src/app.ts"
+      "wc -l src/app.ts",
+      "tree src/"
     ]
   },
   {
@@ -67,7 +68,8 @@ const READONLY_REVIEW_COMMAND_GROUPS = [
       "basename /workspace/repo/src/app.ts",
       "dirname /workspace/repo/src/app.ts",
       "diff src/old.ts src/new.ts",
-      "git log --oneline | awk '{print $1}'"
+      "git log --oneline | awk '{print $1}'",
+      "wc src/app.ts"
     ]
   }
 ] as const;
@@ -77,13 +79,6 @@ for (const group of READONLY_REVIEW_COMMAND_GROUPS) {
     assertAllowedCommands(group.commands);
   });
 }
-
-test("tool policy shell policy allows directory tree and file counts as convenience inspection commands", () => {
-  assertAllowedCommands([
-    "tree src/",
-    "wc src/app.ts"
-  ]);
-});
 
 test("tool policy shell policy allows printf and echo for output formatting", () => {
   assertAllowedCommands([

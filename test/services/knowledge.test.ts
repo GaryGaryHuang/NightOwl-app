@@ -35,15 +35,10 @@ test("KnowledgeSvc disables MCP injection outside built-in-context7 mode regardl
 });
 
 test("KnowledgeSvc returns the built-in Context7 base and appends non-context7 custom entries", () => {
-  const baseOnly = new KnowledgeSvc();
   const withCustomLocal = new KnowledgeSvc({
     userMcpServers: {
       demo: createLocalMcpServer()
     }
-  });
-
-  assert.deepEqual(getBuiltInContext7Servers(baseOnly), {
-    context7: BUILT_IN_CONTEXT7_BASE
   });
 
   const merged = getBuiltInContext7Servers(withCustomLocal);

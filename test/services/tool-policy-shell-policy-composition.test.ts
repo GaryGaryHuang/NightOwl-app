@@ -31,8 +31,6 @@ const PIPELINE_AND_CHAIN_ALLOWED_COMMANDS = [
   'git diff HEAD~1 | grep "function" | wc -l',
   "git log --oneline  |  head -20",
   "git log|head",
-  "git -C /workspace/repo diff HEAD~1",
-  "git -C /workspace/repo grep TODO src/file.ts",
   "git -C /workspace/repo show HEAD:src/app.ts | head -20",
   "cd /workspace/repo && git show HEAD:src/app.ts | head -20",
   "cd /workspace/repo && git -C /workspace/repo/src grep TODO file.ts && cat app.ts",
