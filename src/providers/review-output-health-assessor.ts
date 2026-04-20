@@ -1,16 +1,16 @@
 import type { ReviewOutputBoundaryOperation, ReviewOutputTarget } from "./review-output-sink.ts";
 
-export type SuccessfulSnapshotFaultScope =
+export type OutputWriteFaultScope =
   | "single-file-output-fault"
   | "shared-output-target-fault";
 
-export type SuccessfulSnapshotFailureEvidenceKind =
+export type OutputWriteFailureEvidenceKind =
   | "review-output-boundary-error"
   | "error"
   | "non-error";
 
-export interface SuccessfulSnapshotFailureEvidence {
-  kind: SuccessfulSnapshotFailureEvidenceKind;
+export interface OutputWriteFailureEvidence {
+  kind: OutputWriteFailureEvidenceKind;
   message: string;
   operation?: ReviewOutputBoundaryOperation;
   outputPath?: string;
@@ -18,22 +18,22 @@ export interface SuccessfulSnapshotFailureEvidence {
   causePath?: string;
 }
 
-export interface SuccessfulSnapshotFailureAssessmentRequest {
+export interface OutputWriteFailureAssessmentRequest {
   outputTarget: ReviewOutputTarget;
   noteFilePath: string;
   error: unknown;
 }
 
-export interface SuccessfulSnapshotFailureInput {
+export interface OutputWriteFailureInput {
   outputTarget: ReviewOutputTarget;
   noteFilePath: string;
-  failureEvidence: SuccessfulSnapshotFailureEvidence;
+  failureEvidence: OutputWriteFailureEvidence;
 }
 
-export interface SuccessfulSnapshotFailureAssessment {
-  faultScope: SuccessfulSnapshotFaultScope;
+export interface OutputWriteFailureAssessment {
+  faultScope: OutputWriteFaultScope;
 }
 
-export interface SuccessfulSnapshotOutputHealthAssessor {
-  assess(input: SuccessfulSnapshotFailureInput): Promise<SuccessfulSnapshotFailureAssessment>;
+export interface OutputWriteHealthAssessor {
+  assess(input: OutputWriteFailureInput): Promise<OutputWriteFailureAssessment>;
 }

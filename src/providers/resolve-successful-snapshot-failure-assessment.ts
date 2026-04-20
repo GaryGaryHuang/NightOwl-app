@@ -1,23 +1,23 @@
 import path from "node:path";
 
 import type {
-  SuccessfulSnapshotFailureAssessment,
-  SuccessfulSnapshotFailureAssessmentRequest,
-  SuccessfulSnapshotFailureEvidence,
-  SuccessfulSnapshotFailureInput,
-  SuccessfulSnapshotOutputHealthAssessor
+  OutputWriteFailureAssessment,
+  OutputWriteFailureAssessmentRequest,
+  OutputWriteFailureEvidence,
+  OutputWriteFailureInput,
+  OutputWriteHealthAssessor
 } from "./review-output-health-assessor.ts";
 import { ReviewOutputBoundaryError } from "./review-output-sink.ts";
 
-export async function resolveSuccessfulSnapshotFailureAssessment(
-  assessor: SuccessfulSnapshotOutputHealthAssessor,
-  input: SuccessfulSnapshotFailureAssessmentRequest
-): Promise<SuccessfulSnapshotFailureAssessment> {
+export async function resolveOutputWriteFailureAssessment(
+  assessor: OutputWriteHealthAssessor,
+  input: OutputWriteFailureAssessmentRequest
+): Promise<OutputWriteFailureAssessment> {
   try {
-    const assessorInput: SuccessfulSnapshotFailureInput = {
+    const assessorInput: OutputWriteFailureInput = {
       outputTarget: input.outputTarget,
       noteFilePath: input.noteFilePath,
-      failureEvidence: createSuccessfulSnapshotFailureEvidence(input.error)
+      failureEvidence: createOutputWriteFailureEvidence(input.error)
     };
     // Default to the conservative shared-target classification unless the sink can prove a single-file fault.
     return (await assessor.assess(assessorInput)) ?? { faultScope: "shared-output-target-fault" };
@@ -26,9 +26,9 @@ export async function resolveSuccessfulSnapshotFailureAssessment(
   }
 }
 
-export function createSuccessfulSnapshotFailureEvidence(
+export function createOutputWriteFailureEvidence(
   error: unknown
-): SuccessfulSnapshotFailureEvidence {
+): OutputWriteFailureEvidence {
   const boundaryError =
     error instanceof ReviewOutputBoundaryError ? error : undefined;
   const underlyingError = boundaryError?.cause ?? error;

@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  createSuccessfulSnapshotFailureEvidence,
-  resolveSuccessfulSnapshotFailureAssessment,
+  createOutputWriteFailureEvidence,
+  resolveOutputWriteFailureAssessment,
 } from "../../src/providers/resolve-successful-snapshot-failure-assessment.ts";
 import {
-  type SuccessfulSnapshotFailureAssessmentRequest,
-  type SuccessfulSnapshotOutputHealthAssessor
+  type OutputWriteFailureAssessmentRequest,
+  type OutputWriteHealthAssessor
 } from "../../src/providers/review-output-health-assessor.ts";
 import { ReviewOutputBoundaryError } from "../../src/providers/review-output-sink.ts";
 
-function createInput(): SuccessfulSnapshotFailureAssessmentRequest {
+function createInput(): OutputWriteFailureAssessmentRequest {
   return {
     outputTarget: {
       basePath: "/tmp/review",
@@ -30,20 +30,20 @@ function createInput(): SuccessfulSnapshotFailureAssessmentRequest {
 }
 
 test("resolveSuccessfulSnapshotFailureAssessment returns the assessor result when assess resolves", async () => {
-  const assessor: SuccessfulSnapshotOutputHealthAssessor = {
+  const assessor: OutputWriteHealthAssessor = {
     async assess() {
       return { faultScope: "single-file-output-fault" as const };
     }
   };
 
-  const result = await resolveSuccessfulSnapshotFailureAssessment(assessor, createInput());
+  const result = await resolveOutputWriteFailureAssessment(assessor, createInput());
 
   assert.deepEqual(result, { faultScope: "single-file-output-fault" });
 });
 
 test("createSuccessfulSnapshotFailureEvidence normalizes boundary errors into structured evidence", () => {
   assert.deepEqual(
-    createSuccessfulSnapshotFailureEvidence(
+    createOutputWriteFailureEvidence(
       new ReviewOutputBoundaryError("publishFileReview", "note write failed", {
         cause: Object.assign(new Error("ENAMETOOLONG write failure"), {
           code: "ENAMETOOLONG",
@@ -64,15 +64,15 @@ test("createSuccessfulSnapshotFailureEvidence normalizes boundary errors into st
 });
 
 test("resolveSuccessfulSnapshotFailureAssessment passes structured failure evidence to the assessor", async () => {
-  let observedInput: Parameters<SuccessfulSnapshotOutputHealthAssessor["assess"]>[0] | undefined;
-  const assessor: SuccessfulSnapshotOutputHealthAssessor = {
+  let observedInput: Parameters<OutputWriteHealthAssessor["assess"]>[0] | undefined;
+  const assessor: OutputWriteHealthAssessor = {
     async assess(input) {
       observedInput = input;
       return { faultScope: "single-file-output-fault" as const };
     }
   };
 
-  const result = await resolveSuccessfulSnapshotFailureAssessment(
+  const result = await resolveOutputWriteFailureAssessment(
     assessor,
     {
       ...createInput(),
@@ -98,31 +98,31 @@ test("resolveSuccessfulSnapshotFailureAssessment passes structured failure evide
 });
 
 test("resolveSuccessfulSnapshotFailureAssessment passes through shared-output-target-fault from the assessor", async () => {
-  const assessor: SuccessfulSnapshotOutputHealthAssessor = {
+  const assessor: OutputWriteHealthAssessor = {
     async assess() {
       return { faultScope: "shared-output-target-fault" as const };
     }
   };
 
-  const result = await resolveSuccessfulSnapshotFailureAssessment(assessor, createInput());
+  const result = await resolveOutputWriteFailureAssessment(assessor, createInput());
 
   assert.deepEqual(result, { faultScope: "shared-output-target-fault" });
 });
 
 test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-target-fault when assess rejects", async () => {
-  const assessor: SuccessfulSnapshotOutputHealthAssessor = {
+  const assessor: OutputWriteHealthAssessor = {
     async assess() {
       throw new Error("assessment failed");
     }
   };
 
-  const result = await resolveSuccessfulSnapshotFailureAssessment(assessor, createInput());
+  const result = await resolveOutputWriteFailureAssessment(assessor, createInput());
 
   assert.deepEqual(result, { faultScope: "shared-output-target-fault" });
 });
 
 test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-target-fault when failure evidence normalization throws", async () => {
-  const assessor: SuccessfulSnapshotOutputHealthAssessor = {
+  const assessor: OutputWriteHealthAssessor = {
     async assess() {
       return { faultScope: "single-file-output-fault" as const };
     }
@@ -133,7 +133,7 @@ test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-tar
     }
   };
 
-  const result = await resolveSuccessfulSnapshotFailureAssessment(assessor, {
+  const result = await resolveOutputWriteFailureAssessment(assessor, {
     ...createInput(),
     error
   });
@@ -142,13 +142,13 @@ test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-tar
 });
 
 test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-target-fault when assess returns nullish", async () => {
-  const assessor: SuccessfulSnapshotOutputHealthAssessor = {
+  const assessor: OutputWriteHealthAssessor = {
     async assess() {
       return undefined as never;
     }
   };
 
-  const result = await resolveSuccessfulSnapshotFailureAssessment(assessor, createInput());
+  const result = await resolveOutputWriteFailureAssessment(assessor, createInput());
 
   assert.deepEqual(result, { faultScope: "shared-output-target-fault" });
 });

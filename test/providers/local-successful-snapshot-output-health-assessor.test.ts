@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
 
-import type { SuccessfulSnapshotFailureEvidence } from "../../src/providers/review-output-health-assessor.ts";
-import { LocalSuccessfulSnapshotOutputHealthAssessor } from "../../src/providers/local-successful-snapshot-output-health-assessor.ts";
+import type { OutputWriteFailureEvidence } from "../../src/providers/review-output-health-assessor.ts";
+import { LocalOutputWriteHealthAssessor } from "../../src/providers/local-successful-snapshot-output-health-assessor.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
 type WorkspaceFixture = ReturnType<typeof createWorkspaceProviderFixture>;
@@ -12,22 +12,22 @@ interface SnapshotHealthAssessorFixture {
   fixture: WorkspaceFixture;
   noteFilePath: string;
   assess(
-    failureEvidence: SuccessfulSnapshotFailureEvidence
-  ): ReturnType<LocalSuccessfulSnapshotOutputHealthAssessor["assess"]>;
+    failureEvidence: OutputWriteFailureEvidence
+  ): ReturnType<LocalOutputWriteHealthAssessor["assess"]>;
   cleanup(): void;
 }
 
 async function createSnapshotHealthAssessorFixture(): Promise<SnapshotHealthAssessorFixture> {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
-  const assessor = new LocalSuccessfulSnapshotOutputHealthAssessor();
+  const assessor = new LocalOutputWriteHealthAssessor();
 
   await fixture.provider.initializeRun(fixture.outputPlan);
 
   return {
     fixture,
     noteFilePath,
-    assess(failureEvidence: SuccessfulSnapshotFailureEvidence) {
+    assess(failureEvidence: OutputWriteFailureEvidence) {
       return assessor.assess({
         outputTarget: fixture.outputTarget,
         noteFilePath,
@@ -85,7 +85,7 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output ta
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
-    const inconclusiveErrors: SuccessfulSnapshotFailureEvidence[] = [
+    const inconclusiveErrors: OutputWriteFailureEvidence[] = [
       {
         kind: "error",
         message: "note write failed"

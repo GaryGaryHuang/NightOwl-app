@@ -80,14 +80,14 @@ test("LocalWorkspaceProvider re-initializing a run truncates skipped.md and tool
   }
 });
 
-test("LocalWorkspaceProvider yields a run-scoped publisher whose publishRunManifest writes to the bootstrapped manifestPath", async () => {
+test("LocalWorkspaceProvider yields a run-scoped publisher whose publishArtifact writes manifest to the bootstrapped manifestPath", async () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
     const publisher = await fixture.provider.initializeRun(fixture.outputPlan);
     assert.equal(existsSync(fixture.outputTarget.manifestPath), false);
 
-    await publisher.publishRunManifest({ content: '{\n  "schemaVersion": 1\n}' });
+    await publisher.publishArtifact("manifest", { content: '{\n  "schemaVersion": 1\n}' });
 
     assert.equal(
       fixture.outputTarget.manifestPath.startsWith(fixture.outputTarget.basePath),

@@ -51,10 +51,10 @@ import {
   type RunOutputPublisher
 } from "../providers/review-output-sink.ts";
 import {
-  resolveSuccessfulSnapshotFailureAssessment,
+  resolveOutputWriteFailureAssessment,
 } from "../providers/resolve-successful-snapshot-failure-assessment.ts";
 import {
-  type SuccessfulSnapshotOutputHealthAssessor
+  type OutputWriteHealthAssessor
 } from "../providers/review-output-health-assessor.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
@@ -100,7 +100,7 @@ export interface ReviewOrchestratorOptions {
   verifierReportFinalizer?: Pick<VerifierReportFinalizer, "render">;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
-  successfulSnapshotOutputHealthAssessor?: SuccessfulSnapshotOutputHealthAssessor;
+  successfulSnapshotOutputHealthAssessor?: OutputWriteHealthAssessor;
   stepRunner: Pick<StepRunner, "run">;
   workingDirectory: string;
   timestampProvider?: () => string;
@@ -114,7 +114,7 @@ export class ReviewOrchestrator {
   readonly #reviewFileFilter: ReviewFileFilter;
   readonly #sourceProvider: ReviewSourceProvider;
   readonly #outputSink: ReviewOutputSink;
-  readonly #successfulSnapshotOutputHealthAssessor: SuccessfulSnapshotOutputHealthAssessor;
+  readonly #successfulSnapshotOutputHealthAssessor: OutputWriteHealthAssessor;
   readonly #stepRunner: Pick<StepRunner, "run">;
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
@@ -574,7 +574,7 @@ export class ReviewOrchestrator {
         });
       } catch (outputError) {
         // A snapshot write failure is classified before deciding whether the run should abort or the file should skip.
-        const assessment = await resolveSuccessfulSnapshotFailureAssessment(
+        const assessment = await resolveOutputWriteFailureAssessment(
           this.#successfulSnapshotOutputHealthAssessor,
           {
             outputTarget: toReviewOutputTarget(input.outputTarget),

@@ -2,20 +2,20 @@ import { access, stat, constants } from "node:fs/promises";
 import path from "node:path";
 
 import type {
-  SuccessfulSnapshotFailureAssessment,
-  SuccessfulSnapshotFailureInput,
-  SuccessfulSnapshotOutputHealthAssessor
+  OutputWriteFailureAssessment,
+  OutputWriteFailureInput,
+  OutputWriteHealthAssessor
 } from "./review-output-health-assessor.ts";
 
 /**
  * Local filesystem heuristic for successful snapshot write failures.
  */
-export class LocalSuccessfulSnapshotOutputHealthAssessor
-  implements SuccessfulSnapshotOutputHealthAssessor
+export class LocalOutputWriteHealthAssessor
+  implements OutputWriteHealthAssessor
 {
   async assess(
-    input: SuccessfulSnapshotFailureInput
-  ): Promise<SuccessfulSnapshotFailureAssessment> {
+    input: OutputWriteFailureInput
+  ): Promise<OutputWriteFailureAssessment> {
     const code = input.failureEvidence.causeCode;
 
     if (!code) {
