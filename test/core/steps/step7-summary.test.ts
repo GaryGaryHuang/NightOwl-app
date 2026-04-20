@@ -36,14 +36,25 @@ function createFinding(
     type,
     title: `${type} finding`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    context: "ctx",
+    expectedBehavior: "expected",
+    actualBehavior: "actual",
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
     modelConfidence: confidence,
     findingId,
-    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed" }],
-    reachability: { credible: true, description: "reachable" },
+    supportingEvidence: [
+      { evidenceRef: "E1", supports: "expectedBehavior" },
+      { evidenceRef: "E2", supports: "actualBehavior" },
+      { evidenceRef: "E3", supports: "reachability" },
+      { evidenceRef: "E4", supports: "impact" }
+    ],
+    reachability: {
+      credible: true,
+      entryPoint: "main entry",
+      guardsChecked: ["guard"],
+      description: "reachable"
+    },
     uncertaintyStatus: "supported" as const
   };
 }
@@ -277,7 +288,7 @@ test("Step7SummaryStep.prepare() includes <review_state> in user message", () =>
   const context = createContext([]);
   const plan = step.prepare(context);
 
-  assert.match(plan.prompt.userMessage, /<review_state>/);
+  assert.match(plan.prompt.userMessage, /<review_state\b/);
   assert.match(plan.prompt.userMessage, /<\/review_state>/);
 });
 

@@ -1,5 +1,41 @@
-import type { FileReviewContext, Finding } from "../../src/core/file-review-context.ts";
+import type {
+  EvidenceRef,
+  FileReviewContext,
+  Finding,
+  Reachability
+} from "../../src/core/file-review-context.ts";
 import type { StepResult } from "../../src/core/step-runner.ts";
+
+export function canonicalSupportingEvidence(): EvidenceRef[] {
+  return [
+    { evidenceRef: "E1", supports: "expectedBehavior" },
+    { evidenceRef: "E2", supports: "actualBehavior" },
+    { evidenceRef: "E3", supports: "reachability" },
+    { evidenceRef: "E4", supports: "impact" }
+  ];
+}
+
+export function canonicalReachability(credible = true): Reachability {
+  return {
+    credible,
+    entryPoint: "handleRequest",
+    guardsChecked: ["public route invokes handler", "no prior guard prevents the path"]
+  };
+}
+
+export function acceptedVerifierVerdict(): NonNullable<Finding["verifierVerdict"]> {
+  return {
+    status: "accepted",
+    checks: {
+      anchor: "pass",
+      evidence: "pass",
+      reachability: "pass",
+      impact: "pass",
+      scope: "pass",
+      duplicate: "pass"
+    }
+  };
+}
 
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -113,19 +149,21 @@ export function extractDiffPath(prompt: string): string {
 
 export function buildStandardStep5JsonResponse(): string {
   return JSON.stringify({
+    schemaVersion: 2,
     findings: [
       {
         type: "must",
         title: "問題標題",
         traceability: lineRangeTraceability(1, 1),
-        context: "具體情境",
+        expectedBehavior: "應維持既有 fallback",
+        actualBehavior: "新分支略過 fallback",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
         modelConfidence: 88,
         findingId: "F1",
-        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-        reachability: { credible: true, description: "direct code path" },
+        supportingEvidence: canonicalSupportingEvidence(),
+        reachability: canonicalReachability(),
         uncertaintyStatus: "supported"
       }
     ]
@@ -139,15 +177,17 @@ export function buildStandardStep6JsonResponse(): string {
         type: "must",
         title: "問題標題",
         traceability: lineRangeTraceability(1, 1),
-        context: "具體情境",
+        expectedBehavior: "應維持既有 fallback",
+        actualBehavior: "simulation reaches branch without fallback",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
         modelConfidence: 91,
         findingId: "F1",
-        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-        reachability: { credible: true, description: "direct code path" },
-        uncertaintyStatus: "supported"
+        supportingEvidence: canonicalSupportingEvidence(),
+        reachability: canonicalReachability(),
+        uncertaintyStatus: "supported",
+        verifierVerdict: acceptedVerifierVerdict()
       }
     ],
     dispositions: [
@@ -178,19 +218,21 @@ export function buildStandardStep7SummaryResponse(filePath: string): string {
 
 export function buildSimulationStep5JsonResponse(): string {
   return JSON.stringify({
+    schemaVersion: 2,
     findings: [
       {
         type: "must",
         title: "初版 findings",
         traceability: lineRangeTraceability(1, 1),
-        context: "具體情境",
+        expectedBehavior: "應維持既有 fallback",
+        actualBehavior: "新分支略過 fallback",
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
         modelConfidence: 88,
         findingId: "F1",
-        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-        reachability: { credible: true, description: "direct code path" },
+        supportingEvidence: canonicalSupportingEvidence(),
+        reachability: canonicalReachability(),
         uncertaintyStatus: "supported"
       }
     ]
@@ -204,15 +246,17 @@ export function buildSimulationStep6JsonResponse(): string {
         type: "must",
         title: "最終 findings",
         traceability: lineRangeTraceability(1, 1),
-        context: "模擬後確認的具體情境",
+        expectedBehavior: "應維持既有 fallback",
+        actualBehavior: "simulation confirms fallback is skipped",
         deviation: "經 simulation 後確認最終落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 final guard",
         modelConfidence: 91,
         findingId: "F1",
-        supportingEvidence: [{ source: "diff:src/app.ts:1", content: "simulation confirmed" }],
-        reachability: { credible: true, description: "direct code path" },
-        uncertaintyStatus: "supported"
+        supportingEvidence: canonicalSupportingEvidence(),
+        reachability: canonicalReachability(),
+        uncertaintyStatus: "supported",
+        verifierVerdict: acceptedVerifierVerdict()
       }
     ],
     dispositions: [
@@ -280,14 +324,15 @@ export function createFinding(type: "must" | "nice", title: string, confidence =
     type,
     title,
     traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-    context: "具體情境",
+    expectedBehavior: "應維持既有 fallback",
+    actualBehavior: "新分支略過 fallback",
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
     modelConfidence: confidence,
     findingId: "F1",
-    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-    reachability: { credible: true, description: "direct code path" },
+    supportingEvidence: canonicalSupportingEvidence(),
+    reachability: canonicalReachability(),
     uncertaintyStatus: "supported" as const
   };
 }

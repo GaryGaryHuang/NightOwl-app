@@ -28,42 +28,67 @@ function createFinding(findingId: string): Finding {
     type: "must",
     title: `finding ${findingId}`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    context: "ctx",
+    expectedBehavior: "expected",
+    actualBehavior: "actual",
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
     modelConfidence: 42,
     findingId,
-    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed" }],
-    reachability: { credible: true, description: "reachable" },
+    supportingEvidence: [
+      { evidenceRef: "E1", supports: "expectedBehavior" },
+      { evidenceRef: "E2", supports: "actualBehavior" },
+      { evidenceRef: "E3", supports: "reachability" },
+      { evidenceRef: "E4", supports: "impact" }
+    ],
+    reachability: {
+      credible: true,
+      entryPoint: "main entry",
+      guardsChecked: ["guard"],
+      description: "reachable"
+    },
     uncertaintyStatus: "supported"
   };
 }
 
 const serializer = new ReviewStatePromptSerializer();
 
+function parseReviewStateFromPrompt(prompt: string): unknown {
+  const match = prompt.match(
+    /<review_state format="json">\n([\s\S]*?)\n<\/review_state>/u
+  );
+  assert.ok(match, "review_state JSON block should be present");
+  return JSON.parse(match[1]);
+}
+
 test("Step5ValidationInterrogationStep prompt contract requests modelConfidence", () => {
   const step = new Step5ValidationInterrogationStep({ promptSerializer: serializer });
   const plan = step.prepare(createContext());
 
   assert.match(plan.prompt.userMessage, /modelConfidence/);
+  assert.match(plan.prompt.userMessage, /expectedBehavior/);
+  assert.match(plan.prompt.userMessage, /actualBehavior/);
+  assert.match(plan.prompt.userMessage, /guardsChecked/);
   assert.equal(plan.prompt.userMessage.includes('"confidence"'), false);
 });
 
-test("Step6CognitiveSimulationStep includes full candidate findings JSON in candidate_findings block", () => {
+test("Step6CognitiveSimulationStep includes full candidate findings JSON in review_state snapshot", () => {
   const candidate = createFinding("F1");
   const step = new Step6CognitiveSimulationStep({ promptSerializer: serializer });
   const plan = step.prepare(createContext([candidate]));
 
-  const match = plan.prompt.userMessage.match(
-    /<candidate_findings format="json">\n([\s\S]*?)\n<\/candidate_findings>/
-  );
+  const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
+    candidateFindings: Finding[];
+    verifiedFindings: Finding[];
+  };
 
-  assert.ok(match, "candidate_findings block should be present");
-  const parsed = JSON.parse(match[1]);
-  assert.deepEqual(parsed, [candidate]);
+  assert.deepEqual(snapshot.candidateFindings, [candidate]);
+  assert.deepEqual(snapshot.verifiedFindings, []);
+  assert.equal(plan.prompt.userMessage.includes("<candidate_findings"), false);
   assert.match(plan.prompt.userMessage, /modelConfidence/);
   assert.match(plan.prompt.userMessage, /supportingEvidence/);
   assert.match(plan.prompt.userMessage, /reachability/);
   assert.match(plan.prompt.userMessage, /uncertaintyStatus/);
+  assert.match(plan.prompt.userMessage, /verifierVerdict/);
+  assert.match(plan.prompt.userMessage, /SUPPORTED.*ANCHOR.*EVIDENCE.*REACHABILITY.*OUT_OF_SCOPE.*DUPLICATE.*CONTRADICTION/);
 });

@@ -53,10 +53,10 @@ export function makePassingJudgeServices(): StepResolveServices {
     },
     validator: {
       validate(_input) {
-        return { findings: [] };
+        return { schemaVersion: 2, findings: [] };
       },
       validateWithReport(_input) {
-        return { payload: { findings: [] }, report: emptyReport };
+        return { payload: { schemaVersion: 2, findings: [] }, report: emptyReport };
       },
       filterByAcceptance(payload: FindingsPayload) {
         return payload;
@@ -65,7 +65,7 @@ export function makePassingJudgeServices(): StepResolveServices {
         return { payload, report: emptyReport };
       },
       validateWithDispositions(_input) {
-        return { findings: [], dispositions: [] };
+        return { schemaVersion: 2, findings: [], dispositions: [] };
       },
       validateDispositionCompleteness(_input) {}
     }
@@ -225,7 +225,8 @@ export const INITIAL_FINDING = {
   type: "must",
   title: "初版 findings",
   traceability: lineRangeTraceability(30, 32),
-  context: "初版情境",
+  expectedBehavior: "初版預期行為",
+  actualBehavior: "初版實際行為",
   deviation: "初版落差",
   impact: "初版 impact",
   suggestion: "初版建議",
@@ -236,7 +237,8 @@ export const FINAL_FINDING = {
   type: "must",
   title: "最終 findings",
   traceability: diffHunkTraceability("@@ -1 +1 @@"),
-  context: "最終情境",
+  expectedBehavior: "最終預期行為",
+  actualBehavior: "最終實際行為",
   deviation: "最終落差",
   impact: "最終 impact",
   suggestion: "最終建議",
@@ -247,7 +249,8 @@ export const NICE_FINAL_FINDING = {
   type: "nice",
   title: "從空 findings 補出的最終問題",
   traceability: lineRangeTraceability(40, 40),
-  context: "最終情境",
+  expectedBehavior: "最終預期行為",
+  actualBehavior: "最終實際行為",
   deviation: "最終落差",
   impact: "最終 impact",
   suggestion: "最終建議",
@@ -348,7 +351,7 @@ export async function assertPromptRebuildOnRetry(input: {
 
   assert.equal(prompts.length, 2);
   assert.equal(prompts[0], prompts[1]);
-  assert.match(prompts[0] ?? "", /<review_state>/u);
+  assert.match(prompts[0] ?? "", /<review_state\b/u);
   assert.match(prompts[0] ?? "", input.expectedPromptLandmark);
   assert.doesNotMatch(prompts[0] ?? "", /Review not yet generated/u);
   assert.doesNotMatch(

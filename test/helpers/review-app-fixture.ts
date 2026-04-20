@@ -1,4 +1,9 @@
-import { lineRangeTraceability } from "./orchestrator-fixture.ts";
+import {
+  acceptedVerifierVerdict,
+  canonicalReachability,
+  canonicalSupportingEvidence,
+  lineRangeTraceability
+} from "./orchestrator-fixture.ts";
 
 /**
  * Produces a minimal but structurally valid session response for each SOP
@@ -67,19 +72,21 @@ export function buildSessionResponse(
 
   if (/## Current Step: Validation & Interrogation/u.test(systemMessage)) {
     return JSON.stringify({
+      schemaVersion: 2,
       findings: [
         {
           type: "must",
           title: "問題標題",
           traceability: lineRangeTraceability(1, 1),
-          context: "具體情境",
+          expectedBehavior: "應維持既有 fallback",
+          actualBehavior: "新分支略過 fallback",
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
           suggestion: "補上 guard",
           modelConfidence: 90,
           findingId: "F1",
-          supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-          reachability: { credible: true, description: "direct code path" },
+          supportingEvidence: canonicalSupportingEvidence(),
+          reachability: canonicalReachability(),
           uncertaintyStatus: "supported"
         }
       ]
@@ -88,20 +95,23 @@ export function buildSessionResponse(
 
   if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
     return JSON.stringify({
+      schemaVersion: 2,
       findings: [
         {
           type: "must",
           title: "問題標題",
           traceability: lineRangeTraceability(1, 1),
-          context: "具體情境",
+          expectedBehavior: "應維持既有 fallback",
+          actualBehavior: "simulation reaches branch without fallback",
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
           suggestion: "補上 guard",
           modelConfidence: 91,
           findingId: "F1",
-          supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-          reachability: { credible: true, description: "direct code path" },
-          uncertaintyStatus: "supported"
+          supportingEvidence: canonicalSupportingEvidence(),
+          reachability: canonicalReachability(),
+          uncertaintyStatus: "supported",
+          verifierVerdict: acceptedVerifierVerdict()
         }
       ],
       dispositions: [

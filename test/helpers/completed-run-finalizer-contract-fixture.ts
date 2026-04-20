@@ -20,14 +20,24 @@ export function createFinding(
     type,
     title: input.title ?? `${type} finding`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    context: "ctx",
+    expectedBehavior: "expected behavior",
+    actualBehavior: "actual behavior",
     deviation: "dev",
     impact: "impact",
     suggestion: input.suggestion ?? "suggestion",
     modelConfidence: confidence,
     findingId: `${type}-${confidence}`,
-    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-    reachability: { credible: true, description: "direct code path" },
+    supportingEvidence: [
+      { evidenceRef: "E1", supports: "expectedBehavior" },
+      { evidenceRef: "E2", supports: "actualBehavior" },
+      { evidenceRef: "E3", supports: "reachability" },
+      { evidenceRef: "E4", supports: "impact" }
+    ],
+    reachability: {
+      credible: true,
+      entryPoint: "handleRequest",
+      guardsChecked: ["public route invokes handler"]
+    },
     uncertaintyStatus: "supported" as const
   };
 }
@@ -59,7 +69,16 @@ export function createVerifierReportArtifactEntry(
     taxonomy: overrides.taxonomy ?? "OK",
     outcome: overrides.outcome ?? "accepted",
     gate: overrides.gate ?? "acceptance",
-    reason: overrides.reason ?? "passed all acceptance gates"
+    reason: overrides.reason ?? "passed all acceptance gates",
+    ...(overrides.dispositionStatus === undefined
+      ? {}
+      : { dispositionStatus: overrides.dispositionStatus }),
+    ...(overrides.dispositionReason === undefined
+      ? {}
+      : { dispositionReason: overrides.dispositionReason }),
+    ...(overrides.dispositionExplanation === undefined
+      ? {}
+      : { dispositionExplanation: overrides.dispositionExplanation })
   };
 }
 

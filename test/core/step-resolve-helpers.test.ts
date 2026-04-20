@@ -29,7 +29,7 @@ test("createStep6DispositionResolve rejects retained candidates removed by accep
       resolve(
         verifiedPayload(
           [
-            finding({
+            verifiedFinding({
               findingId: "F1",
               uncertaintyStatus: "tentative"
             })
@@ -38,7 +38,7 @@ test("createStep6DispositionResolve rejects retained candidates removed by accep
         ),
         createResolveServices()
       ),
-    /retained.*F1.*must appear in findings/u
+    /must be accepted.*uncertaintyStatus/u
   );
 });
 
@@ -51,6 +51,7 @@ test("createStructuredResolve writes accepted findings and verifier report entri
 
   const applyTo = await resolve(
     JSON.stringify({
+      schemaVersion: 2,
       findings: [
         finding({ findingId: "F1" }),
         finding({
@@ -119,7 +120,7 @@ test("createStep6DispositionResolve writes accepted findings and matching dispos
 
   const applyTo = await resolve(
     verifiedPayload(
-      [finding({ findingId: "F1" })],
+      [verifiedFinding({ findingId: "F1" })],
       [disposition({ findingId: "F1", status: "retained" })]
     ),
     createResolveServices()
@@ -172,8 +173,8 @@ test("createStep6DispositionResolve allows new accepted findings without disposi
 
   const applyTo = await resolve(
     verifiedPayload(
-      [finding({ findingId: "F2" })],
-      [disposition({ findingId: "F1", status: "retired" })]
+      [verifiedFinding({ findingId: "F2" })],
+      [disposition({ findingId: "F1", status: "retired", reason: "REACHABILITY" })]
     ),
     createResolveServices()
   );
@@ -190,7 +191,22 @@ test("createStep6DispositionResolve allows new accepted findings without disposi
   );
   assert.deepEqual(
     context.getVerifierReportEntries()?.map((entry) => entry.findingId),
-    ["F2", "F2"]
+    ["F2", "F2", "F1"]
+  );
+  assert.deepEqual(
+    context.getVerifierReportEntries()?.at(-1),
+    {
+      filePath: DEFAULT_CONTEXT.filePath,
+      stepId: "step6-cognitive-simulation",
+      findingId: "F1",
+      taxonomy: "REACHABILITY",
+      outcome: "rejected",
+      gate: "disposition",
+      reason: "candidate retired: REACHABILITY - simulation confirms",
+      dispositionStatus: "retired",
+      dispositionReason: "REACHABILITY",
+      dispositionExplanation: "simulation confirms"
+    }
   );
 });
 
@@ -215,7 +231,7 @@ test("createStep6DispositionResolve appends Step 6 verifier entries after existi
 
   const applyTo = await resolve(
     verifiedPayload(
-      [finding({ findingId: "F1" })],
+      [verifiedFinding({ findingId: "F1" })],
       [disposition({ findingId: "F1", status: "retained" })]
     ),
     createResolveServices()
@@ -244,7 +260,7 @@ function createResolveServices(): StepResolveServices {
 }
 
 function verifiedPayload(findings: Finding[], dispositions: FindingDisposition[]): string {
-  return JSON.stringify({ findings, dispositions });
+  return JSON.stringify({ schemaVersion: 2, findings, dispositions });
 }
 
 function finding(overrides: Partial<Finding> = {}): Finding {
@@ -252,17 +268,44 @@ function finding(overrides: Partial<Finding> = {}): Finding {
     type: "must",
     title: "Step 6 finding",
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    context: "context",
+    expectedBehavior: "expected behavior",
+    actualBehavior: "actual behavior",
     deviation: "deviation",
     impact: "impact",
     suggestion: "suggestion",
     modelConfidence: 90,
     findingId: "F1",
-    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "value changed" }],
-    reachability: { credible: true, description: "reachable" },
+    supportingEvidence: [
+      { evidenceRef: "E1", supports: "expectedBehavior" },
+      { evidenceRef: "E2", supports: "actualBehavior" },
+      { evidenceRef: "E3", supports: "reachability" },
+      { evidenceRef: "E4", supports: "impact" }
+    ],
+    reachability: {
+      credible: true,
+      entryPoint: "handleRequest",
+      guardsChecked: ["guard checked"]
+    },
     uncertaintyStatus: "supported",
     ...overrides
   };
+}
+
+function verifiedFinding(overrides: Partial<Finding> = {}): Finding {
+  return finding({
+    verifierVerdict: {
+      status: "accepted",
+      checks: {
+        anchor: "pass",
+        evidence: "pass",
+        reachability: "pass",
+        impact: "pass",
+        scope: "pass",
+        duplicate: "pass"
+      }
+    },
+    ...overrides
+  });
 }
 
 function disposition(

@@ -84,6 +84,44 @@ test("VerifierReportFinalizer preserves planned file order and per-file step ord
   );
 });
 
+test("VerifierReportFinalizer persists retired disposition audit fields", () => {
+  const rendered = new VerifierReportFinalizer().render({
+    plannedNotes: createPlannedNotes([
+      ["src/a.ts", "/workspace/.nightowl/review/feature/files/src__a.ts.md"]
+    ]),
+    successfulFiles: [
+      createSuccessfulFile("src/a.ts", [], [
+        createVerifierReportArtifactEntry({
+          filePath: "src/a.ts",
+          stepId: "step6-cognitive-simulation",
+          findingId: "F1",
+          taxonomy: "REACHABILITY",
+          outcome: "rejected",
+          gate: "disposition",
+          reason: "candidate retired: REACHABILITY - path is not reachable",
+          dispositionStatus: "retired",
+          dispositionReason: "REACHABILITY",
+          dispositionExplanation: "path is not reachable"
+        })
+      ])
+    ],
+    skippedFiles: []
+  });
+
+  assert.deepEqual(JSON.parse(rendered), {
+    filePath: "src/a.ts",
+    stepId: "step6-cognitive-simulation",
+    findingId: "F1",
+    taxonomy: "REACHABILITY",
+    outcome: "rejected",
+    gate: "disposition",
+    reason: "candidate retired: REACHABILITY - path is not reachable",
+    dispositionStatus: "retired",
+    dispositionReason: "REACHABILITY",
+    dispositionExplanation: "path is not reachable"
+  });
+});
+
 test("VerifierReportFinalizer renders empty content for zero-file runs", () => {
   const rendered = new VerifierReportFinalizer().render({
     plannedNotes: [],

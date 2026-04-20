@@ -129,26 +129,35 @@ test("FileReviewContext setFindings deep-clones v2 fields so mutations do not le
     type: "must",
     title: "leak test",
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 2 },
-    context: "ctx",
+    expectedBehavior: "expected",
+    actualBehavior: "actual",
     deviation: "dev",
     impact: "imp",
     suggestion: "sug",
     modelConfidence: 90,
     findingId: "F1",
     supportingEvidence: [
-      { source: "diff:src/app.ts:1-2", content: "original content" }
+      { evidenceRef: "E1", supports: "expectedBehavior" },
+      { evidenceRef: "E2", supports: "actualBehavior" },
+      { evidenceRef: "E3", supports: "reachability" },
+      { evidenceRef: "E4", supports: "impact" }
     ],
-    reachability: { credible: true, description: "direct path" },
+    reachability: {
+      credible: true,
+      entryPoint: "handleRequest",
+      guardsChecked: ["guard checked"]
+    },
     uncertaintyStatus: "supported" as const
   };
 
   context.setFindings([original]);
 
   // Mutate the original object after setFindings
-  original.supportingEvidence[0]!.source = "MUTATED";
-  original.supportingEvidence[0]!.content = "MUTATED";
+  original.supportingEvidence[0]!.evidenceRef = "MUTATED";
+  original.supportingEvidence[0]!.supports = "impact";
   original.reachability.credible = false;
-  original.reachability.description = "MUTATED";
+  original.reachability.entryPoint = "MUTATED";
+  original.reachability.guardsChecked[0] = "MUTATED";
   original.findingId = "MUTATED";
   original.uncertaintyStatus = "tentative";
 
@@ -159,9 +168,10 @@ test("FileReviewContext setFindings deep-clones v2 fields so mutations do not le
   assert.equal(f.findingId, "F1");
   assert.equal(f.uncertaintyStatus, "supported");
   assert.equal(f.reachability.credible, true);
-  assert.equal(f.reachability.description, "direct path");
-  assert.equal(f.supportingEvidence[0]!.source, "diff:src/app.ts:1-2");
-  assert.equal(f.supportingEvidence[0]!.content, "original content");
+  assert.equal(f.reachability.entryPoint, "handleRequest");
+  assert.equal(f.reachability.guardsChecked[0], "guard checked");
+  assert.equal(f.supportingEvidence[0]!.evidenceRef, "E1");
+  assert.equal(f.supportingEvidence[0]!.supports, "expectedBehavior");
 });
 
 test("FileReviewContext getDispositions returns undefined before set", () => {
@@ -198,7 +208,7 @@ test("FileReviewContext setDispositions stores and getDispositions returns deep-
   // Mutate original — should not affect stored
   dispositions[0]!.findingId = "MUTATED";
   dispositions[0]!.status = "modified";
-  dispositions[0]!.reason = "MUTATED";
+  dispositions[0]!.reason = "ANCHOR";
   dispositions[0]!.explanation = "MUTATED";
 
   const fresh = context.getDispositions()!;

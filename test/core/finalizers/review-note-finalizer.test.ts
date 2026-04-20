@@ -32,19 +32,37 @@ function createContext(): FileReviewContext {
   return new FileReviewContext(DEFAULT_INPUT);
 }
 
+function supportingEvidence(): Finding["supportingEvidence"] {
+  return [
+    { evidenceRef: "E1", supports: "expectedBehavior" },
+    { evidenceRef: "E2", supports: "actualBehavior" },
+    { evidenceRef: "E3", supports: "reachability" },
+    { evidenceRef: "E4", supports: "impact" }
+  ];
+}
+
+function reachability(): Finding["reachability"] {
+  return {
+    credible: true,
+    entryPoint: "handleRequest",
+    guardsChecked: ["public route invokes handler"]
+  };
+}
+
 function makeMustFinding(title: string): Finding {
   return {
     type: "must",
     title,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    context: "test-context",
+    expectedBehavior: "test-expected",
+    actualBehavior: "test-actual",
     deviation: "test-deviation",
     impact: "test-impact",
     suggestion: "test-suggestion",
     modelConfidence: 0.9,
     findingId: "F1",
-    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-    reachability: { credible: true, description: "direct code path" },
+    supportingEvidence: supportingEvidence(),
+    reachability: reachability(),
     uncertaintyStatus: "supported" as const
   };
 }
@@ -54,14 +72,15 @@ function makeNiceFinding(title: string): Finding {
     type: "nice",
     title,
     traceability: { kind: "diff-hunk", hunkHeader: "@@ -1,3 +1,3 @@" },
-    context: "test-context",
+    expectedBehavior: "test-expected",
+    actualBehavior: "test-actual",
     deviation: "test-deviation",
     impact: "test-impact",
     suggestion: "test-suggestion",
     modelConfidence: 0.8,
     findingId: "F2",
-    supportingEvidence: [{ source: "diff:src/app.ts:1", content: "changed value" }],
-    reachability: { credible: true, description: "direct code path" },
+    supportingEvidence: supportingEvidence(),
+    reachability: reachability(),
     uncertaintyStatus: "supported" as const
   };
 }
@@ -324,30 +343,30 @@ test("Finalizer renders traceability formats correctly", () => {
       type: "must",
       title: "line-range-single",
       traceability: { kind: "line-range", lineStart: 42, lineEnd: 42 },
-      context: "c", deviation: "d", impact: "i", suggestion: "s", modelConfidence: 0.9,
+      expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s", modelConfidence: 0.9,
       findingId: "F1",
-      supportingEvidence: [{ source: "diff:src/app.ts:42", content: "changed value" }],
-      reachability: { credible: true, description: "direct code path" },
+      supportingEvidence: supportingEvidence(),
+      reachability: reachability(),
       uncertaintyStatus: "supported" as const
     },
     {
       type: "must",
       title: "line-range-multi",
       traceability: { kind: "line-range", lineStart: 10, lineEnd: 20 },
-      context: "c", deviation: "d", impact: "i", suggestion: "s", modelConfidence: 0.9,
+      expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s", modelConfidence: 0.9,
       findingId: "F2",
-      supportingEvidence: [{ source: "diff:src/app.ts:10", content: "changed value" }],
-      reachability: { credible: true, description: "direct code path" },
+      supportingEvidence: supportingEvidence(),
+      reachability: reachability(),
       uncertaintyStatus: "supported" as const
     },
     {
       type: "must",
       title: "diff-hunk",
       traceability: { kind: "diff-hunk", hunkHeader: "@@ -5,7 +5,7 @@" },
-      context: "c", deviation: "d", impact: "i", suggestion: "s", modelConfidence: 0.9,
+      expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s", modelConfidence: 0.9,
       findingId: "F3",
-      supportingEvidence: [{ source: "diff:src/app.ts:5", content: "changed value" }],
-      reachability: { credible: true, description: "direct code path" },
+      supportingEvidence: supportingEvidence(),
+      reachability: reachability(),
       uncertaintyStatus: "supported" as const
     }
   ];

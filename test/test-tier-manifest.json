@@ -30,6 +30,7 @@
     "test/core/step-runner-error-wrapping.test.ts",
     "test/core/step-runner-retry.test.ts",
     "test/core/step0-output-validator.test.ts",
+    "test/core/steps/review-state-snapshot-prompt-contracts.test.ts",
     "test/core/steps/step0-changeset-overview.test.ts",
     "test/core/steps/step4-hypothesis-count-class.test.ts",
     "test/core/steps/step5-step6-prompt-contracts.test.ts",

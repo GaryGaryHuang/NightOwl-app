@@ -32,21 +32,31 @@ function finding(overrides: Record<string, unknown> = {}): Record<string, unknow
     type: "must",
     title: "問題標題",
     traceability: lineRangeTraceability(14, 18),
-    context: "具體情境",
+    expectedBehavior: "應保留原本的 null guard 行為",
+    actualBehavior: "改動後會在檢查前 dereference input",
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
     modelConfidence: 88,
     findingId: "F1",
-    supportingEvidence: [{ source: "diff:src/app.ts:14-18", content: "changed code" }],
-    reachability: { credible: true, description: "direct path" },
+    supportingEvidence: [
+      { evidenceRef: "E1", supports: "expectedBehavior" },
+      { evidenceRef: "E2", supports: "actualBehavior" },
+      { evidenceRef: "E3", supports: "reachability" },
+      { evidenceRef: "E4", supports: "impact" }
+    ],
+    reachability: {
+      credible: true,
+      entryPoint: "handleRequest",
+      guardsChecked: ["input is passed from the public API"]
+    },
     uncertaintyStatus: "supported",
     ...overrides
   };
 }
 
 function payload(findings: unknown[]): string {
-  return JSON.stringify({ findings });
+  return JSON.stringify({ schemaVersion: 2, findings });
 }
 
 function validate(input: {
@@ -97,7 +107,39 @@ test("StructuredOutputValidator accepts schema-valid findings JSON", () => {
   const validFinding = finding();
 
   assert.deepEqual(validate({ responseText: payload([validFinding]) }), {
+    schemaVersion: 2,
     findings: [validFinding]
+  });
+});
+
+test("StructuredOutputValidator accepts CandidateFindingSet schemaVersion 2", () => {
+  const validFinding = finding();
+
+  assert.deepEqual(
+    validate({
+      responseText: JSON.stringify({ schemaVersion: 2, findings: [validFinding] })
+    }),
+    {
+      schemaVersion: 2,
+      findings: [validFinding]
+    }
+  );
+});
+
+test("StructuredOutputValidator migrates legacy confidence to canonical modelConfidence", () => {
+  const legacyFinding = finding({
+    modelConfidence: undefined,
+    confidence: 77
+  });
+  const { confidence: _legacy, ...expectedFindingWithoutLegacy } = legacyFinding;
+  const expectedFinding = {
+    ...expectedFindingWithoutLegacy,
+    modelConfidence: 77
+  };
+
+  assert.deepEqual(validate({ responseText: payload([legacyFinding]) }), {
+    schemaVersion: 2,
+    findings: [expectedFinding]
   });
 });
 
@@ -129,6 +171,12 @@ test("StructuredOutputValidator rejects invalid top-level payload shapes", () =>
   }
 });
 
+test("StructuredOutputValidator rejects unsupported CandidateFindingSet schemaVersion", () => {
+  assertValidationFails({
+    responseText: JSON.stringify({ schemaVersion: 1, findings: [] })
+  });
+});
+
 test("StructuredOutputValidator rejects schema-invalid findings payloads", () => {
   const cases: Array<{
     label: string;
@@ -137,6 +185,14 @@ test("StructuredOutputValidator rejects schema-invalid findings payloads", () =>
     {
       label: "empty title",
       invalidFinding: finding({ title: "" })
+    },
+    {
+      label: "missing expectedBehavior",
+      invalidFinding: finding({ expectedBehavior: undefined })
+    },
+    {
+      label: "empty actualBehavior",
+      invalidFinding: finding({ actualBehavior: "" })
     },
     {
       label: "missing modelConfidence",
@@ -180,7 +236,7 @@ test("StructuredOutputValidator validate returns all structurally valid findings
     validate({
       responseText: payload([mustAbove, mustBelow])
     }),
-    { findings: [mustAbove, mustBelow] }
+    { schemaVersion: 2, findings: [mustAbove, mustBelow] }
   );
 });
 
@@ -227,12 +283,16 @@ test("StructuredOutputValidator filterByAcceptance keeps supported credible find
           impact: "影響可維護性",
           suggestion: "補上整理",
           modelConfidence: 99,
-          reachability: { credible: false, description: "not reachable" }
+          reachability: {
+            credible: false,
+            entryPoint: "handleRequest",
+            guardsChecked: ["guard checked"]
+          }
         })
       ]),
       diffContent: DEFAULT_DIFF
     }),
-    { findings: [keptMust, keptNice] }
+    { schemaVersion: 2, findings: [keptMust, keptNice] }
   );
 });
 
@@ -280,18 +340,25 @@ test("StructuredOutputValidator filterByAcceptance ignores supplied confidence t
           impact: "影響可維護性",
           suggestion: "補上整理",
           modelConfidence: 99,
-          reachability: { credible: false, description: "not reachable" }
+          reachability: {
+            credible: false,
+            entryPoint: "handleRequest",
+            guardsChecked: ["guard checked"]
+          }
         })
       ]),
       diffContent: `${customHunkHeader}\n-old\n+new\n`,
       thresholds: { must: 70, nice: 85 }
     }),
-    { findings: [keptMust, keptNice] }
+    { schemaVersion: 2, findings: [keptMust, keptNice] }
   );
 });
 
 test("StructuredOutputValidator accepts an empty findings array", () => {
-  assert.deepEqual(validate({ responseText: payload([]) }), { findings: [] });
+  assert.deepEqual(validate({ responseText: payload([]) }), {
+    schemaVersion: 2,
+    findings: []
+  });
 });
 
 test("StructuredOutputValidator rejects invalid traceability payloads", () => {
@@ -534,6 +601,7 @@ test("StructuredOutputValidator falls back to legacy line-range check when diffC
   });
 
   assert.deepEqual(validate({ responseText: payload([noDiffFinding]) }), {
+    schemaVersion: 2,
     findings: [noDiffFinding]
   });
 });
@@ -577,21 +645,31 @@ test("StructuredOutputValidator rejects supportingEvidence that is not an array"
   });
 });
 
-test("StructuredOutputValidator rejects evidence ref with empty source", () => {
+test("StructuredOutputValidator rejects evidence ref with empty evidenceRef", () => {
   assertValidationFails({
     responseText: payload([
       finding({
-        supportingEvidence: [{ source: "", content: "some content" }]
+        supportingEvidence: [
+          { evidenceRef: "", supports: "expectedBehavior" },
+          { evidenceRef: "E2", supports: "actualBehavior" },
+          { evidenceRef: "E3", supports: "reachability" },
+          { evidenceRef: "E4", supports: "impact" }
+        ]
       })
     ])
   });
 });
 
-test("StructuredOutputValidator rejects evidence ref with empty content", () => {
+test("StructuredOutputValidator rejects evidence ref with invalid supports role", () => {
   assertValidationFails({
     responseText: payload([
       finding({
-        supportingEvidence: [{ source: "diff:src/app.ts:14", content: "" }]
+        supportingEvidence: [
+          { evidenceRef: "E1", supports: "expectedBehavior" },
+          { evidenceRef: "E2", supports: "actualBehavior" },
+          { evidenceRef: "E3", supports: "reachability" },
+          { evidenceRef: "E4", supports: "security" }
+        ]
       })
     ])
   });
@@ -602,7 +680,24 @@ test("StructuredOutputValidator rejects evidence ref with unknown fields", () =>
     responseText: payload([
       finding({
         supportingEvidence: [
-          { source: "diff:src/app.ts:14", content: "excerpt", url: "http://x" }
+          { evidenceRef: "E1", supports: "expectedBehavior", url: "http://x" },
+          { evidenceRef: "E2", supports: "actualBehavior" },
+          { evidenceRef: "E3", supports: "reachability" },
+          { evidenceRef: "E4", supports: "impact" }
+        ]
+      })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects supportingEvidence missing required role coverage", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        supportingEvidence: [
+          { evidenceRef: "E1", supports: "expectedBehavior" },
+          { evidenceRef: "E2", supports: "actualBehavior" },
+          { evidenceRef: "E3", supports: "reachability" }
         ]
       })
     ])
@@ -618,15 +713,55 @@ test("StructuredOutputValidator rejects missing reachability", () => {
 test("StructuredOutputValidator rejects reachability with non-boolean credible", () => {
   assertValidationFails({
     responseText: payload([
-      finding({ reachability: { credible: "yes", description: "path" } })
+      finding({
+        reachability: {
+          credible: "yes",
+          entryPoint: "handleRequest",
+          guardsChecked: ["guard"]
+        }
+      })
     ])
   });
 });
 
-test("StructuredOutputValidator rejects reachability with empty description", () => {
+test("StructuredOutputValidator rejects reachability with empty entryPoint", () => {
   assertValidationFails({
     responseText: payload([
-      finding({ reachability: { credible: true, description: "" } })
+      finding({
+        reachability: {
+          credible: true,
+          entryPoint: "",
+          guardsChecked: ["guard"]
+        }
+      })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects reachability with empty guardsChecked", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        reachability: {
+          credible: true,
+          entryPoint: "handleRequest",
+          guardsChecked: []
+        }
+      })
+    ])
+  });
+});
+
+test("StructuredOutputValidator rejects reachability with blank guard", () => {
+  assertValidationFails({
+    responseText: payload([
+      finding({
+        reachability: {
+          credible: true,
+          entryPoint: "handleRequest",
+          guardsChecked: [""]
+        }
+      })
     ])
   });
 });
@@ -635,7 +770,12 @@ test("StructuredOutputValidator rejects reachability with unknown fields", () =>
   assertValidationFails({
     responseText: payload([
       finding({
-        reachability: { credible: true, description: "path", path: "a→b" }
+        reachability: {
+          credible: true,
+          entryPoint: "handleRequest",
+          guardsChecked: ["guard"],
+          path: "a->b"
+        }
       })
     ])
   });
@@ -657,6 +797,7 @@ test("StructuredOutputValidator accepts all valid uncertaintyStatus values", () 
   for (const status of ["supported", "tentative", "unsupported", "out_of_scope"]) {
     const f = finding({ uncertaintyStatus: status });
     assert.deepEqual(validate({ responseText: payload([f]) }), {
+      schemaVersion: 2,
       findings: [f]
     });
   }
@@ -665,6 +806,7 @@ test("StructuredOutputValidator accepts all valid uncertaintyStatus values", () 
 test("StructuredOutputValidator accepts optional sourceHypothesisId when non-empty", () => {
   const f = finding({ sourceHypothesisId: "W1" });
   assert.deepEqual(validate({ responseText: payload([f]) }), {
+    schemaVersion: 2,
     findings: [f]
   });
 });
@@ -706,6 +848,7 @@ test("StructuredOutputValidator rejects unknown fields in top-level payload", ()
     () =>
       new StructuredOutputValidator().validate({
         responseText: JSON.stringify({
+          schemaVersion: 2,
           findings: [finding()],
           metadata: {}
         })
@@ -731,20 +874,28 @@ test("StructuredOutputValidator filterByAcceptance filters tentative findings re
     validateAndFilter({
       responseText: payload([tentative, supported])
     }),
-    { findings: [supported] }
+    { schemaVersion: 2, findings: [supported] }
   );
 });
 
 test("StructuredOutputValidator filterByAcceptance filters findings with credible=false", () => {
   const unreachable = finding({
     findingId: "F-unreach",
-    reachability: { credible: false, description: "not reachable" },
+    reachability: {
+      credible: false,
+      entryPoint: "handleRequest",
+      guardsChecked: ["guard checked"]
+    },
     uncertaintyStatus: "supported",
     modelConfidence: 95
   });
   const reachable = finding({
     findingId: "F-reach",
-    reachability: { credible: true, description: "direct path" },
+    reachability: {
+      credible: true,
+      entryPoint: "handleRequest",
+      guardsChecked: ["guard checked"]
+    },
     uncertaintyStatus: "supported",
     modelConfidence: 0
   });
@@ -753,7 +904,7 @@ test("StructuredOutputValidator filterByAcceptance filters findings with credibl
     validateAndFilter({
       responseText: payload([unreachable, reachable])
     }),
-    { findings: [reachable] }
+    { schemaVersion: 2, findings: [reachable] }
   );
 });
 
@@ -769,8 +920,30 @@ function disposition(overrides: Record<string, unknown> = {}): Record<string, un
   };
 }
 
+function acceptedVerifierVerdict(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    status: "accepted",
+    checks: {
+      anchor: "pass",
+      evidence: "pass",
+      reachability: "pass",
+      impact: "pass",
+      scope: "pass",
+      duplicate: "pass"
+    },
+    ...overrides
+  };
+}
+
+function verifiedFinding(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return finding({
+    verifierVerdict: acceptedVerifierVerdict(),
+    ...overrides
+  });
+}
+
 function verifiedPayload(findings: unknown[], dispositions: unknown[]): string {
-  return JSON.stringify({ findings, dispositions });
+  return JSON.stringify({ schemaVersion: 2, findings, dispositions });
 }
 
 function validateWithDispositions(input: {
@@ -800,7 +973,7 @@ function assertDispositionValidationFails(input: {
 }
 
 test("validateWithDispositions accepts valid findings and dispositions", () => {
-  const f = finding();
+  const f = verifiedFinding();
   const d = disposition();
   const result = validateWithDispositions({
     responseText: verifiedPayload([f], [d])
@@ -813,12 +986,24 @@ test("validateWithDispositions accepts valid findings and dispositions", () => {
   assert.equal(result.dispositions[0]!.status, "retained");
 });
 
+test("validateWithDispositions accepts VerifiedFindingSet schemaVersion 2", () => {
+  const result = validateWithDispositions({
+    responseText: JSON.stringify({
+      schemaVersion: 2,
+      findings: [verifiedFinding()],
+      dispositions: [disposition()]
+    })
+  });
+
+  assert.equal(result.schemaVersion, 2);
+});
+
 test("validateWithDispositions accepts empty findings and dispositions", () => {
   const result = validateWithDispositions({
     responseText: verifiedPayload([], [])
   });
 
-  assert.deepEqual(result, { findings: [], dispositions: [] });
+  assert.deepEqual(result, { schemaVersion: 2, findings: [], dispositions: [] });
 });
 
 test("validateWithDispositions rejects missing dispositions key", () => {
@@ -840,7 +1025,7 @@ test("validateWithDispositions rejects unknown top-level field", () => {
     () =>
       new StructuredOutputValidator().validateWithDispositions({
         responseText: JSON.stringify({
-          findings: [finding()],
+          findings: [verifiedFinding()],
           dispositions: [disposition()],
           metadata: {}
         })
@@ -849,10 +1034,20 @@ test("validateWithDispositions rejects unknown top-level field", () => {
   );
 });
 
+test("validateWithDispositions rejects unsupported VerifiedFindingSet schemaVersion", () => {
+  assertDispositionValidationFails({
+    responseText: JSON.stringify({
+      schemaVersion: 1,
+      findings: [],
+      dispositions: []
+    })
+  });
+});
+
 test("validateWithDispositions rejects non-array dispositions", () => {
   assertDispositionValidationFails({
     label: "dispositions is object",
-    responseText: JSON.stringify({ findings: [], dispositions: {} })
+    responseText: JSON.stringify({ schemaVersion: 2, findings: [], dispositions: {} })
   });
 });
 
@@ -934,7 +1129,7 @@ test("validateWithDispositions rejects duplicate findingId in findings", () => {
     () =>
       new StructuredOutputValidator().validateWithDispositions({
         responseText: verifiedPayload(
-          [finding({ findingId: "F1" }), finding({ findingId: "F1" })],
+          [verifiedFinding({ findingId: "F1" }), verifiedFinding({ findingId: "F1" })],
           [disposition()]
         )
       }),
@@ -949,6 +1144,97 @@ test("validateWithDispositions validates each disposition status value", () => {
     });
     assert.equal(result.dispositions[0]!.status, status);
   }
+});
+
+test("validateWithDispositions validates each disposition reason value", () => {
+  for (const reason of [
+    "SUPPORTED",
+    "ANCHOR",
+    "EVIDENCE",
+    "REACHABILITY",
+    "OUT_OF_SCOPE",
+    "DUPLICATE",
+    "CONTRADICTION"
+  ]) {
+    const result = validateWithDispositions({
+      responseText: verifiedPayload([], [disposition({ reason })])
+    });
+    assert.equal(result.dispositions[0]!.reason, reason);
+  }
+});
+
+test("validateWithDispositions rejects invalid disposition reason", () => {
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validateWithDispositions({
+        responseText: verifiedPayload([], [
+          disposition({ reason: "STALE_CONTEXT" })
+        ])
+      }),
+    /SUPPORTED.*ANCHOR.*EVIDENCE.*REACHABILITY.*OUT_OF_SCOPE.*DUPLICATE.*CONTRADICTION/u
+  );
+});
+
+test("validateWithDispositions rejects finding missing verifierVerdict", () => {
+  assertDispositionValidationFails({
+    responseText: verifiedPayload([finding()], [disposition()])
+  });
+});
+
+test("validateWithDispositions rejects non-accepted verifierVerdict", () => {
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validateWithDispositions({
+        responseText: verifiedPayload(
+          [verifiedFinding({ verifierVerdict: acceptedVerifierVerdict({ status: "rejected" }) })],
+          [disposition()]
+        )
+      }),
+    /verifierVerdict\.status.*accepted/u
+  );
+});
+
+test("validateWithDispositions rejects verifierVerdict checks that do not pass", () => {
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validateWithDispositions({
+        responseText: verifiedPayload(
+          [
+            verifiedFinding({
+              verifierVerdict: acceptedVerifierVerdict({
+                checks: {
+                  anchor: "pass",
+                  evidence: "pass",
+                  reachability: "fail",
+                  impact: "pass",
+                  scope: "pass",
+                  duplicate: "pass"
+                }
+              })
+            })
+          ],
+          [disposition()]
+        )
+      }),
+    /verifierVerdict\.checks\.reachability.*pass/u
+  );
+});
+
+test("validateWithDispositions rejects accepted findings that fail Step 6 acceptance gates", () => {
+  assert.throws(
+    () =>
+      new StructuredOutputValidator().validateWithDispositions({
+        responseText: verifiedPayload(
+          [
+            verifiedFinding({
+              uncertaintyStatus: "tentative"
+            })
+          ],
+          [disposition()]
+        )
+      }),
+    /must be accepted.*uncertaintyStatus/u
+  );
 });
 
 // --- validateDispositionCompleteness tests ---
@@ -1144,7 +1430,14 @@ test("filterByAcceptanceWithReport rejects tentative finding with EVIDENCE taxon
 
 test("filterByAcceptanceWithReport rejects non-credible reachability with REACHABILITY taxonomy", () => {
   const validator = new StructuredOutputValidator();
-  const f = finding({ traceability: lineRangeTraceability(21, 22), reachability: { credible: false, description: "unlikely" } });
+  const f = finding({
+    traceability: lineRangeTraceability(21, 22),
+    reachability: {
+      credible: false,
+      entryPoint: "handleRequest",
+      guardsChecked: ["guard checked"]
+    }
+  });
   const validated = validator.validate({
     responseText: payload([f]),
     diffContent: DEFAULT_DIFF,
