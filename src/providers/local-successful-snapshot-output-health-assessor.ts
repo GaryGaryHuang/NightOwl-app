@@ -1,7 +1,6 @@
 import { access, stat, constants } from "node:fs/promises";
 import path from "node:path";
 
-import { ReviewOutputBoundaryError } from "./review-output-sink.ts";
 import type {
   SuccessfulSnapshotFailureAssessment,
   SuccessfulSnapshotFailureInput,
@@ -17,11 +16,7 @@ export class LocalSuccessfulSnapshotOutputHealthAssessor
   async assess(
     input: SuccessfulSnapshotFailureInput
   ): Promise<SuccessfulSnapshotFailureAssessment> {
-    const underlyingError = unwrapOutputCause(input.error);
-    const code =
-      isErrnoException(underlyingError) && typeof underlyingError.code === "string"
-        ? underlyingError.code
-        : undefined;
+    const code = input.failureEvidence.causeCode;
 
     if (!code) {
       return { faultScope: "shared-output-target-fault" };
@@ -31,7 +26,10 @@ export class LocalSuccessfulSnapshotOutputHealthAssessor
       return { faultScope: "shared-output-target-fault" };
     }
 
-    const errorPath = resolveErrnoPath(underlyingError);
+    const errorPath =
+      typeof input.failureEvidence.causePath === "string"
+        ? path.resolve(input.failureEvidence.causePath)
+        : undefined;
     const expectedNotePath = path.resolve(input.noteFilePath);
 
     if (
@@ -65,32 +63,6 @@ const SHARED_TARGET_ERROR_CODES = new Set([
 ]);
 
 const SINGLE_FILE_ERROR_CODES = new Set(["EISDIR", "ENAMETOOLONG"]);
-
-function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
-function unwrapOutputCause(error: unknown): unknown {
-  if (isReviewOutputBoundaryError(error) && error.cause !== undefined) {
-    return error.cause;
-  }
-
-  return error;
-}
-
-function isReviewOutputBoundaryError(
-  error: unknown
-): error is ReviewOutputBoundaryError {
-  return error instanceof ReviewOutputBoundaryError;
-}
-
-function resolveErrnoPath(error: unknown): string | undefined {
-  if (!isErrnoException(error) || typeof error.path !== "string") {
-    return undefined;
-  }
-
-  return path.resolve(error.path);
-}
 
 async function assertWritableDirectory(targetPath: string): Promise<void> {
   const statResult = await stat(targetPath);
