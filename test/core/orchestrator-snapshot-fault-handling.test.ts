@@ -120,7 +120,8 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP
+      timestampProvider: () => RUN_TIMESTAMP,
+      maxConcurrentFiles: 1
     });
 
     await assert.rejects(
@@ -215,7 +216,8 @@ test("ReviewOrchestrator waits for successful snapshot assessment before writing
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP
+      timestampProvider: () => RUN_TIMESTAMP,
+      maxConcurrentFiles: 1
     });
 
     const runPromise = orchestrator.run(REQUEST);
@@ -325,7 +327,8 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP
+      timestampProvider: () => RUN_TIMESTAMP,
+      maxConcurrentFiles: 1
     });
 
     await assert.rejects(
@@ -411,7 +414,8 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP
+      timestampProvider: () => RUN_TIMESTAMP,
+      maxConcurrentFiles: 1
     });
 
     await assert.rejects(
@@ -501,7 +505,8 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
       stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP
+      timestampProvider: () => RUN_TIMESTAMP,
+      maxConcurrentFiles: 1
     });
 
     const result = await orchestrator.run(REQUEST);
@@ -577,7 +582,8 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
       },
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP
+      timestampProvider: () => RUN_TIMESTAMP,
+      maxConcurrentFiles: 1
     });
 
     await assert.rejects(
@@ -651,7 +657,8 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       }),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP
+      timestampProvider: () => RUN_TIMESTAMP,
+      maxConcurrentFiles: 1
     });
 
     await assert.rejects(
@@ -732,7 +739,8 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
       }),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
       workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP
+      timestampProvider: () => RUN_TIMESTAMP,
+      maxConcurrentFiles: 1
     });
 
     await assert.rejects(

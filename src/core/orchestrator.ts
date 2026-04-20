@@ -19,6 +19,7 @@ function extractSignalName(reason: unknown): "SIGINT" | "SIGTERM" | undefined {
 
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
 import { FileReviewContext } from "./file-review-context.ts";
+import { DEFAULT_MAX_CONCURRENT_FILES } from "./max-concurrent-files.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
 import { ReviewNoteFinalizer } from "./finalizers/review-note-finalizer.ts";
 import { RunSummaryFinalizer } from "./finalizers/run-summary-finalizer.ts";
@@ -156,7 +157,8 @@ export class ReviewOrchestrator {
     this.#reviewIndexFinalizer = options.reviewIndexFinalizer ?? new ReviewIndexFinalizer();
     this.#verifierReportFinalizer = options.verifierReportFinalizer ?? new VerifierReportFinalizer();
     this.#runManifestFinalizer = options.runManifestFinalizer ?? new RunManifestFinalizer();
-    this.#maxConcurrentFiles = options.maxConcurrentFiles ?? 1;
+    this.#maxConcurrentFiles =
+      options.maxConcurrentFiles ?? DEFAULT_MAX_CONCURRENT_FILES;
     this.#onProgressEvent = options.onProgressEvent;
     this.#onOutputTargetReady = options.onOutputTargetReady;
     this.#perFileStepsFactory =

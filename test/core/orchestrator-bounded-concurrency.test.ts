@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test, { after, before, describe } from "node:test";
 
 import type { FileReviewContext } from "../../src/core/file-review-context.ts";
+import { DEFAULT_MAX_CONCURRENT_FILES } from "../../src/core/max-concurrent-files.ts";
 import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
@@ -136,6 +137,39 @@ test("ReviewOrchestrator honors a maxConcurrentFiles cap below the planned file 
   );
 });
 
+test("ReviewOrchestrator uses DEFAULT_MAX_CONCURRENT_FILES when maxConcurrentFiles is omitted", async () => {
+  await withReviewHarness(
+    {
+      commitMessage: "add enough changed files to exercise implicit concurrency cap",
+      extraFiles: Object.fromEntries(
+        Array.from(
+          { length: DEFAULT_MAX_CONCURRENT_FILES + 2 },
+          (_, index) => [
+            `src/extra-${index}.ts`,
+            `export const extra${index} = ${index};\n`
+          ]
+        )
+      )
+    },
+    async (harness) => {
+      const metrics = createConcurrencyMetrics();
+      const result = await runOrchestrator(harness, {
+        outputSink: createWritableOutputSink(),
+        stepRunner: createConcurrentRunner({
+          metrics,
+          getBootstrapPublishCount: () => harness.reviewableFiles.length,
+          completionDelayByFile: new Map(
+            harness.reviewableFiles.map((filePath) => [filePath, 40])
+          )
+        })
+      });
+
+      assert.ok(result.plannedFileCount > DEFAULT_MAX_CONCURRENT_FILES);
+      assert.equal(metrics.maxActiveFiles, DEFAULT_MAX_CONCURRENT_FILES);
+    }
+  );
+});
+
 async function withReviewHarness(
   input: {
     commitMessage: string;
@@ -166,7 +200,7 @@ async function withReviewHarness(
 async function runOrchestrator(
   harness: ReviewHarness,
   overrides: {
-    maxConcurrentFiles: number;
+    maxConcurrentFiles?: number;
     outputSink: ConstructorParameters<typeof ReviewOrchestrator>[0]["outputSink"];
     stepRunner: StepRunnerDouble;
     sourceProvider?: ReviewSourceProvider;
@@ -180,7 +214,9 @@ async function runOrchestrator(
     changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
     workingDirectory: harness.fixture.repoDir,
     timestampProvider: () => RUN_TIMESTAMP,
-    maxConcurrentFiles: overrides.maxConcurrentFiles
+    ...(overrides.maxConcurrentFiles === undefined
+      ? {}
+      : { maxConcurrentFiles: overrides.maxConcurrentFiles })
   });
 
   return await orchestrator.run(REQUEST);
