@@ -17,6 +17,31 @@ test("LocalReviewConfigProvider falls back to the documented default review conf
   }
 });
 
+test("LocalReviewConfigProvider wraps non-ENOENT config path filesystem failures in ReviewConfigProviderError", async () => {
+  const configFixture = createReviewConfigProviderFixture();
+
+  try {
+    configFixture.fixture.writeFile(".nightowl", "not a directory\n");
+
+    await assert.rejects(async () => await configFixture.loadReviewConfig(), (error) => {
+      assert.ok(error instanceof ReviewConfigProviderError);
+      assert.equal(error.operation, "loadReviewConfig");
+      assert.match(
+        error.configPath ?? "",
+        /\.nightowl\/reviewconfig\.json$/u
+      );
+      assert.ok(error.cause instanceof Error);
+      assert.equal(
+        (error.cause as NodeJS.ErrnoException).code,
+        "ENOTDIR"
+      );
+      return true;
+    });
+  } finally {
+    configFixture.cleanup();
+  }
+});
+
 test("LocalReviewConfigProvider only reads the canonical .nightowl/reviewconfig.json path", async () => {
   const configFixture = createReviewConfigProviderFixture();
 

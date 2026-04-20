@@ -138,3 +138,31 @@ test("LocalReviewFileFilter wraps reviewignore read failures in ReviewFileFilter
     fixture.cleanup();
   }
 });
+
+test("LocalReviewFileFilter wraps non-ENOENT reviewignore path filesystem failures in ReviewFileFilterError", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".nightowl", "not a directory\n");
+    const reviewFileFilter = new LocalReviewFileFilter();
+
+    await assert.rejects(
+      async () =>
+        reviewFileFilter.filterReviewableFiles(fixture.repoDir, [
+          "src/app.ts"
+        ]),
+      (error: unknown) => {
+        assert.ok(error instanceof ReviewFileFilterError);
+        assert.equal(error.operation, "filterReviewableFiles");
+        assert.ok(error.cause instanceof Error);
+        assert.equal(
+          (error.cause as NodeJS.ErrnoException).code,
+          "ENOTDIR"
+        );
+        return true;
+      }
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
