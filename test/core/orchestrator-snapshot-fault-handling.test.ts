@@ -20,6 +20,12 @@ import {
 type StepEvent = [string, string];
 type OutputCall = [string, string];
 
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve(value: T | PromiseLike<T>): void;
+  reject(reason?: unknown): void;
+}
+
 function buildNotePathLookup(
   plannedNotes: Array<{ filePath: string; noteFilePath: string }>
 ): Map<string, string> {
@@ -39,6 +45,21 @@ function requireNotePath(
   }
 
   return noteFilePath;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: Deferred<T>["resolve"];
+  let reject!: Deferred<T>["reject"];
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return {
+    promise,
+    resolve,
+    reject
+  };
 }
 
 test("ReviewOrchestrator aborts when a successful snapshot write is classified as a shared output target fault and later files do not continue", async () => {
@@ -125,6 +146,123 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
       writtenNotes.get(failedNotePath)?.includes("Review Interrupted") ?? false,
       false
     );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("ReviewOrchestrator waits for successful snapshot assessment before writing an interrupted snapshot or skipped record", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+    fixture.writeFile("README.md", "# Demo feature change\n");
+    fixture.commitAll("add third changed file for deferred successful snapshot assessment");
+
+    const harness = await bootstrapReviewHarness(fixture);
+    const failedFile = harness.reviewableFiles[1];
+    const laterFile = harness.reviewableFiles[2];
+    const plannedNotes = planNoteFiles(
+      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
+      harness.reviewableFiles
+    );
+    const notePathLookup = buildNotePathLookup(plannedNotes);
+    const failedNotePath = plannedNotes.find(
+      ({ filePath }) => filePath === failedFile
+    )!.noteFilePath;
+    const outputCalls: OutputCall[] = [];
+    const stepEvents: StepEvent[] = [];
+    const assessmentStarted = createDeferred<void>();
+    const assessment = createDeferred<{
+      faultScope: "single-file-output-fault";
+    }>();
+    const successfulSnapshotOutputHealthAssessor = {
+      async assess() {
+        assessmentStarted.resolve();
+        return assessment.promise;
+      }
+    };
+    const orchestrator = new ReviewOrchestrator({
+      sourceProvider: harness.sourceProvider,
+      reviewFileFilter: harness.reviewFileFilter,
+      outputSink: defineOutputSinkDouble({
+        async initializeRun(outputPlan) {
+          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
+          return this;
+        },
+        async publishFileReview(fileResult) {
+          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
+
+          if (
+            noteFilePath === failedNotePath &&
+            /> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
+          ) {
+            outputCalls.push(["publishInterruptedSnapshot", noteFilePath]);
+            return;
+          }
+
+          outputCalls.push(["publishFileReview", noteFilePath]);
+
+          if (
+            noteFilePath === failedNotePath &&
+            /^# .*[\s\S]*^## Overview/mu.test(fileResult.content)
+          ) {
+            throw new Error("note write failed");
+          }
+        },
+        async publishSkippedFile(skipRecord) {
+          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
+        },
+        async publishRunSummary() {},
+        async publishReviewIndex() {},
+        async publishVerifierReport() {},
+        async publishRunManifest() {},
+        async publishChangesetOverview() {}
+      }),
+      successfulSnapshotOutputHealthAssessor,
+      stepRunner: createAlwaysSuccessfulStepRunner(stepEvents),
+      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => RUN_TIMESTAMP
+    });
+
+    const runPromise = orchestrator.run(REQUEST);
+
+    await assessmentStarted.promise;
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(
+      outputCalls.some(([callType]) => callType === "publishInterruptedSnapshot"),
+      false
+    );
+    assert.equal(
+      outputCalls.some(([callType, filePath]) =>
+        callType === "publishSkippedFile" && filePath === failedFile
+      ),
+      false
+    );
+    assert.equal(
+      stepEvents.some(([, filePath]) => filePath === laterFile),
+      false
+    );
+
+    assessment.resolve({ faultScope: "single-file-output-fault" });
+    const result = await runPromise;
+
+    assert.equal(result.skippedFileCount, 1);
+    assert.equal(
+      outputCalls.some(([callType, filePath]) =>
+        callType === "publishInterruptedSnapshot" && filePath === failedNotePath
+      ),
+      true
+    );
+    assert.deepEqual(
+      outputCalls.filter(([callType, filePath]) =>
+        callType === "publishSkippedFile" && filePath === failedFile
+      ),
+      [["publishSkippedFile", failedFile]]
+    );
+    assert.ok(stepEvents.some(([, filePath]) => filePath === laterFile));
   } finally {
     fixture.cleanup();
   }
