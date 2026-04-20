@@ -15,6 +15,10 @@ import {
   UNSAFE_WEB_FETCH_URL_REASON,
   type ToolPolicyWebFetchPolicyOptions
 } from "./tool-policy-web-fetch-policy.ts";
+import type {
+  ToolPolicyDecision,
+  ToolPolicyDecisionDeny
+} from "./tool-policy-types.ts";
 
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
@@ -36,6 +40,7 @@ const EMPTY_TOOL_ARGS_DEFERRED_REASON =
   "Empty toolArgs; deferred to permissionHandler.";
 const WEB_FETCH_POLICY_FAIL_CLOSED_REASON =
   "URL policy evaluation failed; denied as a precaution.";
+const PRE_TOOL_USE_NOT_HANDLED = Symbol("pre-tool-use-not-handled");
 
 // Module-scoped intermediate decision record produced by each kind branch inside
 // buildPermissionHandler. A single post-dispatch segment reads this record to
@@ -47,6 +52,10 @@ type HandlerDecisionRecord = {
   reason?: string;
   args: Record<string, string | undefined>;
 };
+
+type PreToolUseDecisionResult =
+  | PreToolUseHookResult
+  | typeof PRE_TOOL_USE_NOT_HANDLED;
 
 export interface ToolPolicyGuardOptions
   extends ToolPolicyWebFetchPolicyOptions {}
@@ -69,6 +78,125 @@ export class ToolPolicyGuard {
       ...(record.reason !== undefined ? { reason: record.reason } : {}),
       args: record.args
     };
+  }
+
+  #denyDecision(reason: string): ToolPolicyDecisionDeny {
+    return {
+      permissionDecision: "deny",
+      permissionDecisionReason: reason
+    };
+  }
+
+  #buildStringArgs(
+    key: string,
+    value: string
+  ): Record<string, string | undefined> {
+    return { [key]: value };
+  }
+
+  #buildPolicyDecisionRecord(
+    tool: string,
+    args: Record<string, string | undefined>,
+    decision: ToolPolicyDecision
+  ): HandlerDecisionRecord {
+    return decision
+      ? {
+          tool,
+          decision: "deny",
+          reason: decision.permissionDecisionReason,
+          args
+        }
+      : {
+          tool,
+          decision: "allow",
+          args
+        };
+  }
+
+  #extractHookStringArg(toolArgs: unknown, key: string): string {
+    if (!toolArgs || typeof toolArgs !== "object") {
+      return "";
+    }
+
+    const record = toolArgs as Record<string, unknown>;
+
+    return key in record && typeof record[key] === "string"
+      ? (record[key] as string)
+      : "";
+  }
+
+  #evaluateShellPolicyDecision(
+    command: string,
+    profile: Pick<ReviewSessionProfile, "repoRoot">,
+    commandCwd?: string
+  ): ToolPolicyDecision {
+    try {
+      return evaluateReadonlyShellCommand(command, profile, commandCwd);
+    } catch {
+      return this.#denyDecision(SHELL_POLICY_FAIL_CLOSED_REASON);
+    }
+  }
+
+  async #evaluateUrlPolicyDecision(url: string): Promise<ToolPolicyDecision> {
+    try {
+      return await this.#webFetchPolicy.evaluate(url);
+    } catch {
+      return this.#denyDecision(WEB_FETCH_POLICY_FAIL_CLOSED_REASON);
+    }
+  }
+
+  async #handlePreToolUseStringPolicy(options: {
+    input: PreToolUseHookInput;
+    auditWriter?: ToolAuditSink;
+    toolNames: ReadonlySet<string>;
+    argName: string;
+    evaluate: (value: string) => ToolPolicyDecision | Promise<ToolPolicyDecision>;
+    failClosedReason: string;
+  }): Promise<PreToolUseDecisionResult> {
+    if (!options.toolNames.has(options.input.toolName)) {
+      return PRE_TOOL_USE_NOT_HANDLED;
+    }
+
+    let value = "";
+
+    try {
+      value = this.#extractHookStringArg(options.input.toolArgs, options.argName);
+
+      if (!value) {
+        options.auditWriter?.append(this.#buildAuditEntry({
+          tool: options.input.toolName,
+          decision: "allow",
+          reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
+          args: this.#buildStringArgs(options.argName, "")
+        }));
+
+        return;
+      }
+
+      const decision = await options.evaluate(value);
+
+      options.auditWriter?.append(this.#buildAuditEntry(
+        this.#buildPolicyDecisionRecord(
+          options.input.toolName,
+          this.#buildStringArgs(options.argName, value),
+          decision
+        )
+      ));
+
+      return decision;
+    } catch {
+      const decision = this.#denyDecision(options.failClosedReason);
+
+      options.auditWriter?.append(this.#buildAuditEntry(
+        this.#buildPolicyDecisionRecord(
+          options.input.toolName,
+          this.#buildStringArgs(options.argName, value),
+          decision
+        )
+      ));
+
+      return decision;
+    }
   }
 
   // --- Per-kind permission evaluators ---
@@ -117,44 +245,36 @@ export class ToolPolicyGuard {
       typeof request.fullCommandText === "string"
         ? request.fullCommandText
         : "";
-    const args: Record<string, string | undefined> = fullCommandText
-      ? { fullCommandText }
+    const args = fullCommandText
+      ? this.#buildStringArgs("fullCommandText", fullCommandText)
       : {};
 
     if (!fullCommandText) {
       return { tool: "shell", decision: "allow", args };
     }
 
-    try {
-      const policyDecision = evaluateReadonlyShellCommand(fullCommandText, profile);
-
-      return policyDecision
-        ? { tool: "shell", decision: "deny", reason: policyDecision.permissionDecisionReason, args }
-        : { tool: "shell", decision: "allow", args };
-    } catch {
-      return { tool: "shell", decision: "deny", reason: SHELL_POLICY_FAIL_CLOSED_REASON, args };
-    }
+    return this.#buildPolicyDecisionRecord(
+      "shell",
+      args,
+      this.#evaluateShellPolicyDecision(fullCommandText, profile)
+    );
   }
 
   async #evaluateUrl(
     request: Record<string, unknown>
   ): Promise<HandlerDecisionRecord> {
     const url = typeof request.url === "string" ? request.url : "";
-    const args: Record<string, string | undefined> = url ? { url } : {};
+    const args = url ? this.#buildStringArgs("url", url) : {};
 
     if (!url) {
       return { tool: "url", decision: "allow", args };
     }
 
-    try {
-      const policyDecision = await this.#webFetchPolicy.evaluate(url);
-
-      return policyDecision
-        ? { tool: "url", decision: "deny", reason: policyDecision.permissionDecisionReason, args }
-        : { tool: "url", decision: "allow", args };
-    } catch {
-      return { tool: "url", decision: "deny", reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON, args };
-    }
+    return this.#buildPolicyDecisionRecord(
+      "url",
+      args,
+      await this.#evaluateUrlPolicyDecision(url)
+    );
   }
 
   #evaluateMcp(
@@ -267,105 +387,34 @@ export class ToolPolicyGuard {
     auditWriter?: ToolAuditSink
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
-      if (URL_TOOL_NAMES.has(input.toolName)) {
-        let url = "";
-        try {
-          url =
-            input.toolArgs &&
-            typeof input.toolArgs === "object" &&
-            "url" in input.toolArgs &&
-            typeof input.toolArgs.url === "string"
-              ? input.toolArgs.url
-              : "";
+      const urlResult = await this.#handlePreToolUseStringPolicy({
+        input,
+        auditWriter,
+        toolNames: URL_TOOL_NAMES,
+        argName: "url",
+        evaluate: (url) => this.#evaluateUrlPolicyDecision(url),
+        failClosedReason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON
+      });
 
-          if (!url) {
-            auditWriter?.append(this.#buildAuditEntry({
-              tool: input.toolName,
-              decision: "allow",
-              reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
-              args: { url: "" }
-            }));
-
-            return;
-          }
-
-          const decision = await this.#webFetchPolicy.evaluate(url);
-
-          auditWriter?.append(this.#buildAuditEntry({
-            tool: input.toolName,
-            decision: decision ? "deny" : "allow",
-            ...(decision ? { reason: decision.permissionDecisionReason } : {}),
-            args: { url }
-          }));
-
-          return decision;
-        } catch {
-          auditWriter?.append(this.#buildAuditEntry({
-            tool: input.toolName,
-            decision: "deny",
-            reason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
-            args: { url }
-          }));
-
-          return {
-            permissionDecision: "deny",
-            permissionDecisionReason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON
-          };
-        }
+      if (urlResult !== PRE_TOOL_USE_NOT_HANDLED) {
+        return urlResult;
       }
 
-      if (!SHELL_TOOL_NAMES.has(input.toolName)) {
-        return;
+      const shellResult = await this.#handlePreToolUseStringPolicy({
+        input,
+        auditWriter,
+        toolNames: SHELL_TOOL_NAMES,
+        argName: "command",
+        evaluate: (command) =>
+          this.#evaluateShellPolicyDecision(command, profile, input.cwd),
+        failClosedReason: SHELL_POLICY_FAIL_CLOSED_REASON
+      });
+
+      if (shellResult !== PRE_TOOL_USE_NOT_HANDLED) {
+        return shellResult;
       }
 
-      let command = "";
-      try {
-        command =
-          input.toolArgs &&
-          typeof input.toolArgs === "object" &&
-          "command" in input.toolArgs &&
-          typeof input.toolArgs.command === "string"
-            ? (input.toolArgs.command as string)
-            : "";
-
-        if (!command) {
-          auditWriter?.append(this.#buildAuditEntry({
-            tool: input.toolName,
-            decision: "allow",
-            reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
-            args: { command: "" }
-          }));
-
-          return;
-        }
-
-        const decision = evaluateReadonlyShellCommand(
-          command,
-          profile,
-          input.cwd
-        );
-
-        auditWriter?.append(this.#buildAuditEntry({
-          tool: input.toolName,
-          decision: decision ? "deny" : "allow",
-          ...(decision ? { reason: decision.permissionDecisionReason } : {}),
-          args: { command }
-        }));
-
-        return decision;
-      } catch {
-        auditWriter?.append(this.#buildAuditEntry({
-          tool: input.toolName,
-          decision: "deny",
-          reason: SHELL_POLICY_FAIL_CLOSED_REASON,
-          args: { command }
-        }));
-
-        return {
-          permissionDecision: "deny",
-          permissionDecisionReason: SHELL_POLICY_FAIL_CLOSED_REASON
-        };
-      }
+      return;
     };
   }
 }
