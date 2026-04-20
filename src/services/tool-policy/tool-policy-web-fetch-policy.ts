@@ -3,7 +3,8 @@ import { isIP } from "node:net";
 import {
   DefaultWebFetchHostnameClassifier,
   DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS,
-  type WebFetchHostnameClassifier
+  type WebFetchHostnameClassifier,
+  type WebFetchHostnameLookupLike
 } from "./web-fetch-hostname-classifier.ts";
 import { canonicalizeHostnameForComparison } from "../../core/web-fetch-hostname-normalization.ts";
 import {
@@ -22,6 +23,7 @@ export const CONFIGURED_WEB_FETCH_HOST_REASON =
 export interface ToolPolicyWebFetchPolicyOptions {
   addressPolicy?: WebFetchPublicAddressPolicy;
   hostnameClassifier?: WebFetchHostnameClassifier;
+  hostnameLookupFn?: WebFetchHostnameLookupLike;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
   webFetchHostnameClassificationTimeoutMs?: number;
@@ -40,7 +42,13 @@ export class ToolPolicyWebFetchPolicy {
     this.#addressPolicy =
       options.addressPolicy ?? new DefaultWebFetchPublicAddressPolicy();
     this.#hostnameClassifier =
-      options.hostnameClassifier ?? new DefaultWebFetchHostnameClassifier();
+      options.hostnameClassifier ??
+      new DefaultWebFetchHostnameClassifier({
+        addressPolicy: this.#addressPolicy,
+        ...(options.hostnameLookupFn === undefined
+          ? {}
+          : { lookupFn: options.hostnameLookupFn })
+      });
     this.#webFetchHostnameClassificationTimeoutMs =
       options.webFetchHostnameClassificationTimeoutMs ??
       DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS;
