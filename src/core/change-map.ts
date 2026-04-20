@@ -1,3 +1,5 @@
+import type { ReviewChangesetEntry } from "../providers/review-source-provider.ts";
+
 /**
  * ChangeMap v1 schema emitted by Step 0 (changeset overview).
  *
@@ -93,40 +95,22 @@ export interface ChangeMap {
 }
 
 /**
- * Extract the set of head-side changed paths from `git diff --name-status` lines
- * as returned by `ReviewSourceProvider.getChangesetEntries()`.
+ * Extract the set of head-side changed paths from provider-normalized changeset
+ * entries. Rename / copy entries already expose the head-side path through
+ * `path`, so downstream coverage checks compare against the same post-change
+ * path that per-file review uses.
  *
- * - Regular lines (`A|M|D` + `\t` + path) take the path field.
- * - Rename / copy lines (`R\d+` / `C\d+`, three tab-separated fields) take the
- *   final field (the new path), so downstream coverage checks compare against
- *   the post-change path that subsequent per-file review uses.
- * - Empty lines are ignored.
- *
- * Order is preserved; duplicates are NOT removed (validator coverage check
- * surfaces unexpected duplicates as `COVERAGE` failures).
+ * Order is preserved; duplicates are NOT removed, because validator coverage
+ * checks surface unexpected duplicates as `COVERAGE` failures.
  */
-export function extractChangedPathsFromNameStatus(
-  lines: readonly string[]
+export function extractChangedPathsFromChangesetEntries(
+  entries: readonly ReviewChangesetEntry[]
 ): readonly string[] {
   const result: string[] = [];
 
-  for (const rawLine of lines) {
-    if (!rawLine || rawLine.length === 0) {
-      continue;
-    }
-
-    const fields = rawLine.split("\t");
-
-    if (fields.length < 2) {
-      continue;
-    }
-
-    // Status code is fields[0] (e.g. "M", "A", "D", "R100", "C75").
-    // The head-side path is always the last field in name-status output.
-    const path = fields[fields.length - 1];
-
-    if (path.length > 0) {
-      result.push(path);
+  for (const entry of entries) {
+    if (entry.path.length > 0) {
+      result.push(entry.path);
     }
   }
 

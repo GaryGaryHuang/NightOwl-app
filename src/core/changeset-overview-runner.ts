@@ -1,7 +1,8 @@
-import { extractChangedPathsFromNameStatus } from "./change-map.ts";
+import { extractChangedPathsFromChangesetEntries } from "./change-map.ts";
 import { getReviewStepCapability } from "./review-step-capability-manifest.ts";
 import { createRunContext, type RunContext } from "./run-context.ts";
 import { retryOnce } from "./session-retry.ts";
+import type { ReviewChangesetEntry } from "../providers/review-source-provider.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import { Step0OutputValidator } from "./step0-output-validator.ts";
 import {
@@ -12,7 +13,7 @@ import {
 
 export interface ChangesetOverviewRunnerInput {
   model: string;
-  changedFilesList: string[];
+  changesetEntries: ReviewChangesetEntry[];
   outputBaseDir: string;
   repoRoot: string;
   signal?: AbortSignal;
@@ -39,7 +40,9 @@ export class ChangesetOverviewRunner {
   }
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
-    const expectedChangedPaths = extractChangedPathsFromNameStatus(input.changedFilesList);
+    const expectedChangedPaths = extractChangedPathsFromChangesetEntries(
+      input.changesetEntries
+    );
     const capability = getReviewStepCapability("changeset-overview");
 
     return retryOnce({

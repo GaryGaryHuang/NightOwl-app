@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ChangesetOverviewRunner } from "../../src/core/changeset-overview-runner.ts";
+import type { ReviewChangesetEntry } from "../../src/providers/review-source-provider.ts";
 import {
   SessionExecutor,
   SessionTurnAbortedError
@@ -49,6 +50,12 @@ function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
   });
 }
 
+function createChangesetEntries(
+  ...entries: ReviewChangesetEntry[]
+): ReviewChangesetEntry[] {
+  return entries;
+}
+
 test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMap response", async () => {
   const prompts: string[] = [];
   const profiles: unknown[] = [];
@@ -70,7 +77,7 @@ test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMa
     model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
-    changedFilesList: ["M\tsrc/app.ts"],
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
   });
 
@@ -120,7 +127,7 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
     model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
-    changedFilesList: ["M\tsrc/app.ts"],
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
   });
 
@@ -154,7 +161,7 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
     model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
-    changedFilesList: ["M\tsrc/app.ts"],
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
   });
 
@@ -184,7 +191,7 @@ test("ChangesetOverviewRunner aborts after two consecutive validation failures",
         model: "gpt-5.4-mini",
         outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
-        changedFilesList: ["M\tsrc/app.ts"],
+        changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
         userContext: []
       }),
     /Step 0 ChangeMap validation failed \[PARSE\]/
@@ -214,7 +221,7 @@ test("ChangesetOverviewRunner fails after two empty responses", async () => {
         model: "gpt-5.4-mini",
         outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
-        changedFilesList: ["M\tsrc/app.ts"],
+        changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
         userContext: []
       }),
     /changeset overview/i
@@ -239,7 +246,12 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
     model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
-    changedFilesList: ["R100\tsrc/old.ts\tsrc/new.ts"],
+    changesetEntries: createChangesetEntries({
+      status: "R",
+      similarityScore: 100,
+      previousPath: "src/old.ts",
+      path: "src/new.ts"
+    }),
     userContext: []
   });
 
@@ -266,7 +278,7 @@ test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
     model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
-    changedFilesList: [],
+    changesetEntries: [],
     userContext: []
   });
 
@@ -309,7 +321,7 @@ test("ChangesetOverviewRunner aborts an in-flight Step 0 turn without consuming 
         outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
         signal: controller.signal,
-        changedFilesList: ["M\tsrc/app.ts"],
+        changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
         userContext: []
       }),
     (error: unknown) => error instanceof SessionTurnAbortedError

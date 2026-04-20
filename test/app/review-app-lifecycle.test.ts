@@ -53,7 +53,7 @@ function createSignalTestApp(options: {
         return startPath;
       },
       async getChangesetEntries() {
-        return TEST_FILES;
+        return TEST_FILES.map((path) => ({ status: "M" as const, path }));
       },
       async getCurrentBranch() {
         return "feature-branch";

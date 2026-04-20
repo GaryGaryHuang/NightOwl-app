@@ -5,10 +5,20 @@ import {
   STEP0_SYSTEM_MESSAGE,
   buildStep0Prompt
 } from "../../../src/core/steps/step0-changeset-overview.ts";
+import type { ReviewChangesetEntry } from "../../../src/providers/review-source-provider.ts";
+
+function createChangesetEntries(
+  ...entries: ReviewChangesetEntry[]
+): ReviewChangesetEntry[] {
+  return entries;
+}
 
 test("buildStep0Prompt always includes the <changed_files> block", () => {
   const prompt = buildStep0Prompt({
-    changedFilesList: ["M\tsrc/app.ts", "A\tsrc/new.ts"],
+    changesetEntries: createChangesetEntries(
+      { status: "M", path: "src/app.ts" },
+      { status: "A", path: "src/new.ts" }
+    ),
     userContext: []
   });
 
@@ -20,7 +30,7 @@ test("buildStep0Prompt always includes the <changed_files> block", () => {
 
 test("buildStep0Prompt omits the <user_context> delimiter block when userContext is empty", () => {
   const prompt = buildStep0Prompt({
-    changedFilesList: ["M\tsrc/app.ts"],
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
   });
 
@@ -32,7 +42,7 @@ test("buildStep0Prompt omits the <user_context> delimiter block when userContext
 
 test("buildStep0Prompt includes <user_context> block when entries are provided", () => {
   const prompt = buildStep0Prompt({
-    changedFilesList: ["M\tsrc/app.ts"],
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: ["PR-123", "https://example.com/spec"]
   });
 
@@ -40,6 +50,20 @@ test("buildStep0Prompt includes <user_context> block when entries are provided",
   assert.match(prompt, /PR-123/);
   assert.match(prompt, /https:\/\/example\.com\/spec/);
   assert.match(prompt, /<\/user_context>/);
+});
+
+test("buildStep0Prompt preserves rename similarity and previous path metadata", () => {
+  const prompt = buildStep0Prompt({
+    changesetEntries: createChangesetEntries({
+      status: "R",
+      similarityScore: 100,
+      previousPath: "src/old.ts",
+      path: "src/new.ts"
+    }),
+    userContext: []
+  });
+
+  assert.match(prompt, /R100\tsrc\/old\.ts\tsrc\/new\.ts/);
 });
 
 test("STEP0_SYSTEM_MESSAGE communicates the ChangeMap v1 JSON contract", () => {
@@ -57,7 +81,7 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMap v1 JSON contract", () => {
 
 test("buildStep0Prompt instruction body includes the literal `## Changeset Overview` template header", () => {
   const prompt = buildStep0Prompt({
-    changedFilesList: ["M\tsrc/app.ts"],
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
   });
 

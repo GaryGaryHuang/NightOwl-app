@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import test from "node:test";
 
@@ -54,10 +55,10 @@ test("LocalGitProvider returns reviewable files and Step 0 changeset entries wit
     );
 
     assert.deepEqual(changesetEntries, [
-      "M\tdist/app.js",
-      "D\tobsolete.txt",
-      "M\tpackages/app/index.ts",
-      "M\tsrc/app.ts"
+      { status: "M", path: "dist/app.js" },
+      { status: "D", path: "obsolete.txt" },
+      { status: "M", path: "packages/app/index.ts" },
+      { status: "M", path: "src/app.ts" }
     ]);
   } finally {
     fixture.cleanup();
@@ -79,6 +80,34 @@ test("LocalGitProvider returns a single-file diff from a real Git repository", a
     assert.match(diff, /diff --git a\/src\/app\.ts b\/src\/app\.ts/);
     assert.match(diff, /-export const value = 1;/);
     assert.match(diff, /\+export const value = 2;/);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("LocalGitProvider preserves raw diff content from git", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    fixture.writeFile("src/whitespace.ts", "export const padded = 'x';   \n");
+    fixture.commitAll("add whitespace fixture");
+
+    const provider = new LocalGitProvider();
+    const diff = await provider.getDiff(
+      fixture.repoDir,
+      "main",
+      "feature-branch",
+      "src/whitespace.ts"
+    );
+    const expectedDiff = execFileSync(
+      "git",
+      ["diff", "main...feature-branch", "--", "src/whitespace.ts"],
+      { cwd: fixture.repoDir, encoding: "utf8" }
+    );
+
+    assert.equal(diff, expectedDiff);
+    assert.match(diff, /\+export const padded = 'x';   \n/);
+    assert.ok(diff.endsWith("\n"));
   } finally {
     fixture.cleanup();
   }

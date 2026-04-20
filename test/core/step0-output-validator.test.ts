@@ -6,7 +6,7 @@ import {
   Step0OutputValidator
 } from "../../src/core/step0-output-validator.ts";
 import {
-  extractChangedPathsFromNameStatus
+  extractChangedPathsFromChangesetEntries
 } from "../../src/core/change-map.ts";
 
 function makeValid(overrides: Record<string, unknown> = {}): string {
@@ -568,17 +568,16 @@ test("Step0OutputValidator rejects unresolvedUnknowns with non-boolean blocksFin
   );
 });
 
-test("extractChangedPathsFromNameStatus handles regular, rename, copy, and empty lines", () => {
-  const lines = [
-    "M\tsrc/foo.ts",
-    "A\tsrc/bar.ts",
-    "D\tsrc/baz.ts",
-    "R100\told.ts\tnew.ts",
-    "C75\tsrc/a.ts\tsrc/b.ts",
-    "",
-    "M\tsrc/qux.ts"
+test("extractChangedPathsFromChangesetEntries handles regular, rename, copy, and empty-path-free entries", () => {
+  const entries = [
+    { status: "M" as const, path: "src/foo.ts" },
+    { status: "A" as const, path: "src/bar.ts" },
+    { status: "D" as const, path: "src/baz.ts" },
+    { status: "R" as const, similarityScore: 100, previousPath: "old.ts", path: "new.ts" },
+    { status: "C" as const, similarityScore: 75, previousPath: "src/a.ts", path: "src/b.ts" },
+    { status: "M" as const, path: "src/qux.ts" }
   ];
-  const result = extractChangedPathsFromNameStatus(lines);
+  const result = extractChangedPathsFromChangesetEntries(entries);
   assert.deepEqual([...result], [
     "src/foo.ts",
     "src/bar.ts",
@@ -589,10 +588,10 @@ test("extractChangedPathsFromNameStatus handles regular, rename, copy, and empty
   ]);
 });
 
-test("extractChangedPathsFromNameStatus preserves duplicates so validator can surface them", () => {
-  const result = extractChangedPathsFromNameStatus([
-    "M\tsrc/dup.ts",
-    "M\tsrc/dup.ts"
+test("extractChangedPathsFromChangesetEntries preserves duplicates so validator can surface them", () => {
+  const result = extractChangedPathsFromChangesetEntries([
+    { status: "M", path: "src/dup.ts" },
+    { status: "M", path: "src/dup.ts" }
   ]);
   assert.deepEqual([...result], ["src/dup.ts", "src/dup.ts"]);
 });

@@ -8,7 +8,7 @@ import {
 } from "../../src/providers/review-source-provider.ts";
 
 test("LocalGitProvider (unit) normalizes list-style git output", async () => {
-  const provider = new LocalGitProvider(async () => "src/a.ts\nsrc/b.ts\n");
+  const provider = new LocalGitProvider(async () => "src/a.ts\r\nsrc/b.ts\r\n\r\n");
 
   assert.deepEqual(
     await provider.getChangedFiles("/repo", "main", "feature"),
@@ -21,7 +21,10 @@ test("LocalGitProvider (unit) normalizes list-style git output", async () => {
 
   assert.deepEqual(
     await changesetProvider.getChangesetEntries("/repo", "main", "feature"),
-    ["M\tsrc/a.ts", "D\tsrc/old.ts"]
+    [
+      { status: "M", path: "src/a.ts" },
+      { status: "D", path: "src/old.ts" }
+    ]
   );
 });
 
@@ -34,24 +37,26 @@ test("LocalGitProvider (unit) normalizes empty git output", async () => {
   assert.equal(await provider.getCurrentBranch("/repo"), undefined);
 });
 
-test("LocalGitProvider (unit) returns scalar git output unchanged", async () => {
-  const diffOutput = "diff --git a/src/a.ts b/src/a.ts\n+added line";
+test("LocalGitProvider (unit) normalizes scalar metadata output without mutating diff text", async () => {
+  const diffOutput = "diff --git a/src/a.ts b/src/a.ts\n+added line   \n";
 
   assert.equal(
-    await new LocalGitProvider(async () => "/repo").resolveRepoRoot("/any/start"),
+    await new LocalGitProvider(async () => "/repo\n").resolveRepoRoot("/any/start"),
     "/repo"
   );
-  assert.equal(
-    await new LocalGitProvider(async () => diffOutput).getDiff(
-      "/repo",
-      "main",
-      "feature",
-      "src/a.ts"
-    ),
-    diffOutput
+
+  const diff = await new LocalGitProvider(async () => diffOutput).getDiff(
+    "/repo",
+    "main",
+    "feature",
+    "src/a.ts"
   );
+
+  assert.equal(diff, diffOutput);
+  assert.match(diff, /\+added line   \n$/);
+
   assert.equal(
-    await new LocalGitProvider(async () => "feature-branch").getCurrentBranch("/repo"),
+    await new LocalGitProvider(async () => "feature-branch\n").getCurrentBranch("/repo"),
     "feature-branch"
   );
 });

@@ -185,7 +185,7 @@ export class ReviewOrchestrator {
     try {
       runContext = await this.#changesetOverviewRunner.run({
         model: "gpt-5.4-mini",
-        changedFilesList: changesetEntries,
+        changesetEntries,
         outputBaseDir: repoRoot,
         repoRoot,
         signal: options?.signal,

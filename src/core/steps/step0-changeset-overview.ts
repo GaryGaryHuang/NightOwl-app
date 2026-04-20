@@ -1,4 +1,8 @@
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import {
+  formatReviewChangesetEntry,
+  type ReviewChangesetEntry
+} from "../../providers/review-source-provider.ts";
 
 export const STEP0_TIMEOUT_MS = 300_000;
 
@@ -86,14 +90,14 @@ const STEP0_INSTRUCTION = [
 ].join("\n");
 
 export interface Step0PromptInput {
-  changedFilesList: string[];
+  changesetEntries: ReviewChangesetEntry[];
   userContext: string[];
 }
 
 export function buildStep0Prompt(input: Step0PromptInput): string {
   const promptLines = [
     "<changed_files>",
-    input.changedFilesList.join("\n"),
+    input.changesetEntries.map(formatReviewChangesetEntry).join("\n"),
     "</changed_files>"
   ];
 

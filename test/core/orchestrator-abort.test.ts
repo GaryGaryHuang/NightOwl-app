@@ -11,7 +11,10 @@ import type { StepDefinition } from "../../src/core/step-runner.ts";
 import type { ReviewFileFilter } from "../../src/providers/review-file-filter.ts";
 import type { ReviewOutputSink } from "../../src/providers/review-output-sink.ts";
 import type { ReviewOutputBootstrapAndPublisher } from "../helpers/output-sink-double.ts";
-import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
+import type {
+  ReviewChangesetEntry,
+  ReviewSourceProvider
+} from "../../src/providers/review-source-provider.ts";
 import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
 import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
@@ -34,6 +37,9 @@ type StepRunnerDouble = {
 type InterruptSignal = "SIGINT" | "SIGTERM" | undefined;
 
 function createMockSourceProvider(files: string[]): ReviewSourceProvider {
+  const changesetEntries: ReviewChangesetEntry[] =
+    files.map((path) => ({ status: "M", path }));
+
   return {
     async resolveRepoRoot(startPath: string): Promise<string> {
       return startPath;
@@ -42,8 +48,8 @@ function createMockSourceProvider(files: string[]): ReviewSourceProvider {
       _repoRoot: string,
       _baseRef: string,
       _headRef: string
-    ): Promise<string[]> {
-      return files;
+    ): Promise<ReviewChangesetEntry[]> {
+      return changesetEntries;
     },
     async getCurrentBranch(_repoRoot: string): Promise<string> {
       return "feature-branch";

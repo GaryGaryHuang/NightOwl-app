@@ -31,7 +31,10 @@ describe("createLocalReviewRunApp progress wiring", () => {
           return "/workspace/repo";
         },
         async getChangesetEntries() {
-          return ["src/app.ts", "packages/app/index.ts"];
+          return [
+            { status: "M" as const, path: "src/app.ts" },
+            { status: "M" as const, path: "packages/app/index.ts" }
+          ];
         },
         async getCurrentBranch() {
           return "feature-branch";

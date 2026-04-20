@@ -317,7 +317,7 @@ test("runCli surfaces a clear runtime error when Step 0 session startup fails", 
         throw new Error("unreachable");
       },
       async getChangesetEntries() {
-        throw new Error("unreachable");
+        return [];
       },
       async getDiff() {
         throw new Error("unreachable");
