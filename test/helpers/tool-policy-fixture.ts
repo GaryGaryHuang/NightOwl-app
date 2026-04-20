@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
-import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../../src/services/tool-policy/tool-policy-guard.ts";
+import type { ToolPolicyBoundaryContext } from "../../src/services/tool-policy/tool-policy-types.ts";
 import { ToolPolicyWebFetchPolicy } from "../../src/services/tool-policy/tool-policy-web-fetch-policy.ts";
 import type { ToolAuditRecord, ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
 import type {
@@ -9,7 +9,7 @@ import type {
   WebFetchHostnameClassifier
 } from "../../src/services/tool-policy/web-fetch-hostname-classifier.ts";
 
-export const BASE_PROFILE: Pick<ReviewSessionProfile, "repoRoot"> = {
+export const BASE_PROFILE: ToolPolicyBoundaryContext = {
   repoRoot: "/workspace/repo"
 };
 

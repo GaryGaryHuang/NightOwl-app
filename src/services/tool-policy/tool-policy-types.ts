@@ -1,3 +1,7 @@
+export interface ToolPolicyBoundaryContext {
+  repoRoot: string;
+}
+
 export interface ToolPolicyDecisionDeny {
   permissionDecision: "deny";
   permissionDecisionReason: string;

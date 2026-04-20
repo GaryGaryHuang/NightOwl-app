@@ -4,7 +4,6 @@ import {
 } from "@github/copilot-sdk";
 
 import { isAllowedReviewReadPath } from "../../core/review-access-guard.ts";
-import type { ReviewSessionProfile } from "../review-session-factory.ts";
 import {
   evaluateReadonlyShellCommand,
   READONLY_BASH_DENY_REASON
@@ -16,6 +15,7 @@ import {
   type ToolPolicyWebFetchPolicyOptions
 } from "./tool-policy-web-fetch-policy.ts";
 import type {
+  ToolPolicyBoundaryContext,
   ToolPolicyDecision,
   ToolPolicyDecisionDeny
 } from "./tool-policy-types.ts";
@@ -127,7 +127,7 @@ export class ToolPolicyGuard {
 
   #evaluateShellPolicyDecision(
     command: string,
-    profile: Pick<ReviewSessionProfile, "repoRoot">,
+    profile: ToolPolicyBoundaryContext,
     commandCwd?: string
   ): ToolPolicyDecision {
     try {
@@ -205,7 +205,7 @@ export class ToolPolicyGuard {
 
   #evaluateRead(
     request: Record<string, unknown>,
-    profile: Pick<ReviewSessionProfile, "repoRoot">
+    profile: ToolPolicyBoundaryContext
   ): HandlerDecisionRecord {
     const readPath = typeof request.path === "string" ? request.path : undefined;
 
@@ -239,7 +239,7 @@ export class ToolPolicyGuard {
 
   #evaluateShell(
     request: Record<string, unknown>,
-    profile: Pick<ReviewSessionProfile, "repoRoot">
+    profile: ToolPolicyBoundaryContext
   ): HandlerDecisionRecord {
     const fullCommandText =
       typeof request.fullCommandText === "string"
@@ -339,7 +339,7 @@ export class ToolPolicyGuard {
   // This is expected behaviour: audit records represent SDK interception events,
   // not the number of AI-initiated actions.
   buildPermissionHandler(
-    profile: Pick<ReviewSessionProfile, "repoRoot">,
+    profile: ToolPolicyBoundaryContext,
     auditWriter?: ToolAuditSink
   ): PermissionHandler {
     return async (request) => {
@@ -383,7 +383,7 @@ export class ToolPolicyGuard {
   }
 
   buildPreToolUseHook(
-    profile: Pick<ReviewSessionProfile, "repoRoot">,
+    profile: ToolPolicyBoundaryContext,
     auditWriter?: ToolAuditSink
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {

@@ -10,6 +10,7 @@ import {
   ToolPolicyGuard,
   type ToolPolicyGuardOptions
 } from "../../src/services/tool-policy/tool-policy-guard.ts";
+import type { ToolPolicyBoundaryContext } from "../../src/services/tool-policy/tool-policy-types.ts";
 import { ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
 import type { ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
 import {
@@ -103,11 +104,11 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
   });
   readonly preToolUseCalls: Array<{
     auditWriter?: ToolAuditSink;
-    profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">;
+    profile: ToolPolicyBoundaryContext;
   }> = [];
   readonly permissionCalls: Array<{
     auditWriter?: ToolAuditSink;
-    profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">;
+    profile: ToolPolicyBoundaryContext;
   }> = [];
 
   constructor(options: ToolPolicyGuardOptions = {}) {
@@ -115,7 +116,7 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
   }
 
   override buildPreToolUseHook(
-    profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">,
+    profile: ToolPolicyBoundaryContext,
     auditWriter?: ToolAuditSink
   ): PreToolUseHook {
     this.preToolUseCalls.push({ auditWriter, profile });
@@ -123,7 +124,7 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
   }
 
   override buildPermissionHandler(
-    profile: Pick<typeof BASE_REVIEW_PROFILE, "repoRoot" | "outputBaseDir">,
+    profile: ToolPolicyBoundaryContext,
     auditWriter?: ToolAuditSink
   ): PermissionHandler {
     this.permissionCalls.push({ auditWriter, profile });

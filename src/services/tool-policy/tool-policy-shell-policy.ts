@@ -2,13 +2,16 @@ import path from "node:path";
 
 import { isAllowedReviewReadPath } from "../../core/review-access-guard.ts";
 
-import type { ReviewSessionProfile } from "../review-session-factory.ts";
 import {
   containsTopLevelRedirection,
   splitTopLevelSequenceSegments,
   splitTopLevelPipelineSegments
 } from "./shell-command-parser.ts";
-import type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
+import type {
+  ToolPolicyBoundaryContext,
+  ToolPolicyDecisionDeny,
+  ToolPolicyDecision
+} from "./tool-policy-types.ts";
 
 export type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
 
@@ -104,7 +107,7 @@ const GIT_POLICY: CommandPolicy = {
 
 export function evaluateReadonlyShellCommand(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot">,
+  profile: ToolPolicyBoundaryContext,
   commandCwd?: string
 ): ToolPolicyDecision {
   return isAllowedReadonlyBashCommand(command, profile, commandCwd)
@@ -117,7 +120,7 @@ export function evaluateReadonlyShellCommand(
 
 function isAllowedReadonlyBashCommand(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot">,
+  profile: ToolPolicyBoundaryContext,
   commandCwd?: string
 ): boolean {
   const trimmedCommand = command.trim();
@@ -180,7 +183,7 @@ function isAllowedReadonlyBashCommand(
  */
 function extractCdCwd(
   chainSegment: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot">,
+  profile: ToolPolicyBoundaryContext,
   effectiveCwd?: string
 ): string | false | undefined {
   const trimmed = chainSegment.trim();
@@ -212,7 +215,7 @@ function extractCdCwd(
 
 function isAllowedSingleSegment(
   segment: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot">,
+  profile: ToolPolicyBoundaryContext,
   commandCwd?: string
 ): boolean {
   const trimmed = segment.trim();
@@ -250,7 +253,7 @@ function isAllowedSingleSegment(
 
 function normalizeGitChangeDirectorySegment(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot">,
+  profile: ToolPolicyBoundaryContext,
   commandCwd?: string
 ): { command: string; baseDirectory?: string } | undefined {
   const tokens = command.split(/\s+/u).filter(Boolean);
@@ -349,7 +352,7 @@ function satisfiesCommandPolicy(command: string, policy: CommandPolicy): boolean
 
 function hasOnlyAllowedPathArguments(
   command: string,
-  profile: Pick<ReviewSessionProfile, "repoRoot">,
+  profile: ToolPolicyBoundaryContext,
   commandCwd?: string
 ): boolean {
   const tokens = command.split(/\s+/u).filter(Boolean);
