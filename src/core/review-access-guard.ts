@@ -1,15 +1,7 @@
 import path from "node:path";
 
-import { NIGHTOWL_DIR, nightowlRoot, reviewOutputRoot } from "./nightowl-namespace.ts";
-
-/**
- * Returns true when the given file path (using any path separator) is the
- * NightOwl namespace directory itself or any path underneath it.
- */
-export function isNightOwlNamespacePath(filePath: string): boolean {
-  const normalized = filePath.replace(/\\/gu, "/");
-  return normalized === NIGHTOWL_DIR || normalized.startsWith(`${NIGHTOWL_DIR}/`);
-}
+import { nightowlRoot, reviewOutputRoot } from "./nightowl-namespace.ts";
+export { isNightOwlNamespacePath } from "./nightowl-namespace-path.ts";
 
 /**
  * Returns true when the given path is within the allowed read boundary for a
