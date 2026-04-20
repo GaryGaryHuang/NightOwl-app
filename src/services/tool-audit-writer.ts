@@ -12,6 +12,10 @@ export interface ToolAuditSink {
   append(record: ToolAuditRecord): void;
 }
 
+export interface ToolAuditOutputTarget {
+  toolAuditPath: string;
+}
+
 export class AuditWriterStateError extends Error {
   constructor(message: string) {
     super(message);
@@ -25,7 +29,7 @@ export class AuditWriterStateError extends Error {
  * Supports two construction modes:
  * - **Direct-write** (`new ToolAuditWriter(path)`): records are appended to disk asynchronously.
  * - **Buffering** (`new ToolAuditWriter()`): records are held in memory until
- *   `setPath(path)` is called, which queues the buffer for async flush and switches to direct-write.
+ *   `attachAuditFile(path)` is called, which queues the buffer for async flush and switches to direct-write.
  *
  * All disk writes are internally chained to preserve append order.
  * Use `flush()` to await completion of all pending writes.
@@ -54,16 +58,23 @@ export class ToolAuditWriter implements ToolAuditSink {
     this.#enqueueWrite(record);
   }
 
-  setPath(path: string): void {
+  attachAuditFile(auditFilePath: string): void {
     if (this.#auditFilePath !== undefined) {
-      throw new AuditWriterStateError("setPath() can only be called once");
+      throw new AuditWriterStateError("tool audit file can only be attached once");
     }
-    this.#auditFilePath = path;
+    this.#auditFilePath = auditFilePath;
     const buffered = this.#buffer!;
     this.#buffer = undefined;
     for (const record of buffered) {
       this.#enqueueWrite(record);
     }
+  }
+
+  /**
+   * @deprecated Use attachAuditFile() or ReviewRunToolAudit.bindOutputTarget().
+   */
+  setPath(path: string): void {
+    this.attachAuditFile(path);
   }
 
   flush(): Promise<void> {
@@ -84,5 +95,29 @@ export class ToolAuditWriter implements ToolAuditSink {
         }
       }
     });
+  }
+}
+
+/**
+ * Run-scoped tool-audit lifecycle for review sessions that may emit audit
+ * records before the review output target has been initialized.
+ */
+export class ReviewRunToolAudit {
+  readonly #writer: ToolAuditWriter;
+
+  constructor(options?: { onWriteFailure?: (error: unknown) => void }) {
+    this.#writer = new ToolAuditWriter(undefined, options);
+  }
+
+  get sink(): ToolAuditSink {
+    return this.#writer;
+  }
+
+  bindOutputTarget(outputTarget: ToolAuditOutputTarget): void {
+    this.#writer.attachAuditFile(outputTarget.toolAuditPath);
+  }
+
+  flush(): Promise<void> {
+    return this.#writer.flush();
   }
 }

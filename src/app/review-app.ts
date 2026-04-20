@@ -31,7 +31,11 @@ import {
 } from "../services/copilot-client-manager.ts";
 import { ReviewSessionFactory } from "../services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../services/tool-policy/tool-policy-guard.ts";
-import { ToolAuditWriter } from "../services/tool-audit-writer.ts";
+import {
+  ReviewRunToolAudit,
+  type ToolAuditOutputTarget,
+  type ToolAuditSink
+} from "../services/tool-audit-writer.ts";
 import type { WebFetchHostnameClassifier } from "../services/tool-policy/web-fetch-hostname-classifier.ts";
 import {
   DryRunReviewSessionFactory
@@ -76,6 +80,12 @@ interface RunDeps {
   flush(): Promise<void>;
 }
 
+interface ToolAuditLifecycle {
+  auditWriterProvider?: () => ToolAuditSink | undefined;
+  onOutputTargetReady?: (outputTarget: ToolAuditOutputTarget) => void;
+  flush(): Promise<void>;
+}
+
 /**
  * Composition root for a single local review run.
  * The repo-root-dependent pieces are assembled inside run() after repo root resolution.
@@ -96,21 +106,36 @@ export function createLocalReviewRunApp(
   const reviewConfigProvider =
     options.reviewConfigProvider ?? new LocalReviewConfigProvider();
 
+  function createToolAuditLifecycle(isDryRun: boolean): ToolAuditLifecycle {
+    if (isDryRun) {
+      return {
+        flush: async () => {}
+      };
+    }
+
+    const toolAudit = new ReviewRunToolAudit();
+
+    return {
+      auditWriterProvider: () => toolAudit.sink,
+      onOutputTargetReady: (outputTarget) => {
+        toolAudit.bindOutputTarget(outputTarget);
+      },
+      flush: () => toolAudit.flush()
+    };
+  }
+
   function buildRunDeps(isDryRun: boolean, reviewConfig: ReviewConfig): RunDeps {
+    const toolAuditLifecycle = createToolAuditLifecycle(isDryRun);
     const judgeSessionFactory = isDryRun
       ? new DryRunJudgeSessionFactory()
       : new JudgeSessionFactory({ clientManager });
     const judgeService = new JudgeService({ judgeSessionFactory });
 
     let reviewSessionFactory: Pick<ReviewSessionFactory, "createSession">;
-    let onOutputTargetReady: ((outputTarget: { toolAuditPath: string }) => void) | undefined;
-    let flush: () => Promise<void> = async () => {};
 
     if (isDryRun) {
       reviewSessionFactory = new DryRunReviewSessionFactory();
     } else {
-      const auditWriter = new ToolAuditWriter();
-      flush = () => auditWriter.flush();
       const knowledgeSvc =
         options.knowledgeSvc ??
         new KnowledgeSvc({
@@ -128,11 +153,8 @@ export function createLocalReviewRunApp(
         clientManager,
         knowledgeSvc,
         toolPolicyGuard,
-        auditWriterProvider: () => auditWriter
+        auditWriterProvider: toolAuditLifecycle.auditWriterProvider
       });
-      onOutputTargetReady = (outputTarget) => {
-        auditWriter.setPath(outputTarget.toolAuditPath);
-      };
     }
 
     const changesetOverviewRunner =
@@ -159,7 +181,7 @@ export function createLocalReviewRunApp(
       maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
       perFileStepsFactory: options.perFileStepsFactory,
       onProgressEvent: options.onProgressEvent,
-      onOutputTargetReady
+      onOutputTargetReady: toolAuditLifecycle.onOutputTargetReady
     });
 
     const lifecycleManager = new RunLifecycleManager({
@@ -167,7 +189,11 @@ export function createLocalReviewRunApp(
       gracefulShutdownTimeoutMs
     });
 
-    return { orchestrator, lifecycleManager, flush };
+    return {
+      orchestrator,
+      lifecycleManager,
+      flush: () => toolAuditLifecycle.flush()
+    };
   }
 
   return {

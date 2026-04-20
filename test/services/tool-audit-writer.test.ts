@@ -4,7 +4,11 @@ import path from "node:path";
 import test from "node:test";
 
 import type { ToolAuditSink } from "../../src/services/tool-audit-writer.ts";
-import { AuditWriterStateError, ToolAuditWriter } from "../../src/services/tool-audit-writer.ts";
+import {
+  AuditWriterStateError,
+  ReviewRunToolAudit,
+  ToolAuditWriter
+} from "../../src/services/tool-audit-writer.ts";
 import {
   createAuditFileFixture,
   createToolAuditRecord
@@ -124,7 +128,7 @@ test("ToolAuditWriter constructed without path enters buffering mode and does no
   }
 });
 
-test("ToolAuditWriter.setPath() flushes buffered records in append order", async () => {
+test("ToolAuditWriter.attachAuditFile() flushes buffered records in append order", async () => {
   const auditFixture = createAuditFileFixture();
 
   try {
@@ -138,7 +142,7 @@ test("ToolAuditWriter.setPath() flushes buffered records in append order", async
     writer.append(r2);
     writer.append(r3);
 
-    writer.setPath(auditFixture.auditPath);
+    writer.attachAuditFile(auditFixture.auditPath);
 
     await writer.flush();
 
@@ -152,7 +156,7 @@ test("ToolAuditWriter.setPath() flushes buffered records in append order", async
   }
 });
 
-test("ToolAuditWriter.append() after setPath() writes directly to disk", async () => {
+test("ToolAuditWriter.append() after attachAuditFile() writes directly to disk", async () => {
   const auditFixture = createAuditFileFixture();
 
   try {
@@ -161,7 +165,7 @@ test("ToolAuditWriter.append() after setPath() writes directly to disk", async (
     const buffered = createToolAuditRecord({ tool: "shell" });
     writer.append(buffered);
 
-    writer.setPath(auditFixture.auditPath);
+    writer.attachAuditFile(auditFixture.auditPath);
 
     const direct = createToolAuditRecord({ tool: "read", args: { path: "/a.ts" } });
     writer.append(direct);
@@ -177,19 +181,19 @@ test("ToolAuditWriter.append() after setPath() writes directly to disk", async (
   }
 });
 
-test("ToolAuditWriter.setPath() throws AuditWriterStateError on second call", () => {
+test("ToolAuditWriter.attachAuditFile() throws AuditWriterStateError on second call", () => {
   const auditFixture = createAuditFileFixture();
 
   try {
     const writer = new ToolAuditWriter();
-    writer.setPath(auditFixture.auditPath);
+    writer.attachAuditFile(auditFixture.auditPath);
 
     assert.throws(
-      () => writer.setPath(path.join(auditFixture.tempDir, "other.jsonl")),
+      () => writer.attachAuditFile(path.join(auditFixture.tempDir, "other.jsonl")),
       (err: unknown) => {
         assert.ok(err instanceof AuditWriterStateError);
         assert.equal(err.name, "AuditWriterStateError");
-        assert.equal(err.message, "setPath() can only be called once");
+        assert.equal(err.message, "tool audit file can only be attached once");
         return true;
       }
     );
@@ -198,18 +202,18 @@ test("ToolAuditWriter.setPath() throws AuditWriterStateError on second call", ()
   }
 });
 
-test("ToolAuditWriter.setPath() throws AuditWriterStateError on direct-write mode instance", () => {
+test("ToolAuditWriter.attachAuditFile() throws AuditWriterStateError on direct-write mode instance", () => {
   const auditFixture = createAuditFileFixture();
 
   try {
     const writer = new ToolAuditWriter(auditFixture.auditPath);
 
     assert.throws(
-      () => writer.setPath(path.join(auditFixture.tempDir, "other.jsonl")),
+      () => writer.attachAuditFile(path.join(auditFixture.tempDir, "other.jsonl")),
       (err: unknown) => {
         assert.ok(err instanceof AuditWriterStateError);
         assert.equal(err.name, "AuditWriterStateError");
-        assert.equal(err.message, "setPath() can only be called once");
+        assert.equal(err.message, "tool audit file can only be attached once");
         return true;
       }
     );
@@ -218,7 +222,7 @@ test("ToolAuditWriter.setPath() throws AuditWriterStateError on direct-write mod
   }
 });
 
-test("ToolAuditWriter.setPath() flush failure does not prevent mode switch", () => {
+test("ToolAuditWriter.attachAuditFile() flush failure does not prevent mode switch", () => {
   const auditFixture = createAuditFileFixture();
 
   try {
@@ -227,8 +231,8 @@ test("ToolAuditWriter.setPath() flush failure does not prevent mode switch", () 
     writer.append(createToolAuditRecord({ tool: "shell" }));
     writer.append(createToolAuditRecord({ tool: "read" }));
 
-    // Use a directory path (not a file) — appendFileSync will fail for each record
-    assert.doesNotThrow(() => writer.setPath(auditFixture.tempDir));
+    // Use a directory path (not a file) — appendFile will fail for each record
+    assert.doesNotThrow(() => writer.attachAuditFile(auditFixture.tempDir));
 
     // Writer should now be in direct-write mode; subsequent append should not throw
     assert.doesNotThrow(() =>
@@ -256,11 +260,33 @@ test("ToolAuditWriter in direct-write mode satisfies ToolAuditSink interface", (
   }
 });
 
-test("ToolAuditWriter.setPath() never called: buffered records are not written to any file", () => {
+test("ReviewRunToolAudit binds buffered sink records to outputTarget.toolAuditPath", async () => {
   const auditFixture = createAuditFileFixture();
 
   try {
-    // Create writer, add records, then let it go out of scope without setPath
+    const toolAudit = new ReviewRunToolAudit();
+    const sink = toolAudit.sink;
+    const shellRecord = createToolAuditRecord({ tool: "shell" });
+    const readRecord = createToolAuditRecord({ tool: "read", args: { path: "/src/index.ts" } });
+
+    sink.append(shellRecord);
+    sink.append(readRecord);
+
+    toolAudit.bindOutputTarget({ toolAuditPath: auditFixture.auditPath });
+    await toolAudit.flush();
+
+    const lines = readAuditLines(auditFixture.read());
+    assert.deepEqual(lines, [shellRecord, readRecord]);
+  } finally {
+    auditFixture.cleanup();
+  }
+});
+
+test("ToolAuditWriter.attachAuditFile() never called: buffered records are not written to any file", () => {
+  const auditFixture = createAuditFileFixture();
+
+  try {
+    // Create writer, add records, then let it go out of scope without attachAuditFile
     const writer = new ToolAuditWriter();
     writer.append(createToolAuditRecord({ tool: "shell" }));
     writer.append(createToolAuditRecord({ tool: "read" }));
