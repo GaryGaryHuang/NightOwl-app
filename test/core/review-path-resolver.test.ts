@@ -128,3 +128,10 @@ test("planNoteFiles throws for invalid changed-file paths that have no basename"
     /Invalid changed file path/u
   );
 });
+
+test("planNoteFiles throws when duplicate entries cause unresolvable conflicts", () => {
+  assert.throws(
+    () => planNoteFiles(FILES_PATH, ["src/app.ts", "src/app.ts"]),
+    /conflict resolution exceeded maximum iterations/u
+  );
+});

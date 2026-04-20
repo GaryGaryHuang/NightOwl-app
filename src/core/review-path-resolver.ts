@@ -67,8 +67,21 @@ export function planNoteFiles(
   // Iteratively widen any colliding note filenames by incrementing parent depth.
   // Terminates because each conflict pass increments depth for at least one file,
   // bounded above by the number of directory segments in that file's path.
+  // Safety bound: maximum possible iterations equals the deepest directory depth
+  // among all changed files, since each pass increases depth by at least 1.
+  const maxIterations = changedFiles.reduce((max, filePath) => {
+    const segmentCount = filePath.replace(/\\/gu, "/").split("/").length;
+    return segmentCount > max ? segmentCount : max;
+  }, 1);
+
+  let iterations = 0;
   let conflicts = detectNoteNameConflicts(changedFiles, depths);
   while (conflicts.length > 0) {
+    if (++iterations > maxIterations) {
+      throw new Error(
+        "planNoteFiles: conflict resolution exceeded maximum iterations — possible duplicate entries in changedFiles"
+      );
+    }
     for (const filePaths of conflicts) {
       for (const filePath of filePaths) {
         depths.set(filePath, (depths.get(filePath) ?? 1) + 1);
