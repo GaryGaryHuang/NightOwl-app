@@ -64,6 +64,14 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
         "ReviewSessionFactory requires callers to provide an explicit knowledgeMode."
       );
     }
+    if (
+      profile.knowledgeMode === "built-in-context7" &&
+      this.#knowledgeSvc === undefined
+    ) {
+      throw new Error(
+        "ReviewSessionFactory requires knowledgeSvc for built-in-context7 sessions."
+      );
+    }
     const sessionConfig: SessionConfig = {
       availableTools: [...REVIEW_AVAILABLE_TOOLS],
       hooks: {

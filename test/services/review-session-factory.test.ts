@@ -28,6 +28,14 @@ const EXPECTED_REVIEW_AVAILABLE_TOOLS = [
   "glob"
 ] as const;
 
+const DEFAULT_CONTEXT7_SERVERS: Record<string, MCPServerConfig> = {
+  context7: {
+    type: "http",
+    url: "https://mcp.context7.com/mcp",
+    tools: ["*"]
+  }
+};
+
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
 >;
@@ -70,9 +78,14 @@ function createReviewSessionFactoryHarness(
       };
     }),
     toolPolicyGuard: options.toolPolicyGuard ?? new SpyToolPolicyGuard(),
-    ...(options.knowledgeSvc === undefined
-      ? {}
-      : { knowledgeSvc: options.knowledgeSvc }),
+    knowledgeSvc:
+      options.knowledgeSvc ?? {
+        getMcpServers(knowledgeMode) {
+          return knowledgeMode === "built-in-context7"
+            ? DEFAULT_CONTEXT7_SERVERS
+            : {};
+        }
+      },
     ...(options.auditWriterProvider === undefined
       ? {}
       : { auditWriterProvider: options.auditWriterProvider })
@@ -164,7 +177,10 @@ test("ReviewSessionFactory builds the base review session config from the profil
     toolPolicyGuard: new SpyToolPolicyGuard()
   });
 
-  await factory.createSession(BASE_REVIEW_PROFILE);
+  await factory.createSession({
+    ...BASE_REVIEW_PROFILE,
+    knowledgeMode: "disabled"
+  });
 
   const config = getRecordedConfig(receivedConfigs);
   assert.equal(config.model, "gpt-5.4-mini");
@@ -228,6 +244,31 @@ test("ReviewSessionFactory rejects runtime profiles that omit knowledgeMode", as
       ),
     /requires callers to provide an explicit knowledgeMode/u
   );
+});
+
+test("ReviewSessionFactory rejects built-in-context7 sessions when knowledgeSvc is missing", async () => {
+  const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
+  const factory = new ReviewSessionFactory({
+    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
+      assertRecordedReviewSessionConfig(config);
+      return {
+        async sendAndWait() {
+          return {
+            type: "assistant.message",
+            data: { content: "ok" }
+          };
+        },
+        async disconnect() {}
+      };
+    }),
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  await assert.rejects(
+    () => factory.createSession(BASE_REVIEW_PROFILE),
+    /requires knowledgeSvc for built-in-context7 sessions/u
+  );
+  assert.equal(receivedConfigs.length, 0);
 });
 
 // auditWriterProvider is supplied at construction time; sessions created before the provider
