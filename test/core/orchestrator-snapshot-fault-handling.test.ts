@@ -72,6 +72,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -165,6 +166,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -252,6 +254,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -343,6 +346,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -408,6 +412,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -493,6 +498,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -575,6 +581,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),

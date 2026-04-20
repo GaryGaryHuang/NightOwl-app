@@ -37,6 +37,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
         async publishSkippedFile() {},
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -141,6 +142,7 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
         async publishSkippedFile() {},
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {
           callOrder.push("publishChangesetOverview");

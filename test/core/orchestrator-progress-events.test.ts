@@ -66,6 +66,7 @@ describe("ReviewOrchestrator progress events", () => {
         async publishSkippedFile() {},
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),

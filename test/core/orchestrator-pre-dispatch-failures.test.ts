@@ -45,6 +45,7 @@ test("ReviewOrchestrator aborts when Step 0 fails before initializing local outp
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -104,6 +105,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
         async publishSkippedFile() {},
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {
           calls.push("publishChangesetOverview");
@@ -174,6 +176,7 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -240,6 +243,7 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),
@@ -314,6 +318,7 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
         },
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       }),

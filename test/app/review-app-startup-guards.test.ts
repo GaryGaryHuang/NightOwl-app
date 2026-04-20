@@ -46,6 +46,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
         async publishSkippedFile() {},
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       })
@@ -106,6 +107,7 @@ test("createLocalReviewRunApp passes context7ApiKey option to the session config
         async publishSkippedFile() {},
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       })

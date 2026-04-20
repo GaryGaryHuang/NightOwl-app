@@ -103,6 +103,7 @@ describe("createLocalReviewRunApp web-fetch tool policy wiring", () => {
         async publishSkippedFile() {},
         async publishRunSummary() {},
         async publishReviewIndex() {},
+        async publishVerifierReport() {},
         async publishRunManifest() {},
         async publishChangesetOverview() {}
       })
