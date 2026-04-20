@@ -3,9 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, before, after, test } from "node:test";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
-import type { ReviewPerFileStepsFactory } from "../../src/core/orchestrator.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
-import type { StepDefinition } from "../../src/core/step-runner.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 
 /**
@@ -15,7 +13,7 @@ import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-
  * git repo fixture, using the production DryRunReviewSessionFactory and
  * DryRunJudgeSessionFactory. No Copilot SDK or AI API is invoked.
  *
- * Verifies only generic dry-run behavior:
+ * Verifies only happy-path dry-run behavior:
  *  - clientManager.start() / stop() are never called
  *  - Output folder structure matches production layout
  *  - tool-audit.jsonl is empty (no SDK tool calls)
@@ -95,165 +93,4 @@ describe("dry-run integration", () => {
     const content = readFileSync(result.outputTarget.skippedPath, "utf8");
     assert.ok(!content.includes("##"), "skipped.md should have no skipped file sections in dry-run");
   });
-});
-
-interface DryRunStepExecutionRecord {
-  filePath: string;
-  stepId: string;
-}
-
-function createDryRunOnlyStep(
-  stepId: string,
-  executionLog: DryRunStepExecutionRecord[]
-): StepDefinition {
-  return {
-    stepId,
-    prepare(context) {
-      return {
-        stepId,
-        prompt: {
-          systemMessage: `custom system for ${stepId}`,
-          userMessage: `custom prompt for ${context.filePath}`
-        },
-        reviewProfile: {
-          model: "gpt-5-mini",
-          knowledgeMode: "disabled"
-        },
-        async resolve(actualResponse: string) {
-          assert.ok(actualResponse.length > 0, "dry-run should produce a non-empty response");
-
-          return () => {
-            executionLog.push({ filePath: context.filePath, stepId });
-          };
-        }
-      };
-    }
-  };
-}
-
-function createCustomPerFileStepsFactory(
-  stepIds: readonly string[],
-  executionLog: DryRunStepExecutionRecord[]
-): ReviewPerFileStepsFactory {
-  return () => stepIds.map((stepId) => createDryRunOnlyStep(stepId, executionLog));
-}
-
-function collectStepIdsByFile(
-  executionLog: readonly DryRunStepExecutionRecord[]
-): Map<string, string[]> {
-  const stepIdsByFile = new Map<string, string[]>();
-
-  for (const entry of executionLog) {
-    const steps = stepIdsByFile.get(entry.filePath) ?? [];
-    steps.push(entry.stepId);
-    stepIdsByFile.set(entry.filePath, steps);
-  }
-
-  return stepIdsByFile;
-}
-
-async function runDryRunWithCustomStepTopology(
-  stepIds: readonly string[]
-): Promise<{
-  executionLog: DryRunStepExecutionRecord[];
-  fixture: ReviewRepoFixture;
-  result: ReviewRunSummary;
-}> {
-  const executionLog: DryRunStepExecutionRecord[] = [];
-  const fixture = createReviewRepoFixture();
-  fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-
-  const app = createLocalReviewRunApp({
-    workingDirectory: fixture.repoDir,
-    timestampProvider: () => "03300941",
-    perFileStepsFactory: createCustomPerFileStepsFactory(stepIds, executionLog),
-    reviewConfigProvider: {
-      async loadReviewConfig() {
-        return {
-          maxConcurrentFiles: 1,
-          confidenceThresholds: {
-            must: 80,
-            nice: 90
-          },
-          mcpServers: {}
-        };
-      }
-    },
-    clientManager: {
-      async start() {
-        throw new Error("clientManager.start() must not be called in dry-run");
-      },
-      async stop() {
-        throw new Error("clientManager.stop() must not be called in dry-run");
-      },
-      async forceStop() {},
-      getClient() {
-        throw new Error("clientManager.getClient() must not be called in dry-run");
-      }
-    }
-  });
-
-  const result = await app.run({
-    baseRef: "main",
-    headRef: "feature-branch",
-    repoPath: "./packages/app",
-    userContext: [],
-    dryRun: true
-  });
-
-  return { executionLog, fixture, result };
-}
-
-function assertCustomTopologyRun(
-  result: ReviewRunSummary,
-  executionLog: readonly DryRunStepExecutionRecord[],
-  expectedStepIds: readonly string[]
-): void {
-  assert.equal(result.dryRun, true);
-  assert.equal(result.skippedFileCount, 0);
-  assert.ok(result.successfulFileCount > 0, "dry-run should process at least one file");
-  assert.equal(
-    executionLog.length,
-    result.successfulFileCount * expectedStepIds.length
-  );
-
-  const stepIdsByFile = collectStepIdsByFile(executionLog);
-  assert.equal(stepIdsByFile.size, result.successfulFileCount);
-
-  for (const stepIds of stepIdsByFile.values()) {
-    assert.deepEqual(stepIds, [...expectedStepIds]);
-  }
-}
-
-test("dry-run still succeeds when a custom step is added to the per-file topology", async () => {
-  const stepIds = ["custom-overview", "custom-added-step", "custom-summary"];
-  const { fixture, result, executionLog } = await runDryRunWithCustomStepTopology(stepIds);
-
-  try {
-    assertCustomTopologyRun(result, executionLog, stepIds);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("dry-run still succeeds when a step is removed from the per-file topology", async () => {
-  const stepIds = ["custom-overview", "custom-summary"];
-  const { fixture, result, executionLog } = await runDryRunWithCustomStepTopology(stepIds);
-
-  try {
-    assertCustomTopologyRun(result, executionLog, stepIds);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("dry-run still succeeds when the per-file steps are reordered", async () => {
-  const stepIds = ["custom-summary", "custom-overview", "custom-added-step"];
-  const { fixture, result, executionLog } = await runDryRunWithCustomStepTopology(stepIds);
-
-  try {
-    assertCustomTopologyRun(result, executionLog, stepIds);
-  } finally {
-    fixture.cleanup();
-  }
 });

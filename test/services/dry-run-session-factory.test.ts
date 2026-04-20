@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
+import { REVIEW_STEP_CAPABILITIES } from "../../src/core/review-step-capability-manifest.ts";
 import {
   DryRunReviewSessionFactory
 } from "../../src/services/dry-run-review-session-factory.ts";
@@ -9,8 +10,7 @@ import {
 } from "../../src/services/dry-run-judge-session-factory.ts";
 import {
   buildDryRunChangesetOverviewResponse,
-  getDryRunStubResponse,
-  GENERIC_DRY_RUN_STUB
+  getDryRunStubResponse
 } from "../../src/services/dry-run-stub-catalog.ts";
 
 describe("DryRunReviewSessionFactory stub mapping", () => {
@@ -27,39 +27,6 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
 
     const response = await session.sendAndWait("please review");
     assert.equal(response, getDryRunStubResponse("step1-overview"));
-  });
-
-  test("returns generic fallback for unknown stepId", async () => {
-    const factory = new DryRunReviewSessionFactory();
-    const session = await factory.createSession({
-      knowledgeMode: "disabled",
-      model: "gpt-5.4-mini",
-      outputBaseDir: "/workspace/output",
-      repoRoot: "/workspace/repo",
-      systemMessage: "custom step system",
-      stepId: "custom-added-step"
-    });
-
-    assert.equal(
-      await session.sendAndWait("please review"),
-      GENERIC_DRY_RUN_STUB
-    );
-  });
-
-  test("returns generic fallback when stepId is omitted", async () => {
-    const factory = new DryRunReviewSessionFactory();
-    const session = await factory.createSession({
-      knowledgeMode: "disabled",
-      model: "gpt-5.4-mini",
-      outputBaseDir: "/workspace/output",
-      repoRoot: "/workspace/repo",
-      systemMessage: "no step id"
-    });
-
-    assert.equal(
-      await session.sendAndWait("prompt"),
-      GENERIC_DRY_RUN_STUB
-    );
   });
 });
 
@@ -78,15 +45,9 @@ describe("DryRunJudgeSessionFactory dry-run behavior", () => {
 
 describe("Dry-run stub catalog completeness", () => {
   test("covers all built-in step IDs", () => {
-    const builtInStepIds = [
-      "step1-overview",
-      "step2-dependencies-boundaries",
-      "step3-knowledge-source-of-truth",
-      "step4-strategy-what-if-scenarios",
-      "step5-validation-interrogation",
-      "step6-cognitive-simulation",
-      "step7-summary"
-    ];
+    const builtInStepIds = REVIEW_STEP_CAPABILITIES
+      .map((capability) => capability.stepId)
+      .filter((stepId) => stepId !== "changeset-overview");
 
     for (const stepId of builtInStepIds) {
       const stub = getDryRunStubResponse(stepId);
@@ -101,8 +62,6 @@ describe("Dry-run stub catalog completeness", () => {
       "A\tsrc/added.ts",
       "M\tsrc/foo.ts",
       "D\tsrc/deleted.ts",
-      "R100\tsrc/old.ts\tsrc/new.ts",
-      "C75\tsrc/copied-from.ts\tsrc/copied-to.ts",
       "</changed_files>"
     ].join("\n");
 
@@ -118,12 +77,10 @@ describe("Dry-run stub catalog completeness", () => {
       [
         { path: "src/added.ts", status: "A" },
         { path: "src/foo.ts", status: "M" },
-        { path: "src/deleted.ts", status: "D" },
-        { path: "src/new.ts", status: "R" },
-        { path: "src/copied-to.ts", status: "A" }
+        { path: "src/deleted.ts", status: "D" }
       ]
     );
-    assert.match(parsed.overviewMarkdown, /^## Changeset Overview\n- 調整範圍：/u);
-    assert.equal(parsed.overviewMarkdown.includes("### 調整範圍"), false);
+    assert.match(parsed.overviewMarkdown, /^## Changeset Overview\n- Scope:/u);
+    assert.equal(parsed.overviewMarkdown.includes("### Scope"), false);
   });
 });

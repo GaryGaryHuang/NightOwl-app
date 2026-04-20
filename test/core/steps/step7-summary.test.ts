@@ -113,6 +113,13 @@ test("parseRiskLevelFromResponse extracts valid risk levels", async (t) => {
     );
   });
 
+  await t.test("extracts English summary risk line", () => {
+    assert.equal(
+      parseRiskLevelFromResponse("- Overall risk level: None"),
+      "None"
+    );
+  });
+
   await t.test("picks first match in multi-line response", () => {
     const response = [
       "### 審查基礎",
