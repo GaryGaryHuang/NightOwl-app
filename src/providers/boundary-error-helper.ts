@@ -19,9 +19,9 @@ export async function wrapBoundaryError<T>(
 }
 
 /**
- * Wraps a preflight async operation so missing resources can fall back
- * without converting ENOENT into a boundary error, while other failures
- * are still normalized at the provider boundary.
+ * Wraps an async operation so missing resources can fall back without
+ * converting ENOENT into a boundary error, while other failures are still
+ * normalized at the provider boundary.
  *
  * @internal Not part of the public API.
  */

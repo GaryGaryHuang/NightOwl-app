@@ -1,4 +1,4 @@
-import { stat, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 import { reviewConfigPath } from "../../core/nightowl-namespace.ts";
 import type {
@@ -11,7 +11,6 @@ import {
   parseReviewConfig
 } from "./review-config-parser.ts";
 import {
-  wrapBoundaryError,
   wrapBoundaryErrorUnlessEnoent
 } from "../boundary-error-helper.ts";
 
@@ -27,21 +26,9 @@ export class LocalReviewConfigProvider implements ReviewConfigProvider {
       { cause, configPath }
     );
 
-    const configExists = await wrapBoundaryErrorUnlessEnoent(
-      async () => {
-        await stat(configPath);
-        return true;
-      },
-      () => false,
-      toBoundaryError
-    );
-
-    if (!configExists) {
-      return buildDefaultReviewConfig();
-    }
-
-    return wrapBoundaryError(
+    return wrapBoundaryErrorUnlessEnoent(
       async () => parseReviewConfig(await readFile(configPath, "utf8")),
+      () => buildDefaultReviewConfig(),
       toBoundaryError
     );
   }

@@ -1,4 +1,4 @@
-import { stat, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 
 import ignore from "ignore";
 
@@ -9,7 +9,6 @@ import {
   type ReviewFileFilter
 } from "./review-file-filter.ts";
 import {
-  wrapBoundaryError,
   wrapBoundaryErrorUnlessEnoent
 } from "./boundary-error-helper.ts";
 
@@ -26,26 +25,14 @@ export class LocalReviewFileFilter implements ReviewFileFilter {
       { cause }
     );
 
-    const reviewIgnoreExists = await wrapBoundaryErrorUnlessEnoent(
-      async () => {
-        await stat(reviewIgnoreFilePath);
-        return true;
-      },
-      () => false,
-      toBoundaryError
-    );
-
-    if (!reviewIgnoreExists) {
-      return [...sourceFiles];
-    }
-
-    return wrapBoundaryError(
+    return wrapBoundaryErrorUnlessEnoent(
       async () => {
         const matcher = ignore().add(await readFile(reviewIgnoreFilePath, "utf8"));
 
         // `reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
         return sourceFiles.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
       },
+      () => [...sourceFiles],
       toBoundaryError
     );
   }
