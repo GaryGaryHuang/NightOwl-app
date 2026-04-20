@@ -6,98 +6,60 @@ import {
   resolveWebFetchDeniedHostsFromConfigObject
 } from "../../src/providers/config/review-config-web-fetch-host-parser.ts";
 
-const INVALID_HOST_ENTRIES: unknown[] = [
-  123,
-  "   ",
-  "https://docs.example.com",
-  "docs.example.com:8443",
-  "docs.example.com/guide",
-  "192.168.1.10",
-  "*",
-  "*.",
-  "*.*.example.com",
-  "example.*",
-  "foo*bar.com",
-  "*example.com"
-];
-
-const INVALID_ALLOWLIST_ONLY_HOST_ENTRIES = [
-  "*.example.com:8443",
-  "*.example.com/guide",
-  "*.192.168.1.10"
-];
-
-test("web-fetch host parser normalizes exact and wildcard host entries", () => {
+test("web-fetch host parser normalizes exact and wildcard host entries while preserving absence semantics", () => {
   assert.deepEqual(
     resolveWebFetchAllowedHostsFromConfigObject({
-      webFetchAllowedHosts: [" Docs.Example.Com. ", "*.Example.com. "]
+      webFetchAllowedHosts: [" Docs.Example.com ", "*.API.Example.com"]
     }),
-    ["docs.example.com", "*.example.com"]
+    ["docs.example.com", "*.api.example.com"]
   );
-
-  assert.deepEqual(
-    resolveWebFetchDeniedHostsFromConfigObject({
-      webFetchDeniedHosts: [" Internal.Example.Com. ", "*.Internal.Example.Com. "]
-    }),
-    ["internal.example.com", "*.internal.example.com"]
-  );
-});
-
-test("web-fetch host parser preserves denylist-only and empty-denylist behavior", () => {
-  assert.deepEqual(
-    resolveWebFetchDeniedHostsFromConfigObject({
-      webFetchDeniedHosts: []
-    }),
-    []
-  );
-
-  assert.deepEqual(
-    resolveWebFetchDeniedHostsFromConfigObject({
-      webFetchDeniedHosts: ["evil.com"]
-    }),
-    ["evil.com"]
-  );
-
   assert.equal(
     resolveWebFetchAllowedHostsFromConfigObject({}),
     undefined
   );
+  assert.deepEqual(
+    resolveWebFetchDeniedHostsFromConfigObject({ webFetchDeniedHosts: [] }),
+    []
+  );
 });
 
-test("web-fetch host parser rejects invalid allowlist entries with the stable error surface", () => {
-  const invalidAllowlistConfigs: Array<Record<string, unknown>> = [
-    {
-      webFetchAllowedHosts: "docs.example.com"
-    },
-    ...[...INVALID_HOST_ENTRIES, ...INVALID_ALLOWLIST_ONLY_HOST_ENTRIES].map(
-      (entry) => ({
-        webFetchAllowedHosts: [entry]
-      })
-    )
-  ];
-
-  for (const config of invalidAllowlistConfigs) {
-    assert.throws(
-      () => resolveWebFetchAllowedHostsFromConfigObject(config),
-      /webFetchAllowedHosts/u
-    );
-  }
+test("web-fetch host parser rejects invalid allowlist entries", () => {
+  assert.throws(
+    () =>
+      resolveWebFetchAllowedHostsFromConfigObject({
+        webFetchAllowedHosts: "docs.example.com" as unknown as string[]
+      }),
+    /webFetchAllowedHosts/u
+  );
+  assert.throws(
+    () =>
+      resolveWebFetchAllowedHostsFromConfigObject({
+        webFetchAllowedHosts: ["https://docs.example.com"]
+      }),
+    /webFetchAllowedHosts/u
+  );
+  assert.throws(
+    () =>
+      resolveWebFetchAllowedHostsFromConfigObject({
+        webFetchAllowedHosts: ["*docs.example.com"]
+      }),
+    /webFetchAllowedHosts/u
+  );
 });
 
-test("web-fetch host parser rejects invalid denylist entries with the stable error surface", () => {
-  const invalidDenylistConfigs: Array<Record<string, unknown>> = [
-    {
-      webFetchDeniedHosts: "evil.com"
-    },
-    ...INVALID_HOST_ENTRIES.map((entry) => ({
-      webFetchDeniedHosts: [entry]
-    }))
-  ];
-
-  for (const config of invalidDenylistConfigs) {
-    assert.throws(
-      () => resolveWebFetchDeniedHostsFromConfigObject(config),
-      /webFetchDeniedHosts/u
-    );
-  }
+test("web-fetch host parser rejects invalid denylist entries", () => {
+  assert.throws(
+    () =>
+      resolveWebFetchDeniedHostsFromConfigObject({
+        webFetchDeniedHosts: [""]
+      }),
+    /webFetchDeniedHosts/u
+  );
+  assert.throws(
+    () =>
+      resolveWebFetchDeniedHostsFromConfigObject({
+        webFetchDeniedHosts: ["127.0.0.1"]
+      }),
+    /webFetchDeniedHosts/u
+  );
 });

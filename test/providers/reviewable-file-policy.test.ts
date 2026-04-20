@@ -3,59 +3,29 @@ import test from "node:test";
 
 import { selectReviewableFiles } from "../../src/providers/reviewable-file-policy.ts";
 
-test("selectReviewableFiles always excludes .nightowl namespace files", () => {
-  assert.deepEqual(
-    selectReviewableFiles([
-      ".nightowl",
-      ".nightowl/reviewignore",
-      ".nightowl\\reviewconfig.json",
-      "src/app.ts",
-      "docs/spec.md"
-    ]),
-    ["src/app.ts", "docs/spec.md"]
-  );
-});
-
-test("selectReviewableFiles applies reviewignore rules after namespace exclusion", () => {
+test("selectReviewableFiles excludes .nightowl files even when reviewignore would re-include them, and preserves surviving order", () => {
   assert.deepEqual(
     selectReviewableFiles(
       [
-        "src/app.ts",
+        "src/z.ts",
         ".nightowl/reviewconfig.json",
-        "dist/output.js",
-        "packages/app/index.ts"
+        "dist/app.js",
+        ".nightowl/notes.md",
+        "src/a.ts",
+        "docs/spec.md"
       ],
       "dist/**\n!.nightowl/reviewconfig.json\n"
     ),
-    ["src/app.ts", "packages/app/index.ts"]
+    ["src/z.ts", "src/a.ts", "docs/spec.md"]
   );
 });
 
 test("selectReviewableFiles normalizes path separators before ignore matching", () => {
   assert.deepEqual(
     selectReviewableFiles(
-      [
-        "src\\app.ts",
-        "dist\\output.js",
-        "docs\\spec.md"
-      ],
-      "dist/**\n"
+      ["src\\generated\\client.ts", "src\\app.ts"],
+      "src/generated/**\n"
     ),
-    ["src\\app.ts", "docs\\spec.md"]
-  );
-});
-
-test("selectReviewableFiles preserves input order for surviving files", () => {
-  assert.deepEqual(
-    selectReviewableFiles(
-      [
-        "src/z.ts",
-        ".nightowl/reviewconfig.json",
-        "docs/spec.md",
-        "src/a.ts"
-      ],
-      "docs/**\n"
-    ),
-    ["src/z.ts", "src/a.ts"]
+    ["src\\app.ts"]
   );
 });

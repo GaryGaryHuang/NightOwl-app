@@ -7,31 +7,53 @@ import {
   type ReviewSourceProviderOperation
 } from "../../src/providers/review-source-provider.ts";
 
-test("LocalGitProvider (unit) normalizes list-style git output", async () => {
-  const provider = new LocalGitProvider(async () => "src/a.ts\r\nsrc/b.ts\r\n\r\n");
-
+test("LocalGitProvider normalizes list and scalar git output while preserving raw diff text", async () => {
   assert.deepEqual(
-    await provider.getChangedFiles("/repo", "main", "feature"),
+    await new LocalGitProvider(async () => "src/a.ts\r\nsrc/b.ts\r\n\r\n").getChangedFiles(
+      "/repo",
+      "main",
+      "feature"
+    ),
     ["src/a.ts", "src/b.ts"]
   );
-
-  const changesetProvider = new LocalGitProvider(
-    async () => "M\tsrc/a.ts\nD\tsrc/old.ts\n"
+  assert.equal(
+    await new LocalGitProvider(async () => "/repo\n").resolveRepoRoot("/repo/packages/app"),
+    "/repo"
+  );
+  assert.equal(
+    await new LocalGitProvider(async () => "feature-branch\n").getCurrentBranch("/repo"),
+    "feature-branch"
+  );
+  assert.equal(
+    await new LocalGitProvider(async () => "\n").getCurrentBranch("/repo"),
+    undefined
   );
 
-  assert.deepEqual(
-    await changesetProvider.getChangesetEntries("/repo", "main", "feature"),
-    [
-      { status: "M", path: "src/a.ts" },
-      { status: "D", path: "src/old.ts" }
-    ]
+  const diffOutput = "diff --git a/src/a.ts b/src/a.ts\n+added line   \n";
+  assert.equal(
+    await new LocalGitProvider(async () => diffOutput).getDiff(
+      "/repo",
+      "main",
+      "feature",
+      "src/a.ts"
+    ),
+    diffOutput
   );
 });
 
-test("LocalGitProvider (unit) accepts valid git-only status tokens and normalizes them to the stable provider contract", async () => {
+test("LocalGitProvider normalizes empty git output to empty collections", async () => {
+  const provider = new LocalGitProvider(async () => "");
+
+  assert.deepEqual(await provider.getChangedFiles("/repo", "main", "feature"), []);
+  assert.deepEqual(await provider.getChangesetEntries("/repo", "main", "feature"), []);
+});
+
+test("LocalGitProvider normalizes git-only status tokens onto the stable changeset contract", async () => {
   const provider = new LocalGitProvider(
     async () =>
       [
+        "R86\tsrc/old-name.ts\tsrc/new-name.ts",
+        "C75\tsrc/original.ts\tsrc/copied.ts",
         "T\tsrc/type-change.ts",
         "U\tsrc/unmerged.ts",
         "X\tsrc/unknown.ts",
@@ -43,6 +65,18 @@ test("LocalGitProvider (unit) accepts valid git-only status tokens and normalize
   assert.deepEqual(
     await provider.getChangesetEntries("/repo", "main", "feature"),
     [
+      {
+        status: "R",
+        previousPath: "src/old-name.ts",
+        path: "src/new-name.ts",
+        similarityScore: 86
+      },
+      {
+        status: "C",
+        previousPath: "src/original.ts",
+        path: "src/copied.ts",
+        similarityScore: 75
+      },
       { status: "M", path: "src/type-change.ts" },
       { status: "M", path: "src/unmerged.ts" },
       { status: "M", path: "src/unknown.ts" },
@@ -52,40 +86,7 @@ test("LocalGitProvider (unit) accepts valid git-only status tokens and normalize
   );
 });
 
-test("LocalGitProvider (unit) normalizes empty git output", async () => {
-  const provider = new LocalGitProvider(async () => "");
-
-  assert.deepEqual(await provider.getChangedFiles("/repo", "main", "feature"), []);
-  assert.deepEqual(await provider.getChangesetEntries("/repo", "main", "feature"), []);
-  assert.equal(await provider.getDiff("/repo", "main", "feature", "src/a.ts"), "");
-  assert.equal(await provider.getCurrentBranch("/repo"), undefined);
-});
-
-test("LocalGitProvider (unit) normalizes scalar metadata output without mutating diff text", async () => {
-  const diffOutput = "diff --git a/src/a.ts b/src/a.ts\n+added line   \n";
-
-  assert.equal(
-    await new LocalGitProvider(async () => "/repo\n").resolveRepoRoot("/any/start"),
-    "/repo"
-  );
-
-  const diff = await new LocalGitProvider(async () => diffOutput).getDiff(
-    "/repo",
-    "main",
-    "feature",
-    "src/a.ts"
-  );
-
-  assert.equal(diff, diffOutput);
-  assert.match(diff, /\+added line   \n$/);
-
-  assert.equal(
-    await new LocalGitProvider(async () => "feature-branch\n").getCurrentBranch("/repo"),
-    "feature-branch"
-  );
-});
-
-test("LocalGitProvider (unit) wraps runner failures with operation context", async () => {
+test("LocalGitProvider wraps runner failures with operation context", async () => {
   const cases: Array<{
     operation: ReviewSourceProviderOperation;
     run(provider: LocalGitProvider): Promise<unknown>;

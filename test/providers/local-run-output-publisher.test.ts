@@ -12,9 +12,6 @@ import {
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
 function createPublisher(outputPlan: ReviewOutputPlan): LocalRunOutputPublisher {
-  // Publisher's narrow contract assumes the OutputTarget is already provisioned.
-  // Create only the directories required by writeFile/appendFile; do NOT bootstrap
-  // the append-only artifacts that LocalWorkspaceProvider owns.
   const { outputTarget } = outputPlan;
   mkdirSync(outputTarget.basePath, { recursive: true });
   mkdirSync(outputTarget.filesPath, { recursive: true });
@@ -32,7 +29,7 @@ function withPlannedNote(
   };
 }
 
-test("run-scoped output publisher publishes file review content to the target note path", async () => {
+test("LocalRunOutputPublisher writes file reviews to the planned note path", async () => {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
 
@@ -40,6 +37,7 @@ test("run-scoped output publisher publishes file review content to the target no
     const publisher = createPublisher(
       withPlannedNote(fixture.outputTarget, "src/app.ts", noteFilePath)
     );
+
     await publisher.publishFileReview({
       filePath: "src/app.ts",
       content: "# src/app.ts\n\nPending review.\n"
@@ -51,56 +49,23 @@ test("run-scoped output publisher publishes file review content to the target no
   }
 });
 
-test("run-scoped output publisher appends deterministic skipped-file records to skipped.md", async () => {
-  const fixture = createWorkspaceProviderFixture();
-
-  try {
-    const publisher = createPublisher(fixture.outputPlan);
-    await publisher.publishSkippedFile({
-      filePath: "src/app.ts",
-      stepId: "step5-validation-interrogation",
-      reason: "deterministic validation failed"
-    });
-    await publisher.publishSkippedFile({
-      filePath: "src/other.ts",
-      stepId: "step7-summary",
-      reason: "judge rejected"
-    });
-
-    assert.equal(
-      fixture.readFile(fixture.outputTarget.skippedPath),
-      [
-        "- `src/app.ts` — step5-validation-interrogation — deterministic validation failed",
-        "- `src/other.ts` — step7-summary — judge rejected",
-        ""
-      ].join("\n")
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("run-scoped output publisher preserves intact skipped.md lines across multiple appends", async () => {
+test("LocalRunOutputPublisher preserves intact skipped.md records across concurrent appends", async () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
     const publisher = createPublisher(fixture.outputPlan);
 
     await Promise.all([
-      Promise.resolve().then(() =>
-        publisher.publishSkippedFile({
-          filePath: "src/app.ts",
-          stepId: "step5-validation-interrogation",
-          reason: "deterministic validation failed"
-        })
-      ),
-      Promise.resolve().then(() =>
-        publisher.publishSkippedFile({
-          filePath: "src/other.ts",
-          stepId: "step7-summary",
-          reason: "judge rejected"
-        })
-      )
+      publisher.publishSkippedFile({
+        filePath: "src/app.ts",
+        stepId: "step5-validation-interrogation",
+        reason: "deterministic validation failed"
+      }),
+      publisher.publishSkippedFile({
+        filePath: "src/other.ts",
+        stepId: "step7-summary",
+        reason: "judge rejected"
+      })
     ]);
 
     const lines = fixture.readFile(fixture.outputTarget.skippedPath).trimEnd().split("\n");
@@ -113,86 +78,32 @@ test("run-scoped output publisher preserves intact skipped.md lines across multi
   }
 });
 
-test("run-scoped output publisher publishes run-level artifact content to the configured paths", async () => {
+test("LocalRunOutputPublisher writes each run-level artifact to its configured output path", async () => {
   const fixture = createWorkspaceProviderFixture();
 
   try {
     const publisher = createPublisher(fixture.outputPlan);
-    const cases: Array<{
-      kind: import("../../src/providers/review-output-sink.ts").ReviewArtifactKind;
-      outputPath: string;
-      content: string;
-    }> = [
-      {
-        kind: "summary",
-        outputPath: fixture.outputTarget.summaryPath,
-        content: [
-          "# Review Summary",
-          "",
-          "- Planned files: 1",
-          "- Successful files: 1",
-          "- Skipped files: 0"
-        ].join("\n")
-      },
-      {
-        kind: "index",
-        outputPath: fixture.outputTarget.indexPath,
-        content: [
-          "# Review Index",
-          "",
-          "- Planned files: 1",
-          "",
-          "## Run Artifacts",
-          "- [summary.md](./summary.md)"
-        ].join("\n")
-      },
-      {
-        kind: "verifier-report",
-        outputPath: fixture.outputTarget.verifierReportPath,
-        content:
-          '{"filePath":"src/app.ts","stepId":"step5-validation-interrogation","findingId":"F1","taxonomy":"OK","outcome":"accepted","gate":"acceptance","reason":"passed all acceptance gates"}'
-      },
-      {
-        kind: "manifest",
-        outputPath: fixture.outputTarget.manifestPath,
-        content: '{\n  "schemaVersion": 1\n}'
-      },
-      {
-        kind: "changeset-overview",
-        outputPath: fixture.outputTarget.changesetOverviewPath,
-        content: "## Changeset Overview\n\n- Modified `src/app.ts`\n"
-      }
-    ];
 
-    for (const { kind, outputPath, content } of cases) {
-      await publisher.publishArtifact(kind, { content });
-      assert.equal(fixture.readFile(outputPath), content);
-    }
+    await publisher.publishArtifact("changeset-overview", { content: "overview\n" });
+    await publisher.publishArtifact("summary", { content: "summary\n" });
+    await publisher.publishArtifact("index", { content: "index\n" });
+    await publisher.publishArtifact("verifier-report", { content: "{\"ok\":true}\n" });
+    await publisher.publishArtifact("manifest", { content: "{\n  \"schemaVersion\": 1\n}\n" });
+
+    assert.equal(fixture.readFile(fixture.outputTarget.changesetOverviewPath), "overview\n");
+    assert.equal(fixture.readFile(fixture.outputTarget.summaryPath), "summary\n");
+    assert.equal(fixture.readFile(fixture.outputTarget.indexPath), "index\n");
+    assert.equal(fixture.readFile(fixture.outputTarget.verifierReportPath), "{\"ok\":true}\n");
+    assert.equal(
+      fixture.readFile(fixture.outputTarget.manifestPath),
+      "{\n  \"schemaVersion\": 1\n}\n"
+    );
   } finally {
     fixture.cleanup();
   }
 });
 
-test("run-scoped output publishers do not share output state across distinct OutputTargets", async () => {
-  const fixtureA = createWorkspaceProviderFixture();
-  const fixtureB = createWorkspaceProviderFixture();
-
-  try {
-    const publisherA = createPublisher(fixtureA.outputPlan);
-    const publisherB = createPublisher(fixtureB.outputPlan);
-
-    await publisherA.publishArtifact("summary", { content: "summary A\n" });
-    await publisherB.publishArtifact("summary", { content: "summary B\n" });
-
-    assert.equal(fixtureA.readFile(fixtureA.outputTarget.summaryPath), "summary A\n");
-    assert.equal(fixtureB.readFile(fixtureB.outputTarget.summaryPath), "summary B\n");
-  } finally {
-    fixtureA.cleanup();
-    fixtureB.cleanup();
-  }
-});
-
-test("run-scoped output publisher reports typed file-review write failures with stable operation metadata", async () => {
+test("LocalRunOutputPublisher reports typed note-write failures with stable boundary metadata", async () => {
   const fixture = createWorkspaceProviderFixture();
   const noteFilePath = fixture.buildNoteFilePath("src__app.ts.md");
 

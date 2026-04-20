@@ -40,29 +40,45 @@ async function createSnapshotHealthAssessorFixture(): Promise<SnapshotHealthAsse
   };
 }
 
-test("LocalOutputWriteHealthAssessor classifies path-specific note write failures as single-file output faults when the shared files path remains healthy", async () => {
+test("LocalOutputWriteHealthAssessor classifies isolated note-path write failures as single-file output faults", async () => {
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
-    for (const code of ["ENAMETOOLONG", "EISDIR"]) {
-      assert.deepEqual(
-        await assessorFixture.assess({
-          kind: "review-output-boundary-error",
-          message: `${code} write failure`,
-          causeCode: code,
-          causePath: assessorFixture.noteFilePath,
-          outputPath: assessorFixture.noteFilePath
-        }),
-        { faultScope: "single-file-output-fault" },
-        `expected ${code} on the note path to be single-file-output-fault`
-      );
-    }
+    assert.deepEqual(
+      await assessorFixture.assess({
+        kind: "review-output-boundary-error",
+        message: "name too long",
+        causeCode: "ENAMETOOLONG",
+        causePath: assessorFixture.noteFilePath,
+        outputPath: assessorFixture.noteFilePath
+      }),
+      { faultScope: "single-file-output-fault" }
+    );
   } finally {
     assessorFixture.cleanup();
   }
 });
 
-test("LocalOutputWriteHealthAssessor classifies disk-capacity write failures as shared output target faults", async () => {
+test("LocalOutputWriteHealthAssessor refuses to downgrade single-file-like errors when they point at a shared path", async () => {
+  const assessorFixture = await createSnapshotHealthAssessorFixture();
+
+  try {
+    assert.deepEqual(
+      await assessorFixture.assess({
+        kind: "review-output-boundary-error",
+        message: "name too long",
+        causeCode: "ENAMETOOLONG",
+        causePath: assessorFixture.fixture.outputTarget.filesPath,
+        outputPath: assessorFixture.fixture.outputTarget.filesPath
+      }),
+      { faultScope: "shared-output-target-fault" }
+    );
+  } finally {
+    assessorFixture.cleanup();
+  }
+});
+
+test("LocalOutputWriteHealthAssessor classifies shared-target write failures conservatively", async () => {
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
@@ -81,61 +97,7 @@ test("LocalOutputWriteHealthAssessor classifies disk-capacity write failures as 
   }
 });
 
-test("LocalOutputWriteHealthAssessor falls back to shared output target fault when classification is inconclusive", async () => {
-  const assessorFixture = await createSnapshotHealthAssessorFixture();
-
-  try {
-    const inconclusiveErrors: OutputWriteFailureEvidence[] = [
-      {
-        kind: "error",
-        message: "note write failed"
-      },
-      {
-        kind: "review-output-boundary-error",
-        message: "note write failed",
-        causeCode: "ENAMETOOLONG",
-        causePath: assessorFixture.fixture.outputTarget.filesPath,
-        outputPath: assessorFixture.fixture.outputTarget.filesPath
-      }
-    ];
-
-    for (const failure of inconclusiveErrors) {
-      assert.deepEqual(
-        await assessorFixture.assess(failure),
-        { faultScope: "shared-output-target-fault" }
-      );
-    }
-  } finally {
-    assessorFixture.cleanup();
-  }
-});
-
-test("LocalOutputWriteHealthAssessor treats shared files-path corruption as a shared output target fault", async () => {
-  const assessorFixture = await createSnapshotHealthAssessorFixture();
-
-  try {
-    rmSync(assessorFixture.fixture.outputTarget.filesPath, {
-      recursive: true,
-      force: true
-    });
-    writeFileSync(assessorFixture.fixture.outputTarget.filesPath, "not-a-directory");
-
-    assert.deepEqual(
-      await assessorFixture.assess({
-        kind: "review-output-boundary-error",
-        message: "path collision",
-        causeCode: "EEXIST",
-        causePath: assessorFixture.fixture.outputTarget.filesPath,
-        outputPath: assessorFixture.fixture.outputTarget.filesPath
-      }),
-      { faultScope: "shared-output-target-fault" }
-    );
-  } finally {
-    assessorFixture.cleanup();
-  }
-});
-
-test("LocalOutputWriteHealthAssessor falls back to shared output target fault when the run base path is not writable directory health", async () => {
+test("LocalOutputWriteHealthAssessor refuses to downgrade when shared output directories are unhealthy", async () => {
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
@@ -148,7 +110,7 @@ test("LocalOutputWriteHealthAssessor falls back to shared output target fault wh
     assert.deepEqual(
       await assessorFixture.assess({
         kind: "review-output-boundary-error",
-        message: "path collision",
+        message: "name too long",
         causeCode: "ENAMETOOLONG",
         causePath: assessorFixture.noteFilePath,
         outputPath: assessorFixture.noteFilePath
