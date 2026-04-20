@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   createOutputWriteFailureEvidence,
   resolveOutputWriteFailureAssessment,
-} from "../../src/providers/resolve-successful-snapshot-failure-assessment.ts";
+} from "../../src/providers/resolve-output-write-failure-assessment.ts";
 import {
   type OutputWriteFailureAssessmentRequest,
   type OutputWriteHealthAssessor
@@ -29,7 +29,7 @@ function createInput(): OutputWriteFailureAssessmentRequest {
   };
 }
 
-test("resolveSuccessfulSnapshotFailureAssessment returns the assessor result when assess resolves", async () => {
+test("resolveOutputWriteFailureAssessment returns the assessor result when assess resolves", async () => {
   const assessor: OutputWriteHealthAssessor = {
     async assess() {
       return { faultScope: "single-file-output-fault" as const };
@@ -41,7 +41,7 @@ test("resolveSuccessfulSnapshotFailureAssessment returns the assessor result whe
   assert.deepEqual(result, { faultScope: "single-file-output-fault" });
 });
 
-test("createSuccessfulSnapshotFailureEvidence normalizes boundary errors into structured evidence", () => {
+test("createOutputWriteFailureEvidence normalizes boundary errors into structured evidence", () => {
   assert.deepEqual(
     createOutputWriteFailureEvidence(
       new ReviewOutputBoundaryError("publishFileReview", "note write failed", {
@@ -63,7 +63,7 @@ test("createSuccessfulSnapshotFailureEvidence normalizes boundary errors into st
   );
 });
 
-test("resolveSuccessfulSnapshotFailureAssessment passes structured failure evidence to the assessor", async () => {
+test("resolveOutputWriteFailureAssessment passes structured failure evidence to the assessor", async () => {
   let observedInput: Parameters<OutputWriteHealthAssessor["assess"]>[0] | undefined;
   const assessor: OutputWriteHealthAssessor = {
     async assess(input) {
@@ -97,7 +97,7 @@ test("resolveSuccessfulSnapshotFailureAssessment passes structured failure evide
   });
 });
 
-test("resolveSuccessfulSnapshotFailureAssessment passes through shared-output-target-fault from the assessor", async () => {
+test("resolveOutputWriteFailureAssessment passes through shared-output-target-fault from the assessor", async () => {
   const assessor: OutputWriteHealthAssessor = {
     async assess() {
       return { faultScope: "shared-output-target-fault" as const };
@@ -109,7 +109,7 @@ test("resolveSuccessfulSnapshotFailureAssessment passes through shared-output-ta
   assert.deepEqual(result, { faultScope: "shared-output-target-fault" });
 });
 
-test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-target-fault when assess rejects", async () => {
+test("resolveOutputWriteFailureAssessment falls back to shared-output-target-fault when assess rejects", async () => {
   const assessor: OutputWriteHealthAssessor = {
     async assess() {
       throw new Error("assessment failed");
@@ -121,7 +121,7 @@ test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-tar
   assert.deepEqual(result, { faultScope: "shared-output-target-fault" });
 });
 
-test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-target-fault when failure evidence normalization throws", async () => {
+test("resolveOutputWriteFailureAssessment falls back to shared-output-target-fault when failure evidence normalization throws", async () => {
   const assessor: OutputWriteHealthAssessor = {
     async assess() {
       return { faultScope: "single-file-output-fault" as const };
@@ -141,7 +141,7 @@ test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-tar
   assert.deepEqual(result, { faultScope: "shared-output-target-fault" });
 });
 
-test("resolveSuccessfulSnapshotFailureAssessment falls back to shared-output-target-fault when assess returns nullish", async () => {
+test("resolveOutputWriteFailureAssessment falls back to shared-output-target-fault when assess returns nullish", async () => {
   const assessor: OutputWriteHealthAssessor = {
     async assess() {
       return undefined as never;

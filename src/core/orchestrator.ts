@@ -54,7 +54,7 @@ import {
 } from "../providers/review-output-sink.ts";
 import {
   resolveOutputWriteFailureAssessment,
-} from "../providers/resolve-successful-snapshot-failure-assessment.ts";
+} from "../providers/resolve-output-write-failure-assessment.ts";
 import {
   type OutputWriteHealthAssessor
 } from "../providers/review-output-health-assessor.ts";

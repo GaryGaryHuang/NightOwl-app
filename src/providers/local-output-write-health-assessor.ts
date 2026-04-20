@@ -8,7 +8,7 @@ import type {
 } from "./review-output-health-assessor.ts";
 
 /**
- * Local filesystem heuristic for successful snapshot write failures.
+ * Local filesystem heuristic for output write failures during successful snapshot publication.
  */
 export class LocalOutputWriteHealthAssessor
   implements OutputWriteHealthAssessor

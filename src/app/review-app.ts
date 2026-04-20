@@ -11,7 +11,7 @@ import { StepRunner } from "../core/step-runner.ts";
 import { LocalGitProvider } from "../providers/local-git-provider.ts";
 import { LocalReviewFileFilter } from "../providers/local-review-file-filter.ts";
 import { LocalReviewConfigProvider } from "../providers/config/local-review-config-provider.ts";
-import { LocalOutputWriteHealthAssessor } from "../providers/local-successful-snapshot-output-health-assessor.ts";
+import { LocalOutputWriteHealthAssessor } from "../providers/local-output-write-health-assessor.ts";
 import { LocalWorkspaceProvider } from "../providers/local-workspace-provider.ts";
 import type { ReviewConfigProvider } from "../providers/config/review-config-provider.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";

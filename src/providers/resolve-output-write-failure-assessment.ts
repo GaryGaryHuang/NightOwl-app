@@ -9,6 +9,10 @@ import type {
 } from "./review-output-health-assessor.ts";
 import { ReviewOutputBoundaryError } from "./review-output-sink.ts";
 
+/**
+ * Converts snapshot write failures into the provider-local evidence surface used
+ * by output write health assessors, with a conservative shared-target fallback.
+ */
 export async function resolveOutputWriteFailureAssessment(
   assessor: OutputWriteHealthAssessor,
   input: OutputWriteFailureAssessmentRequest

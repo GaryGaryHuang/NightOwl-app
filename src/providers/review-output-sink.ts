@@ -1,3 +1,5 @@
+// Mirrors the core OutputTarget/PlannedNoteFile surface at the provider boundary.
+// Keeping a provider-local copy avoids coupling adapter contracts to core path-planning modules.
 export interface ReviewOutputTarget {
   basePath: string;
   changesetOverviewPath: string;

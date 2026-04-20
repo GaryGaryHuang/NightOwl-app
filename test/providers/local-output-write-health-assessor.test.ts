@@ -3,7 +3,7 @@ import { rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
 
 import type { OutputWriteFailureEvidence } from "../../src/providers/review-output-health-assessor.ts";
-import { LocalOutputWriteHealthAssessor } from "../../src/providers/local-successful-snapshot-output-health-assessor.ts";
+import { LocalOutputWriteHealthAssessor } from "../../src/providers/local-output-write-health-assessor.ts";
 import { createWorkspaceProviderFixture } from "../helpers/workspace-provider-contract-fixture.ts";
 
 type WorkspaceFixture = ReturnType<typeof createWorkspaceProviderFixture>;
@@ -40,7 +40,7 @@ async function createSnapshotHealthAssessorFixture(): Promise<SnapshotHealthAsse
   };
 }
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note write failures as single-file output faults when the shared files path remains healthy", async () => {
+test("LocalOutputWriteHealthAssessor classifies path-specific note write failures as single-file output faults when the shared files path remains healthy", async () => {
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
@@ -62,7 +62,7 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor classifies path-specific note 
   }
 });
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor classifies disk-capacity write failures as shared output target faults", async () => {
+test("LocalOutputWriteHealthAssessor classifies disk-capacity write failures as shared output target faults", async () => {
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
@@ -81,7 +81,7 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor classifies disk-capacity write
   }
 });
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output target fault when classification is inconclusive", async () => {
+test("LocalOutputWriteHealthAssessor falls back to shared output target fault when classification is inconclusive", async () => {
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
@@ -110,7 +110,7 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output ta
   }
 });
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor treats shared files-path corruption as a shared output target fault", async () => {
+test("LocalOutputWriteHealthAssessor treats shared files-path corruption as a shared output target fault", async () => {
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
@@ -135,7 +135,7 @@ test("LocalSuccessfulSnapshotOutputHealthAssessor treats shared files-path corru
   }
 });
 
-test("LocalSuccessfulSnapshotOutputHealthAssessor falls back to shared output target fault when the run base path is not writable directory health", async () => {
+test("LocalOutputWriteHealthAssessor falls back to shared output target fault when the run base path is not writable directory health", async () => {
   const assessorFixture = await createSnapshotHealthAssessorFixture();
 
   try {
