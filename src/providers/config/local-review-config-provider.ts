@@ -10,7 +10,10 @@ import {
   buildDefaultReviewConfig,
   parseReviewConfig
 } from "./review-config-parser.ts";
-import { isEnoent, wrapBoundaryError } from "../boundary-error-helper.ts";
+import {
+  wrapBoundaryError,
+  wrapBoundaryErrorUnlessEnoent
+} from "../boundary-error-helper.ts";
 
 /**
  * Load repo-local review config and normalize the supported overrides.
@@ -18,23 +21,28 @@ import { isEnoent, wrapBoundaryError } from "../boundary-error-helper.ts";
 export class LocalReviewConfigProvider implements ReviewConfigProvider {
   async loadReviewConfig(repoRoot: string): Promise<ReviewConfig> {
     const configPath = reviewConfigPath(repoRoot);
+    const toBoundaryError = (cause: unknown) => new ReviewConfigProviderError(
+      "loadReviewConfig",
+      `invalid review config at ${configPath}`,
+      { cause, configPath }
+    );
 
-    try {
-      await stat(configPath);
-    } catch (error: unknown) {
-      if (isEnoent(error)) {
-        return buildDefaultReviewConfig();
-      }
-      throw error;
+    const configExists = await wrapBoundaryErrorUnlessEnoent(
+      async () => {
+        await stat(configPath);
+        return true;
+      },
+      () => false,
+      toBoundaryError
+    );
+
+    if (!configExists) {
+      return buildDefaultReviewConfig();
     }
 
     return wrapBoundaryError(
       async () => parseReviewConfig(await readFile(configPath, "utf8")),
-      (cause) => new ReviewConfigProviderError(
-        "loadReviewConfig",
-        `invalid review config at ${configPath}`,
-        { cause, configPath }
-      )
+      toBoundaryError
     );
   }
 }

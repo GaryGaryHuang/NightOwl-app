@@ -8,7 +8,10 @@ import {
   ReviewFileFilterError,
   type ReviewFileFilter
 } from "./review-file-filter.ts";
-import { isEnoent, wrapBoundaryError } from "./boundary-error-helper.ts";
+import {
+  wrapBoundaryError,
+  wrapBoundaryErrorUnlessEnoent
+} from "./boundary-error-helper.ts";
 
 /**
  * Local review file filter backed by canonical `.nightowl/reviewignore` rules.
@@ -17,14 +20,23 @@ export class LocalReviewFileFilter implements ReviewFileFilter {
   async filterReviewableFiles(repoRoot: string, files: string[]): Promise<string[]> {
     const reviewIgnoreFilePath = reviewIgnorePath(repoRoot);
     const sourceFiles = files.filter((filePath) => !isNightOwlNamespacePath(filePath));
+    const toBoundaryError = (cause: unknown) => new ReviewFileFilterError(
+      "filterReviewableFiles",
+      "Review file filter failed during filterReviewableFiles.",
+      { cause }
+    );
 
-    try {
-      await stat(reviewIgnoreFilePath);
-    } catch (error: unknown) {
-      if (isEnoent(error)) {
-        return [...sourceFiles];
-      }
-      throw error;
+    const reviewIgnoreExists = await wrapBoundaryErrorUnlessEnoent(
+      async () => {
+        await stat(reviewIgnoreFilePath);
+        return true;
+      },
+      () => false,
+      toBoundaryError
+    );
+
+    if (!reviewIgnoreExists) {
+      return [...sourceFiles];
     }
 
     return wrapBoundaryError(
@@ -34,11 +46,7 @@ export class LocalReviewFileFilter implements ReviewFileFilter {
         // `reviewignore` follows gitignore-style matching, so normalize separators before evaluation.
         return sourceFiles.filter((filePath) => !matcher.ignores(normalizeFilePath(filePath)));
       },
-      (cause) => new ReviewFileFilterError(
-        "filterReviewableFiles",
-        "Review file filter failed during filterReviewableFiles.",
-        { cause }
-      )
+      toBoundaryError
     );
   }
 }
