@@ -29,7 +29,7 @@ export const STEP0_SYSTEM_MESSAGE = [
   "  - `behaviorChanges`: an array; each entry MUST have exactly `description`, `files`, and non-empty `evidenceRefs`. Empty array is allowed.",
   "  - `evidenceRefs`: an array; each entry MUST have exactly `id`, `sourceKind` (`changed-files`|`diff`|`file`|`user-context`|`url`), `pathOrUrl`, `anchor`, and `summary`.",
   "  - `unresolvedUnknowns`: an array; each entry MUST have exactly `question` (string), `blocksFinding` (boolean), and `resolutionPath` (string). Empty array is allowed.",
-  "- `changedFiles[]` MUST cover every path in `<changed_files>` exactly once and MUST NOT introduce any path that is not present there. For renames or copies (`R<num>` / `C<num>`), use the head-side (post-change) path.",
+  "- `changedFiles[]` MUST cover every path in `<changed_files>` exactly once and MUST NOT introduce any path that is not present there. For renames (`R<num>`), use the head-side (post-change) path. Copied files are represented as added (`A`) entries.",
   "- Every `changedFiles[].group` value MUST match a `fileGroups[].label`.",
   "- Every `crossFileBoundaries[]`, `testCoverageObservations[]`, and `behaviorChanges[]` evidence reference MUST point to an ID defined in `evidenceRefs[]`.",
   "- Do NOT use placeholder markers such as `TODO`, `TBD`, `N/A`, `<replace>`, or `placeholder`. If something is genuinely unknown, record it under `unresolvedUnknowns` with a concrete `resolutionPath`.",
@@ -97,7 +97,7 @@ export interface Step0PromptInput {
 export function buildStep0Prompt(input: Step0PromptInput): string {
   const promptLines = [
     "<changed_files>",
-    input.changesetEntries.map(formatReviewChangesetEntry).join("\n"),
+    input.changesetEntries.map(formatStep0ChangedFileEntry).join("\n"),
     "</changed_files>"
   ];
 
@@ -116,4 +116,12 @@ export function buildStep0Prompt(input: Step0PromptInput): string {
   );
 
   return promptLines.join("\n");
+}
+
+function formatStep0ChangedFileEntry(entry: ReviewChangesetEntry): string {
+  if (entry.status === "C") {
+    return `A\t${entry.path}`;
+  }
+
+  return formatReviewChangesetEntry(entry);
 }

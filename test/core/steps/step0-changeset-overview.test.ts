@@ -66,6 +66,21 @@ test("buildStep0Prompt preserves rename similarity and previous path metadata", 
   assert.match(prompt, /R100\tsrc\/old\.ts\tsrc\/new\.ts/);
 });
 
+test("buildStep0Prompt projects copy entries as added files for ChangeMap v1", () => {
+  const prompt = buildStep0Prompt({
+    changesetEntries: createChangesetEntries({
+      status: "C",
+      similarityScore: 75,
+      previousPath: "src/original.ts",
+      path: "src/copied.ts"
+    }),
+    userContext: []
+  });
+
+  assert.match(prompt, /A\tsrc\/copied\.ts/);
+  assert.doesNotMatch(prompt, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
+});
+
 test("STEP0_SYSTEM_MESSAGE communicates the ChangeMap v1 JSON contract", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /Changeset Overview/);
   assert.match(STEP0_SYSTEM_MESSAGE, /schemaVersion/);
@@ -77,6 +92,7 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMap v1 JSON contract", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /behaviorChanges/);
   assert.match(STEP0_SYSTEM_MESSAGE, /evidenceRefs/);
   assert.match(STEP0_SYSTEM_MESSAGE, /unresolvedUnknowns/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /Copied files are represented as added/);
 });
 
 test("buildStep0Prompt instruction body includes the literal `## Changeset Overview` template header", () => {

@@ -258,6 +258,39 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
   assert.equal(runContext.changesetOverview.changedFiles[0].path, "src/new.ts");
 });
 
+test("ChangesetOverviewRunner accepts copied paths as added ChangeMap entries", async () => {
+  const prompts: string[] = [];
+  const runner = new ChangesetOverviewRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        return {
+          async sendAndWait(prompt) {
+            prompts.push(prompt);
+            return buildChangeMapJson({ paths: ["src/copied.ts"] });
+          }
+        };
+      }
+    }
+  });
+
+  const runContext = await runner.run({
+    model: "gpt-5.4-mini",
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changesetEntries: createChangesetEntries({
+      status: "C",
+      similarityScore: 75,
+      previousPath: "src/original.ts",
+      path: "src/copied.ts"
+    }),
+    userContext: []
+  });
+
+  assert.match(prompts[0]!, /A\tsrc\/copied\.ts/);
+  assert.doesNotMatch(prompts[0]!, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
+  assert.equal(runContext.changesetOverview.changedFiles[0].path, "src/copied.ts");
+});
+
 test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {

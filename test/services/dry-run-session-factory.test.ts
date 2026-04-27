@@ -89,6 +89,7 @@ describe("Dry-run stub catalog completeness", () => {
       "A\tsrc/added.ts",
       "M\tsrc/foo.ts",
       "D\tsrc/deleted.ts",
+      "C75\tsrc/original.ts\tsrc/copied.ts",
       "</changed_files>"
     ].join("\n");
 
@@ -104,7 +105,8 @@ describe("Dry-run stub catalog completeness", () => {
       [
         { path: "src/added.ts", status: "A" },
         { path: "src/foo.ts", status: "M" },
-        { path: "src/deleted.ts", status: "D" }
+        { path: "src/deleted.ts", status: "D" },
+        { path: "src/copied.ts", status: "A" }
       ]
     );
     assert.match(parsed.overviewMarkdown, /^## Changeset Overview\n- Scope:/u);
