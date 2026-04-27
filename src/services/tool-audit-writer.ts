@@ -1,4 +1,5 @@
-import { appendFile } from "node:fs/promises";
+import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 export interface ToolAuditRecord {
   ts: string;                 // ISO 8601 UTC
@@ -66,6 +67,10 @@ export class ToolAuditWriter implements ToolAuditSink {
     this.#enqueueWrite(record);
   }
 
+  get bufferedRecordCount(): number {
+    return this.#buffer?.length ?? 0;
+  }
+
   attachAuditFile(auditFilePath: string): void {
     if (this.#auditFilePath !== undefined) {
       throw new AuditWriterStateError("tool audit file can only be attached once");
@@ -108,11 +113,13 @@ export class ToolAuditWriter implements ToolAuditSink {
  */
 export class ReviewRunToolAudit {
   readonly #writer: ToolAuditWriter;
+  readonly #onWriteFailure?: (failure: ToolAuditWriteFailure) => void;
 
   constructor(
     options?: { onWriteFailure?: (failure: ToolAuditWriteFailure) => void }
   ) {
     this.#writer = new ToolAuditWriter(undefined, options);
+    this.#onWriteFailure = options?.onWriteFailure;
   }
 
   get sink(): ToolAuditSink {
@@ -121,6 +128,23 @@ export class ReviewRunToolAudit {
 
   bindOutputTarget(outputTarget: ToolAuditOutputTarget): void {
     this.#writer.attachAuditFile(outputTarget.toolAuditPath);
+  }
+
+  async bindFailureOutputTarget(outputTarget: ToolAuditOutputTarget): Promise<void> {
+    if (this.#writer.bufferedRecordCount === 0) {
+      return;
+    }
+
+    try {
+      await mkdir(path.dirname(outputTarget.toolAuditPath), { recursive: true });
+      await writeFile(outputTarget.toolAuditPath, "");
+      this.bindOutputTarget(outputTarget);
+    } catch (error) {
+      this.#onWriteFailure?.({
+        auditFilePath: outputTarget.toolAuditPath,
+        error
+      });
+    }
   }
 
   flush(): Promise<void> {

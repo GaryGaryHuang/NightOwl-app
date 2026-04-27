@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
@@ -273,6 +273,53 @@ test("ReviewRunToolAudit reports buffered flush failures with the bound audit pa
     assert.equal(failures.length, 1);
     assert.equal(failures[0]?.auditFilePath, auditFixture.tempDir);
     assert.match(failures[0]?.message ?? "", /EISDIR|illegal operation on a directory/u);
+  } finally {
+    auditFixture.cleanup();
+  }
+});
+
+test("ReviewRunToolAudit persists buffered records to a failed-run audit target", async () => {
+  const auditFixture = createAuditFileFixture();
+  const failedRunAuditPath = path.join(
+    auditFixture.tempDir,
+    "failed-run",
+    "tool-audit.jsonl"
+  );
+
+  try {
+    const toolAudit = new ReviewRunToolAudit();
+    const shellRecord = createToolAuditRecord({
+      tool: "bash",
+      args: { command: "git log --oneline" }
+    });
+
+    toolAudit.sink.append(shellRecord);
+
+    await toolAudit.bindFailureOutputTarget({ toolAuditPath: failedRunAuditPath });
+    await toolAudit.flush();
+
+    const lines = readAuditLines(readFileSync(failedRunAuditPath, "utf8"));
+    assert.deepEqual(lines, [shellRecord]);
+  } finally {
+    auditFixture.cleanup();
+  }
+});
+
+test("ReviewRunToolAudit does not create a failed-run audit file when no records were buffered", async () => {
+  const auditFixture = createAuditFileFixture();
+  const failedRunAuditPath = path.join(
+    auditFixture.tempDir,
+    "empty-failed-run",
+    "tool-audit.jsonl"
+  );
+
+  try {
+    const toolAudit = new ReviewRunToolAudit();
+
+    await toolAudit.bindFailureOutputTarget({ toolAuditPath: failedRunAuditPath });
+    await toolAudit.flush();
+
+    assert.equal(existsSync(failedRunAuditPath), false);
   } finally {
     auditFixture.cleanup();
   }

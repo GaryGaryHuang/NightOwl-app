@@ -93,6 +93,7 @@ export interface ReviewOrchestratorOptions {
   maxConcurrentFiles?: number;
   onProgressEvent?: RunProgressEventHandler;
   onOutputTargetReady?: (outputTarget: OutputTarget) => void;
+  onRunLevelFailureOutputTargetReady?: (outputTarget: OutputTarget) => Promise<void> | void;
   perFileStepsFactory?: ReviewPerFileStepsFactory;
   reviewFileFilter: ReviewFileFilter;
   renderReviewNote?: ReviewNoteRenderer;
@@ -128,6 +129,7 @@ export class ReviewOrchestrator {
   readonly #maxConcurrentFiles: number;
   readonly #onProgressEvent?: RunProgressEventHandler;
   readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
+  readonly #onRunLevelFailureOutputTargetReady?: (outputTarget: OutputTarget) => Promise<void> | void;
   readonly #perFileStepsFactory: ReviewPerFileStepsFactory;
   readonly #promptSerializer: ReviewStatePromptSerializer;
 
@@ -162,6 +164,8 @@ export class ReviewOrchestrator {
       options.maxConcurrentFiles ?? DEFAULT_MAX_CONCURRENT_FILES;
     this.#onProgressEvent = options.onProgressEvent;
     this.#onOutputTargetReady = options.onOutputTargetReady;
+    this.#onRunLevelFailureOutputTargetReady =
+      options.onRunLevelFailureOutputTargetReady;
     this.#perFileStepsFactory =
       options.perFileStepsFactory ?? buildDefaultPerFileSteps;
     this.#promptSerializer = new ReviewStatePromptSerializer();
@@ -201,6 +205,10 @@ export class ReviewOrchestrator {
         throw new ReviewRunInterruptedError(extractSignalName(options.signal.reason));
       }
 
+      await this.#onRunLevelFailure({
+        repoRoot,
+        request
+      });
       throw error;
     }
 
@@ -385,6 +393,23 @@ export class ReviewOrchestrator {
       dryRun: request.dryRun ?? false,
       finalizerFailures
     };
+  }
+
+  async #onRunLevelFailure(input: {
+    repoRoot: string;
+    request: RunRequest;
+  }): Promise<void> {
+    if (!this.#onRunLevelFailureOutputTargetReady) {
+      return;
+    }
+
+    const outputTarget = buildOutputTarget({
+      repoRoot: input.repoRoot,
+      headRef: input.request.headRef,
+      timestamp: this.#timestampProvider()
+    });
+
+    await this.#onRunLevelFailureOutputTargetReady(outputTarget);
   }
 
   async #runPlannedFileWorkers(input: {

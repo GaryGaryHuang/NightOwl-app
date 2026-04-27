@@ -76,6 +76,9 @@ export interface DryRunDepsBuilderOptions extends RunDepsSharedOptions {
 interface ToolAuditLifecycle {
   auditWriterProvider?: () => ToolAuditSink | undefined;
   onOutputTargetReady?: (outputTarget: ToolAuditOutputTarget) => void;
+  onRunLevelFailureOutputTargetReady?: (
+    outputTarget: ToolAuditOutputTarget
+  ) => Promise<void>;
   flush(): Promise<void>;
 }
 
@@ -125,7 +128,9 @@ export class ProductionRunDepsBuilder implements RunDepsBuilder {
       reviewConfig,
       reviewSessionFactory,
       judgeService,
-      onOutputTargetReady: toolAuditLifecycle.onOutputTargetReady
+      onOutputTargetReady: toolAuditLifecycle.onOutputTargetReady,
+      onRunLevelFailureOutputTargetReady:
+        toolAuditLifecycle.onRunLevelFailureOutputTargetReady
     });
 
     const lifecycleManager = new RunLifecycleManager({
@@ -159,7 +164,8 @@ export class DryRunRunDepsBuilder implements RunDepsBuilder {
       reviewConfig,
       reviewSessionFactory,
       judgeService,
-      onOutputTargetReady: undefined
+      onOutputTargetReady: undefined,
+      onRunLevelFailureOutputTargetReady: undefined
     });
 
     const lifecycleManager = new RunLifecycleManager({
@@ -180,10 +186,20 @@ interface BuildOrchestratorParams {
   reviewSessionFactory: Pick<ReviewSessionFactory, "createSession">;
   judgeService: JudgeService;
   onOutputTargetReady: ((outputTarget: ToolAuditOutputTarget) => void) | undefined;
+  onRunLevelFailureOutputTargetReady:
+    | ((outputTarget: ToolAuditOutputTarget) => Promise<void>)
+    | undefined;
 }
 
 function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator {
-  const { shared, reviewConfig, reviewSessionFactory, judgeService, onOutputTargetReady } = params;
+  const {
+    shared,
+    reviewConfig,
+    reviewSessionFactory,
+    judgeService,
+    onOutputTargetReady,
+    onRunLevelFailureOutputTargetReady
+  } = params;
 
   const changesetOverviewRunner =
     shared.changesetOverviewRunner ??
@@ -209,7 +225,8 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     maxConcurrentFiles: reviewConfig.maxConcurrentFiles,
     perFileStepsFactory: shared.perFileStepsFactory,
     onProgressEvent: shared.onProgressEvent,
-    onOutputTargetReady
+    onOutputTargetReady,
+    onRunLevelFailureOutputTargetReady
   });
 }
 
@@ -227,6 +244,8 @@ function createProductionToolAuditLifecycle(
     onOutputTargetReady: (outputTarget) => {
       toolAudit.bindOutputTarget(outputTarget);
     },
+    onRunLevelFailureOutputTargetReady: (outputTarget) =>
+      toolAudit.bindFailureOutputTarget(outputTarget),
     flush: () => toolAudit.flush()
   };
 }

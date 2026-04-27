@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
@@ -192,6 +193,85 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
       existsSync(result.outputTarget.toolAuditPath),
       `tool-audit.jsonl must exist at ${result.outputTarget.toolAuditPath}`
     );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("createLocalReviewRunApp persists Step 0 audit records when Step 0 fails before output initialization", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const repoRoot = realpathSync(fixture.repoDir);
+    const expectedAuditPath = path.join(
+      repoRoot,
+      ".nightowl",
+      "review",
+      "feature-branch_03241401",
+      "tool-audit.jsonl"
+    );
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03241401",
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              await config.hooks?.onPreToolUse?.(
+                {
+                  timestamp: 0,
+                  cwd: repoRoot,
+                  toolName: "bash",
+                  toolArgs: { command: "git log --oneline" }
+                } as never,
+                { sessionId: "s1" } as never
+              );
+
+              return {
+                async sendAndWait() {
+                  return { data: { content: "not-json" } };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      }
+    });
+
+    await assert.rejects(
+      () =>
+        app.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: [],
+          dryRun: false
+        }),
+      /Step 0 ChangeMap validation failed/u
+    );
+
+    const auditRecords = readFileSync(expectedAuditPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line)) as Array<{
+        tool: string;
+        decision: string;
+        args: Record<string, string | undefined>;
+      }>;
+
+    assert.equal(auditRecords.length, 2);
+    for (const record of auditRecords) {
+      assert.equal(record.tool, "bash");
+      assert.equal(record.decision, "allow");
+      assert.deepEqual(record.args, { command: "git log --oneline" });
+    }
   } finally {
     fixture.cleanup();
   }
