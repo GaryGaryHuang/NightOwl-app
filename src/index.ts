@@ -84,7 +84,7 @@ export async function runCli(
     const message =
       error instanceof Error ? error.message : "NightOwl CLI failed unexpectedly.";
     stderr.error(message);
-    return 1;
+    return 2;
   } finally {
     resolvedRuntime?.progressReporter.finalize();
   }

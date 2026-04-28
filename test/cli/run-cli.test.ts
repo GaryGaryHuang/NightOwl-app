@@ -244,7 +244,7 @@ test("runCli surfaces availability checker failures through the fatal error path
     }
   );
 
-  assert.equal(exitCode, 1);
+  assert.equal(exitCode, 2);
   assert.deepEqual(stdout, []);
   assert.match(stderr.join("\n"), /Copilot auth expired\./u);
 });
@@ -348,7 +348,7 @@ test("runCli surfaces a clear runtime error when Step 0 session startup fails", 
     { app }
   );
 
-  assert.equal(exitCode, 1);
+  assert.equal(exitCode, 2);
   assert.equal(stdout.length, 1);
   assert.match(stdout[0] ?? "", /main/u);
   assert.match(stdout[0] ?? "", /feature-branch/u);
@@ -368,7 +368,7 @@ test("runCli does not print partial completed-run counts or artifact lines on fa
     }
   );
 
-  assert.equal(exitCode, 1);
+  assert.equal(exitCode, 2);
   assert.deepEqual(stdout, [renderExpectedStartup()]);
   assert.match(stderr.join("\n"), /summary write failed/u);
   assert.doesNotMatch(stderr.join("\n"), /Review run completed\.|Output:/u);
@@ -400,7 +400,7 @@ test("runCli keeps fatal runs on the error path even when artifacts already exis
       }
     );
 
-    assert.equal(exitCode, 1);
+    assert.equal(exitCode, 2);
     assert.deepEqual(stdout, [renderExpectedStartup()]);
     assert.match(stderr.join("\n"), /index write failed/u);
     assert.doesNotMatch(stderr.join("\n"), /Files:/u);
@@ -458,7 +458,7 @@ test("runCli maps interrupted runs to signal-specific exit codes and messages", 
   }
 });
 
-test("runCli still exits with code 1 and generic message for a plain Error", async () => {
+test("runCli exits with code 2 and generic message for an unexpected runtime error", async () => {
   const { exitCode, stderr } = await runCliWithCapturedOutput(
     DEFAULT_ARGV,
     {
@@ -470,7 +470,7 @@ test("runCli still exits with code 1 and generic message for a plain Error", asy
     }
   );
 
-  assert.equal(exitCode, 1);
+  assert.equal(exitCode, 2);
   assert.match(stderr.join("\n"), /some other failure/u);
 });
 
