@@ -1,5 +1,5 @@
-import { buildDiffAnchorMap } from "./diff-anchor-map.ts";
 import type { FileReviewContext, Finding } from "./file-review-context.ts";
+import { buildFindingAnchorValidationContext } from "./finding-anchor-context.ts";
 import {
   DEPENDENCIES_BOUNDARIES_SECTION_KEY,
   KNOWLEDGE_SOURCE_OF_TRUTH_SECTION_KEY,
@@ -69,7 +69,7 @@ export class ReviewStatePromptSerializer {
   }
 
   buildSnapshot(input: ReviewStateSerializeInput): ReviewStateSnapshot {
-    const diffAnchorMap = buildDiffAnchorMap(
+    const anchorContext = buildFindingAnchorValidationContext(
       input.context.filePath,
       input.context.diffContent
     );
@@ -81,7 +81,7 @@ export class ReviewStatePromptSerializer {
       baseRef: input.context.baseRef,
       headRef: input.context.headRef,
       diffSummary: {
-        hunks: diffAnchorMap.hunks.map((hunk) => ({
+        hunks: anchorContext.diffAnchorMap.hunks.map((hunk) => ({
           hunkHeader: hunk.hunkHeader,
           headLineStart: hunk.headLineStart,
           headLineEnd: hunk.headLineEnd,

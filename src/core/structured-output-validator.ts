@@ -1,4 +1,3 @@
-import { buildDiffAnchorMap, type DiffAnchorMap } from "./diff-anchor-map.ts";
 import type {
   DependencyPathException,
   DispositionReason,
@@ -14,6 +13,10 @@ import type {
   VerifierVerdictCheckName,
   VerifiedFindingsPayload
 } from "./file-review-context.ts";
+import {
+  buildFindingAnchorValidationContext,
+  type FindingAnchorValidationContext
+} from "./finding-anchor-context.ts";
 import {
   verifyFindingAnchor,
   type AnchorVerificationFailure
@@ -67,13 +70,15 @@ export class StructuredOutputValidator {
       (parsed as Record<string, unknown>).schemaVersion
     );
 
-    const diffAnchorMap =
+    const anchorContext =
       input.diffContent === undefined
         ? undefined
-        : buildDiffAnchorMap(input.filePath ?? "<unknown>", input.diffContent);
-    const hunkHeaders = collectUnifiedDiffHunkHeaders(input.diffContent);
+        : buildFindingAnchorValidationContext(
+            input.filePath ?? "<unknown>",
+            input.diffContent
+          );
     const validatedFindings = findings.map((finding) =>
-      validateFinding(finding, hunkHeaders, diffAnchorMap, {
+      validateFinding(finding, anchorContext, {
         verifierVerdict: "disallow"
       })
     );
@@ -235,13 +240,15 @@ export class StructuredOutputValidator {
       );
     }
 
-    const diffAnchorMap =
+    const anchorContext =
       input.diffContent === undefined
         ? undefined
-        : buildDiffAnchorMap(input.filePath ?? "<unknown>", input.diffContent);
-    const hunkHeaders = collectUnifiedDiffHunkHeaders(input.diffContent);
+        : buildFindingAnchorValidationContext(
+            input.filePath ?? "<unknown>",
+            input.diffContent
+          );
     const validatedFindings = findings.map((finding, index) => {
-      const validated = validateFinding(finding, hunkHeaders, diffAnchorMap, {
+      const validated = validateFinding(finding, anchorContext, {
         verifierVerdict: "require-accepted"
       });
       validateStep6AcceptedFinding(validated, index);
@@ -334,8 +341,7 @@ export class StructuredOutputValidator {
 
 function validateFinding(
   input: unknown,
-  hunkHeaders: Set<string>,
-  diffAnchorMap: DiffAnchorMap | undefined,
+  anchorContext: FindingAnchorValidationContext | undefined,
   options: { verifierVerdict: "disallow" | "require-accepted" } = {
     verifierVerdict: "disallow"
   }
@@ -363,8 +369,7 @@ function validateFinding(
   );
   const traceability = validateTraceability(
     finding.traceability,
-    hunkHeaders,
-    diffAnchorMap,
+    anchorContext,
     dependencyPathException
   );
   const expectedBehavior = validateStringField(
@@ -520,8 +525,7 @@ function validateModelConfidence(finding: Record<string, unknown>): number {
 
 function validateTraceability(
   input: unknown,
-  hunkHeaders: Set<string>,
-  diffAnchorMap: DiffAnchorMap | undefined,
+  anchorContext: FindingAnchorValidationContext | undefined,
   dependencyPathException: DependencyPathException | undefined
 ): FindingTraceability {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -561,10 +565,10 @@ function validateTraceability(
       lineEnd
     };
 
-    if (diffAnchorMap) {
+    if (anchorContext) {
       const verdict = verifyFindingAnchor({
         traceability: resolved,
-        diffAnchorMap,
+        anchorContext,
         ...(dependencyPathException === undefined
           ? {}
           : { dependencyPathException })
@@ -595,10 +599,10 @@ function validateTraceability(
       hunkHeader
     };
 
-    if (diffAnchorMap) {
+    if (anchorContext) {
       const verdict = verifyFindingAnchor({
         traceability: resolved,
-        diffAnchorMap
+        anchorContext
       });
 
       if (!verdict.ok) {
@@ -608,13 +612,9 @@ function validateTraceability(
       return resolved;
     }
 
-    if (!hunkHeaders.has(hunkHeader)) {
-      throw new Error(
-        "deterministic validation failed: 'traceability.hunkHeader' not found in diff"
-      );
-    }
-
-    return resolved;
+    throw new Error(
+      "deterministic validation failed: 'traceability.hunkHeader' not found in diff"
+    );
   }
 
   throw new Error(
@@ -707,19 +707,6 @@ function validatePositiveInteger(value: unknown, fieldName: string): number {
   }
 
   return value;
-}
-
-function collectUnifiedDiffHunkHeaders(diffContent?: string): Set<string> {
-  if (!diffContent) {
-    return new Set();
-  }
-
-  return new Set(
-    diffContent
-      .split("\n")
-      .filter((line) => /^@@ .* @@(?: .*|)$/u.test(line.trim()))
-      .map((line) => line.trim())
-  );
 }
 
 function validateStringField(value: unknown, fieldName: string): string {

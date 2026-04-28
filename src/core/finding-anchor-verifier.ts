@@ -9,11 +9,11 @@
  * `dependencyPathException` content (that belongs to later milestones).
  */
 
-import type { DiffAnchorMap } from "./diff-anchor-map.ts";
 import type {
   DependencyPathException,
   FindingTraceability
 } from "./file-review-context.ts";
+import type { FindingAnchorValidationContext } from "./finding-anchor-context.ts";
 
 export const ANCHOR_FAILURE_TAG = "ANCHOR" as const;
 
@@ -38,14 +38,15 @@ export type AnchorVerificationResult =
 
 export interface VerifyFindingAnchorInput {
   readonly traceability: FindingTraceability;
-  readonly diffAnchorMap: DiffAnchorMap;
+  readonly anchorContext: FindingAnchorValidationContext;
   readonly dependencyPathException?: DependencyPathException | undefined;
 }
 
 export function verifyFindingAnchor(
   input: VerifyFindingAnchorInput
 ): AnchorVerificationResult {
-  const { traceability, diffAnchorMap, dependencyPathException } = input;
+  const { traceability, anchorContext, dependencyPathException } = input;
+  const { diffAnchorMap } = anchorContext;
 
   if (traceability.kind === "diff-hunk") {
     const known = diffAnchorMap.hunks.some(
@@ -60,7 +61,7 @@ export function verifyFindingAnchor(
       ok: false,
       tag: ANCHOR_FAILURE_TAG,
       reason: "unknown-hunk-header",
-      detail: `hunk header '${traceability.hunkHeader}' not found in diff for ${diffAnchorMap.filePath}`
+      detail: `hunk header '${traceability.hunkHeader}' not found in diff for ${anchorContext.filePath}`
     };
   }
 
@@ -89,6 +90,6 @@ export function verifyFindingAnchor(
     ok: false,
     tag: ANCHOR_FAILURE_TAG,
     reason: "line-range-outside-changed-lines",
-    detail: `line range ${traceability.lineStart}-${traceability.lineEnd} does not overlap any changed head-side line in the diff for ${diffAnchorMap.filePath}`
+    detail: `line range ${traceability.lineStart}-${traceability.lineEnd} does not overlap any changed head-side line in the diff for ${anchorContext.filePath}`
   };
 }

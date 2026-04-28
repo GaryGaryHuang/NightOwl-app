@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildDiffAnchorMap } from "../../src/core/diff-anchor-map.ts";
 import type { DependencyPathException } from "../../src/core/file-review-context.ts";
+import { buildFindingAnchorValidationContext } from "../../src/core/finding-anchor-context.ts";
 import {
   ANCHOR_FAILURE_TAG,
   verifyFindingAnchor
@@ -16,7 +16,7 @@ const DIFF = [
   " ctx"
 ].join("\n");
 
-const MAP = buildDiffAnchorMap("src/foo.ts", DIFF);
+const ANCHOR_CONTEXT = buildFindingAnchorValidationContext("src/foo.ts", DIFF);
 
 const STRUCTURAL_EXCEPTION_WITH_SYMBOL: DependencyPathException = {
   reason: "called from changed initializer",
@@ -29,7 +29,7 @@ const STRUCTURAL_EXCEPTION_WITH_SYMBOL: DependencyPathException = {
 test("line-range overlapping a changed head line passes verification", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "line-range", lineStart: 20, lineEnd: 22 },
-    diffAnchorMap: MAP
+    anchorContext: ANCHOR_CONTEXT
   });
 
   assert.deepEqual(result, { ok: true });
@@ -38,7 +38,7 @@ test("line-range overlapping a changed head line passes verification", () => {
 test("line-range fully outside any changed head line fails with ANCHOR tag", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
-    diffAnchorMap: MAP
+    anchorContext: ANCHOR_CONTEXT
   });
 
   assert.equal(result.ok, false);
@@ -56,7 +56,7 @@ test("line-range fully outside any changed head line fails with ANCHOR tag", () 
 test("dependency-path exception structural shape with optional symbol bypasses overlap", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
-    diffAnchorMap: MAP,
+    anchorContext: ANCHOR_CONTEXT,
     dependencyPathException: STRUCTURAL_EXCEPTION_WITH_SYMBOL
   });
 
@@ -66,7 +66,7 @@ test("dependency-path exception structural shape with optional symbol bypasses o
 test("diff-hunk with known header passes verification", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "diff-hunk", hunkHeader: "@@ -20,2 +20,4 @@" },
-    diffAnchorMap: MAP
+    anchorContext: ANCHOR_CONTEXT
   });
 
   assert.deepEqual(result, { ok: true });
@@ -75,7 +75,7 @@ test("diff-hunk with known header passes verification", () => {
 test("diff-hunk with unknown header fails verification with ANCHOR tag", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "diff-hunk", hunkHeader: "@@ -1,1 +1,1 @@" },
-    diffAnchorMap: MAP
+    anchorContext: ANCHOR_CONTEXT
   });
 
   assert.equal(result.ok, false);
@@ -86,7 +86,7 @@ test("diff-hunk with unknown header fails verification with ANCHOR tag", () => {
 test("line-range below headLineStart fails when no exception", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 5 },
-    diffAnchorMap: MAP
+    anchorContext: ANCHOR_CONTEXT
   });
 
   assert.equal(result.ok, false);
@@ -95,7 +95,7 @@ test("line-range below headLineStart fails when no exception", () => {
 test("line-range inside hunk span but outside changed lines still fails", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "line-range", lineStart: 23, lineEnd: 23 },
-    diffAnchorMap: MAP
+    anchorContext: ANCHOR_CONTEXT
   });
 
   assert.equal(result.ok, false);
@@ -108,14 +108,14 @@ test("line-range inside hunk span but outside changed lines still fails", () => 
 test("line-range partially overlapping first changed line passes", () => {
   const result = verifyFindingAnchor({
     traceability: { kind: "line-range", lineStart: 18, lineEnd: 21 },
-    diffAnchorMap: MAP
+    anchorContext: ANCHOR_CONTEXT
   });
 
   assert.deepEqual(result, { ok: true });
 });
 
 test("line-range matching changed line in second hunk passes", () => {
-  const multi = buildDiffAnchorMap(
+  const multi = buildFindingAnchorValidationContext(
     "src/multi.ts",
     [
       "@@ -1,1 +1,1 @@",
@@ -128,7 +128,7 @@ test("line-range matching changed line in second hunk passes", () => {
 
   const result = verifyFindingAnchor({
     traceability: { kind: "line-range", lineStart: 60, lineEnd: 62 },
-    diffAnchorMap: multi
+    anchorContext: multi
   });
 
   assert.deepEqual(result, { ok: true });
@@ -140,7 +140,7 @@ test("diff-hunk header comparison trims whitespace", () => {
       kind: "diff-hunk",
       hunkHeader: "  @@ -20,2 +20,4 @@  "
     },
-    diffAnchorMap: MAP
+    anchorContext: ANCHOR_CONTEXT
   });
 
   assert.deepEqual(result, { ok: true });
