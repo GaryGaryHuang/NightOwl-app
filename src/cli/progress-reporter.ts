@@ -11,15 +11,6 @@ import {
 } from "./progress-state.ts";
 
 export type { CliProgressStdout } from "./progress-renderer.ts";
-export {
-  buildActiveFileSummary,
-  createProgressSnapshot,
-  reduceProgressEvent,
-  withActiveFileProgress,
-  withClaimedFile,
-  withProgressedFile,
-  withResolvedOutcome
-} from "./progress-state.ts";
 
 export class CliProgressReporter {
   readonly #renderer: CliProgressRenderer;

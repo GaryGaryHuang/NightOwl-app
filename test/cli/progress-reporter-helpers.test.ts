@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   buildActiveFileSummary,
   reduceProgressEvent
-} from "../../src/cli/progress-reporter.ts";
+} from "../../src/cli/progress-state.ts";
 
 test("buildActiveFileSummary formats and orders active file paths", () => {
   const cases: Array<{
