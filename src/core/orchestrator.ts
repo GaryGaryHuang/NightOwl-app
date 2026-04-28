@@ -258,10 +258,10 @@ export class ReviewOrchestrator {
     const outputPublisher = await this.#outputSink.initializeRun(outputPlan);
     abortGuard.throwIfAborted();
 
-    await outputPublisher.publishArtifact("changeset-overview", { content: runContext.changesetOverviewMarkdown });
+    this.#onOutputTargetReady?.(outputTarget);
     abortGuard.throwIfAborted();
 
-    this.#onOutputTargetReady?.(outputTarget);
+    await outputPublisher.publishArtifact("changeset-overview", { content: runContext.changesetOverviewMarkdown });
     abortGuard.throwIfAborted();
 
     this.#emitProgressEvent({

@@ -1,5 +1,11 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync
+} from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
@@ -276,3 +282,155 @@ test("createLocalReviewRunApp persists Step 0 audit records when Step 0 fails be
     fixture.cleanup();
   }
 });
+
+test("createLocalReviewRunApp persists Step 0 audit records when changeset overview publish fails after output initialization", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const repoRoot = realpathSync(fixture.repoDir);
+    const expectedAuditPath = path.join(
+      repoRoot,
+      ".nightowl",
+      "review",
+      "feature-branch_03241402",
+      "tool-audit.jsonl"
+    );
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      timestampProvider: () => "03241402",
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              await config.hooks?.onPreToolUse?.(
+                {
+                  timestamp: 0,
+                  cwd: repoRoot,
+                  toolName: "bash",
+                  toolArgs: { command: "git log --oneline" }
+                } as never,
+                { sessionId: "s1" } as never
+              );
+
+              return {
+                async sendAndWait() {
+                  return { data: { content: buildValidStep0ChangeMapJson() } };
+                },
+                async disconnect() {}
+              };
+            }
+          };
+        }
+      },
+      outputSink: defineOutputSinkDouble({
+        async initializeRun(outputPlan) {
+          mkdirSync(outputPlan.outputTarget.basePath, { recursive: true });
+          mkdirSync(outputPlan.outputTarget.filesPath, { recursive: true });
+          writeFileSync(outputPlan.outputTarget.skippedPath, "");
+          writeFileSync(outputPlan.outputTarget.toolAuditPath, "");
+          return this;
+        },
+        async publishFileReview() {},
+        async publishSkippedFile() {},
+        async publishArtifact(kind) {
+          if (kind === "changeset-overview") {
+            throw new Error("changeset overview write failed");
+          }
+        }
+      })
+    });
+
+    await assert.rejects(
+      () =>
+        app.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: [],
+          dryRun: false
+        }),
+      /changeset overview write failed/u
+    );
+
+    const auditRecords = readFileSync(expectedAuditPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line)) as Array<{
+        tool: string;
+        decision: string;
+        args: Record<string, string | undefined>;
+      }>;
+
+    assert.equal(auditRecords.length, 1);
+    for (const record of auditRecords) {
+      assert.equal(record.tool, "bash");
+      assert.equal(record.decision, "allow");
+      assert.deepEqual(record.args, { command: "git log --oneline" });
+    }
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+function buildValidStep0ChangeMapJson(): string {
+  const paths = [
+    "dist/app.js",
+    "obsolete.txt",
+    "packages/app/index.ts",
+    "src/app.ts"
+  ];
+
+  return JSON.stringify({
+    schemaVersion: 1,
+    overviewMarkdown: "## Changeset Overview\n- 調整範圍：feature",
+    changedFiles: [
+      {
+        path: "dist/app.js",
+        status: "M",
+        category: "feature",
+        group: "review-flow",
+        basis: "name-status"
+      },
+      {
+        path: "obsolete.txt",
+        status: "D",
+        category: "feature",
+        group: "review-flow",
+        basis: "name-status"
+      },
+      {
+        path: "packages/app/index.ts",
+        status: "M",
+        category: "feature",
+        group: "review-flow",
+        basis: "name-status"
+      },
+      {
+        path: "src/app.ts",
+        status: "M",
+        category: "feature",
+        group: "review-flow",
+        basis: "name-status"
+      }
+    ],
+    fileGroups: [
+      {
+        id: "G1",
+        label: "review-flow",
+        files: paths,
+        observedChange: "review flow updates shared run context"
+      }
+    ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
+    behaviorChanges: [],
+    evidenceRefs: [],
+    unresolvedUnknowns: []
+  });
+}
