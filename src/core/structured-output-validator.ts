@@ -35,66 +35,28 @@ export class StructuredOutputValidator {
     diffContent?: string;
     filePath?: string;
   }): FindingsPayload {
-    let parsed: unknown;
+    const record = parseTopLevelObject(
+      input.responseText,
+      "top-level payload must be an object with a 'findings' array"
+    );
 
-    try {
-      parsed = JSON.parse(input.responseText);
-    } catch {
-      throw new Error(
-        "deterministic validation failed: response is not valid JSON"
-      );
-    }
-
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed) ||
-      !("findings" in parsed)
-    ) {
+    if (!("findings" in record) || !Array.isArray(record.findings)) {
       throw new Error(
         "deterministic validation failed: top-level payload must be an object with a 'findings' array"
       );
     }
 
-    const findings = (parsed as { findings: unknown }).findings;
+    rejectUnknownFields(record, ALLOWED_TOP_LEVEL_KEYS, "top-level payload");
+    const schemaVersion = validateSchemaVersion(record.schemaVersion);
 
-    if (!Array.isArray(findings)) {
-      throw new Error(
-        "deterministic validation failed: top-level payload must be an object with a 'findings' array"
-      );
-    }
-
-    rejectUnknownFields(
-      parsed as Record<string, unknown>,
-      ALLOWED_TOP_LEVEL_KEYS,
-      "top-level payload"
-    );
-    const schemaVersion = validateSchemaVersion(
-      (parsed as Record<string, unknown>).schemaVersion
-    );
-
-    const anchorContext =
-      input.diffContent === undefined
-        ? undefined
-        : buildFindingAnchorValidationContext(
-            input.filePath ?? "<unknown>",
-            input.diffContent
-          );
-    const validatedFindings = findings.map((finding) =>
+    const anchorContext = buildAnchorContext(input);
+    const validatedFindings = record.findings.map((finding) =>
       validateFinding(finding, anchorContext, {
         verifierVerdict: "disallow"
       })
     );
 
-    const seenIds = new Set<string>();
-    for (const f of validatedFindings) {
-      if (seenIds.has(f.findingId)) {
-        throw new Error(
-          `deterministic validation failed: duplicate findingId '${f.findingId}'`
-        );
-      }
-      seenIds.add(f.findingId);
-    }
+    assertUniqueFindingIds(validatedFindings, "findings");
 
     return {
       schemaVersion,
@@ -187,35 +149,18 @@ export class StructuredOutputValidator {
     diffContent?: string;
     filePath?: string;
   }): VerifiedFindingsPayload {
-    let parsed: unknown;
+    const record = parseTopLevelObject(
+      input.responseText,
+      "top-level payload must be an object with 'findings' and 'dispositions' arrays"
+    );
 
-    try {
-      parsed = JSON.parse(input.responseText);
-    } catch {
-      throw new Error(
-        "deterministic validation failed: response is not valid JSON"
-      );
-    }
-
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
+    if (!("findings" in record) || !Array.isArray(record.findings)) {
       throw new Error(
         "deterministic validation failed: top-level payload must be an object with 'findings' and 'dispositions' arrays"
       );
     }
 
-    const record = parsed as Record<string, unknown>;
-
-    if (!("findings" in record)) {
-      throw new Error(
-        "deterministic validation failed: top-level payload must be an object with 'findings' and 'dispositions' arrays"
-      );
-    }
-
-    if (!("dispositions" in record)) {
+    if (!("dispositions" in record) || !Array.isArray(record.dispositions)) {
       throw new Error(
         "deterministic validation failed: top-level payload must contain a 'dispositions' array"
       );
@@ -228,30 +173,8 @@ export class StructuredOutputValidator {
     );
     const schemaVersion = validateSchemaVersion(record.schemaVersion);
 
-    const findings = record.findings;
-
-    if (!Array.isArray(findings)) {
-      throw new Error(
-        "deterministic validation failed: top-level payload must be an object with 'findings' and 'dispositions' arrays"
-      );
-    }
-
-    const dispositionsRaw = record.dispositions;
-
-    if (!Array.isArray(dispositionsRaw)) {
-      throw new Error(
-        "deterministic validation failed: top-level payload must contain a 'dispositions' array"
-      );
-    }
-
-    const anchorContext =
-      input.diffContent === undefined
-        ? undefined
-        : buildFindingAnchorValidationContext(
-            input.filePath ?? "<unknown>",
-            input.diffContent
-          );
-    const validatedFindings = findings.map((finding, index) => {
+    const anchorContext = buildAnchorContext(input);
+    const validatedFindings = record.findings.map((finding, index) => {
       const validated = validateFinding(finding, anchorContext, {
         verifierVerdict: "require-accepted"
       });
@@ -259,29 +182,13 @@ export class StructuredOutputValidator {
       return validated;
     });
 
-    const seenFindingIds = new Set<string>();
-    for (const f of validatedFindings) {
-      if (seenFindingIds.has(f.findingId)) {
-        throw new Error(
-          `deterministic validation failed: duplicate findingId '${f.findingId}'`
-        );
-      }
-      seenFindingIds.add(f.findingId);
-    }
+    assertUniqueFindingIds(validatedFindings, "findings");
 
-    const validatedDispositions = dispositionsRaw.map((d, index) =>
+    const validatedDispositions = record.dispositions.map((d, index) =>
       validateDisposition(d, index)
     );
 
-    const seenDispositionIds = new Set<string>();
-    for (const d of validatedDispositions) {
-      if (seenDispositionIds.has(d.findingId)) {
-        throw new Error(
-          `deterministic validation failed: duplicate findingId '${d.findingId}' in dispositions`
-        );
-      }
-      seenDispositionIds.add(d.findingId);
-    }
+    assertUniqueFindingIds(validatedDispositions, "dispositions");
 
     return {
       schemaVersion,
@@ -747,6 +654,76 @@ function validateSchemaVersion(value: unknown): 2 {
   }
 
   return 2;
+}
+
+/**
+ * Parse responseText as JSON and assert it is a non-null, non-array object.
+ * `topLevelShapeMessage` is the human-readable description of the expected shape
+ * (e.g. "top-level payload must be an object with a 'findings' array"); it is
+ * appended to the standard "deterministic validation failed: " prefix when the
+ * parsed value is not an object.
+ */
+function parseTopLevelObject(
+  responseText: string,
+  topLevelShapeMessage: string
+): Record<string, unknown> {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(responseText);
+  } catch {
+    throw new Error(
+      "deterministic validation failed: response is not valid JSON"
+    );
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(
+      `deterministic validation failed: ${topLevelShapeMessage}`
+    );
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
+/**
+ * Build a finding-anchor validation context from a step-resolve input, returning
+ * undefined when the caller did not supply diff content (e.g. test fixtures).
+ */
+function buildAnchorContext(input: {
+  diffContent?: string;
+  filePath?: string;
+}): FindingAnchorValidationContext | undefined {
+  if (input.diffContent === undefined) {
+    return undefined;
+  }
+
+  return buildFindingAnchorValidationContext(
+    input.filePath ?? "<unknown>",
+    input.diffContent
+  );
+}
+
+/**
+ * Throw on the first duplicate findingId encountered. `scope` is either
+ * "findings" (legacy message preserved for the validate / validateWithDispositions
+ * findings array) or "dispositions" (suffixed message preserved for the
+ * dispositions array).
+ */
+function assertUniqueFindingIds(
+  items: ReadonlyArray<{ findingId: string }>,
+  scope: "findings" | "dispositions"
+): void {
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item.findingId)) {
+      const suffix = scope === "dispositions" ? " in dispositions" : "";
+      throw new Error(
+        `deterministic validation failed: duplicate findingId '${item.findingId}'${suffix}`
+      );
+    }
+    seen.add(item.findingId);
+  }
 }
 
 // --- Allowed-key constants ---
