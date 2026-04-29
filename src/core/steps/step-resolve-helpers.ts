@@ -1,7 +1,4 @@
-import type {
-  DispositionReason,
-  FileReviewContext
-} from "../file-review-context.ts";
+import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { RiskLevel } from "../risk-level.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
@@ -9,7 +6,10 @@ import type {
   VerifierReportArtifactEntry,
   VerifierReportEntry
 } from "../verifier-report.ts";
-import { pickDispositionFields } from "../verifier-report.ts";
+import {
+  dispositionReasonToTaxonomy,
+  pickDispositionFields
+} from "../verifier-report.ts";
 
 /**
  * Factory for the resolve() closure shared by all section steps (Step 1–4, 7).
@@ -162,27 +162,6 @@ function toVerifierArtifactEntries(input: {
     reason: entry.reason,
     ...pickDispositionFields(entry)
   }));
-}
-
-function dispositionReasonToTaxonomy(
-  reason: DispositionReason
-): VerifierReportEntry["taxonomy"] {
-  switch (reason) {
-    case "SUPPORTED":
-      return "OK";
-    case "ANCHOR":
-      return "ANCHOR";
-    case "EVIDENCE":
-      return "EVIDENCE";
-    case "REACHABILITY":
-      return "REACHABILITY";
-    case "OUT_OF_SCOPE":
-      return "OUT_OF_SCOPE";
-    case "DUPLICATE":
-      return "DUPLICATE";
-    case "CONTRADICTION":
-      return "CONTRADICTION";
-  }
 }
 
 const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(["High", "Medium", "Low", "None"]);

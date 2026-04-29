@@ -21,7 +21,10 @@ import {
   verifyFindingAnchor,
   type AnchorVerificationFailure
 } from "./finding-anchor-verifier.ts";
-import type { VerifierReportEntry } from "./verifier-report.ts";
+import {
+  DISPOSITION_REASONS,
+  type VerifierReportEntry
+} from "./verifier-report.ts";
 
 /**
  * Deterministically validate structured findings JSON before it is written into review state.
@@ -845,15 +848,7 @@ const VALID_DISPOSITION_STATUSES: readonly string[] = [
   "retired"
 ];
 
-const VALID_DISPOSITION_REASONS: readonly string[] = [
-  "SUPPORTED",
-  "ANCHOR",
-  "EVIDENCE",
-  "REACHABILITY",
-  "OUT_OF_SCOPE",
-  "DUPLICATE",
-  "CONTRADICTION"
-];
+const VALID_DISPOSITION_REASONS: readonly string[] = DISPOSITION_REASONS;
 
 // --- Helper functions ---
 
