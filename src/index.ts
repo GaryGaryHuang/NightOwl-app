@@ -1,8 +1,8 @@
 import {
   createLocalReviewRunApp,
-  formatLocalReviewRunSummary,
   type ReviewApp
 } from "./app/review-app.ts";
+import { formatLocalReviewRunSummary } from "./cli/format-run-summary.ts";
 import { CliProgressReporter, type CliProgressStdout } from "./cli/progress-reporter.ts";
 import { CliUsageError, parseReviewCommand } from "./cli/parser.ts";
 import type { RunRequest } from "./core/run-request.ts";

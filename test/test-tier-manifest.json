@@ -1,7 +1,7 @@
 {
   "unit": [
-    "test/app/format-local-review-run-summary.test.ts",
     "test/app/run-lifecycle-manager.test.ts",
+    "test/cli/format-run-summary.test.ts",
     "test/cli/parser.test.ts",
     "test/cli/progress-reporter-helpers.test.ts",
     "test/cli/progress-reporter.test.ts",

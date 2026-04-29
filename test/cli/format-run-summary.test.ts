@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   formatLocalReviewRunSummary,
   LOCAL_REVIEW_RUN_HEADER
-} from "../../src/app/review-app.ts";
+} from "../../src/cli/format-run-summary.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { stubChangeMap } from "../helpers/change-map-stub.ts";

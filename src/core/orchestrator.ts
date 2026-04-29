@@ -1,14 +1,7 @@
 import path from "node:path";
 
-export class ReviewRunInterruptedError extends Error {
-  readonly signal: "SIGINT" | "SIGTERM" | undefined;
-
-  constructor(signal?: "SIGINT" | "SIGTERM") {
-    super("Run interrupted by external signal.");
-    this.name = "ReviewRunInterruptedError";
-    this.signal = signal;
-  }
-}
+import { ReviewRunInterruptedError } from "./review-run-interrupted-error.ts";
+export { ReviewRunInterruptedError } from "./review-run-interrupted-error.ts";
 
 function extractSignalName(reason: unknown): "SIGINT" | "SIGTERM" | undefined {
   if (reason === "SIGINT" || reason === "SIGTERM") {

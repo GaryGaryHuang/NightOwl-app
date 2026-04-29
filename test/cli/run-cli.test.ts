@@ -4,10 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import {
-  createLocalReviewRunApp,
-  formatLocalReviewRunSummary
-} from "../../src/app/review-app.ts";
+import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
+import { formatLocalReviewRunSummary } from "../../src/cli/format-run-summary.ts";
 import {
   ReviewRunInterruptedError,
   type ReviewRunSummary
