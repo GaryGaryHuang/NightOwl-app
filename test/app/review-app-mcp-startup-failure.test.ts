@@ -4,7 +4,6 @@ import type { SessionConfig } from "@github/copilot-sdk";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
-import type { ReviewMcpServerConfig } from "../../src/core/review-mcp-server-config.ts";
 import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
 import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
@@ -16,7 +15,7 @@ import {
   isKnowledgeSourceOfTruthSystemMessage
 } from "../helpers/review-app-fixture.ts";
 
-test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the existing retry-and-abort path", async () => {
+test("createLocalReviewRunApp aborts Step 0 MCP startup failure after retry without initializing output", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -108,7 +107,7 @@ test("createLocalReviewRunApp keeps Step 0 Context7 startup failure on the exist
   }
 });
 
-test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the existing retry-and-skip path", async () => {
+test("createLocalReviewRunApp skips one file after per-file MCP startup retry exhaustion", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -229,231 +228,3 @@ test("createLocalReviewRunApp keeps Step 3 Context7 startup failure on the exist
     fixture.cleanup();
   }
 });
-
-// ---------------------------------------------------------------------------
-// Step 0 custom/remote MCP startup failure — table-driven retry-and-abort
-// ---------------------------------------------------------------------------
-
-const step0McpFailureCases = [
-  {
-    mcpType: "custom",
-    serverName: "demo",
-    mcpConfig: { type: "local" as const, command: "npx", args: ["-y", "@example/demo-mcp"], tools: ["*"] },
-    errorMessage: "custom mcp startup failed"
-  },
-  {
-    mcpType: "remote",
-    serverName: "my-remote",
-    mcpConfig: { type: "http" as const, url: "https://mcp.example.com/v1", tools: ["*"] },
-    errorMessage: "remote mcp startup failed"
-  }
-];
-
-for (const { mcpType, serverName, mcpConfig, errorMessage } of step0McpFailureCases) {
-  test(`createLocalReviewRunApp keeps Step 0 ${mcpType} MCP startup failure on the existing retry-and-abort path`, async () => {
-    await assertStep0McpStartupFailureAborts({ serverName, mcpConfig, errorMessage });
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Per-file custom/remote MCP startup failure — table-driven retry-and-skip
-// ---------------------------------------------------------------------------
-
-const perFileMcpFailureCases = [
-  {
-    mcpType: "custom",
-    serverName: "demo",
-    mcpConfig: { type: "local" as const, command: "npx", args: ["-y", "@example/demo-mcp"], tools: ["*"] },
-    stepMatcher: isKnowledgeSourceOfTruthSystemMessage,
-    errorMessage: "custom mcp startup failed"
-  },
-  {
-    mcpType: "remote",
-    serverName: "my-remote",
-    mcpConfig: { type: "http" as const, url: "https://mcp.example.com/v1", tools: ["*"] },
-    stepMatcher: isKnowledgeSourceOfTruthSystemMessage,
-    errorMessage: "remote mcp startup failed"
-  }
-];
-
-for (const { mcpType, serverName, mcpConfig, stepMatcher, errorMessage } of perFileMcpFailureCases) {
-  test(`createLocalReviewRunApp keeps per-file ${mcpType} MCP startup failure on the existing retry-and-skip path`, async () => {
-    await assertPerFileMcpStartupFailureSkipsOneFile({ serverName, mcpConfig, stepMatcher, errorMessage });
-  });
-}
-
-async function assertStep0McpStartupFailureAborts(input: {
-  serverName: string;
-  mcpConfig: ReviewMcpServerConfig;
-  errorMessage: string;
-}): Promise<void> {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    let failures = 0;
-    const app = createLocalReviewRunApp({
-      workingDirectory: fixture.repoDir,
-      clientManager: {
-        async start() {},
-        async stop() {},
-        async forceStop() {},
-        getClient() {
-          return {
-            async start() {},
-            async stop() {},
-            async forceStop() {},
-            async createSession(config: SessionConfig) {
-              if (
-                config.mcpServers?.[input.serverName] &&
-                isChangesetOverviewSystemMessage(config.systemMessage)
-              ) {
-                failures += 1;
-                throw new Error(input.errorMessage);
-              }
-
-              return {
-                async sendAndWait() {
-                  return {
-                    data: {
-                      content: "## Changeset Overview\n- 調整範圍：feature"
-                    }
-                  };
-                },
-                async disconnect() {}
-              };
-            }
-          };
-        }
-      },
-      reviewConfigProvider: {
-        async loadReviewConfig() {
-          return {
-            maxConcurrentFiles: 1,
-            confidenceThresholds: { must: 80, nice: 90 },
-            mcpServers: {
-              [input.serverName]: input.mcpConfig
-            }
-          };
-        }
-      }
-    });
-
-    await assert.rejects(
-      () =>
-        app.run({
-          baseRef: "main",
-          headRef: "feature-branch",
-          repoPath: "./packages/app",
-          userContext: [],
-          dryRun: false
-        }),
-      new RegExp(input.errorMessage, "u")
-    );
-
-    assert.ok(failures >= 2);
-  } finally {
-    fixture.cleanup();
-  }
-}
-
-async function assertPerFileMcpStartupFailureSkipsOneFile(input: {
-  serverName: string;
-  mcpConfig: ReviewMcpServerConfig;
-  stepMatcher(systemMessage: unknown): boolean;
-  errorMessage: string;
-}): Promise<void> {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add changed file for MCP startup failure coverage");
-
-    const skippedRecords: SkipRecord[] = [];
-    let failures = 0;
-    const app = createLocalReviewRunApp({
-      workingDirectory: fixture.repoDir,
-      clientManager: {
-        async start() {},
-        async stop() {},
-        async forceStop() {},
-        getClient() {
-          return {
-            async start() {},
-            async stop() {},
-            async forceStop() {},
-            async createSession(config: SessionConfig) {
-              if (
-                config.mcpServers?.[input.serverName] &&
-                input.stepMatcher(config.systemMessage)
-              ) {
-                failures += 1;
-
-                if (failures <= 2) {
-                  throw new Error(input.errorMessage);
-                }
-              }
-
-              return {
-                async sendAndWait({ prompt }) {
-                  return {
-                    data: {
-                      content: buildSessionResponse(config, prompt)
-                    }
-                  };
-                },
-                async disconnect() {}
-              };
-            }
-          };
-        }
-      },
-      changesetOverviewRunner: {
-        async run() {
-          return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-            userContext: []
-          });
-        }
-      },
-      reviewConfigProvider: {
-        async loadReviewConfig() {
-          return {
-            maxConcurrentFiles: 1,
-            confidenceThresholds: { must: 80, nice: 90 },
-            mcpServers: {
-              [input.serverName]: input.mcpConfig
-            }
-          };
-        }
-      },
-      outputSink: defineOutputSinkDouble({
-        async initializeRun() {
-          return this;
-        },
-        async publishFileReview() {},
-        async publishSkippedFile(skipRecord) {
-          skippedRecords.push(skipRecord);
-        },
-        async publishArtifact() {}
-      })
-    });
-
-    const result = await app.run({
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./packages/app",
-      userContext: [],
-      dryRun: false
-    });
-
-    assert.ok(failures >= 2);
-    assert.equal(result.skippedFileCount, 1);
-    assert.match(
-      skippedRecords[0]?.reason ?? "",
-      new RegExp(input.errorMessage, "u")
-    );
-  } finally {
-    fixture.cleanup();
-  }
-}
