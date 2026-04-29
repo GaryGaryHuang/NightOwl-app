@@ -9,6 +9,7 @@ import type {
   VerifierReportArtifactEntry,
   VerifierReportEntry
 } from "../verifier-report.ts";
+import { pickDispositionFields } from "../verifier-report.ts";
 
 /**
  * Factory for the resolve() closure shared by all section steps (Step 1–4, 7).
@@ -159,15 +160,7 @@ function toVerifierArtifactEntries(input: {
     outcome: entry.outcome,
     gate: entry.gate,
     reason: entry.reason,
-    ...(entry.dispositionStatus === undefined
-      ? {}
-      : { dispositionStatus: entry.dispositionStatus }),
-    ...(entry.dispositionReason === undefined
-      ? {}
-      : { dispositionReason: entry.dispositionReason }),
-    ...(entry.dispositionExplanation === undefined
-      ? {}
-      : { dispositionExplanation: entry.dispositionExplanation })
+    ...pickDispositionFields(entry)
   }));
 }
 

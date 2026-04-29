@@ -171,6 +171,7 @@ export class StructuredOutputValidator {
       };
     }
 
+    // isFindingAccepted(finding) is guaranteed true at this point.
     return {
       accepted: true,
       taxonomy: "OK",
@@ -433,14 +434,22 @@ function validateFinding(
   return result;
 }
 
-function validateStep6AcceptedFinding(finding: Finding, index: number): void {
-  if (finding.uncertaintyStatus !== "supported") {
-    throw new Error(
-      `deterministic validation failed: findings[${index}] must be accepted: uncertaintyStatus must be 'supported'`
-    );
-  }
+/**
+ * Canonical acceptance predicate shared by the filter path (#classifyAcceptance)
+ * and the strict validation path (validateStep6AcceptedFinding).
+ */
+function isFindingAccepted(finding: Finding): boolean {
+  return finding.uncertaintyStatus === "supported" && finding.reachability.credible;
+}
 
-  if (!finding.reachability.credible) {
+function validateStep6AcceptedFinding(finding: Finding, index: number): void {
+  if (!isFindingAccepted(finding)) {
+    if (finding.uncertaintyStatus !== "supported") {
+      throw new Error(
+        `deterministic validation failed: findings[${index}] must be accepted: uncertaintyStatus must be 'supported'`
+      );
+    }
+
     throw new Error(
       `deterministic validation failed: findings[${index}] must be accepted: reachability.credible must be true`
     );

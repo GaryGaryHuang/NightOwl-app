@@ -51,6 +51,27 @@ function cloneEntry(entry: VerifierReportEntry): VerifierReportEntry {
   return { ...entry };
 }
 
+/**
+ * Spread optional disposition fields from a VerifierReportEntry.
+ * Shared by toVerifierArtifactEntries (step-resolve-helpers) and
+ * renderVerifierReport (verifier-report-finalizer) to avoid duplication.
+ */
+export function pickDispositionFields(
+  entry: VerifierReportEntry
+): Pick<VerifierReportEntry, "dispositionStatus" | "dispositionReason" | "dispositionExplanation"> {
+  return {
+    ...(entry.dispositionStatus === undefined
+      ? {}
+      : { dispositionStatus: entry.dispositionStatus }),
+    ...(entry.dispositionReason === undefined
+      ? {}
+      : { dispositionReason: entry.dispositionReason }),
+    ...(entry.dispositionExplanation === undefined
+      ? {}
+      : { dispositionExplanation: entry.dispositionExplanation })
+  };
+}
+
 export class VerifierReportBuilder {
   readonly #entries: VerifierReportEntry[] = [];
 
