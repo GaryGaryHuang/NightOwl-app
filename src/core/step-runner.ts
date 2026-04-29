@@ -8,6 +8,34 @@ import { StructuredOutputValidator } from "./structured-output-validator.ts";
 import type { FindingsPayload, FindingDisposition, VerifiedFindingsPayload } from "./file-review-context.ts";
 import type { VerifierReportEntry } from "./verifier-report.ts";
 
+export interface StructuredOutputValidatorLike {
+  validate(input: {
+    responseText: string;
+    diffContent?: string;
+    filePath?: string;
+  }): FindingsPayload;
+  validateWithReport(input: {
+    responseText: string;
+    diffContent?: string;
+    filePath?: string;
+  }): { payload: FindingsPayload; report: VerifierReportEntry[] };
+  filterByAcceptance(payload: FindingsPayload): FindingsPayload;
+  filterByAcceptanceWithReport(payload: FindingsPayload): {
+    payload: FindingsPayload;
+    report: VerifierReportEntry[];
+  };
+  validateWithDispositions(input: {
+    responseText: string;
+    diffContent?: string;
+    filePath?: string;
+  }): VerifiedFindingsPayload;
+  validateDispositionCompleteness(input: {
+    dispositions: FindingDisposition[];
+    candidateFindingIds: readonly string[];
+    acceptedFindingIds: readonly string[];
+  }): void;
+}
+
 export interface StepResolveServices {
   judgeService?: {
     evaluate(input: {
@@ -17,33 +45,7 @@ export interface StepResolveServices {
       sectionContent: string;
     }): Promise<{ passed: boolean; cause?: string }>;
   };
-  validator: {
-    validate(input: {
-      responseText: string;
-      diffContent?: string;
-      filePath?: string;
-    }): FindingsPayload;
-    validateWithReport(input: {
-      responseText: string;
-      diffContent?: string;
-      filePath?: string;
-    }): { payload: FindingsPayload; report: VerifierReportEntry[] };
-    filterByAcceptance(payload: FindingsPayload): FindingsPayload;
-    filterByAcceptanceWithReport(payload: FindingsPayload): {
-      payload: FindingsPayload;
-      report: VerifierReportEntry[];
-    };
-    validateWithDispositions(input: {
-      responseText: string;
-      diffContent?: string;
-      filePath?: string;
-    }): VerifiedFindingsPayload;
-    validateDispositionCompleteness(input: {
-      dispositions: FindingDisposition[];
-      candidateFindingIds: readonly string[];
-      acceptedFindingIds: readonly string[];
-    }): void;
-  };
+  validator: StructuredOutputValidatorLike;
 }
 
 export interface StepExecutionPlan {
@@ -99,33 +101,7 @@ export interface StepRunnerOptions {
       sectionContent: string;
     }): Promise<{ passed: boolean; cause?: string }>;
   };
-  structuredOutputValidator?: {
-    validate(input: {
-      responseText: string;
-      diffContent?: string;
-      filePath?: string;
-    }): FindingsPayload;
-    validateWithReport(input: {
-      responseText: string;
-      diffContent?: string;
-      filePath?: string;
-    }): { payload: FindingsPayload; report: VerifierReportEntry[] };
-    filterByAcceptance(payload: FindingsPayload): FindingsPayload;
-    filterByAcceptanceWithReport(payload: FindingsPayload): {
-      payload: FindingsPayload;
-      report: VerifierReportEntry[];
-    };
-    validateWithDispositions(input: {
-      responseText: string;
-      diffContent?: string;
-      filePath?: string;
-    }): VerifiedFindingsPayload;
-    validateDispositionCompleteness(input: {
-      dispositions: FindingDisposition[];
-      candidateFindingIds: readonly string[];
-      acceptedFindingIds: readonly string[];
-    }): void;
-  };
+  structuredOutputValidator?: StructuredOutputValidatorLike;
   onStepRetry?: (info: StepRetryInfo) => void;
 }
 
