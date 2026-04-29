@@ -7,6 +7,8 @@ import {
   ReviewStatePromptSerializer,
   type ReviewStateSnapshot
 } from "../../../src/core/review-state-prompt-serializer.ts";
+import { createRunContext } from "../../../src/core/run-context.ts";
+import { Step1OverviewStep } from "../../../src/core/steps/step1-overview.ts";
 import { Step2DependenciesBoundariesStep } from "../../../src/core/steps/step2-dependencies-boundaries.ts";
 import { Step3KnowledgeSourceOfTruthStep } from "../../../src/core/steps/step3-knowledge-source-of-truth.ts";
 import { Step4StrategyWhatIfScenariosStep } from "../../../src/core/steps/step4-strategy-what-if-scenarios.ts";
@@ -71,10 +73,12 @@ function createFinding(findingId: string): Finding {
   };
 }
 
-function createChangeMap(): ChangeMap {
+function createChangeMap(
+  overviewMarkdown = "## Changeset Overview\n"
+): ChangeMap {
   return {
     schemaVersion: 1,
-    overviewMarkdown: "## Changeset Overview\n",
+    overviewMarkdown,
     changedFiles: [
       {
         path: "src/app.ts",
@@ -124,6 +128,83 @@ function assertBaseSnapshot(snapshot: ReviewStateSnapshot): void {
   assert.match(snapshot.sections.overview ?? "", /^## Overview/u);
   assert.deepEqual(snapshot.evidenceRefs, []);
 }
+
+function assertDiffBlock(prompt: string): void {
+  assert.match(
+    prompt,
+    /<diff path="src\/app\.ts" base="main" head="feature">/u
+  );
+  assert.match(prompt, /@@ -1 \+1 @@\n-old\n\+new/u);
+  assert.match(prompt, /<\/diff>/u);
+}
+
+test("Step1OverviewStep prompt carries changeset context, file diff, and profile metadata", () => {
+  const context = createContext();
+  const runContext = createRunContext({
+    changesetOverview: createChangeMap(
+      "## Changeset Overview\n- Auth flow spans src/app.ts and package entrypoints."
+    ),
+    userContext: ["PR describes a dry-run review workflow"]
+  });
+
+  const plan = new Step1OverviewStep({ runContext }).prepare(context);
+
+  assert.equal(plan.stepId, "step1-overview");
+  assert.equal(plan.reviewProfile.model, "gpt-5-mini");
+  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
+  assert.match(plan.prompt.systemMessage, /## Current Step: Overview/u);
+  assert.match(plan.prompt.userMessage, /<changeset_context>/u);
+  assert.match(plan.prompt.userMessage, /Auth flow spans src\/app\.ts/u);
+  assertDiffBlock(plan.prompt.userMessage);
+  assert.match(plan.prompt.userMessage, /測試覆蓋觀察/u);
+});
+
+test("Step2DependenciesBoundariesStep prompt carries Step 1 overview and boundary contract instructions", () => {
+  const context = createContext();
+
+  const plan = new Step2DependenciesBoundariesStep({
+    promptSerializer: serializer
+  }).prepare(context);
+  const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage);
+
+  assert.equal(plan.stepId, "step2-dependencies-boundaries");
+  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
+  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
+  assert.match(
+    plan.prompt.systemMessage,
+    /## Current Step: Dependencies & Boundaries/u
+  );
+  assert.equal(snapshot.sections.overview, "## Overview\nchanged old to new");
+  assertDiffBlock(plan.prompt.userMessage);
+  assert.match(plan.prompt.userMessage, /Contract/u);
+  assert.match(plan.prompt.userMessage, /隱含相依/u);
+});
+
+test("Step3KnowledgeSourceOfTruthStep prompt carries prior review state and knowledge-source instructions", () => {
+  const context = createContext();
+
+  const plan = new Step3KnowledgeSourceOfTruthStep({
+    promptSerializer: serializer
+  }).prepare(context);
+  const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage);
+
+  assert.equal(plan.stepId, "step3-knowledge-source-of-truth");
+  assert.equal(plan.reviewProfile.model, "gpt-5-mini");
+  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
+  assert.match(
+    plan.prompt.systemMessage,
+    /## Current Step: Knowledge & Source of Truth/u
+  );
+  assert.equal(snapshot.sections.overview, "## Overview\nchanged old to new");
+  assert.match(
+    snapshot.sections.boundaryMap ?? "",
+    /## Dependencies & Boundaries/u
+  );
+  assertDiffBlock(plan.prompt.userMessage);
+  assert.match(plan.prompt.userMessage, /版本／文件參考/u);
+  assert.match(plan.prompt.userMessage, /採用規則與假設/u);
+  assert.match(plan.prompt.userMessage, /排除範圍/u);
+});
 
 test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
   const context = createContext();
