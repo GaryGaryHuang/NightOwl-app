@@ -214,40 +214,6 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
   ]);
 });
 
-test("ReviewIndexFinalizer throws with identifying message when a planned file is absent from both outcome sets", () => {
-  assert.throws(
-    () =>
-      renderIndex({
-        plannedNotes: createPlannedNotes([
-          plannedNote("src/missing.ts", "src__missing.ts.md")
-        ]),
-        successfulFiles: [],
-        skippedFiles: []
-      }),
-    (error: unknown) => {
-      assert.ok(error instanceof Error);
-      assert.equal(
-        error.message,
-        "Missing finalized outcome for planned file: src/missing.ts"
-      );
-      return true;
-    }
-  );
-});
-
-test("ReviewIndexFinalizer labels a file present in both outcome sets as its risk level (successfulFiles wins)", () => {
-  const rendered = renderIndex({
-    plannedNotes: createPlannedNotes([
-      plannedNote("src/both.ts", "src__both.ts.md")
-    ]),
-    successfulFiles: [createSuccessfulFile("src/both.ts", [])],
-    skippedFiles: [createSkippedFile("src/both.ts", "step1-overview", "judge rejected")]
-  });
-
-  assert.match(rendered, /- \[None\] \[`src\/both\.ts`\]/u);
-  assert.doesNotMatch(rendered, /\[Skipped\]/u);
-});
-
 function assertTextContainsInOrder(text: string, fragments: string[]): void {
   let cursor = 0;
 

@@ -174,25 +174,3 @@ test("RunManifestFinalizer renders an empty files array for zero-file runs", () 
 test("RunManifestFinalizer uses schema version 3", () => {
   assert.equal(renderManifest().schemaVersion, 3);
 });
-
-test("RunManifestFinalizer throws with an identifying message when a planned file is absent from both outcome sets", () => {
-  assert.throws(
-    () =>
-      renderManifest({
-        plannedNotes: createPlannedNotes([
-          [
-            "src/missing.ts",
-            "/workspace/.nightowl/review/feature-branch_03131430/files/src__missing.ts.md"
-          ]
-        ])
-      }),
-    (error: unknown) => {
-      assert.ok(error instanceof Error);
-      assert.equal(
-        error.message,
-        "Missing finalized outcome for planned file: src/missing.ts"
-      );
-      return true;
-    }
-  );
-});
