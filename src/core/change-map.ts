@@ -7,31 +7,44 @@ import type { ReviewChangesetEntry } from "../providers/review-source-provider.t
  * authoritative structured run-level contract for downstream review.
  */
 
-export type ChangeMapStatus = "A" | "M" | "D" | "R";
+export const CHANGE_MAP_STATUSES = ["A", "M", "D", "R"] as const;
+export type ChangeMapStatus = (typeof CHANGE_MAP_STATUSES)[number];
 
-export type ChangeMapCategory =
-  | "feature"
-  | "bugfix"
-  | "refactor"
-  | "config"
-  | "test"
-  | "docs";
+export const CHANGE_MAP_CATEGORIES = [
+  "feature",
+  "bugfix",
+  "refactor",
+  "config",
+  "test",
+  "docs"
+] as const;
+export type ChangeMapCategory = (typeof CHANGE_MAP_CATEGORIES)[number];
 
-export type ChangeMapBasis = "name-status" | "diff-inspected" | "file-inspected";
+export const CHANGE_MAP_BASES = [
+  "name-status",
+  "diff-inspected",
+  "file-inspected"
+] as const;
+export type ChangeMapBasis = (typeof CHANGE_MAP_BASES)[number];
 
-export type ChangeMapRelationship =
-  | "calls"
-  | "imports"
-  | "configures"
-  | "tests"
-  | "unknown";
+export const CHANGE_MAP_RELATIONSHIPS = [
+  "calls",
+  "imports",
+  "configures",
+  "tests",
+  "unknown"
+] as const;
+export type ChangeMapRelationship = (typeof CHANGE_MAP_RELATIONSHIPS)[number];
 
+export const CHANGE_MAP_EVIDENCE_SOURCE_KINDS = [
+  "changed-files",
+  "diff",
+  "file",
+  "user-context",
+  "url"
+] as const;
 export type ChangeMapEvidenceSourceKind =
-  | "changed-files"
-  | "diff"
-  | "file"
-  | "user-context"
-  | "url";
+  (typeof CHANGE_MAP_EVIDENCE_SOURCE_KINDS)[number];
 
 export interface ChangedFileEntry {
   readonly path: string;

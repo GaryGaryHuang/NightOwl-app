@@ -1,12 +1,17 @@
-import type {
-  BehaviorChangeEntry,
-  ChangeMap,
-  ChangeMapEvidenceSourceKind,
-  ChangeMapRelationship,
-  CrossFileBoundaryEntry,
-  EvidenceRefEntry,
-  FileGroupEntry,
-  TestCoverageObservationEntry
+import {
+  CHANGE_MAP_BASES,
+  CHANGE_MAP_CATEGORIES,
+  CHANGE_MAP_EVIDENCE_SOURCE_KINDS,
+  CHANGE_MAP_RELATIONSHIPS,
+  CHANGE_MAP_STATUSES,
+  type BehaviorChangeEntry,
+  type ChangeMap,
+  type ChangeMapEvidenceSourceKind,
+  type ChangeMapRelationship,
+  type CrossFileBoundaryEntry,
+  type EvidenceRefEntry,
+  type FileGroupEntry,
+  type TestCoverageObservationEntry
 } from "./change-map.ts";
 
 export type Step0ValidationCode =
@@ -92,34 +97,13 @@ const ALLOWED_UNRESOLVED_UNKNOWN_KEYS = new Set([
   "resolutionPath"
 ]);
 
-const ALLOWED_STATUSES: ReadonlySet<string> = new Set(["A", "M", "D", "R"]);
-const ALLOWED_CATEGORIES: ReadonlySet<string> = new Set([
-  "feature",
-  "bugfix",
-  "refactor",
-  "config",
-  "test",
-  "docs"
-]);
-const ALLOWED_BASES: ReadonlySet<string> = new Set([
-  "name-status",
-  "diff-inspected",
-  "file-inspected"
-]);
-const ALLOWED_RELATIONSHIPS: ReadonlySet<string> = new Set([
-  "calls",
-  "imports",
-  "configures",
-  "tests",
-  "unknown"
-]);
-const ALLOWED_EVIDENCE_SOURCE_KINDS: ReadonlySet<string> = new Set([
-  "changed-files",
-  "diff",
-  "file",
-  "user-context",
-  "url"
-]);
+const ALLOWED_STATUSES: ReadonlySet<string> = new Set(CHANGE_MAP_STATUSES);
+const ALLOWED_CATEGORIES: ReadonlySet<string> = new Set(CHANGE_MAP_CATEGORIES);
+const ALLOWED_BASES: ReadonlySet<string> = new Set(CHANGE_MAP_BASES);
+const ALLOWED_RELATIONSHIPS: ReadonlySet<string> = new Set(CHANGE_MAP_RELATIONSHIPS);
+const ALLOWED_EVIDENCE_SOURCE_KINDS: ReadonlySet<string> = new Set(
+  CHANGE_MAP_EVIDENCE_SOURCE_KINDS
+);
 
 const OVERVIEW_MARKDOWN_PREFIX = "## Changeset Overview";
 
