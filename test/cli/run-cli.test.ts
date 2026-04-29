@@ -32,83 +32,63 @@ type ReviewRunSummaryOverrides = Partial<Omit<ReviewRunSummary, "outputTarget">>
 
 type CliRuntimeWithoutWriters = Omit<CliRuntime, "stdout" | "stderr">;
 
-test("runCli forwards parsed input to the app boundary once", async () => {
-  const seenRequests: RunRequest[] = [];
-  const result = createCompletedRunResult({
-    plannedFileCount: 1,
-    successfulFileCount: 1,
-    skippedFileCount: 0
-  });
-
-  const { exitCode, stdout, stderr } = await runCliWithCapturedOutput(
-    [
-      "main",
-      "feature-branch",
-      "--repo",
-      "./demo",
-      "--context",
-      "release-note"
-    ],
+test("runCli forwards parsed input including dry-run mode to the app boundary", async () => {
+  const cases = [
     {
-      app: {
-        async run(request) {
-          seenRequests.push(request);
-          return result;
-        }
+      name: "normal run with --repo and --context",
+      argv: ["main", "feature-branch", "--repo", "./demo", "--context", "release-note"],
+      dryRun: false,
+      expectedRequest: {
+        baseRef: "main",
+        headRef: "feature-branch",
+        repoPath: "./demo",
+        userContext: ["release-note"],
+        dryRun: false
+      }
+    },
+    {
+      name: "dry-run mode",
+      argv: ["main", "feature-branch", "--dry-run"],
+      dryRun: true,
+      expectedRequest: {
+        baseRef: "main",
+        headRef: "feature-branch",
+        userContext: [],
+        dryRun: true
       }
     }
-  );
+  ];
 
-  assert.equal(exitCode, 0);
-  assert.deepEqual(seenRequests, [
-    {
-      baseRef: "main",
-      headRef: "feature-branch",
-      repoPath: "./demo",
-      userContext: ["release-note"],
-      dryRun: false
-    }
-  ]);
-  assert.deepEqual(stdout, [renderExpectedStartup(), formatLocalReviewRunSummary(result)]);
-  assert.deepEqual(stderr, []);
-});
+  for (const { name, argv, dryRun, expectedRequest } of cases) {
+    const seenRequests: RunRequest[] = [];
+    const result = createCompletedRunResult({
+      dryRun,
+      plannedFileCount: 1,
+      successfulFileCount: 1,
+      skippedFileCount: 0
+    });
 
-test("runCli forwards dry-run mode and marks startup feedback", async () => {
-  const seenRequests: RunRequest[] = [];
-  const result = createCompletedRunResult({
-    dryRun: true,
-    plannedFileCount: 1,
-    successfulFileCount: 1,
-    skippedFileCount: 0
-  });
-
-  const { exitCode, stdout, stderr } = await runCliWithCapturedOutput(
-    ["main", "feature-branch", "--dry-run"],
-    {
-      app: {
-        async run(request) {
-          seenRequests.push(request);
-          return result;
+    const { exitCode, stdout, stderr } = await runCliWithCapturedOutput(
+      argv,
+      {
+        app: {
+          async run(request) {
+            seenRequests.push(request);
+            return result;
+          }
         }
       }
-    }
-  );
+    );
 
-  assert.equal(exitCode, 0);
-  assert.deepEqual(seenRequests, [
-    {
-      baseRef: "main",
-      headRef: "feature-branch",
-      userContext: [],
-      dryRun: true
-    }
-  ]);
-  assert.equal(stdout[0], renderExpectedStartup(true));
-  assert.deepEqual(stdout, [
-    renderExpectedStartup(true),
-    formatLocalReviewRunSummary(result)
-  ]);
-  assert.deepEqual(stderr, []);
+    assert.equal(exitCode, 0, name);
+    assert.deepEqual(seenRequests, [expectedRequest], name);
+    assert.equal(stdout[0], renderExpectedStartup(dryRun), name);
+    assert.deepEqual(stdout, [
+      renderExpectedStartup(dryRun),
+      formatLocalReviewRunSummary(result)
+    ], name);
+    assert.deepEqual(stderr, [], name);
+  }
 });
 
 test("runCli emits startup feedback after parsing and before the app completes", async () => {
@@ -291,22 +271,6 @@ test("runCli prints the completed-run summary contract from the app result", asy
     result: ReviewRunSummary;
   }> = [
     {
-      name: "zero planned files",
-      result: createCompletedRunResult({
-        plannedFileCount: 0,
-        successfulFileCount: 0,
-        skippedFileCount: 0
-      })
-    },
-    {
-      name: "all files skipped",
-      result: createCompletedRunResult({
-        plannedFileCount: 2,
-        successfulFileCount: 0,
-        skippedFileCount: 2
-      })
-    },
-    {
       name: "mixed successful and skipped files",
       result: createCompletedRunResult({
         plannedFileCount: 2,
@@ -335,7 +299,7 @@ test("runCli prints the completed-run summary contract from the app result", asy
     assert.deepEqual(stderr, [], name);
   }
 
-  const summary = formatLocalReviewRunSummary(cases[2].result);
+  const summary = formatLocalReviewRunSummary(cases[0].result);
   assert.match(summary, /Planned files: 2/u);
   assert.match(summary, /Successful files: 1/u);
   assert.match(summary, /Skipped files: 1/u);

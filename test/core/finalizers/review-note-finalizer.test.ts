@@ -306,7 +306,7 @@ test("Finalizer renders findings stats and must before nice", () => {
   ]);
 });
 
-test("Finalizer excludes confidence from rendered findings", () => {
+test("Finalizer excludes internal fields from rendered findings", () => {
   const context = createContext();
 
   context.setSection("overview", "## Overview\nContent");
@@ -314,18 +314,9 @@ test("Finalizer excludes confidence from rendered findings", () => {
 
   const result = finalizer(context);
 
-  assertTextExcludesAll(result, ["confidence", "0.9"]);
-});
-
-test("Finalizer excludes v2 internal fields from rendered findings", () => {
-  const context = createContext();
-
-  context.setSection("overview", "## Overview\nContent");
-  context.setFindings([makeMustFinding("v2-exclusion-test")]);
-
-  const result = finalizer(context);
-
   assertTextExcludesAll(result, [
+    "confidence",
+    "0.9",
     "findingId",
     "supportingEvidence",
     "reachability",

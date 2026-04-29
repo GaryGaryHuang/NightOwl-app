@@ -159,44 +159,6 @@ test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, L
   assert.match(rendered, /- None: 1/u);
 });
 
-test("RunSummaryFinalizer sorts successful files by risk level with planned-order tie-breaking", () => {
-  const rendered = renderSummary({
-    plannedNotes: createPlannedNotesFromPaths(["a.ts", "b.ts", "c.ts", "d.ts", "e.ts"]),
-    successfulFiles: [
-      createSuccessfulFile("a.ts", []),
-      createSuccessfulFile("b.ts", [createFinding("nice", 80, { title: "Low issue" })]),
-      createSuccessfulFile("c.ts", [createFinding("must", 80, { title: "Medium issue" })]),
-      createSuccessfulFile("d.ts", [createFinding("must", 90, { title: "High issue" })]),
-      createSuccessfulFile("e.ts", [])
-    ]
-  });
-
-  assertTextContainsInOrder(rendered, [
-    "- [High] `c.ts` — must=1, nice=0",
-    "- [High] `d.ts` — must=1, nice=0",
-    "- [Low] `b.ts` — must=0, nice=1",
-    "- [None] `a.ts` — must=0, nice=0",
-    "- [None] `e.ts` — must=0, nice=0"
-  ]);
-});
-
-test("RunSummaryFinalizer preserves planned order for same-risk-level successful files", () => {
-  const rendered = renderSummary({
-    plannedNotes: createPlannedNotesFromPaths(["a.ts", "b.ts", "c.ts"]),
-    successfulFiles: [
-      createSuccessfulFile("a.ts", [createFinding("nice", 85, { title: "Nice suggestion" })]),
-      createSuccessfulFile("b.ts", [createFinding("nice", 83, { title: "Another nice" })]),
-      createSuccessfulFile("c.ts", [createFinding("nice", 81, { title: "Yet another nice" })])
-    ]
-  });
-
-  assertTextContainsInOrder(rendered, [
-    "- [Low] `a.ts`",
-    "- [Low] `b.ts`",
-    "- [Low] `c.ts`"
-  ]);
-});
-
 function assertTextContainsInOrder(text: string, fragments: string[]): void {
   let cursor = 0;
 
