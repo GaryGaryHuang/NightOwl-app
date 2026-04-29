@@ -20,7 +20,7 @@ import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.t
 import { renderReviewIndex, type ReviewIndexRenderer } from "./finalizers/review-index-finalizer.ts";
 import { renderRunManifest, type RunManifestRenderer } from "./finalizers/run-manifest-finalizer.ts";
 import { renderVerifierReport, type VerifierReportRenderer } from "./finalizers/verifier-report-finalizer.ts";
-import { resolveFileOutcomes } from "./run-outcome-resolver.ts";
+import { resolveFileOutcomes, type ResolvedFileOutcome } from "./run-outcome-resolver.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";
@@ -175,35 +175,13 @@ export class ReviewOrchestrator {
 
     const startPath = path.resolve(this.#workingDirectory, request.repoPath ?? ".");
     const repoRoot = await this.#sourceProvider.resolveRepoRoot(startPath);
-    const changesetEntries = await this.#sourceProvider.getChangesetEntries(
-      repoRoot,
-      request.baseRef,
-      request.headRef
-    );
+
     // Step 0 must complete first because its RunContext feeds the per-file Overview step.
-    let runContext: RunContext;
-
-    try {
-      runContext = await this.#changesetOverviewRunner.run({
-        model: "gpt-5.4-mini",
-        changesetEntries,
-        outputBaseDir: repoRoot,
-        repoRoot,
-        signal: options?.signal,
-        userContext: request.userContext,
-        workingDirectory: repoRoot
-      });
-    } catch (error) {
-      if (error instanceof SessionTurnAbortedError && options?.signal?.aborted) {
-        throw new ReviewRunInterruptedError(extractSignalName(options.signal.reason));
-      }
-
-      await this.#onRunLevelFailure({
-        repoRoot,
-        request
-      });
-      throw error;
-    }
+    const runContext = await this.#runStep0({
+      repoRoot,
+      request,
+      signal: options?.signal
+    });
 
     // Check if the signal was aborted during Step 0 (or before run() was called).
     // This is the only explicit poll — all later boundaries rely on the event listener below.
@@ -266,22 +244,12 @@ export class ReviewOrchestrator {
     abortGuard.throwIfAborted();
 
     // Publish bootstrap snapshots before any per-file step runs so every file starts from the same skeleton.
-    for (const plannedNote of plannedNoteFiles) {
-      abortGuard.throwIfAborted();
-      await outputPublisher.publishFileReview({
-        filePath: plannedNote.filePath,
-        content: this.#renderReviewNote(
-          new FileReviewContext({
-            filePath: plannedNote.filePath,
-            noteFilePath: plannedNote.noteFilePath,
-            diffContent: "",
-            baseRef: request.baseRef,
-            headRef: request.headRef
-          })
-        )
-      });
-      abortGuard.throwIfAborted();
-    }
+    await this.#publishBootstrapSnapshots({
+      plannedNoteFiles,
+      request,
+      outputPublisher,
+      abortGuard
+    });
 
     this.#emitProgressEvent({
       type: "phase-changed",
@@ -329,52 +297,14 @@ export class ReviewOrchestrator {
       skippedFileCount: skippedFiles.length
     });
 
-    const finalizerFailures: FinalizerFailure[] = [];
-
-    await this.#tryPublishFinalizer("summary", finalizerFailures, () =>
-      outputPublisher.publishArtifact("summary", {
-        content: this.#renderRunSummary({
-          repoRoot,
-          baseRef: request.baseRef,
-          headRef: request.headRef,
-          resolvedOutcomes
-        })
-      })
-    );
-
-    await this.#tryPublishFinalizer("index", finalizerFailures, () =>
-      outputPublisher.publishArtifact("index", {
-        content: this.#renderReviewIndex({
-          repoRoot,
-          baseRef: request.baseRef,
-          headRef: request.headRef,
-          resolvedOutcomes,
-          outputTarget,
-          plannedNotes: plannedNoteFiles
-        })
-      })
-    );
-
-    await this.#tryPublishFinalizer("verifier-report", finalizerFailures, () =>
-      outputPublisher.publishArtifact("verifier-report", {
-        content: this.#renderVerifierReport({
-          resolvedOutcomes
-        })
-      })
-    );
-
-    await this.#tryPublishFinalizer("manifest", finalizerFailures, () =>
-      outputPublisher.publishArtifact("manifest", {
-        content: this.#renderRunManifest({
-          repoRoot,
-          baseRef: request.baseRef,
-          headRef: request.headRef,
-          resolvedOutcomes,
-          outputTarget,
-          plannedNotes: plannedNoteFiles
-        })
-      })
-    );
+    const finalizerFailures = await this.#publishFinalizers({
+      outputPublisher,
+      outputTarget,
+      plannedNoteFiles,
+      resolvedOutcomes,
+      repoRoot,
+      request
+    });
 
     return {
       repoRoot,
@@ -386,6 +316,166 @@ export class ReviewOrchestrator {
       dryRun: request.dryRun ?? false,
       finalizerFailures
     };
+  }
+
+  async #runStep0(input: {
+    repoRoot: string;
+    request: RunRequest;
+    signal?: AbortSignal;
+  }): Promise<RunContext> {
+    const changesetEntries = await this.#sourceProvider.getChangesetEntries(
+      input.repoRoot,
+      input.request.baseRef,
+      input.request.headRef
+    );
+
+    try {
+      return await this.#changesetOverviewRunner.run({
+        model: "gpt-5.4-mini",
+        changesetEntries,
+        outputBaseDir: input.repoRoot,
+        repoRoot: input.repoRoot,
+        signal: input.signal,
+        userContext: input.request.userContext,
+        workingDirectory: input.repoRoot
+      });
+    } catch (error) {
+      if (error instanceof SessionTurnAbortedError && input.signal?.aborted) {
+        throw new ReviewRunInterruptedError(extractSignalName(input.signal.reason));
+      }
+
+      await this.#onRunLevelFailure({
+        repoRoot: input.repoRoot,
+        request: input.request
+      });
+      throw error;
+    }
+  }
+
+  async #publishBootstrapSnapshots(input: {
+    plannedNoteFiles: PlannedNoteFile[];
+    request: RunRequest;
+    outputPublisher: RunOutputPublisher;
+    abortGuard: RunAbortGuard;
+  }): Promise<void> {
+    for (const plannedNote of input.plannedNoteFiles) {
+      input.abortGuard.throwIfAborted();
+      await input.outputPublisher.publishFileReview({
+        filePath: plannedNote.filePath,
+        content: this.#renderReviewNote(
+          new FileReviewContext({
+            filePath: plannedNote.filePath,
+            noteFilePath: plannedNote.noteFilePath,
+            diffContent: "",
+            baseRef: input.request.baseRef,
+            headRef: input.request.headRef
+          })
+        )
+      });
+      input.abortGuard.throwIfAborted();
+    }
+  }
+
+  async #publishFinalizers(input: {
+    outputPublisher: RunOutputPublisher;
+    outputTarget: OutputTarget;
+    plannedNoteFiles: PlannedNoteFile[];
+    resolvedOutcomes: ResolvedFileOutcome[];
+    repoRoot: string;
+    request: RunRequest;
+  }): Promise<FinalizerFailure[]> {
+    const failures: FinalizerFailure[] = [];
+
+    await this.#tryPublishFinalizer("summary", failures, () =>
+      input.outputPublisher.publishArtifact("summary", {
+        content: this.#renderRunSummary({
+          repoRoot: input.repoRoot,
+          baseRef: input.request.baseRef,
+          headRef: input.request.headRef,
+          resolvedOutcomes: input.resolvedOutcomes
+        })
+      })
+    );
+
+    await this.#tryPublishFinalizer("index", failures, () =>
+      input.outputPublisher.publishArtifact("index", {
+        content: this.#renderReviewIndex({
+          repoRoot: input.repoRoot,
+          baseRef: input.request.baseRef,
+          headRef: input.request.headRef,
+          resolvedOutcomes: input.resolvedOutcomes,
+          outputTarget: input.outputTarget,
+          plannedNotes: input.plannedNoteFiles
+        })
+      })
+    );
+
+    await this.#tryPublishFinalizer("verifier-report", failures, () =>
+      input.outputPublisher.publishArtifact("verifier-report", {
+        content: this.#renderVerifierReport({
+          resolvedOutcomes: input.resolvedOutcomes
+        })
+      })
+    );
+
+    await this.#tryPublishFinalizer("manifest", failures, () =>
+      input.outputPublisher.publishArtifact("manifest", {
+        content: this.#renderRunManifest({
+          repoRoot: input.repoRoot,
+          baseRef: input.request.baseRef,
+          headRef: input.request.headRef,
+          resolvedOutcomes: input.resolvedOutcomes,
+          outputTarget: input.outputTarget,
+          plannedNotes: input.plannedNoteFiles
+        })
+      })
+    );
+
+    return failures;
+  }
+
+  async #handleSnapshotPublishFailure(input: {
+    outputError: unknown;
+    fileContext: FileReviewContext;
+    outputTarget: OutputTarget;
+    stepId: string;
+    outcomeSlots: (PlannedOutcomeSlot | undefined)[];
+    plannedIndex: number;
+    outputPublisher: RunOutputPublisher;
+    abortGuard: RunAbortGuard;
+  }): Promise<void> {
+    // A snapshot write failure is classified before deciding whether the run should abort or the file should skip.
+    const assessment = await resolveOutputWriteFailureAssessment(
+      this.#successfulSnapshotOutputHealthAssessor,
+      {
+        outputTarget: toReviewOutputTarget(input.outputTarget),
+        noteFilePath: input.fileContext.noteFilePath,
+        error: input.outputError
+      }
+    );
+
+    if (assessment.faultScope === "shared-output-target-fault") {
+      input.abortGuard.markAborted(input.outputError);
+      throw input.outputError;
+    }
+
+    const reason = input.outputError instanceof Error
+      ? input.outputError.message
+      : String(input.outputError);
+
+    if (input.abortGuard.isAborted) {
+      return;
+    }
+
+    await this.#skipFile({
+      fileContext: input.fileContext,
+      stepId: input.stepId,
+      reason,
+      outcomeSlots: input.outcomeSlots,
+      plannedIndex: input.plannedIndex,
+      outputPublisher: input.outputPublisher,
+      abortGuard: input.abortGuard
+    });
   }
 
   async #onRunLevelFailure(input: {
@@ -594,31 +684,11 @@ export class ReviewOrchestrator {
           content: this.#renderReviewNote(fileContext)
         });
       } catch (outputError) {
-        // A snapshot write failure is classified before deciding whether the run should abort or the file should skip.
-        const assessment = await resolveOutputWriteFailureAssessment(
-          this.#successfulSnapshotOutputHealthAssessor,
-          {
-            outputTarget: toReviewOutputTarget(input.outputTarget),
-            noteFilePath: fileContext.noteFilePath,
-            error: outputError
-          }
-        );
-
-        if (assessment.faultScope === "shared-output-target-fault") {
-          input.abortGuard.markAborted(outputError);
-          throw outputError;
-        }
-
-        const reason = outputError instanceof Error ? outputError.message : String(outputError);
-
-        if (input.abortGuard.isAborted) {
-          return;
-        }
-
-        await this.#skipFile({
+        await this.#handleSnapshotPublishFailure({
+          outputError,
           fileContext,
+          outputTarget: input.outputTarget,
           stepId: step.stepId,
-          reason,
           outcomeSlots: input.outcomeSlots,
           plannedIndex: input.workItem.plannedIndex,
           outputPublisher: input.outputPublisher,
