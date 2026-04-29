@@ -73,6 +73,44 @@ test("runCli forwards parsed input to the app boundary once", async () => {
   assert.deepEqual(stderr, []);
 });
 
+test("runCli forwards dry-run mode and marks startup feedback", async () => {
+  const seenRequests: RunRequest[] = [];
+  const result = createCompletedRunResult({
+    dryRun: true,
+    plannedFileCount: 1,
+    successfulFileCount: 1,
+    skippedFileCount: 0
+  });
+
+  const { exitCode, stdout, stderr } = await runCliWithCapturedOutput(
+    ["main", "feature-branch", "--dry-run"],
+    {
+      app: {
+        async run(request) {
+          seenRequests.push(request);
+          return result;
+        }
+      }
+    }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(seenRequests, [
+    {
+      baseRef: "main",
+      headRef: "feature-branch",
+      userContext: [],
+      dryRun: true
+    }
+  ]);
+  assert.equal(stdout[0], renderExpectedStartup(true));
+  assert.deepEqual(stdout, [
+    renderExpectedStartup(true),
+    formatLocalReviewRunSummary(result)
+  ]);
+  assert.deepEqual(stderr, []);
+});
+
 test("runCli emits startup feedback after parsing and before the app completes", async () => {
   const output = createOutputCollector();
   let resolveRun: ((result: ReviewRunSummary) => void) | undefined;
