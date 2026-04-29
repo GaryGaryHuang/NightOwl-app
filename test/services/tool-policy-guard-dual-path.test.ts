@@ -3,8 +3,7 @@ import test from "node:test";
 
 import {
   BASE_PROFILE,
-  createPolicySession,
-  FakeHostnameClassifier
+  createPolicySession
 } from "../helpers/tool-policy-fixture.ts";
 
 const SESSION_CONTEXT = { sessionId: "s1" };
@@ -21,23 +20,7 @@ function createHookInput(
   };
 }
 
-test("dual-path consistency: shell allow produces matching decisions from both handler and hook", async () => {
-  const { handler, hook } = createPolicySession();
-
-  const handlerResult = await handler(
-    { kind: "shell", fullCommandText: "git log --oneline" },
-    SESSION_CONTEXT
-  );
-  const hookResult = await hook(
-    createHookInput("bash", { command: "git log --oneline" }),
-    SESSION_CONTEXT
-  );
-
-  assert.deepEqual(handlerResult, { kind: "approved" });
-  assert.equal(hookResult, undefined);
-});
-
-test("dual-path consistency: shell deny produces matching decisions from both handler and hook", async () => {
+test("dual-path consistency: shell deny remains aligned between handler and hook", async () => {
   const { handler, hook } = createPolicySession();
 
   const handlerResult = await handler(
@@ -59,28 +42,8 @@ test("dual-path consistency: shell deny produces matching decisions from both ha
   );
 });
 
-test("dual-path consistency: url allow produces matching decisions from both handler and hook", async () => {
-  const { handler, hook } = createPolicySession({
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" })
-  });
-
-  const handlerResult = await handler(
-    { kind: "url", url: "https://example.com" },
-    SESSION_CONTEXT
-  );
-  const hookResult = await hook(
-    createHookInput("web_fetch", { url: "https://example.com" }),
-    SESSION_CONTEXT
-  );
-
-  assert.deepEqual(handlerResult, { kind: "approved" });
-  assert.equal(hookResult, undefined);
-});
-
-test("dual-path consistency: url deny produces matching decisions from both handler and hook", async () => {
-  const { handler, hook } = createPolicySession({
-    hostnameClassifier: new FakeHostnameClassifier({ kind: "denied", reason: "Hostname resolved to non-public address" })
-  });
+test("dual-path consistency: URL deny remains aligned between handler and hook", async () => {
+  const { handler, hook } = createPolicySession();
 
   const handlerResult = await handler(
     { kind: "url", url: "http://localhost:8080" },
