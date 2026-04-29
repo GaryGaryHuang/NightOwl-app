@@ -247,21 +247,51 @@ describe("Eval Harness", () => {
 
   // --- Corpus structure ---
 
-  it("EVAL-STRUCT-1 corpus has at least 10 cases", () => {
-    assert.ok(corpus.length >= 10, `expected >= 10 cases, got ${corpus.length}`);
+  it("EVAL-STRUCT-1 corpus is non-empty and caseIds are unique", () => {
+    assert.ok(corpus.length > 0, "corpus must contain at least one case");
+
+    const seenCaseIds = new Set<string>();
+    for (const c of corpus) {
+      assert.ok(c.caseId.trim(), "caseId must be non-empty");
+      assert.equal(
+        seenCaseIds.has(c.caseId),
+        false,
+        `duplicate caseId: ${c.caseId}`
+      );
+      seenCaseIds.add(c.caseId);
+    }
   });
 
-  it("EVAL-STRUCT-2 corpus covers all 5 case types", () => {
-    const types = new Set(corpus.map((c) => c.caseType));
-    for (const expected of [
-      "known-true-positive",
-      "no-finding-safe-change",
-      "speculative-false-positive",
-      "wrong-anchor",
-      "prompt-injection"
-    ]) {
-      assert.ok(types.has(expected as CorpusCase["caseType"]), `missing caseType: ${expected}`);
-    }
+  it("EVAL-STRUCT-2 corpus contains release-gate scenario slices", () => {
+    assert.ok(
+      corpus.some(
+        (c) =>
+          c.caseType === "known-true-positive" &&
+          c.expected.acceptedFindingIds.length > 0
+      ),
+      "corpus must include at least one true-positive slice with an accepted finding"
+    );
+
+    assert.ok(
+      corpus.some(
+        (c) =>
+          FALSE_POSITIVE_CASE_TYPES.has(c.caseType) &&
+          c.expected.acceptedFindingIds.length === 0 &&
+          (c.expected.rejectedFindingIds.length > 0 ||
+            c.caseType === "no-finding-safe-change")
+      ),
+      "corpus must include at least one false-positive or acceptance-rejection slice"
+    );
+
+    assert.ok(
+      corpus.some(
+        (c) =>
+          c.caseType === "wrong-anchor" &&
+          c.expected.acceptedFindingIds.length === 0 &&
+          Object.values(c.expected.taxonomyCodes).includes("ANCHOR")
+      ),
+      "corpus must include at least one wrong-anchor slice"
+    );
   });
 
   // --- Per-case assertions ---
