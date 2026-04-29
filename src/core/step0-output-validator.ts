@@ -5,13 +5,18 @@ import {
   CHANGE_MAP_RELATIONSHIPS,
   CHANGE_MAP_STATUSES,
   type BehaviorChangeEntry,
+  type ChangedFileEntry,
   type ChangeMap,
+  type ChangeMapBasis,
+  type ChangeMapCategory,
   type ChangeMapEvidenceSourceKind,
   type ChangeMapRelationship,
+  type ChangeMapStatus,
   type CrossFileBoundaryEntry,
   type EvidenceRefEntry,
   type FileGroupEntry,
-  type TestCoverageObservationEntry
+  type TestCoverageObservationEntry,
+  type UnresolvedUnknownEntry
 } from "./change-map.ts";
 
 export type Step0ValidationCode =
@@ -241,7 +246,7 @@ function rejectUnknownKeys(
   }
 }
 
-function validateChangedFiles(value: unknown): ChangedFileArray {
+function validateChangedFiles(value: unknown): readonly ChangedFileEntry[] {
   if (!Array.isArray(value)) {
     throw new Step0OutputValidationError(
       "SCHEMA",
@@ -255,19 +260,7 @@ function validateChangedFiles(value: unknown): ChangedFileArray {
 function validateChangedFile(
   rawEntry: unknown,
   index: number
-): {
-  readonly path: string;
-  readonly status: "A" | "M" | "D" | "R";
-  readonly category:
-    | "feature"
-    | "bugfix"
-    | "refactor"
-    | "config"
-    | "test"
-    | "docs";
-  readonly group: string;
-  readonly basis: "name-status" | "diff-inspected" | "file-inspected";
-} {
+): ChangedFileEntry {
   const entry = ensurePlainObject(rawEntry, `changedFiles[${index}]`);
   rejectUnknownKeys(entry, ALLOWED_CHANGED_FILE_KEYS, `changedFiles[${index}]`);
 
@@ -276,34 +269,26 @@ function validateChangedFile(
     entry.status,
     ALLOWED_STATUSES,
     `changedFiles[${index}].status`
-  ) as "A" | "M" | "D" | "R";
+  ) as ChangeMapStatus;
   const category = requireEnum(
     entry.category,
     ALLOWED_CATEGORIES,
     `changedFiles[${index}].category`
-  ) as "feature" | "bugfix" | "refactor" | "config" | "test" | "docs";
+  ) as ChangeMapCategory;
   const group = requireNonEmptyString(entry.group, `changedFiles[${index}].group`);
   rejectPlaceholderText(group, `changedFiles[${index}].group`);
   const basis = requireEnum(
     entry.basis,
     ALLOWED_BASES,
     `changedFiles[${index}].basis`
-  ) as "name-status" | "diff-inspected" | "file-inspected";
+  ) as ChangeMapBasis;
 
   return { path, status, category, group, basis };
 }
 
-type ChangedFileArray = readonly {
-  readonly path: string;
-  readonly status: "A" | "M" | "D" | "R";
-  readonly category: "feature" | "bugfix" | "refactor" | "config" | "test" | "docs";
-  readonly group: string;
-  readonly basis: "name-status" | "diff-inspected" | "file-inspected";
-}[];
-
 function validateFileGroups(
   value: unknown,
-  changedFiles: ChangedFileArray,
+  changedFiles: readonly ChangedFileEntry[],
   knownPaths: ReadonlySet<string>
 ): readonly FileGroupEntry[] {
   if (!Array.isArray(value)) {
@@ -631,11 +616,7 @@ function validateKnownPathsArray(
 
 function validateUnresolvedUnknowns(
   value: unknown
-): readonly {
-  readonly question: string;
-  readonly blocksFinding: boolean;
-  readonly resolutionPath: string;
-}[] {
+): readonly UnresolvedUnknownEntry[] {
   if (!Array.isArray(value)) {
     throw new Step0OutputValidationError(
       "SCHEMA",
@@ -682,7 +663,7 @@ function validateUnresolvedUnknowns(
 }
 
 function enforceCoverage(
-  changedFiles: ChangedFileArray,
+  changedFiles: readonly ChangedFileEntry[],
   expectedChangedPaths: readonly string[]
 ): void {
   const seenExpectedPaths = new Set<string>();
