@@ -32,7 +32,7 @@ src/
 │   ├── orchestrator.ts  Flow control: Step 0 → path planning → fan-out → Steps 1–7 → finalizers
 │   ├── step-runner.ts   Step execution + completion check + retry
 │   ├── steps/           One strategy module per SOP step (Step 1–7)
-│   └── finalizers/      Output renderers (review notes, summary, index, manifest)
+│   └── finalizers/      Output renderers (review notes, summary, index, verifier report, manifest)
 ├── providers/           External I/O adapters (Git, filesystem, config)
 └── services/            SDK session lifecycle, tool policy, MCP injection
 ```
