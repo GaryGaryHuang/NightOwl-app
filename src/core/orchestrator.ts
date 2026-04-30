@@ -386,7 +386,7 @@ export class ReviewOrchestrator {
   }): Promise<FinalizerFailure[]> {
     const failures: FinalizerFailure[] = [];
 
-    await this.#tryPublishFinalizer("summary", failures, () =>
+    const summaryPublished = await this.#tryPublishFinalizer("summary", failures, () =>
       input.outputPublisher.publishArtifact("summary", {
         content: this.#renderRunSummary({
           repoRoot: input.repoRoot,
@@ -396,8 +396,11 @@ export class ReviewOrchestrator {
         })
       })
     );
+    if (!summaryPublished) {
+      return failures;
+    }
 
-    await this.#tryPublishFinalizer("index", failures, () =>
+    const indexPublished = await this.#tryPublishFinalizer("index", failures, () =>
       input.outputPublisher.publishArtifact("index", {
         content: this.#renderReviewIndex({
           repoRoot: input.repoRoot,
@@ -409,14 +412,20 @@ export class ReviewOrchestrator {
         })
       })
     );
+    if (!indexPublished) {
+      return failures;
+    }
 
-    await this.#tryPublishFinalizer("verifier-report", failures, () =>
+    const verifierReportPublished = await this.#tryPublishFinalizer("verifier-report", failures, () =>
       input.outputPublisher.publishArtifact("verifier-report", {
         content: this.#renderVerifierReport({
           resolvedOutcomes: input.resolvedOutcomes
         })
       })
     );
+    if (!verifierReportPublished) {
+      return failures;
+    }
 
     await this.#tryPublishFinalizer("manifest", failures, () =>
       input.outputPublisher.publishArtifact("manifest", {
@@ -796,13 +805,15 @@ export class ReviewOrchestrator {
     artifact: FinalizerFailure["artifact"],
     failures: FinalizerFailure[],
     publish: () => Promise<void>
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
       await publish();
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failures.push({ artifact, message });
       this.#emitProgressEvent({ type: "finalizer-failed", artifact, message });
+      return false;
     }
   }
 

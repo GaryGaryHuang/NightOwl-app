@@ -42,6 +42,8 @@ type OutputCall = "initializeRun"
   | "publishSkippedFile"
   | `publishArtifact:${ReviewArtifactKind}`;
 
+type RunLevelArtifact = "summary" | "index" | "verifier-report" | "manifest";
+
 const RUN_LEVEL_FINALIZER_CALLS: OutputCall[] = [
   "publishArtifact:summary",
   "publishArtifact:index",
@@ -228,26 +230,52 @@ test("ReviewOrchestrator publishes run-level artifacts when getDiff failure down
   );
 });
 
-test("ReviewOrchestrator records finalizerFailure and continues remaining finalizers", async () => {
+test("ReviewOrchestrator records finalizerFailure and stops dependent finalizers", async () => {
   const cases: Array<{
-    artifact: "summary" | "index" | "manifest";
+    artifact: RunLevelArtifact;
     message: RegExp;
-    failure: Partial<Record<"summary" | "index" | "manifest", string>>;
+    failure: Partial<Record<RunLevelArtifact, string>>;
+    expectedCalls: OutputCall[];
+    skippedCalls: OutputCall[];
   }> = [
     {
       artifact: "summary",
       message: /summary write failed/u,
-      failure: { summary: "summary write failed" }
+      failure: { summary: "summary write failed" },
+      expectedCalls: ["publishArtifact:summary"],
+      skippedCalls: [
+        "publishArtifact:index",
+        "publishArtifact:verifier-report",
+        "publishArtifact:manifest"
+      ]
     },
     {
       artifact: "index",
       message: /index write failed/u,
-      failure: { index: "index write failed" }
+      failure: { index: "index write failed" },
+      expectedCalls: ["publishArtifact:summary", "publishArtifact:index"],
+      skippedCalls: [
+        "publishArtifact:verifier-report",
+        "publishArtifact:manifest"
+      ]
+    },
+    {
+      artifact: "verifier-report",
+      message: /verifier-report write failed/u,
+      failure: { "verifier-report": "verifier-report write failed" },
+      expectedCalls: [
+        "publishArtifact:summary",
+        "publishArtifact:index",
+        "publishArtifact:verifier-report"
+      ],
+      skippedCalls: ["publishArtifact:manifest"]
     },
     {
       artifact: "manifest",
       message: /manifest write failed/u,
-      failure: { manifest: "manifest write failed" }
+      failure: { manifest: "manifest write failed" },
+      expectedCalls: RUN_LEVEL_FINALIZER_CALLS,
+      skippedCalls: []
     }
   ];
 
@@ -262,27 +290,30 @@ test("ReviewOrchestrator records finalizerFailure and continues remaining finali
       assert.equal(result.finalizerFailures.length, 1, testCase.artifact);
       assert.equal(result.finalizerFailures[0].artifact, testCase.artifact);
       assert.match(result.finalizerFailures[0].message, testCase.message);
-      for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+      for (const call of testCase.expectedCalls) {
         assert.equal(outputSink.calls.includes(call), true, `${testCase.artifact}:${call}`);
+      }
+      for (const call of testCase.skippedCalls) {
+        assert.equal(outputSink.calls.includes(call), false, `${testCase.artifact}:${call}`);
       }
       assert.ok(outputSink.writtenFileReviews.length > 0);
     });
   }
 });
 
-test("ReviewOrchestrator records multiple finalizerFailures in call order", async () => {
+test("ReviewOrchestrator does not publish manifest after verifier-report finalizer failure", async () => {
   await withReviewHarness({}, async (harness) => {
+    const outputSink = new FinalizerFailingOutputSink({
+      "verifier-report": "verifier-report boom"
+    });
     const result = await runOrchestrator(harness, {
-      outputSink: new FinalizerFailingOutputSink({
-        summary: "summary boom",
-        manifest: "manifest boom"
-      }),
+      outputSink,
       stepRunner: createSuccessfulSummaryRunner()
     });
 
-    assert.equal(result.finalizerFailures.length, 2);
-    assert.equal(result.finalizerFailures[0].artifact, "summary");
-    assert.equal(result.finalizerFailures[1].artifact, "manifest");
+    assert.equal(result.finalizerFailures.length, 1);
+    assert.equal(result.finalizerFailures[0].artifact, "verifier-report");
+    assert.equal(outputSink.calls.includes("publishArtifact:manifest"), false);
   });
 });
 
@@ -576,9 +607,9 @@ class CorruptingDiskOutputSink extends RecordingOutputSink {
 }
 
 class FinalizerFailingOutputSink extends RecordingOutputSink {
-  readonly #failures: Partial<Record<"summary" | "index" | "manifest", string>>;
+  readonly #failures: Partial<Record<RunLevelArtifact, string>>;
 
-  constructor(failures: Partial<Record<"summary" | "index" | "manifest", string>>) {
+  constructor(failures: Partial<Record<RunLevelArtifact, string>>) {
     super();
     this.#failures = failures;
   }
@@ -589,9 +620,9 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
 
     this.record(callName, targetPath);
 
-    const failureKey = kind === "verifier-report" ? undefined : kind as "summary" | "index" | "manifest";
-    if (failureKey && this.#failures[failureKey]) {
-      throw new Error(this.#failures[failureKey]);
+    const failure = resolveRunLevelFailure(this.#failures, kind);
+    if (failure) {
+      throw new Error(failure);
     }
 
     writeFileSync(targetPath, result.content);
@@ -608,6 +639,22 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
 
     return pathMap[kind];
   }
+}
+
+function resolveRunLevelFailure(
+  failures: Partial<Record<RunLevelArtifact, string>>,
+  kind: ReviewArtifactKind
+): string | undefined {
+  if (
+    kind === "summary" ||
+    kind === "index" ||
+    kind === "verifier-report" ||
+    kind === "manifest"
+  ) {
+    return failures[kind];
+  }
+
+  return undefined;
 }
 
 function writeArtifact(filePath: string, content: string): void {
