@@ -90,5 +90,9 @@ test("Step6CognitiveSimulationStep includes full candidate findings JSON in revi
   assert.match(plan.prompt.userMessage, /reachability/);
   assert.match(plan.prompt.userMessage, /uncertaintyStatus/);
   assert.match(plan.prompt.userMessage, /verifierVerdict/);
+  assert.match(
+    plan.prompt.userMessage,
+    /If no findings remain, return: \{"schemaVersion": 2, "findings": \[\], "dispositions":/u
+  );
   assert.match(plan.prompt.userMessage, /SUPPORTED.*ANCHOR.*EVIDENCE.*REACHABILITY.*OUT_OF_SCOPE.*DUPLICATE.*CONTRADICTION/);
 });
