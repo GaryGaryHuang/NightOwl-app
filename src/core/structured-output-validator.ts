@@ -26,6 +26,16 @@ import {
   type VerifierReportEntry
 } from "./verifier-report.ts";
 
+export class StructuredValidationReportError extends Error {
+  readonly report: readonly VerifierReportEntry[];
+
+  constructor(message: string, report: readonly VerifierReportEntry[]) {
+    super(message);
+    this.name = "StructuredValidationReportError";
+    this.report = report.map((entry) => ({ ...entry }));
+  }
+}
+
 /**
  * Deterministically validate structured findings JSON before it is written into review state.
  */
@@ -78,15 +88,87 @@ export class StructuredOutputValidator {
     diffContent?: string;
     filePath?: string;
   }): { payload: FindingsPayload; report: VerifierReportEntry[] } {
-    const payload = this.validate(input);
-    const report: VerifierReportEntry[] = payload.findings.map((f) => ({
-      findingId: f.findingId,
-      taxonomy: "OK" as const,
-      outcome: "accepted" as const,
-      gate: "schema" as const,
-      reason: "passed schema and anchor validation"
-    }));
-    return { payload, report };
+    const record = parseTopLevelObject(
+      input.responseText,
+      "top-level payload must be an object with a 'findings' array"
+    );
+
+    if (!("findings" in record) || !Array.isArray(record.findings)) {
+      throw new Error(
+        "deterministic validation failed: top-level payload must be an object with a 'findings' array"
+      );
+    }
+
+    rejectUnknownFields(record, ALLOWED_TOP_LEVEL_KEYS, "top-level payload");
+    const schemaVersion = validateSchemaVersion(record.schemaVersion);
+
+    const anchorContext = buildAnchorContext(input);
+    const validatedFindings: Finding[] = [];
+    const report: VerifierReportEntry[] = [];
+    const seenFindingIds = new Set<string>();
+
+    for (const rawFinding of record.findings) {
+      const reportableFindingId = extractReportableFindingId(rawFinding);
+
+      if (reportableFindingId === undefined) {
+        validatedFindings.push(
+          validateFinding(rawFinding, anchorContext, {
+            verifierVerdict: "disallow"
+          })
+        );
+        continue;
+      }
+
+      if (seenFindingIds.has(reportableFindingId)) {
+        report.push({
+          findingId: reportableFindingId,
+          taxonomy: "DUPLICATE",
+          outcome: "rejected",
+          gate: "schema",
+          reason: `duplicate findingId '${reportableFindingId}'`
+        });
+        continue;
+      }
+      seenFindingIds.add(reportableFindingId);
+
+      try {
+        const validated = validateFinding(rawFinding, anchorContext, {
+          verifierVerdict: "disallow"
+        });
+        validatedFindings.push(validated);
+        report.push({
+          findingId: validated.findingId,
+          taxonomy: "OK",
+          outcome: "accepted",
+          gate: "schema",
+          reason: "passed schema and anchor validation"
+        });
+      } catch (error) {
+        report.push(createRejectedValidationReportEntry(reportableFindingId, error));
+      }
+    }
+
+    const hasValidationRejection = report.some(
+      (entry) =>
+        entry.outcome === "rejected" &&
+        (entry.gate === "schema" || entry.gate === "anchor")
+    );
+    if (hasValidationRejection) {
+      throw new StructuredValidationReportError(
+        "deterministic validation failed: one or more findings failed schema or anchor validation",
+        report
+      );
+    }
+
+    assertUniqueFindingIds(validatedFindings, "findings");
+
+    return {
+      payload: {
+        schemaVersion,
+        findings: validatedFindings
+      },
+      report
+    };
   }
 
   filterByAcceptanceWithReport(payload: FindingsPayload): {
@@ -248,6 +330,40 @@ export class StructuredOutputValidator {
       }
     }
   }
+}
+
+function extractReportableFindingId(input: unknown): string | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return undefined;
+  }
+
+  const value = (input as Record<string, unknown>).findingId;
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function createRejectedValidationReportEntry(
+  findingId: string,
+  error: unknown
+): VerifierReportEntry {
+  const reason = error instanceof Error ? error.message : String(error);
+
+  if (reason.includes("[ANCHOR]")) {
+    return {
+      findingId,
+      taxonomy: "ANCHOR",
+      outcome: "rejected",
+      gate: "anchor",
+      reason
+    };
+  }
+
+  return {
+    findingId,
+    taxonomy: "SCHEMA",
+    outcome: "rejected",
+    gate: "schema",
+    reason
+  };
 }
 
 function validateFinding(

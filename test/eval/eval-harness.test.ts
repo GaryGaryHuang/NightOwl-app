@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
+import {
+  StructuredOutputValidator,
+  StructuredValidationReportError
+} from "../../src/core/structured-output-validator.ts";
 import type { VerifierReportEntry } from "../../src/core/verifier-report.ts";
 
 // --- Corpus types ---
@@ -81,13 +84,27 @@ function runCase(c: CorpusCase): CaseResult {
 
     report = [...schemaReport, ...acceptanceReport];
     acceptedFindingIds = acceptedPayload.findings.map((f) => f.findingId);
-
-    // Rejected = appeared in schema pass but not in acceptance pass
-    const acceptedSet = new Set(acceptedFindingIds);
-    rejectedFindingIds = schemaPayload.findings
-      .filter((f) => !acceptedSet.has(f.findingId))
-      .map((f) => f.findingId);
+    rejectedFindingIds = [
+      ...new Set(
+        report
+          .filter((entry) => entry.outcome === "rejected")
+          .map((entry) => entry.findingId)
+      )
+    ];
   } catch (err) {
+    if (err instanceof StructuredValidationReportError) {
+      report = [...err.report];
+      rejectedFindingIds = [
+        ...new Set(
+          report
+            .filter((entry) => entry.outcome === "rejected")
+            .map((entry) => entry.findingId)
+        )
+      ];
+      acceptedFindingIds = [];
+      return verifyCaseResult(c, acceptedFindingIds, rejectedFindingIds, report, errors);
+    }
+
     // Schema/anchor validation threw — all findings are rejected
     const message = err instanceof Error ? err.message : String(err);
 
@@ -124,6 +141,16 @@ function runCase(c: CorpusCase): CaseResult {
     }
   }
 
+  return verifyCaseResult(c, acceptedFindingIds, rejectedFindingIds, report, errors);
+}
+
+function verifyCaseResult(
+  c: CorpusCase,
+  acceptedFindingIds: string[],
+  rejectedFindingIds: string[],
+  report: VerifierReportEntry[],
+  errors: string[]
+): CaseResult {
   // Verify accepted finding IDs match expected
   const expectedAccepted = new Set(c.expected.acceptedFindingIds);
   const actualAccepted = new Set(acceptedFindingIds);

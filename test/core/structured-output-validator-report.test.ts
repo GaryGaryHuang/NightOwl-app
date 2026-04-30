@@ -1,13 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
+import {
+  StructuredOutputValidator,
+  StructuredValidationReportError
+} from "../../src/core/structured-output-validator.ts";
 import {
   DEFAULT_DIFF,
   finding,
   lineRangeTraceability,
   payload
 } from "../helpers/structured-output-validator-fixture.ts";
+
+function captureStructuredValidationReportError(
+  callback: () => void
+): StructuredValidationReportError {
+  try {
+    callback();
+  } catch (error) {
+    assert.ok(error instanceof StructuredValidationReportError);
+    return error;
+  }
+
+  assert.fail("Expected StructuredValidationReportError");
+}
 
 test("validateWithReport returns payload and per-finding schema-pass report entries", () => {
   const validator = new StructuredOutputValidator();
@@ -42,7 +58,72 @@ test("validateWithReport with multiple findings returns per-finding entries", ()
   assert.equal(result.report[1].findingId, "F2");
 });
 
-test("validateWithReport throws on schema error (same as validate)", () => {
+test("validateWithReport throws with per-finding schema failure report entries", () => {
+  const validator = new StructuredOutputValidator();
+  const accepted = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22) });
+  const rejected = finding({ findingId: "F2", traceability: lineRangeTraceability(21, 22), type: "maybe" });
+  const error = captureStructuredValidationReportError(
+    () =>
+      validator.validateWithReport({
+        responseText: payload([accepted, rejected]),
+        diffContent: DEFAULT_DIFF,
+        filePath: "src/app.ts"
+      })
+  );
+
+  const rejectedEntry = error.report.find((entry) => entry.findingId === "F2");
+  assert.equal(rejectedEntry?.taxonomy, "SCHEMA");
+  assert.equal(rejectedEntry?.outcome, "rejected");
+  assert.equal(rejectedEntry?.gate, "schema");
+  assert.match(rejectedEntry?.reason ?? "", /'type' must be 'must' or 'nice'/u);
+  assert.equal(
+    error.report.find((entry) => entry.findingId === "F1")?.outcome,
+    "accepted"
+  );
+});
+
+test("validateWithReport throws with per-finding anchor failure report entries", () => {
+  const validator = new StructuredOutputValidator();
+  const accepted = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22) });
+  const rejected = finding({ findingId: "F2", traceability: lineRangeTraceability(14, 18) });
+  const error = captureStructuredValidationReportError(
+    () =>
+      validator.validateWithReport({
+        responseText: payload([accepted, rejected]),
+        diffContent: DEFAULT_DIFF,
+        filePath: "src/app.ts"
+      })
+  );
+
+  const rejectedEntry = error.report.find((entry) => entry.findingId === "F2");
+  assert.equal(rejectedEntry?.taxonomy, "ANCHOR");
+  assert.equal(rejectedEntry?.outcome, "rejected");
+  assert.equal(rejectedEntry?.gate, "anchor");
+  assert.match(rejectedEntry?.reason ?? "", /\[ANCHOR\]/u);
+});
+
+test("validateWithReport throws with duplicate findingId report entries", () => {
+  const validator = new StructuredOutputValidator();
+  const first = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22) });
+  const duplicate = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22), title: "duplicate finding" });
+  const error = captureStructuredValidationReportError(
+    () =>
+      validator.validateWithReport({
+        responseText: payload([first, duplicate]),
+        diffContent: DEFAULT_DIFF,
+        filePath: "src/app.ts"
+      })
+  );
+
+  const duplicateEntry = error.report.find(
+    (entry) => entry.findingId === "F1" && entry.taxonomy === "DUPLICATE"
+  );
+  assert.equal(duplicateEntry?.outcome, "rejected");
+  assert.equal(duplicateEntry?.gate, "schema");
+  assert.match(duplicateEntry?.reason ?? "", /duplicate findingId 'F1'/u);
+});
+
+test("validateWithReport throws on unreportable top-level schema errors", () => {
   const validator = new StructuredOutputValidator();
   assert.throws(
     () => validator.validateWithReport({ responseText: "not json" }),

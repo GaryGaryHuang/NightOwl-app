@@ -4,9 +4,15 @@ import { resolveReviewKnowledgeMode } from "./review-step-capability-manifest.ts
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
 import { retryOnce } from "./session-retry.ts";
-import { StructuredOutputValidator } from "./structured-output-validator.ts";
+import {
+  StructuredOutputValidator,
+  StructuredValidationReportError
+} from "./structured-output-validator.ts";
 import type { FindingsPayload, FindingDisposition, VerifiedFindingsPayload } from "./file-review-context.ts";
-import type { VerifierReportEntry } from "./verifier-report.ts";
+import type {
+  VerifierReportArtifactEntry,
+  VerifierReportEntry
+} from "./verifier-report.ts";
 
 export interface StructuredOutputValidatorLike {
   validate(input: {
@@ -152,10 +158,23 @@ export class StepRunner {
           throw new Error("empty review response");
         }
 
-        const deferred = await plan.resolve(response, {
-          judgeService: this.#judgeService,
-          validator: this.#structuredOutputValidator
-        });
+        let deferred: (context: FileReviewContext) => void;
+        try {
+          deferred = await plan.resolve(response, {
+            judgeService: this.#judgeService,
+            validator: this.#structuredOutputValidator
+          });
+        } catch (error) {
+          const validationReport = toValidationReportArtifactEntries(
+            error,
+            plan.stepId,
+            input.context.filePath
+          );
+          if (validationReport.length > 0) {
+            input.context.appendVerifierReportEntries(validationReport);
+          }
+          throw error;
+        }
 
         return {
           stepId: plan.stepId,
@@ -182,4 +201,24 @@ export class StepRunner {
       }
     });
   }
+}
+
+function toValidationReportArtifactEntries(
+  error: unknown,
+  stepId: string,
+  filePath: string
+): VerifierReportArtifactEntry[] {
+  if (!(error instanceof StructuredValidationReportError)) {
+    return [];
+  }
+
+  return error.report.map((entry) => ({
+    filePath,
+    stepId,
+    findingId: entry.findingId,
+    taxonomy: entry.taxonomy,
+    outcome: entry.outcome,
+    gate: entry.gate,
+    reason: entry.reason
+  }));
 }

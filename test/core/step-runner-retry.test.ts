@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { StepRunner } from "../../src/core/step-runner.ts";
+import { createStructuredResolve } from "../../src/core/steps/step-resolve-helpers.ts";
 import {
   createReviewSessionFactory,
   createSectionTestStep,
@@ -10,6 +11,11 @@ import {
   runDefaultJudgeOverviewStep,
   runDefaultSectionStep
 } from "../helpers/step-runner-contract-fixture.ts";
+import {
+  finding as structuredFinding,
+  lineRangeTraceability as structuredLineRangeTraceability,
+  payload as structuredPayload
+} from "../helpers/structured-output-validator-fixture.ts";
 
 test("StepRunner retries the whole section-step when judge rejects the first attempt and applies only the successful retry", async () => {
   const lifecycle: unknown[] = [];
@@ -93,6 +99,91 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
 
   assert.equal(reviewAttempts, 2);
   assert.equal(context.getSection("overview"), undefined);
+});
+
+test("StepRunner records structured validation reports without committing partial findings", async () => {
+  const context = createStepRunnerContext();
+  let reviewAttempts = 0;
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait() {
+        reviewAttempts += 1;
+        if (reviewAttempts === 1) {
+          return structuredPayload([
+            structuredFinding({
+              findingId: "F1",
+              traceability: structuredLineRangeTraceability(1, 1)
+            }),
+            structuredFinding({
+              findingId: "F2",
+              traceability: structuredLineRangeTraceability(1, 1),
+              type: "maybe"
+            })
+          ]);
+        }
+
+        return structuredPayload([
+          structuredFinding({
+            findingId: "F3",
+            traceability: structuredLineRangeTraceability(1, 1)
+          })
+        ]);
+      }
+    })
+  });
+
+  const result = await runner.run({
+    step: {
+      stepId: "step5-validation-interrogation",
+      prepare(stepContext) {
+        return {
+          stepId: "step5-validation-interrogation",
+          prompt: { systemMessage: "system prompt", userMessage: "user prompt" },
+          reviewProfile: { model: "gpt-5.4-mini", timeoutMs: 300_000 },
+          resolve: createStructuredResolve({
+            stepId: "step5-validation-interrogation",
+            filePath: stepContext.filePath,
+            diffContent: stepContext.diffContent
+          })
+        };
+      }
+    },
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo"
+  });
+
+  assert.equal(reviewAttempts, 2);
+  assert.equal(context.getFindings(), undefined);
+  assert.deepEqual(
+    context.getVerifierReportEntries()?.map((entry) => ({
+      findingId: entry.findingId,
+      taxonomy: entry.taxonomy,
+      outcome: entry.outcome,
+      gate: entry.gate
+    })),
+    [
+      {
+        findingId: "F1",
+        taxonomy: "OK",
+        outcome: "accepted",
+        gate: "schema"
+      },
+      {
+        findingId: "F2",
+        taxonomy: "SCHEMA",
+        outcome: "rejected",
+        gate: "schema"
+      }
+    ]
+  );
+
+  result.applyTo(context);
+
+  assert.deepEqual(
+    context.getFindings()?.map((finding) => finding.findingId),
+    ["F3"]
+  );
 });
 
 test("StepRunner retries the whole step on judge timeout with fresh review and judge attempts", async () => {
