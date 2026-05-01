@@ -27,6 +27,7 @@ type TurnState = (typeof TurnState)[keyof typeof TurnState];
 
 const SESSION_EXECUTOR_REUSE_ERROR =
   "SessionExecutor instances are single-use; create a new executor for each turn.";
+const SESSION_ABORT_WAIT_TIMEOUT_MS = 1000;
 
 export class SessionExecutor {
   readonly #session: SessionLike;
@@ -49,6 +50,11 @@ export class SessionExecutor {
     let state: TurnState = TurnState.Idle;
     let abortRequested = false;
     let abortPromise: Promise<void> | undefined;
+    let rejectOnAbort: (() => void) | undefined;
+    let sendPromise: ReturnType<SessionLike["sendAndWait"]> | undefined;
+    const abortSignalPromise = new Promise<never>((_, reject) => {
+      rejectOnAbort = () => reject(new SessionTurnAbortedError());
+    });
     const requestAbort = (): void => {
       if (state !== TurnState.Running || abortRequested) {
         return;
@@ -56,6 +62,7 @@ export class SessionExecutor {
 
       abortRequested = true;
       abortPromise = this.#session.abort?.().catch(() => {});
+      rejectOnAbort?.();
     };
 
     try {
@@ -66,10 +73,13 @@ export class SessionExecutor {
       signal?.addEventListener("abort", requestAbort, { once: true });
       state = TurnState.Running;
 
-      const response = await this.#session.sendAndWait(
+      sendPromise = this.#session.sendAndWait(
         { prompt },
         timeoutMs
       );
+      const response = await (signal
+        ? Promise.race([sendPromise, abortSignalPromise])
+        : sendPromise);
       state = TurnState.Settled;
 
       if (abortRequested || signal?.aborted) {
@@ -91,9 +101,35 @@ export class SessionExecutor {
     } finally {
       state = TurnState.Settled;
       signal?.removeEventListener("abort", requestAbort);
-      await abortPromise;
+      if (sendPromise) {
+        void sendPromise.catch(() => {});
+      }
+      await waitForAbortAttempt(abortPromise);
       // Each executor is one-shot: release the in-memory session immediately after the exchange.
       await this.#session.disconnect().catch(() => {});
+    }
+  }
+}
+
+async function waitForAbortAttempt(
+  abortPromise: Promise<void> | undefined
+): Promise<void> {
+  if (!abortPromise) {
+    return;
+  }
+
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    await Promise.race([
+      abortPromise,
+      new Promise<void>((resolve) => {
+        timeoutHandle = setTimeout(resolve, SESSION_ABORT_WAIT_TIMEOUT_MS);
+      })
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
     }
   }
 }

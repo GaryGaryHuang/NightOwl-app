@@ -20,6 +20,16 @@ export interface CopilotClientManagerOptions {
   createClient?: () => CopilotClientLike;
 }
 
+export function buildCopilotClientEnvironment(
+  env: NodeJS.ProcessEnv = process.env
+): Record<string, string | undefined> {
+  return {
+    ...env,
+    GIT_PAGER: "cat",
+    PAGER: "cat"
+  };
+}
+
 /**
  * Generic start/stop/getClient lifecycle for a Copilot client process.
  *
@@ -118,7 +128,11 @@ export class CopilotClientManagerBase<
 export class CopilotClientManager extends CopilotClientManagerBase<CopilotClientLike, CopilotClientLike> {
   constructor(options: CopilotClientManagerOptions = {}) {
     super(
-      options.createClient ?? (() => new CopilotClient() as CopilotClientLike),
+      options.createClient ??
+        (() =>
+          new CopilotClient({
+            env: buildCopilotClientEnvironment()
+          }) as CopilotClientLike),
       (client) => client
     );
   }

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   CopilotClientManager,
+  buildCopilotClientEnvironment,
   type CopilotClientLike
 } from "../../src/services/copilot-client-manager.ts";
 import {
@@ -97,6 +98,18 @@ test("CopilotClientManager forceStop() is a no-op before startup", async () => {
   await manager.forceStop();
 
   assert.equal(createClientCalls, 0);
+});
+
+test("buildCopilotClientEnvironment disables interactive pagers for review shell tools", () => {
+  const env = buildCopilotClientEnvironment({
+    HOME: "/Users/dev",
+    GIT_PAGER: "less",
+    PAGER: "more"
+  });
+
+  assert.equal(env.HOME, "/Users/dev");
+  assert.equal(env.GIT_PAGER, "cat");
+  assert.equal(env.PAGER, "cat");
 });
 
 test("CopilotClientManager does not retain a client when start() fails", async () => {

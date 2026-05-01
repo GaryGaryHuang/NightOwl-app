@@ -178,6 +178,33 @@ test("SessionExecutor requests session abort exactly once for an in-flight turn 
   assert.deepEqual(calls, ["sendAndWait", "abort", "disconnect"]);
 });
 
+test("SessionExecutor rejects on abort even when the in-flight turn never settles", async () => {
+  const controller = new AbortController();
+  const calls: string[] = [];
+  const session = {
+    async sendAndWait() {
+      calls.push("sendAndWait");
+      return await new Promise<{ data?: { content?: string } } | undefined>(() => {});
+    },
+    async abort() {
+      calls.push("abort");
+    },
+    async disconnect() {
+      calls.push("disconnect");
+    }
+  };
+
+  const executor = new SessionExecutor(session);
+  const pending = executor.sendAndWait("analyze this changeset", 300_000, controller.signal);
+  controller.abort("SIGINT");
+
+  await assert.rejects(
+    () => pending,
+    (error: unknown) => error instanceof SessionTurnAbortedError
+  );
+  assert.deepEqual(calls, ["sendAndWait", "abort", "disconnect"]);
+});
+
 test("SessionExecutor does not send a late abort after the turn already settled", async () => {
   const controller = new AbortController();
   const calls: string[] = [];
