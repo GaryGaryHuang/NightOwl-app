@@ -150,7 +150,7 @@ test("Step1OverviewStep prompt carries changeset context, file diff, and profile
   const plan = new Step1OverviewStep({ runContext }).prepare(context);
 
   assert.equal(plan.stepId, "step1-overview");
-  assert.equal(plan.reviewProfile.model, "gpt-5-mini");
+  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, 300_000);
   assert.match(plan.prompt.systemMessage, /## Current Step: Overview/u);
   assert.match(plan.prompt.userMessage, /<changeset_context>/u);
@@ -189,7 +189,7 @@ test("Step3KnowledgeSourceOfTruthStep prompt carries prior review state and know
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage);
 
   assert.equal(plan.stepId, "step3-knowledge-source-of-truth");
-  assert.equal(plan.reviewProfile.model, "gpt-5-mini");
+  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, 300_000);
   assert.match(
     plan.prompt.systemMessage,

@@ -93,7 +93,7 @@ export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
         )
       },
       reviewProfile: {
-        model: "gpt-5-mini",
+        model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },
       resolve: createSectionResolve({
