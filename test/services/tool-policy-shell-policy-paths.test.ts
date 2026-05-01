@@ -38,8 +38,12 @@ function assertDeniedCommands(
 
 const OUT_OF_BOUNDARY_PATH_COMMANDS = [
   "cat /etc/passwd | head -5",
+  'cat "/etc/passwd"',
+  "cat '/etc/passwd'",
   "cat ../secret.txt",
   "git -C /tmp diff HEAD~1",
+  'git -C "/tmp" diff HEAD~1',
+  'grep root "/etc/passwd"',
   "nl /etc/passwd",
   "diff /etc/hosts src/app.ts"
 ] as const;
@@ -51,6 +55,7 @@ test("tool policy shell policy denies out-of-boundary path arguments", () => {
 test("tool policy shell policy resolves repo-relative path arguments against the effective cwd", () => {
   assertAllowedCommands([
     'grep -E "foo|bar" src/file.ts',
+    'grep TODO "src/app.ts"',
     "cat src/app.ts"
   ], "/workspace/repo");
 
@@ -62,6 +67,9 @@ test("tool policy shell policy resolves repo-relative path arguments against the
 test("tool policy shell policy only allows absolute git -C paths and rejects malformed git -C prefixes", () => {
   assertAllowedCommands([
     "git -C /workspace/repo diff HEAD~1",
+    'git -C "/workspace/repo" diff HEAD~1',
+    "git --no-pager -C /workspace/repo diff HEAD~1",
+    "git -C /workspace/repo --no-pager diff HEAD~1",
     "git -C /workspace/repo grep TODO src/file.ts"
   ]);
 

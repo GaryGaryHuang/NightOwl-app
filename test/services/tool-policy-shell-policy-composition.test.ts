@@ -68,8 +68,13 @@ const QUOTED_OR_ESCAPED_DELIMITER_COMMANDS = [
   "grep 'List<Foo>' src/app.ts",
   String.raw`grep foo\>bar src/app.ts`,
   String.raw`grep foo\<bar src/app.ts`,
+  String.raw`grep foo\$ src/app.ts`,
+  String.raw`grep foo\* src/app.ts`,
+  'grep "foo*" src/app.ts',
+  "grep 'foo?' src/app.ts",
   'grep "foo; bar" src/app.ts',
   "grep 'foo; bar' src/app.ts",
+  "grep 'foo$' src/app.ts",
   'grep "foo||bar" src/app.ts',
   "grep 'foo||bar' src/app.ts",
   String.raw`grep foo\|\|bar src/app.ts`
@@ -123,6 +128,22 @@ test("tool policy shell policy denies command substitution syntax even when the 
     "cat `ls`",
     "echo \"prefix $(git status) suffix\"",
     "echo \"prefix `git status` suffix\""
+  ]);
+});
+
+test("tool policy shell policy denies shell expansion forms outside quotes", () => {
+  assertDeniedCommands([
+    "cat $HOME/.ssh/config",
+    "cat ${HOME}/.ssh/config",
+    'cat "$HOME/.ssh/config"',
+    "cat $'/etc/passwd'",
+    "cat ~root/.ssh/config",
+    "cat src/*",
+    "cat src/?",
+    "cat [a-z]",
+    "cat {src,/etc}/passwd",
+    "cat {1..3}",
+    'awk "{print $1}" src/app.ts'
   ]);
 });
 

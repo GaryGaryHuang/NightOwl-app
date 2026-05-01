@@ -31,6 +31,8 @@ const READONLY_REVIEW_COMMAND_GROUPS = [
     name: "git changeset and history inspection",
     commands: [
       "git show HEAD:src/app.ts",
+      "git --no-pager diff HEAD~1",
+      "git --no-pager show HEAD:src/app.ts",
       "git status --short",
       "git rev-parse HEAD",
       "git merge-base main feature",
@@ -117,6 +119,7 @@ test("tool policy shell policy denies find with destructive or subcommand-execut
 test("tool policy shell policy allows safe find inspection predicates", () => {
   assertAllowedCommands([
     "find . -name '*.ts' -type f",
+    "find . -name '*.{ts,tsx}' -type f",
     "find . -executable -type f"
   ]);
 });
@@ -131,6 +134,8 @@ test("tool policy shell policy denies write or output flags on otherwise allowli
 
 test("tool policy shell policy denies unrecognised git subcommands", () => {
   assertDeniedCommands([
+    "git --no-pager push origin main",
+    "git -c core.pager=cat diff HEAD~1",
     "git push origin main",
     "git commit -m 'msg'",
     "git checkout -b new-branch",

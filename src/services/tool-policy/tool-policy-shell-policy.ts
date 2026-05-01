@@ -3,7 +3,9 @@ import path from "node:path";
 import { isAllowedReviewReadPath } from "../../core/review-access-guard.ts";
 
 import {
+  containsShellExpansion,
   containsTopLevelRedirection,
+  splitShellCommandWords,
   splitTopLevelSequenceSegments,
   splitTopLevelPipelineSegments
 } from "./shell-command-parser.ts";
@@ -32,6 +34,11 @@ interface CommandPolicy {
   deniedFlags?: Set<string>;
   deniedFlagPrefixes?: string[];
   requiredFlags?: Set<string>;
+}
+
+interface NormalizedCommandSegment {
+  tokens: string[];
+  baseDirectory?: string;
 }
 
 const DEFAULT_POLICY: CommandPolicy = {};
@@ -139,6 +146,12 @@ function isAllowedReadonlyBashCommand(
     return false;
   }
 
+  const hasShellExpansion = containsShellExpansion(trimmedCommand);
+
+  if (hasShellExpansion !== false) {
+    return false;
+  }
+
   const sequenceSegments = splitTopLevelSequenceSegments(trimmedCommand);
 
   if (!sequenceSegments) {
@@ -187,12 +200,12 @@ function extractCdCwd(
   effectiveCwd?: string
 ): string | false | undefined {
   const trimmed = chainSegment.trim();
+  const tokens = splitShellCommandWords(trimmed);
 
-  if (trimmed !== "cd" && !trimmed.startsWith("cd ")) {
+  if (!tokens || tokens[0] !== "cd") {
     return undefined;
   }
 
-  const tokens = trimmed.split(/\s+/u).filter(Boolean);
   const pathToken = tokens.slice(1).find((token) => !token.startsWith("-"));
 
   if (!pathToken) {
@@ -234,18 +247,18 @@ function isAllowedSingleSegment(
     return false;
   }
 
-  const commandPolicy = resolveCommandPolicy(normalizedSegment.command);
+  const commandPolicy = resolveCommandPolicy(normalizedSegment.tokens);
 
   if (!commandPolicy) {
     return false;
   }
 
-  if (!satisfiesCommandPolicy(normalizedSegment.command, commandPolicy)) {
+  if (!satisfiesCommandPolicy(normalizedSegment.tokens, commandPolicy)) {
     return false;
   }
 
   return hasOnlyAllowedPathArguments(
-    normalizedSegment.command,
+    normalizedSegment.tokens,
     profile,
     normalizedSegment.baseDirectory
   );
@@ -255,39 +268,68 @@ function normalizeGitChangeDirectorySegment(
   command: string,
   profile: ToolPolicyBoundaryContext,
   commandCwd?: string
-): { command: string; baseDirectory?: string } | undefined {
-  const tokens = command.split(/\s+/u).filter(Boolean);
+): NormalizedCommandSegment | undefined {
+  const tokens = splitShellCommandWords(command);
 
-  if (tokens[0] !== "git" || tokens[1] !== "-C") {
+  if (!tokens || tokens.length === 0) {
+    return undefined;
+  }
+
+  if (tokens[0] !== "git") {
     return {
-      command,
+      tokens,
       baseDirectory: commandCwd
     };
   }
 
-  if (tokens.length < 4) {
-    return undefined;
+  let baseDirectory = commandCwd;
+  let gitArgumentIndex = 1;
+  let seenChangeDirectory = false;
+
+  while (gitArgumentIndex < tokens.length) {
+    const token = tokens[gitArgumentIndex];
+
+    if (token === "--no-pager") {
+      gitArgumentIndex += 1;
+      continue;
+    }
+
+    if (token !== "-C") {
+      break;
+    }
+
+    if (seenChangeDirectory) {
+      return undefined;
+    }
+
+    const pathToken = tokens[gitArgumentIndex + 1];
+
+    if (!pathToken || !path.isAbsolute(pathToken)) {
+      return undefined;
+    }
+
+    const currentBaseDirectory =
+      typeof baseDirectory === "string" && baseDirectory.trim()
+        ? baseDirectory
+        : profile.repoRoot;
+    const resolvedPath = resolvePathToken(pathToken, currentBaseDirectory);
+
+    if (!isAllowedReviewReadPath(resolvedPath, profile.repoRoot)) {
+      return undefined;
+    }
+
+    baseDirectory = resolvedPath;
+    seenChangeDirectory = true;
+    gitArgumentIndex += 2;
   }
 
-  const pathToken = tokens[2];
-
-  if (!path.isAbsolute(pathToken)) {
-    return undefined;
-  }
-
-  const baseDirectory =
-    typeof commandCwd === "string" && commandCwd.trim()
-      ? commandCwd
-      : profile.repoRoot;
-  const resolvedPath = resolvePathToken(pathToken, baseDirectory);
-
-  if (!isAllowedReviewReadPath(resolvedPath, profile.repoRoot)) {
+  if (gitArgumentIndex >= tokens.length) {
     return undefined;
   }
 
   return {
-    command: `git ${tokens.slice(3).join(" ")}`,
-    baseDirectory: resolvedPath
+    tokens: ["git", ...tokens.slice(gitArgumentIndex)],
+    baseDirectory
   };
 }
 
@@ -296,8 +338,7 @@ function normalizeGitChangeDirectorySegment(
  * Returns the CommandPolicy if the command is allowed, or undefined if not.
  * For `git`, the subcommand is validated against ALLOWED_GIT_SUBCOMMANDS.
  */
-function resolveCommandPolicy(command: string): CommandPolicy | undefined {
-  const tokens = command.split(/\s+/u).filter(Boolean);
+function resolveCommandPolicy(tokens: readonly string[]): CommandPolicy | undefined {
   const commandName = tokens[0];
 
   if (!commandName) {
@@ -320,9 +361,7 @@ function resolveCommandPolicy(command: string): CommandPolicy | undefined {
 /**
  * Check that a command satisfies per-command denied/required flag constraints.
  */
-function satisfiesCommandPolicy(command: string, policy: CommandPolicy): boolean {
-  const tokens = command.split(/\s+/u).filter(Boolean);
-
+function satisfiesCommandPolicy(tokens: readonly string[], policy: CommandPolicy): boolean {
   if (policy.deniedFlags) {
     for (const token of tokens) {
       if (policy.deniedFlags.has(token)) {
@@ -351,11 +390,10 @@ function satisfiesCommandPolicy(command: string, policy: CommandPolicy): boolean
 }
 
 function hasOnlyAllowedPathArguments(
-  command: string,
+  tokens: readonly string[],
   profile: ToolPolicyBoundaryContext,
   commandCwd?: string
 ): boolean {
-  const tokens = command.split(/\s+/u).filter(Boolean);
   const baseDirectory =
     typeof commandCwd === "string" && commandCwd.trim()
       ? commandCwd

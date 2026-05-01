@@ -143,3 +143,253 @@ export function containsTopLevelRedirection(command: string): boolean | undefine
 
   return false;
 }
+
+export function containsShellExpansion(command: string): boolean | undefined {
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaping = false;
+  let atWordStart = true;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaping) {
+      escaping = false;
+      atWordStart = false;
+      continue;
+    }
+
+    if (inSingleQuote) {
+      if (char === "'") {
+        inSingleQuote = false;
+      }
+
+      atWordStart = false;
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (char === '"') {
+        inDoubleQuote = false;
+        continue;
+      }
+
+      if (char === "\\") {
+        const nextChar = command[i + 1];
+
+        if (isDoubleQuoteEscapedChar(nextChar)) {
+          escaping = true;
+        }
+
+        continue;
+      }
+
+      if (char === "$" && startsShellExpansion(command[i + 1])) {
+        return true;
+      }
+
+      atWordStart = false;
+      continue;
+    }
+
+    if (/\s/u.test(char)) {
+      atWordStart = true;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaping = true;
+      atWordStart = false;
+      continue;
+    }
+
+    if (char === "'") {
+      inSingleQuote = true;
+      atWordStart = false;
+      continue;
+    }
+
+    if (char === '"') {
+      inDoubleQuote = true;
+      atWordStart = false;
+      continue;
+    }
+
+    if (char === "$" && startsShellExpansion(command[i + 1])) {
+      return true;
+    }
+
+    if (char === "~" && atWordStart) {
+      return true;
+    }
+
+    if (char === "*" || char === "?" || char === "[") {
+      return true;
+    }
+
+    if (char === "{" && startsBraceExpansion(command, i)) {
+      return true;
+    }
+
+    atWordStart = false;
+  }
+
+  if (escaping || inSingleQuote || inDoubleQuote) {
+    return undefined;
+  }
+
+  return false;
+}
+
+export function splitShellCommandWords(command: string): string[] | undefined {
+  const words: string[] = [];
+  let currentWord = "";
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaping = false;
+  let wordStarted = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaping) {
+      currentWord += char;
+      escaping = false;
+      wordStarted = true;
+      continue;
+    }
+
+    if (inSingleQuote) {
+      if (char === "'") {
+        inSingleQuote = false;
+      } else {
+        currentWord += char;
+      }
+
+      wordStarted = true;
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      if (char === '"') {
+        inDoubleQuote = false;
+        wordStarted = true;
+        continue;
+      }
+
+      if (char === "\\") {
+        const nextChar = command[i + 1];
+
+        if (isDoubleQuoteEscapedChar(nextChar)) {
+          escaping = true;
+        } else {
+          currentWord += char;
+        }
+
+        wordStarted = true;
+        continue;
+      }
+
+      currentWord += char;
+      wordStarted = true;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaping = true;
+      wordStarted = true;
+      continue;
+    }
+
+    if (char === "'") {
+      inSingleQuote = true;
+      wordStarted = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inDoubleQuote = true;
+      wordStarted = true;
+      continue;
+    }
+
+    if (/\s/u.test(char)) {
+      if (wordStarted) {
+        words.push(currentWord);
+        currentWord = "";
+        wordStarted = false;
+      }
+
+      continue;
+    }
+
+    currentWord += char;
+    wordStarted = true;
+  }
+
+  if (escaping || inSingleQuote || inDoubleQuote) {
+    return undefined;
+  }
+
+  if (wordStarted) {
+    words.push(currentWord);
+  }
+
+  return words;
+}
+
+function isDoubleQuoteEscapedChar(char: string | undefined): boolean {
+  return (
+    char === "$" ||
+    char === "`" ||
+    char === '"' ||
+    char === "\\" ||
+    char === "\n"
+  );
+}
+
+function startsBraceExpansion(command: string, startIndex: number): boolean {
+  let escaping = false;
+  let hasComma = false;
+  let hasSequence = false;
+
+  for (let i = startIndex + 1; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (char === "}") {
+      return hasComma || hasSequence;
+    }
+
+    if (char === ",") {
+      hasComma = true;
+      continue;
+    }
+
+    if (char === "." && command[i + 1] === ".") {
+      hasSequence = true;
+    }
+  }
+
+  return false;
+}
+
+function startsShellExpansion(char: string | undefined): boolean {
+  if (char === undefined) {
+    return false;
+  }
+
+  return (
+    /[A-Za-z0-9_]/u.test(char) ||
+    ["{", "(", "[", "'", '"', "#", "?", "!", "$", "*", "@", "-"].includes(char)
+  );
+}
