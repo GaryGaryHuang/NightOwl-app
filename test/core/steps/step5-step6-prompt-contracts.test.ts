@@ -33,7 +33,6 @@ function createFinding(findingId: string): Finding {
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    modelConfidence: 42,
     findingId,
     supportingEvidence: [
       { evidenceRef: "E1", supports: "expectedBehavior" },
@@ -61,15 +60,13 @@ function parseReviewStateFromPrompt(prompt: string): unknown {
   return JSON.parse(match[1]);
 }
 
-test("Step5ValidationInterrogationStep prompt contract requests modelConfidence", () => {
+test("Step5ValidationInterrogationStep prompt contract requests structured finding fields", () => {
   const step = new Step5ValidationInterrogationStep({ promptSerializer: serializer });
   const plan = step.prepare(createContext());
 
-  assert.match(plan.prompt.userMessage, /modelConfidence/);
   assert.match(plan.prompt.userMessage, /expectedBehavior/);
   assert.match(plan.prompt.userMessage, /actualBehavior/);
   assert.match(plan.prompt.userMessage, /guardsChecked/);
-  assert.equal(plan.prompt.userMessage.includes('"confidence"'), false);
 });
 
 test("Step6CognitiveSimulationStep includes full candidate findings JSON in review_state snapshot", () => {
@@ -85,7 +82,6 @@ test("Step6CognitiveSimulationStep includes full candidate findings JSON in revi
   assert.deepEqual(snapshot.candidateFindings, [candidate]);
   assert.deepEqual(snapshot.verifiedFindings, []);
   assert.equal(plan.prompt.userMessage.includes("<candidate_findings"), false);
-  assert.match(plan.prompt.userMessage, /modelConfidence/);
   assert.match(plan.prompt.userMessage, /supportingEvidence/);
   assert.match(plan.prompt.userMessage, /reachability/);
   assert.match(plan.prompt.userMessage, /uncertaintyStatus/);

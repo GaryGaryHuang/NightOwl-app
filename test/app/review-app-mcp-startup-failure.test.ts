@@ -171,10 +171,6 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
         async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
-            confidenceThresholds: {
-              must: 80,
-              nice: 90
-            },
             mcpServers: {}
           };
         }

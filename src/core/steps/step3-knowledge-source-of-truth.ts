@@ -40,7 +40,7 @@ const STEP3_INSTRUCTION = [
   "3. Converge the scope of this review:",
   "   - State the rules, standards, references, and assumptions that will govern later analysis",
   "   - Explicitly list what is out of scope for this review",
-  "   - If a necessary assumption remains uncertain, make that uncertainty explicit rather than overstating confidence",
+  "   - If a necessary assumption remains uncertain, make that uncertainty explicit rather than overstating certainty",
   "",
   "Respond in the following format. If no applicable repo-native or external reference is needed for this change, write `無` under 版本／文件參考:",
   "",

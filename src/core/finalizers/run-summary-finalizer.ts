@@ -35,7 +35,6 @@ export function renderRunSummary(input: RunSummaryRenderInput): string {
     }));
     const riskCounts: Record<RiskLevel, number> = {
       High: 0,
-      Medium: 0,
       Low: 0,
       None: 0
     };
@@ -77,7 +76,6 @@ export function renderRunSummary(input: RunSummaryRenderInput): string {
       "",
       "## Risk Distribution",
       `- High: ${riskCounts.High}`,
-      `- Medium: ${riskCounts.Medium}`,
       `- Low: ${riskCounts.Low}`,
       `- None: ${riskCounts.None}`,
       "",

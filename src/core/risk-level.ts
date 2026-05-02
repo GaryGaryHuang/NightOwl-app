@@ -1,16 +1,12 @@
 import type { Finding, FindingDisposition } from "./file-review-context.ts";
 
-// "Medium" is retained for downstream output contract compatibility.
-// The current deterministic mapping in `deriveFileRiskLevel` never emits it.
-// If future risk heuristics need a Medium tier, the plumbing is already in place.
-export type RiskLevel = "High" | "Medium" | "Low" | "None";
+export type RiskLevel = "High" | "Low" | "None";
 
-// Shared severity ordering for run-level outputs: strong must-fix findings rank above weaker musts, then nice-to-haves.
+// Shared severity ordering for run-level outputs: must-fix findings rank above nice-to-haves, then no findings.
 export const RISK_ORDER: Record<RiskLevel, number> = {
   High: 0,
-  Medium: 1,
-  Low: 2,
-  None: 3
+  Low: 1,
+  None: 2
 };
 
 export function countMustFindings(findings: Finding[] | undefined): number {
@@ -24,7 +20,6 @@ export function countNiceFindings(findings: Finding[] | undefined): number {
 /**
  * Collapse finalized findings into the run-level risk label shown in summaries, indexes, and manifests.
  *
- * Risk semantics are intentionally independent of model-authored confidence.
  * Any accepted must-fix finding escalates the file to High; nice-only findings map to Low;
  * and no accepted findings maps to None.
  */
@@ -99,8 +94,6 @@ function buildRiskBasis(
   switch (level) {
     case "High":
       return `High: ${mustCount} must-fix finding(s) remain after verification`;
-    case "Medium":
-      return `Medium: compatibility-only risk label; current deterministic mapping did not emit this state`;
     case "Low":
       return `Low: ${niceCount} nice-to-have finding(s) remain after verification; no must-fix findings`;
     case "None":

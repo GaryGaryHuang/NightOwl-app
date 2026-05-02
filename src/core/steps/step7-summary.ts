@@ -90,7 +90,7 @@ function buildStep7Instruction(): string {
     "   - If the change has no runtime behavioral impact (e.g. annotation-only removal), write `無行為變更`.",
     "",
     "3. 風險評估: Use the `derivedRiskLevel` from `<risk_snapshot>` as the `整體風險等級`. Do not recompute or override it.",
-    "   - 整體風險等級: Copy the exact value from `<risk_snapshot>` `derivedRiskLevel` field (High / Medium / Low / None).",
+    "   - 整體風險等級: Copy the exact value from `<risk_snapshot>` `derivedRiskLevel` field (High / Low / None).",
     "   - 風險理由: Reference the specific findings (or their absence) that determined the level. Do not add hedging qualifiers about residual uncertainty.",
     "",
     "Respond in the following format:",
@@ -103,7 +103,7 @@ function buildStep7Instruction(): string {
     "### 行為變更提醒",
     "- [runtime behavioral changes as direct facts, or 無行為變更]",
     "### 風險評估",
-    "- 整體風險等級：[High / Medium / Low / None]",
+    "- 整體風險等級：[High / Low / None]",
     "- 風險理由：[reference specific findings or their absence — no hedging]",
     "",
     "Before submitting your response, verify:",
@@ -120,6 +120,6 @@ function buildStep7JudgeCriteria(): string {
     "段落 `## Summary` 必須存在，且符合以下條件：",
     "- 包含 `### 審查基礎` 子段落，且「改動概要」、「依據規範」、「審查假設」三個欄位都必須出現並對應回答欄位要求。",
     "- 包含 `### 行為變更提醒` 子段落，且有具體內容或明確寫 `無行為變更`。",
-    "- 包含 `### 風險評估` 子段落，且「整體風險等級」為 High / Medium / Low / None 其中之一，「風險理由」非空。"
+    "- 包含 `### 風險評估` 子段落，且「整體風險等級」為 High / Low / None 其中之一，「風險理由」非空。"
   ].join("\n");
 }

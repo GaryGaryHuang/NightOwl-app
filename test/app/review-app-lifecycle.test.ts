@@ -174,7 +174,6 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
         async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
-            confidenceThresholds: { must: 80, nice: 90 },
             mcpServers: {}
           };
         }

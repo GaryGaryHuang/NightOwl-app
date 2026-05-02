@@ -1,13 +1,7 @@
 import {
-  DEFAULT_CONFIDENCE_THRESHOLDS
-} from "../../core/confidence-thresholds.ts";
-import {
   DEFAULT_MAX_CONCURRENT_FILES
 } from "../../core/max-concurrent-files.ts";
-import {
-  resolveConfidenceThresholdsFromConfigObject,
-  resolveMaxConcurrentFilesFromConfigObject
-} from "./review-config-field-resolvers.ts";
+import { resolveMaxConcurrentFilesFromConfigObject } from "./review-config-field-resolvers.ts";
 import type { ReviewConfig } from "./review-config-provider.ts";
 import {
   invalidReviewConfigError,
@@ -23,7 +17,6 @@ import {
 // Adding a field to ReviewConfig without listing it here causes a type error.
 const RECOGNIZED_CONFIG_KEYS: { [K in keyof Required<ReviewConfig>]: true } = {
   maxConcurrentFiles: true,
-  confidenceThresholds: true,
   mcpServers: true,
   webFetchAllowedHosts: true,
   webFetchDeniedHosts: true
@@ -40,7 +33,6 @@ export function parseReviewConfig(configText: string): ReviewConfig {
 export function buildDefaultReviewConfig(): ReviewConfig {
   return {
     maxConcurrentFiles: DEFAULT_MAX_CONCURRENT_FILES,
-    confidenceThresholds: { ...DEFAULT_CONFIDENCE_THRESHOLDS },
     mcpServers: {}
   };
 }
@@ -79,7 +71,6 @@ export function resolveTopLevelReviewConfig(
 
   return {
     maxConcurrentFiles: resolveMaxConcurrentFilesFromConfigObject(configObject),
-    confidenceThresholds: resolveConfidenceThresholdsFromConfigObject(configObject),
     mcpServers: resolveMcpServersFromConfigObject(configObject),
     ...(webFetchAllowedHosts === undefined
       ? {}
@@ -89,4 +80,3 @@ export function resolveTopLevelReviewConfig(
       : { webFetchDeniedHosts })
   };
 }
-

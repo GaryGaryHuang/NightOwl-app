@@ -45,7 +45,7 @@ test("validateWithReport returns payload and per-finding schema-pass report entr
 test("validateWithReport with multiple findings returns per-finding entries", () => {
   const validator = new StructuredOutputValidator();
   const f1 = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22) });
-  const f2 = finding({ findingId: "F2", traceability: lineRangeTraceability(21, 22), type: "nice", modelConfidence: 75 });
+  const f2 = finding({ findingId: "F2", traceability: lineRangeTraceability(21, 22), type: "nice"});
   const result = validator.validateWithReport({
     responseText: payload([f1, f2]),
     diffContent: DEFAULT_DIFF,
@@ -189,9 +189,9 @@ test("filterByAcceptanceWithReport rejects non-credible reachability with REACHA
   assert.equal(result.report[0].outcome, "rejected");
 });
 
-test("filterByAcceptanceWithReport accepts low modelConfidence finding once deterministic gates pass", () => {
+test("filterByAcceptanceWithReport accepts finding once deterministic gates pass", () => {
   const validator = new StructuredOutputValidator();
-  const f = finding({ traceability: lineRangeTraceability(21, 22), modelConfidence: 0 });
+  const f = finding({ traceability: lineRangeTraceability(21, 22) });
   const validated = validator.validate({
     responseText: payload([f]),
     diffContent: DEFAULT_DIFF,

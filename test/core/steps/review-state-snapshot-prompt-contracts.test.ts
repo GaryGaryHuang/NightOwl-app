@@ -54,7 +54,6 @@ function createFinding(findingId: string): Finding {
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    modelConfidence: 85,
     findingId,
     supportingEvidence: [
       { evidenceRef: "E1", supports: "expectedBehavior" },

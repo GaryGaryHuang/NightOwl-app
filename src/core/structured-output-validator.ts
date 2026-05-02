@@ -410,7 +410,6 @@ function validateFinding(
   const deviation = validateStringField(finding.deviation, "deviation");
   const impact = validateStringField(finding.impact, "impact");
   const suggestion = validateStringField(finding.suggestion, "suggestion");
-  const modelConfidence = validateModelConfidence(finding);
   const findingId = validateStringField(finding.findingId, "findingId");
   const validatedEvidence = validateSupportingEvidence(finding.supportingEvidence);
   const validatedReachability = validateReachability(finding.reachability);
@@ -435,7 +434,6 @@ function validateFinding(
     deviation,
     impact,
     suggestion,
-    modelConfidence,
     findingId,
     supportingEvidence: validatedEvidence,
     reachability: validatedReachability,
@@ -531,31 +529,6 @@ function validateAcceptedVerifierVerdict(input: unknown): VerifierVerdict {
     status: "accepted",
     checks: validatedChecks
   };
-}
-
-function validateModelConfidence(finding: Record<string, unknown>): number {
-  const canonical = finding.modelConfidence;
-  const legacy = finding.confidence;
-
-  if (canonical !== undefined && legacy !== undefined && canonical !== legacy) {
-    throw new Error(
-      "deterministic validation failed: 'modelConfidence' and legacy 'confidence' must match when both are provided"
-    );
-  }
-
-  const resolved = canonical ?? legacy;
-  if (
-    typeof resolved !== "number" ||
-    Number.isNaN(resolved) ||
-    resolved < 0 ||
-    resolved > 100
-  ) {
-    throw new Error(
-      "deterministic validation failed: 'modelConfidence' must be a number between 0 and 100"
-    );
-  }
-
-  return resolved;
 }
 
 function validateTraceability(
@@ -855,8 +828,6 @@ const ALLOWED_FINDING_KEYS = [
   "deviation",
   "impact",
   "suggestion",
-  "modelConfidence",
-  "confidence",
   "dependencyPathException",
   "findingId",
   "supportingEvidence",

@@ -14,7 +14,7 @@ const DEFAULT_BASE_PATH = "/workspace/.nightowl/review/feature-branch_03131430";
 
 export function createFinding(
   type: "must" | "nice",
-  confidence: number,
+  idSuffix: number,
   input: { title?: string; suggestion?: string } = {}
 ): Finding {
   return {
@@ -26,8 +26,7 @@ export function createFinding(
     deviation: "dev",
     impact: "impact",
     suggestion: input.suggestion ?? "suggestion",
-    modelConfidence: confidence,
-    findingId: `${type}-${confidence}`,
+    findingId: `${type}-${idSuffix}`,
     supportingEvidence: [
       { evidenceRef: "E1", supports: "expectedBehavior" },
       { evidenceRef: "E2", supports: "actualBehavior" },

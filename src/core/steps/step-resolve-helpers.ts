@@ -164,7 +164,7 @@ function toVerifierArtifactEntries(input: {
   }));
 }
 
-const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(["High", "Medium", "Low", "None"]);
+const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(["High", "Low", "None"]);
 const RISK_LEVEL_PATTERN = /(?:整體風險等級|Overall risk level)[：:]\s*([\w]+)/i;
 
 /**

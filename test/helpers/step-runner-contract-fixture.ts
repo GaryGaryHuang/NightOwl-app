@@ -230,7 +230,6 @@ export const INITIAL_FINDING = {
   deviation: "初版落差",
   impact: "初版 impact",
   suggestion: "初版建議",
-  modelConfidence: 88
 } as const;
 
 export const FINAL_FINDING = {
@@ -242,7 +241,6 @@ export const FINAL_FINDING = {
   deviation: "最終落差",
   impact: "最終 impact",
   suggestion: "最終建議",
-  modelConfidence: 91
 } as const;
 
 export const NICE_FINAL_FINDING = {
@@ -254,7 +252,6 @@ export const NICE_FINAL_FINDING = {
   deviation: "最終落差",
   impact: "最終 impact",
   suggestion: "最終建議",
-  modelConfidence: 93
 } as const;
 
 export const DEFAULT_JUDGE_RESOLVE = makeSectionResolveWithJudge(
@@ -270,7 +267,7 @@ export const SUMMARY_RESPONSE = [
   "### 行為變更提醒",
   "- 無",
   "### 風險評估",
-  "- 整體風險等級：Medium",
+  "- 整體風險等級：High",
   "- 風險理由：final findings 仍需留意。"
 ].join("\n");
 

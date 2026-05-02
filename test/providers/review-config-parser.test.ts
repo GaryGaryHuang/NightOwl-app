@@ -41,7 +41,6 @@ test("parseReviewConfig accepts a representative fully-populated config", () => 
     parseReviewConfig(
       JSON.stringify({
         maxConcurrentFiles: 3,
-        confidenceThresholds: { must: 70, nice: 85 },
         mcpServers: {
           context7: {
             type: "http",
@@ -55,7 +54,6 @@ test("parseReviewConfig accepts a representative fully-populated config", () => 
     ),
     buildExpectedReviewConfig({
       maxConcurrentFiles: 3,
-      confidenceThresholds: { must: 70, nice: 85 },
       mcpServers: {
         context7: {
           type: "context7",

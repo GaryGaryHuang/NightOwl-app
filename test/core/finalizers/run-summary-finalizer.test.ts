@@ -62,7 +62,6 @@ test("RunSummaryFinalizer renders the exact aggregate summary contract with reba
   assert.match(rendered, /- Final findings totals: must=2, nice=1/u);
   assert.match(rendered, /^## Risk Distribution$/mu);
   assert.match(rendered, /- High: 2/u);
-  assert.match(rendered, /- Medium: 0/u);
   assert.match(rendered, /- Low: 0/u);
   assert.match(rendered, /- None: 0/u);
   assert.match(
@@ -115,7 +114,6 @@ test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate outpu
   assert.match(rendered, /- Skipped files: 2/u);
   assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
   assert.match(rendered, /- High: 0/u);
-  assert.match(rendered, /- Medium: 0/u);
   assert.match(rendered, /- Low: 0/u);
   assert.match(rendered, /- None: 0/u);
   assert.match(rendered, /## Successful Files\n- 無/u);
@@ -141,12 +139,12 @@ test("RunSummaryFinalizer excludes skipped files from final findings totals", ()
   assert.doesNotMatch(rendered, /must=1, nice=1/u);
 });
 
-test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, Low, and None counts", () => {
+test("RunSummaryFinalizer renders Risk Distribution section with High, Low, and None counts", () => {
   const rendered = renderSummary({
-    plannedNotes: createPlannedNotesFromPaths(["high.ts", "medium.ts", "low.ts", "none.ts"]),
+    plannedNotes: createPlannedNotesFromPaths(["high.ts", "another-high.ts", "low.ts", "none.ts"]),
     successfulFiles: [
       createSuccessfulFile("high.ts", [createFinding("must", 90, { title: "High issue" })]),
-      createSuccessfulFile("medium.ts", [createFinding("must", 89, { title: "Medium issue" })]),
+      createSuccessfulFile("another-high.ts", [createFinding("must", 89, { title: "Another high issue" })]),
       createSuccessfulFile("low.ts", [createFinding("nice", 88, { title: "Low issue" })]),
       createSuccessfulFile("none.ts", [])
     ]
@@ -154,7 +152,6 @@ test("RunSummaryFinalizer renders Risk Distribution section with High, Medium, L
 
   assert.match(rendered, /^## Risk Distribution$/mu);
   assert.match(rendered, /- High: 2/u);
-  assert.match(rendered, /- Medium: 0/u);
   assert.match(rendered, /- Low: 1/u);
   assert.match(rendered, /- None: 1/u);
 });

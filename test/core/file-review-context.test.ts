@@ -134,7 +134,6 @@ test("FileReviewContext setFindings deep-clones v2 fields so mutations do not le
     deviation: "dev",
     impact: "imp",
     suggestion: "sug",
-    modelConfidence: 90,
     findingId: "F1",
     supportingEvidence: [
       { evidenceRef: "E1", supports: "expectedBehavior" },
@@ -187,7 +186,6 @@ test("FileReviewContext getFindings returns defensively cloned copies", () => {
       deviation: "dev",
       impact: "impact",
       suggestion: "suggestion",
-      modelConfidence: 90,
       findingId: "F1",
       supportingEvidence: [
         { evidenceRef: "E1", supports: "expectedBehavior" },

@@ -1,4 +1,3 @@
-import type { ConfidenceThresholds } from "../../src/core/confidence-thresholds.ts";
 import type { ReviewMcpServers } from "../../src/core/review-mcp-server-config.ts";
 import { LocalReviewConfigProvider } from "../../src/providers/config/local-review-config-provider.ts";
 import type {
@@ -42,17 +41,12 @@ export function createReviewConfigProviderFixture() {
 // (i.e. `undefined` must not appear in the output).
 export function buildExpectedReviewConfig(input: {
   maxConcurrentFiles?: number;
-  confidenceThresholds?: Partial<ConfidenceThresholds>;
   mcpServers?: ReviewMcpServers;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
 } = {}): ReviewConfig {
   return {
     maxConcurrentFiles: input.maxConcurrentFiles ?? 5,
-    confidenceThresholds: {
-      must: input.confidenceThresholds?.must ?? 80,
-      nice: input.confidenceThresholds?.nice ?? 90
-    },
     mcpServers: input.mcpServers ?? {},
     ...(input.webFetchAllowedHosts === undefined
       ? {}

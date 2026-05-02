@@ -1,4 +1,3 @@
-import type { ConfidenceThresholds } from "../../core/confidence-thresholds.ts";
 import type { ReviewMcpServers } from "../../core/review-mcp-server-config.ts";
 
 export type ReviewConfigProviderOperation = "loadReviewConfig";
@@ -21,7 +20,6 @@ export class ReviewConfigProviderError extends Error {
 
 export interface ReviewConfig {
   maxConcurrentFiles: number;
-  confidenceThresholds: ConfidenceThresholds;
   mcpServers: ReviewMcpServers;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];

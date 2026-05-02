@@ -49,7 +49,7 @@ describe("ReviewOrchestrator bounded concurrency with mixed completion order", (
     skippedFile = requireReviewableFile(harness, "README.md");
     fastSuccessfulFile = requireReviewableFile(harness, "packages/app/index.ts");
     slowSuccessfulFile = requireReviewableFile(harness, "src/app.ts");
-    const mediumSuccessfulFile =
+    const delayedSuccessfulFile =
       harness.reviewableFiles.find(
         (filePath) =>
           filePath !== skippedFile &&
@@ -76,7 +76,7 @@ describe("ReviewOrchestrator bounded concurrency with mixed completion order", (
         completionDelayByFile: new Map([
           [fastSuccessfulFile, 0],
           [skippedFile, 80],
-          [mediumSuccessfulFile, 140],
+          [delayedSuccessfulFile, 140],
           [slowSuccessfulFile, 220]
         ]),
         failedFile: skippedFile,

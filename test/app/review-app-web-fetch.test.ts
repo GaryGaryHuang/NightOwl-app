@@ -90,7 +90,6 @@ describe("createLocalReviewRunApp web-fetch tool policy wiring", () => {
         async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
-            confidenceThresholds: { must: 80, nice: 90 },
             mcpServers: {}
           };
         }

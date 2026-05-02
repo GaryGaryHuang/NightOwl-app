@@ -273,7 +273,6 @@ function finding(overrides: Partial<Finding> = {}): Finding {
     deviation: "deviation",
     impact: "impact",
     suggestion: "suggestion",
-    modelConfidence: 90,
     findingId: "F1",
     supportingEvidence: [
       { evidenceRef: "E1", supports: "expectedBehavior" },

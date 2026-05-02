@@ -28,7 +28,6 @@ function createFinding(findingId: string, type: "must" | "nice" = "must"): Findi
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    modelConfidence: 85,
     findingId,
     supportingEvidence: [
       { evidenceRef: "E1", supports: "expectedBehavior" },

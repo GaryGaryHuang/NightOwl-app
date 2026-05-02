@@ -22,15 +22,12 @@ test("LocalReviewConfigProvider only reads the canonical .nightowl/reviewconfig.
 
   try {
     configFixture.writeLegacyRootReviewConfig({ maxConcurrentFiles: 2 });
-    configFixture.writeLegacyNamespaceReviewConfig({
-      confidenceThresholds: { must: 70, nice: 85 }
-    });
+    configFixture.writeLegacyNamespaceReviewConfig({ maxConcurrentFiles: 3 });
 
     assert.deepEqual(await configFixture.loadReviewConfig(), buildExpectedReviewConfig());
 
     configFixture.writeReviewConfig({
       maxConcurrentFiles: 2,
-      confidenceThresholds: { must: 70, nice: 85 },
       webFetchAllowedHosts: ["docs.example.com"]
     });
 
@@ -38,7 +35,6 @@ test("LocalReviewConfigProvider only reads the canonical .nightowl/reviewconfig.
       await configFixture.loadReviewConfig(),
       buildExpectedReviewConfig({
         maxConcurrentFiles: 2,
-        confidenceThresholds: { must: 70, nice: 85 },
         webFetchAllowedHosts: ["docs.example.com"]
       })
     );

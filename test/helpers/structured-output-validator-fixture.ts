@@ -36,7 +36,6 @@ export function finding(overrides: Record<string, unknown> = {}): Record<string,
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
-    modelConfidence: 88,
     findingId: "F1",
     supportingEvidence: [
       { evidenceRef: "E1", supports: "expectedBehavior" },

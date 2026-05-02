@@ -62,7 +62,6 @@ describe("createLocalReviewRunApp progress wiring", () => {
         async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
-            confidenceThresholds: { must: 80, nice: 90 },
             mcpServers: {}
           };
         }
@@ -169,7 +168,6 @@ test("createLocalReviewRunApp emits a progress warning when tool-audit writes fa
         async loadReviewConfig() {
           return {
             maxConcurrentFiles: 1,
-            confidenceThresholds: { must: 80, nice: 90 },
             mcpServers: {}
           };
         }

@@ -18,16 +18,16 @@ test("deriveFileRiskLevel maps finalized findings to the documented risk levels"
     {
       label: "mixed must findings still map to High",
       findings: [
-        createFinding("must", 1, { title: "lower-confidence must" }),
+        createFinding("must", 1, { title: "first must" }),
         createFinding("must", 96, { title: "another must" })
       ],
       expected: "High"
     },
     {
-      label: "nice-only findings regardless of confidence",
+      label: "nice-only findings",
       findings: [
-        createFinding("nice", 10, { title: "low-confidence nice" }),
-        createFinding("nice", 99, { title: "high-confidence nice" })
+        createFinding("nice", 10, { title: "first nice" }),
+        createFinding("nice", 99, { title: "second nice" })
       ],
       expected: "Low"
     },

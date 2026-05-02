@@ -160,7 +160,6 @@ export function buildStandardStep5JsonResponse(): string {
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        modelConfidence: 88,
         findingId: "F1",
         supportingEvidence: canonicalSupportingEvidence(),
         reachability: canonicalReachability(),
@@ -182,7 +181,6 @@ export function buildStandardStep6JsonResponse(): string {
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        modelConfidence: 91,
         findingId: "F1",
         supportingEvidence: canonicalSupportingEvidence(),
         reachability: canonicalReachability(),
@@ -229,7 +227,6 @@ export function buildSimulationStep5JsonResponse(): string {
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        modelConfidence: 88,
         findingId: "F1",
         supportingEvidence: canonicalSupportingEvidence(),
         reachability: canonicalReachability(),
@@ -251,7 +248,6 @@ export function buildSimulationStep6JsonResponse(): string {
         deviation: "經 simulation 後確認最終落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 final guard",
-        modelConfidence: 91,
         findingId: "F1",
         supportingEvidence: canonicalSupportingEvidence(),
         reachability: canonicalReachability(),
@@ -297,7 +293,7 @@ export function buildStrategyResponse(
   ].join("\n");
 }
 
-export type Step7NarrativeRiskLevel = "High" | "Medium" | "Low" | "None";
+export type Step7NarrativeRiskLevel = "High" | "Low" | "None";
 
 export function buildSummaryResponse(
   filePath: string,
@@ -319,7 +315,7 @@ export function buildSummaryResponse(
   ].join("\n");
 }
 
-export function createFinding(type: "must" | "nice", title: string, confidence = 90): Finding {
+export function createFinding(type: "must" | "nice", title: string): Finding {
   return {
     type,
     title,
@@ -329,7 +325,6 @@ export function createFinding(type: "must" | "nice", title: string, confidence =
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
-    modelConfidence: confidence,
     findingId: "F1",
     supportingEvidence: canonicalSupportingEvidence(),
     reachability: canonicalReachability(),

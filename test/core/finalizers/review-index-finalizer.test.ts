@@ -151,7 +151,7 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
   assert.doesNotMatch(rendered, /\(\.\/files\/foo#bar\)\.ts\.md\)/u);
 });
 
-test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None with skipped files last", () => {
+test("ReviewIndexFinalizer sorts file notes by High to Low to None with skipped files last", () => {
   const rendered = renderIndex({
     repoRoot: "/workspace/repo",
     baseRef: "main",
@@ -160,14 +160,14 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
     plannedNotes: createPlannedNotes([
       plannedNote("none.ts"),
       plannedNote("low.ts"),
-      plannedNote("medium.ts"),
+      plannedNote("another-high.ts"),
       plannedNote("high.ts"),
       plannedNote("skipped.ts")
     ]),
     successfulFiles: [
       createSuccessfulFile("none.ts", []),
       createSuccessfulFile("low.ts", [createFinding("nice", 80, { title: "Low issue" })]),
-      createSuccessfulFile("medium.ts", [createFinding("must", 80, { title: "Medium issue" })]),
+      createSuccessfulFile("another-high.ts", [createFinding("must", 80, { title: "Another high issue" })]),
       createSuccessfulFile("high.ts", [createFinding("must", 90, { title: "High issue" })])
     ],
     skippedFiles: [
@@ -180,7 +180,7 @@ test("ReviewIndexFinalizer sorts file notes by High to Medium to Low to None wit
   });
 
   assertTextContainsInOrder(rendered, [
-    "- [High] [`medium.ts`]",
+    "- [High] [`another-high.ts`]",
     "- [High] [`high.ts`]",
     "- [Low] [`low.ts`]",
     "- [None] [`none.ts`]",

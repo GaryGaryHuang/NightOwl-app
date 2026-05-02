@@ -29,7 +29,6 @@ function createContext(findings?: Finding[]): FileReviewContext {
 
 function createFinding(
   type: "must" | "nice",
-  confidence: number,
   findingId: string
 ): Finding {
   return {
@@ -41,7 +40,6 @@ function createFinding(
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    modelConfidence: confidence,
     findingId,
     supportingEvidence: [
       { evidenceRef: "E1", supports: "expectedBehavior" },
@@ -68,13 +66,6 @@ test("parseRiskLevelFromResponse extracts valid risk levels", async (t) => {
     assert.equal(
       parseRiskLevelFromResponse("### 風險評估\n- 整體風險等級：High\n- 風險理由：..."),
       "High"
-    );
-  });
-
-  await t.test("extracts Medium", () => {
-    assert.equal(
-      parseRiskLevelFromResponse("- 整體風險等級：Medium"),
-      "Medium"
     );
   });
 
@@ -143,7 +134,7 @@ test("createStep7HybridResolve rejects when risk level mismatches snapshot", asy
     expectedRiskLevel: "High"
   });
 
-  const response = buildSummaryResponse("Medium");
+  const response = buildSummaryResponse("Low");
 
   await assert.rejects(
     () => resolve(response, createResolveServices({ judgePasses: true })),
@@ -229,7 +220,7 @@ test("createStep7HybridResolve does not call judge when risk mismatches", async 
 
 test("Step7SummaryStep.prepare() includes <risk_snapshot> in user message when findings exist", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([createFinding("must", 90, "F1")]);
+  const context = createContext([createFinding("must", "F1")]);
   const plan = step.prepare(context);
 
   assert.match(plan.prompt.userMessage, /<risk_snapshot>/);
@@ -250,7 +241,7 @@ test("Step7SummaryStep.prepare() includes <risk_snapshot> with None when no find
 
 test("Step7SummaryStep.prepare() risk_snapshot JSON is parseable", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([createFinding("must", 96, "F1"), createFinding("nice", 91, "F2")]);
+  const context = createContext([createFinding("must", "F1"), createFinding("nice", "F2")]);
   const plan = step.prepare(context);
 
   const match = plan.prompt.userMessage.match(/<risk_snapshot>\n([\s\S]*?)\n<\/risk_snapshot>/);
@@ -264,7 +255,7 @@ test("Step7SummaryStep.prepare() risk_snapshot JSON is parseable", () => {
 
 test("Step7SummaryStep.prepare() includes retiredFindingCount from dispositions", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([createFinding("nice", 91, "F1")]);
+  const context = createContext([createFinding("nice", "F1")]);
   context.setDispositions([
     {
       findingId: "F-retired",
@@ -301,7 +292,7 @@ test("Step7SummaryStep.prepare() includes <review_state> in user message", () =>
 
 test("Step7SummaryStep.prepare() resolve uses expectedRiskLevel matching snapshot", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([createFinding("must", 80, "F1")]);
+  const context = createContext([createFinding("must", "F1")]);
   const plan = step.prepare(context);
 
   // The resolve function exists and is a function (hybrid resolve)

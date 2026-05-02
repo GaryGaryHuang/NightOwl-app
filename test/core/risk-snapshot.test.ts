@@ -53,7 +53,7 @@ test("buildRiskSnapshot counts mixed finding types correctly", () => {
     createFinding("nice", 91),
     createFinding("must", 82, { title: "second must" })
   ];
-  // Override findingIds for uniqueness since createFinding generates from type+confidence
+  // Override findingIds for uniqueness since createFinding generates from type+id suffix
   findings[2] = { ...findings[2], findingId: "must-82-2" };
 
   const snapshot = buildRiskSnapshot(findings);
