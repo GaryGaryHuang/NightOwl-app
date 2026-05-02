@@ -99,7 +99,6 @@ Place an optional configuration file at `<repo_root>/.nightowl/reviewconfig.json
 ```json
 {
   "maxConcurrentFiles": 5,
-  "confidenceThresholds": { "must": 80, "nice": 90 },
   "mcpServers": {},
   "webFetchAllowedHosts": ["docs.example.com", "*.github.com"],
   "webFetchDeniedHosts": ["internal.corp.com"]
@@ -109,8 +108,6 @@ Place an optional configuration file at `<repo_root>/.nightowl/reviewconfig.json
 | Field | Default | Description |
 |-------|---------|-------------|
 | `maxConcurrentFiles` | `5` | Number of files processed in parallel |
-| `confidenceThresholds.must` | `80` | Minimum confidence (0–100) to include a must-fix finding |
-| `confidenceThresholds.nice` | `90` | Minimum confidence (0–100) to include a nice-to-have finding |
 | `mcpServers` | `{}` | Additional [MCP](https://modelcontextprotocol.io/) servers the AI agent can access during review |
 | `webFetchAllowedHosts` | — | Hosts the AI agent is allowed to fetch via HTTPS during review |
 | `webFetchDeniedHosts` | — | Hosts explicitly blocked from fetch (deny-over-allow) |
