@@ -22,10 +22,16 @@ import {
 
 const EXPECTED_REVIEW_AVAILABLE_TOOLS = [
   "bash",
+  "list_bash",
+  "read_bash",
+  "stop_bash",
   "web_fetch",
   "view",
   "grep",
-  "glob"
+  "rg",
+  "glob",
+  "list_agents",
+  "read_agent"
 ] as const;
 
 const DEFAULT_CONTEXT7_SERVERS: Record<string, MCPServerConfig> = {

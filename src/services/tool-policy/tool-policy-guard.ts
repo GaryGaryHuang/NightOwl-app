@@ -29,6 +29,13 @@ type PreToolUseHookResult = Awaited<ReturnType<PreToolUseHook>>;
 
 const SHELL_TOOL_NAMES = new Set(["bash", "sh", "shell"]);
 const URL_TOOL_NAMES = new Set(["web_fetch", "url"]);
+const AUDITED_PASS_THROUGH_TOOL_ARGS = new Map<string, readonly string[]>([
+  ["list_bash", []],
+  ["read_bash", ["shellId", "delay"]],
+  ["stop_bash", ["shellId"]],
+  ["list_agents", ["include_completed"]],
+  ["read_agent", ["agent_id", "wait", "timeout", "since_turn"]]
+]);
 const SHELL_POLICY_FAIL_CLOSED_REASON =
   "Shell policy evaluation failed; denied as a precaution.";
 const CUSTOM_TOOL_DENY_REASON =
@@ -126,6 +133,32 @@ export class ToolPolicyGuard {
       : "";
   }
 
+  #extractHookPrimitiveArgs(
+    toolArgs: unknown,
+    keys: readonly string[]
+  ): Record<string, string | undefined> {
+    if (!toolArgs || typeof toolArgs !== "object") {
+      return {};
+    }
+
+    const record = toolArgs as Record<string, unknown>;
+    const args: Record<string, string | undefined> = {};
+
+    for (const key of keys) {
+      const value = record[key];
+
+      if (
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+      ) {
+        args[key] = String(value);
+      }
+    }
+
+    return args;
+  }
+
   #evaluateShellPolicyDecision(
     command: string,
     profile: ToolPolicyBoundaryContext,
@@ -198,6 +231,25 @@ export class ToolPolicyGuard {
 
       return decision;
     }
+  }
+
+  #handlePreToolUsePassThroughAudit(options: {
+    input: PreToolUseHookInput;
+    auditWriter?: ToolAuditSink;
+  }): PreToolUseDecisionResult {
+    const auditArgKeys = AUDITED_PASS_THROUGH_TOOL_ARGS.get(options.input.toolName);
+
+    if (!auditArgKeys) {
+      return PRE_TOOL_USE_NOT_HANDLED;
+    }
+
+    options.auditWriter?.append(this.#buildAuditEntry({
+      tool: options.input.toolName,
+      decision: "allow",
+      args: this.#extractHookPrimitiveArgs(options.input.toolArgs, auditArgKeys)
+    }));
+
+    return;
   }
 
   // --- Per-kind permission evaluators ---
@@ -340,7 +392,8 @@ export class ToolPolicyGuard {
   //   - onPermissionRequest (PermissionHandler): intercepts SDK permission request
   //     events, covering read / write / shell / url / mcp / custom-tool etc.
   //   - onPreToolUse (PreToolUseHook): first gate before tool execution,
-  //     used for inline tool-args validation of web_fetch and bash tools.
+  //     used for inline tool-args validation of web_fetch and bash tools, and
+  //     pass-through audit records for session/agent status tools.
   //
   // Both paths fire independently and are not mutually exclusive. A single AI
   // tool call may therefore produce two audit log entries — one from each path.
@@ -437,6 +490,15 @@ export class ToolPolicyGuard {
         if (result !== PRE_TOOL_USE_NOT_HANDLED) {
           return result;
         }
+      }
+
+      const passThroughAuditResult = this.#handlePreToolUsePassThroughAudit({
+        input,
+        auditWriter
+      });
+
+      if (passThroughAuditResult !== PRE_TOOL_USE_NOT_HANDLED) {
+        return passThroughAuditResult;
       }
 
       return;

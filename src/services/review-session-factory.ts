@@ -27,10 +27,16 @@ export interface ReviewSessionProfile {
  */
 export const REVIEW_AVAILABLE_TOOLS = [
   "bash",
+  "list_bash",
+  "read_bash",
+  "stop_bash",
   "web_fetch",
   "view",
   "grep",
-  "glob"
+  "rg",
+  "glob",
+  "list_agents",
+  "read_agent"
 ] as const;
 
 export interface ReviewSessionFactoryOptions {
