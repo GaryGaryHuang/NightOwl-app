@@ -85,7 +85,6 @@ describe("VerifierReportBuilder", () => {
   it("VR-3.2 summarize counts all taxonomy codes correctly", () => {
     const builder = new VerifierReportBuilder();
     const codes: VerifierTaxonomyCode[] = [
-      "PARSE",
       "SCHEMA",
       "ANCHOR",
       "EVIDENCE",
@@ -93,11 +92,6 @@ describe("VerifierReportBuilder", () => {
       "OUT_OF_SCOPE",
       "DUPLICATE",
       "CONTRADICTION",
-      "STALE_CONTEXT",
-      "CONFIDENCE_MISUSE",
-      "GENERIC_HYPOTHESIS",
-      "UNVERIFIABLE_INDIRECT",
-      "ACCEPTANCE",
       "OK"
     ];
     for (const code of codes) {

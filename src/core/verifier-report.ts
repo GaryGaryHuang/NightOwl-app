@@ -8,7 +8,6 @@
 import type { DispositionReason } from "./file-review-context.ts";
 
 export const TAXONOMY_CODES = [
-  "PARSE",
   "SCHEMA",
   "ANCHOR",
   "EVIDENCE",
@@ -16,11 +15,6 @@ export const TAXONOMY_CODES = [
   "OUT_OF_SCOPE",
   "DUPLICATE",
   "CONTRADICTION",
-  "STALE_CONTEXT",
-  "CONFIDENCE_MISUSE",
-  "GENERIC_HYPOTHESIS",
-  "UNVERIFIABLE_INDIRECT",
-  "ACCEPTANCE",
   "OK"
 ] as const;
 

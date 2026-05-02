@@ -119,15 +119,13 @@ function runCase(c: CorpusCase): CaseResult {
           .filter((id) => id !== "unknown");
       }
     } catch {
-      // Can't parse input — that's expected for PARSE test cases
+      // Can't parse input; no reportable findingId can be extracted.
     }
 
     // Determine taxonomy from error message
     let taxonomy: string = "SCHEMA";
     if (message.includes("[ANCHOR]")) {
       taxonomy = "ANCHOR";
-    } else if (message.includes("not valid JSON")) {
-      taxonomy = "PARSE";
     }
 
     for (const id of rejectedFindingIds) {
