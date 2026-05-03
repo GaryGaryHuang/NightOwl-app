@@ -86,6 +86,7 @@ export class Step1OverviewStep implements StepDefinition {
         userMessage: buildStep1UserMessage(context, this.#runContext)
       },
       reviewProfile: {
+        knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },

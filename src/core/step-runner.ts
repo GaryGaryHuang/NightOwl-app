@@ -1,6 +1,5 @@
 import type { FileReviewContext } from "./file-review-context.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
-import { resolveReviewKnowledgeMode } from "./review-step-capability-manifest.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
 import { retryOnce } from "./session-retry.ts";
@@ -66,7 +65,7 @@ export interface StepExecutionPlan {
     userMessage: string;
   };
   reviewProfile: {
-    knowledgeMode?: ReviewKnowledgeMode;
+    knowledgeMode: ReviewKnowledgeMode;
     model: string;
     timeoutMs?: number;
   };
@@ -139,10 +138,7 @@ export class StepRunner {
         const plan = input.step.prepare(input.context);
         const sessionProfile = {
           stepId: plan.stepId,
-          knowledgeMode: resolveReviewKnowledgeMode(
-            plan.stepId,
-            plan.reviewProfile.knowledgeMode
-          ),
+          knowledgeMode: plan.reviewProfile.knowledgeMode,
           model: plan.reviewProfile.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,

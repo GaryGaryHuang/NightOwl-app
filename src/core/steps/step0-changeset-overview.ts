@@ -1,10 +1,21 @@
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import type { ReviewKnowledgeMode } from "../review-knowledge-mode.ts";
 import {
   formatReviewChangesetEntry,
   type ReviewChangesetEntry
 } from "../../providers/review-source-provider.ts";
 
 export const STEP0_TIMEOUT_MS = 300_000;
+
+export const STEP0_REVIEW_PROFILE = {
+  knowledgeMode: "built-in-context7",
+  model: "gpt-5.4-mini",
+  timeoutMs: STEP0_TIMEOUT_MS
+} as const satisfies {
+  knowledgeMode: ReviewKnowledgeMode;
+  model: string;
+  timeoutMs: number;
+};
 
 export const STEP0_SYSTEM_MESSAGE = [
   COMMON_SYSTEM_MESSAGE,

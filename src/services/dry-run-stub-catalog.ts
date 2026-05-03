@@ -1,5 +1,3 @@
-import type { ReviewStepCapabilityStepId } from "../core/review-step-capability-manifest.ts";
-
 export const GENERIC_DRY_RUN_STUB =
   "[dry-run] No built-in stub template for this step.";
 
@@ -113,14 +111,9 @@ const STUB_SUMMARY = [
   "- Overall risk level: None"
 ].join("\n");
 
-type BuiltInDryRunStepId = Exclude<
-  ReviewStepCapabilityStepId,
-  "changeset-overview"
->;
-
 export type DryRunResponseProvider = (prompt: string) => string;
 
-const DRY_RUN_STUB_RESPONSES: Record<BuiltInDryRunStepId, string> = {
+const DRY_RUN_STUB_RESPONSES = {
   "step1-overview": STUB_OVERVIEW,
   "step2-dependencies-boundaries": STUB_DEPENDENCIES_BOUNDARIES,
   "step3-knowledge-source-of-truth": STUB_KNOWLEDGE_SOURCE_OF_TRUTH,
@@ -128,7 +121,13 @@ const DRY_RUN_STUB_RESPONSES: Record<BuiltInDryRunStepId, string> = {
   "step5-validation-interrogation": STUB_VALIDATION_INTERROGATION,
   "step6-cognitive-simulation": STUB_COGNITIVE_SIMULATION,
   "step7-summary": STUB_SUMMARY
-};
+} as const;
+
+type BuiltInDryRunStepId = keyof typeof DRY_RUN_STUB_RESPONSES;
+
+export const BUILT_IN_DRY_RUN_STEP_IDS = Object.keys(
+  DRY_RUN_STUB_RESPONSES
+) as BuiltInDryRunStepId[];
 
 export function getDryRunStubResponse(
   stepId: BuiltInDryRunStepId

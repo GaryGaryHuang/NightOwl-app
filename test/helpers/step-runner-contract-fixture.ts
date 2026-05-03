@@ -104,6 +104,7 @@ export function createSectionTestStep(input: {
           userMessage: input.userMessage ?? "user prompt"
         },
         reviewProfile: input.reviewProfile ?? {
+          knowledgeMode: "disabled",
           model: "gpt-5-mini",
           timeoutMs: 300_000
         },
@@ -164,6 +165,7 @@ export function createStructuredTestStep(input: {
           userMessage: input.userMessage ?? "user prompt"
         },
         reviewProfile: input.reviewProfile ?? {
+          knowledgeMode: "disabled",
           model: "gpt-5-mini",
           timeoutMs: 300_000
         },

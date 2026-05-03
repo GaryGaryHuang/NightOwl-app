@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { REVIEW_STEP_CAPABILITIES } from "../../src/core/review-step-capability-manifest.ts";
 import {
   DryRunReviewSessionFactory
 } from "../../src/services/dry-run-review-session-factory.ts";
@@ -9,6 +8,7 @@ import {
   DryRunJudgeSessionFactory
 } from "../../src/services/dry-run-judge-session-factory.ts";
 import {
+  BUILT_IN_DRY_RUN_STEP_IDS,
   buildDryRunChangesetOverviewResponse,
   getDryRunStubResponse
 } from "../../src/services/dry-run-stub-catalog.ts";
@@ -72,11 +72,7 @@ describe("DryRunJudgeSessionFactory dry-run behavior", () => {
 
 describe("Dry-run stub catalog completeness", () => {
   test("covers all built-in step IDs", () => {
-    const builtInStepIds = REVIEW_STEP_CAPABILITIES
-      .map((capability) => capability.stepId)
-      .filter((stepId) => stepId !== "changeset-overview");
-
-    for (const stepId of builtInStepIds) {
+    for (const stepId of BUILT_IN_DRY_RUN_STEP_IDS) {
       const stub = getDryRunStubResponse(stepId);
       assert.ok(stub !== undefined, `Missing stub catalog entry for stepId "${stepId}"`);
       assert.ok(stub.length > 0, `Empty stub response for stepId "${stepId}"`);

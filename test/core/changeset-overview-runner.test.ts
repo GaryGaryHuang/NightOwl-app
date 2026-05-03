@@ -74,7 +74,6 @@ test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMa
   });
 
   const runContext = await runner.run({
-    model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
@@ -124,7 +123,6 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   });
 
   const runContext = await runner.run({
-    model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
@@ -158,7 +156,6 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   });
 
   const runContext = await runner.run({
-    model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
@@ -188,7 +185,6 @@ test("ChangesetOverviewRunner aborts after two consecutive validation failures",
   await assert.rejects(
     () =>
       runner.run({
-        model: "gpt-5.4-mini",
         outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
         changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
@@ -218,7 +214,6 @@ test("ChangesetOverviewRunner fails after two empty responses", async () => {
   await assert.rejects(
     () =>
       runner.run({
-        model: "gpt-5.4-mini",
         outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
         changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
@@ -243,7 +238,6 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
   });
 
   const runContext = await runner.run({
-    model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({
@@ -274,7 +268,6 @@ test("ChangesetOverviewRunner accepts copied paths as added ChangeMap entries", 
   });
 
   const runContext = await runner.run({
-    model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({
@@ -308,7 +301,6 @@ test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
   });
 
   const runContext = await runner.run({
-    model: "gpt-5.4-mini",
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: [],
@@ -350,7 +342,6 @@ test("ChangesetOverviewRunner aborts an in-flight Step 0 turn without consuming 
   await assert.rejects(
     () =>
       runner.run({
-        model: "gpt-5.4-mini",
         outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
         signal: controller.signal,

@@ -1,18 +1,16 @@
 import { extractChangedPathsFromChangesetEntries } from "./change-map.ts";
-import { getReviewStepCapability } from "./review-step-capability-manifest.ts";
 import { createRunContext, type RunContext } from "./run-context.ts";
 import { retryOnce } from "./session-retry.ts";
 import type { ReviewChangesetEntry } from "../providers/review-source-provider.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import { Step0OutputValidator } from "./step0-output-validator.ts";
 import {
+  STEP0_REVIEW_PROFILE,
   STEP0_SYSTEM_MESSAGE,
-  STEP0_TIMEOUT_MS,
   buildStep0Prompt
 } from "./steps/step0-changeset-overview.ts";
 
 export interface ChangesetOverviewRunnerInput {
-  model: string;
   changesetEntries: ReviewChangesetEntry[];
   outputBaseDir: string;
   repoRoot: string;
@@ -43,14 +41,13 @@ export class ChangesetOverviewRunner {
     const expectedChangedPaths = extractChangedPathsFromChangesetEntries(
       input.changesetEntries
     );
-    const capability = getReviewStepCapability("changeset-overview");
 
     return retryOnce({
       execute: async () => {
         const session = await this.#reviewSessionFactory.createSession({
           stepId: "changeset-overview",
-          knowledgeMode: capability.knowledgeMode,
-          model: input.model,
+          knowledgeMode: STEP0_REVIEW_PROFILE.knowledgeMode,
+          model: STEP0_REVIEW_PROFILE.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,
           systemMessage: STEP0_SYSTEM_MESSAGE,
@@ -59,7 +56,7 @@ export class ChangesetOverviewRunner {
         const response = (
           await session.sendAndWait(
             buildStep0Prompt(input),
-            STEP0_TIMEOUT_MS,
+            STEP0_REVIEW_PROFILE.timeoutMs,
             input.signal
           )
         )?.trim();

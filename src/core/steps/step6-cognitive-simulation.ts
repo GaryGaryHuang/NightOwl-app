@@ -123,6 +123,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         )
       },
       reviewProfile: {
+        knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },

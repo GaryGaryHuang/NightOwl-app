@@ -149,6 +149,7 @@ test("Step1OverviewStep prompt carries changeset context, file diff, and profile
   const plan = new Step1OverviewStep({ runContext }).prepare(context);
 
   assert.equal(plan.stepId, "step1-overview");
+  assert.equal(plan.reviewProfile.knowledgeMode, "disabled");
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, 300_000);
   assert.match(plan.prompt.systemMessage, /## Current Step: Overview/u);
@@ -167,6 +168,7 @@ test("Step2DependenciesBoundariesStep prompt carries Step 1 overview and boundar
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage);
 
   assert.equal(plan.stepId, "step2-dependencies-boundaries");
+  assert.equal(plan.reviewProfile.knowledgeMode, "disabled");
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, 300_000);
   assert.match(
@@ -188,6 +190,7 @@ test("Step3KnowledgeSourceOfTruthStep prompt carries prior review state and know
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage);
 
   assert.equal(plan.stepId, "step3-knowledge-source-of-truth");
+  assert.equal(plan.reviewProfile.knowledgeMode, "built-in-context7");
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, 300_000);
   assert.match(
@@ -224,6 +227,18 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
 
   const snapshots = stepPlans.map((plan) =>
     parseReviewStateFromPrompt(plan.prompt.userMessage)
+  );
+
+  assert.deepEqual(
+    stepPlans.map((plan) => plan.reviewProfile.knowledgeMode),
+    [
+      "disabled",
+      "built-in-context7",
+      "disabled",
+      "disabled",
+      "disabled",
+      "disabled"
+    ]
   );
 
   for (const snapshot of snapshots) {

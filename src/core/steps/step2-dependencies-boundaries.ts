@@ -89,6 +89,7 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
         userMessage: buildStep2UserMessage(context, this.#promptSerializer.serialize({ context, include: ["sections"] }))
       },
       reviewProfile: {
+        knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },

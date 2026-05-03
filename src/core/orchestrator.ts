@@ -331,7 +331,6 @@ export class ReviewOrchestrator {
 
     try {
       return await this.#changesetOverviewRunner.run({
-        model: "gpt-5.4-mini",
         changesetEntries,
         outputBaseDir: input.repoRoot,
         repoRoot: input.repoRoot,

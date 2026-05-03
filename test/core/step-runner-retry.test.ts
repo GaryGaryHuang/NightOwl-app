@@ -139,7 +139,11 @@ test("StepRunner records structured validation reports without committing partia
         return {
           stepId: "step5-validation-interrogation",
           prompt: { systemMessage: "system prompt", userMessage: "user prompt" },
-          reviewProfile: { model: "gpt-5.4-mini", timeoutMs: 300_000 },
+          reviewProfile: {
+            knowledgeMode: "disabled",
+            model: "gpt-5.4-mini",
+            timeoutMs: 300_000
+          },
           resolve: createStructuredResolve({
             stepId: "step5-validation-interrogation",
             filePath: stepContext.filePath,
@@ -423,7 +427,11 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
         return {
           stepId: "step1-overview",
           prompt: { systemMessage: "system prompt", userMessage: "user prompt" },
-          reviewProfile: { model: "gpt-5-mini", timeoutMs: 300_000 },
+          reviewProfile: {
+            knowledgeMode: "disabled",
+            model: "gpt-5-mini",
+            timeoutMs: 300_000
+          },
           async resolve(response: string) {
             return (targetContext: import("../../src/core/file-review-context.ts").FileReviewContext) => {
               targetContext.setSection("overview", response);

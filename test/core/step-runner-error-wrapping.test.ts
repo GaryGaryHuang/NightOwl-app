@@ -62,7 +62,7 @@ test("StepRunner returns an apply-able result without mutating state or writing 
   ]);
 });
 
-test("StepRunner keeps built-in-context7 for Step 3 review sessions", async () => {
+test("StepRunner passes the step-provided knowledgeMode into review sessions", async () => {
   const lifecycle: unknown[] = [];
   const context = createStepRunnerContext();
   const runner = new StepRunner({
@@ -82,7 +82,12 @@ test("StepRunner keeps built-in-context7 for Step 3 review sessions", async () =
   const result = await runner.run({
     step: createSectionTestStep({
       stepId: "step3-knowledge-source-of-truth",
-      sectionKey: "knowledge-source-of-truth"
+      sectionKey: "knowledge-source-of-truth",
+      reviewProfile: {
+        knowledgeMode: "built-in-context7",
+        model: "gpt-5-mini",
+        timeoutMs: 300_000
+      }
     }),
     context,
     outputBaseDir: "/workspace/output",

@@ -93,6 +93,7 @@ export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
         )
       },
       reviewProfile: {
+        knowledgeMode: "built-in-context7",
         model: "gpt-5.4-mini",
         timeoutMs: 300_000
       },
