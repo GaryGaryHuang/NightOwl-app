@@ -119,7 +119,7 @@ test("StepRunner does not consume retry budget or run deterministic validation w
         return { payload, report: [] };
       },
       validateWithDispositions() {
-        return { schemaVersion: 2, findings: [], dispositions: [] };
+        return { schemaVersion: 2, findingUpdates: [], dispositions: [] };
       },
       validateDispositionCompleteness() {}
     }

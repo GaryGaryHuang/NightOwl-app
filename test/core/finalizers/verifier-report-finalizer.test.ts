@@ -45,10 +45,10 @@ test("VerifierReportFinalizer renders the exact JSONL contract for mixed-result 
           filePath: "src/b.ts",
           stepId: "step5-validation-interrogation",
           findingId: "F2",
-          taxonomy: "EVIDENCE",
+          taxonomy: "SCHEMA",
           outcome: "rejected",
-          gate: "acceptance",
-          reason: "uncertaintyStatus is 'tentative'"
+          gate: "schema",
+          reason: "unknown field(s) in finding: uncertaintyStatus"
         })
       ])
     ]
@@ -64,10 +64,10 @@ test("VerifierReportFinalizer renders the exact JSONL contract for mixed-result 
     filePath: "src/b.ts",
     stepId: "step5-validation-interrogation",
     findingId: "F2",
-    taxonomy: "EVIDENCE",
+    taxonomy: "SCHEMA",
     outcome: "rejected",
-    gate: "acceptance",
-    reason: "uncertaintyStatus is 'tentative'"
+    gate: "schema",
+    reason: "unknown field(s) in finding: uncertaintyStatus"
   });
 });
 

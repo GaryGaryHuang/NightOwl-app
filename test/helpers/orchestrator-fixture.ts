@@ -1,41 +1,8 @@
 import type {
-  EvidenceRef,
   FileReviewContext,
-  Finding,
-  Reachability
+  Finding
 } from "../../src/core/file-review-context.ts";
 import type { StepResult } from "../../src/core/step-runner.ts";
-
-export function canonicalSupportingEvidence(): EvidenceRef[] {
-  return [
-    { evidenceRef: "E1", supports: "expectedBehavior" },
-    { evidenceRef: "E2", supports: "actualBehavior" },
-    { evidenceRef: "E3", supports: "reachability" },
-    { evidenceRef: "E4", supports: "impact" }
-  ];
-}
-
-export function canonicalReachability(credible = true): Reachability {
-  return {
-    credible,
-    entryPoint: "handleRequest",
-    guardsChecked: ["public route invokes handler", "no prior guard prevents the path"]
-  };
-}
-
-export function acceptedVerifierVerdict(): NonNullable<Finding["verifierVerdict"]> {
-  return {
-    status: "accepted",
-    checks: {
-      anchor: "pass",
-      evidence: "pass",
-      reachability: "pass",
-      impact: "pass",
-      scope: "pass",
-      duplicate: "pass"
-    }
-  };
-}
 
 export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -160,10 +127,7 @@ export function buildStandardStep5JsonResponse(): string {
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        findingId: "F1",
-        supportingEvidence: canonicalSupportingEvidence(),
-        reachability: canonicalReachability(),
-        uncertaintyStatus: "supported"
+        findingId: "F1"
       }
     ]
   });
@@ -171,7 +135,8 @@ export function buildStandardStep5JsonResponse(): string {
 
 export function buildStandardStep6JsonResponse(): string {
   return JSON.stringify({
-    findings: [
+    schemaVersion: 2,
+    findingUpdates: [
       {
         type: "must",
         title: "問題標題",
@@ -181,17 +146,13 @@ export function buildStandardStep6JsonResponse(): string {
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        findingId: "F1",
-        supportingEvidence: canonicalSupportingEvidence(),
-        reachability: canonicalReachability(),
-        uncertaintyStatus: "supported",
-        verifierVerdict: acceptedVerifierVerdict()
+        findingId: "F1"
       }
     ],
     dispositions: [
       {
         findingId: "F1",
-        status: "retained",
+        status: "modified",
         reason: "SUPPORTED",
         explanation: "simulation confirms the finding"
       }
@@ -227,10 +188,7 @@ export function buildSimulationStep5JsonResponse(): string {
         deviation: "預期與實際有落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 guard",
-        findingId: "F1",
-        supportingEvidence: canonicalSupportingEvidence(),
-        reachability: canonicalReachability(),
-        uncertaintyStatus: "supported"
+        findingId: "F1"
       }
     ]
   });
@@ -238,7 +196,8 @@ export function buildSimulationStep5JsonResponse(): string {
 
 export function buildSimulationStep6JsonResponse(): string {
   return JSON.stringify({
-    findings: [
+    schemaVersion: 2,
+    findingUpdates: [
       {
         type: "must",
         title: "最終 findings",
@@ -248,17 +207,13 @@ export function buildSimulationStep6JsonResponse(): string {
         deviation: "經 simulation 後確認最終落差",
         impact: "會造成 correctness 問題",
         suggestion: "補上 final guard",
-        findingId: "F1",
-        supportingEvidence: canonicalSupportingEvidence(),
-        reachability: canonicalReachability(),
-        uncertaintyStatus: "supported",
-        verifierVerdict: acceptedVerifierVerdict()
+        findingId: "F1"
       }
     ],
     dispositions: [
       {
         findingId: "F1",
-        status: "retained",
+        status: "modified",
         reason: "SUPPORTED",
         explanation: "simulation confirms the finding"
       }
@@ -325,10 +280,7 @@ export function createFinding(type: "must" | "nice", title: string): Finding {
     deviation: "預期與實際有落差",
     impact: "會造成 correctness 問題",
     suggestion: "補上 guard",
-    findingId: "F1",
-    supportingEvidence: canonicalSupportingEvidence(),
-    reachability: canonicalReachability(),
-    uncertaintyStatus: "supported" as const
+    findingId: "F1"
   };
 }
 

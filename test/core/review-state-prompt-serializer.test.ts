@@ -28,20 +28,7 @@ function createFinding(findingId: string, type: "must" | "nice" = "must"): Findi
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    findingId,
-    supportingEvidence: [
-      { evidenceRef: "E1", supports: "expectedBehavior" },
-      { evidenceRef: "E2", supports: "actualBehavior" },
-      { evidenceRef: "E3", supports: "reachability" },
-      { evidenceRef: "E4", supports: "impact" }
-    ],
-    reachability: {
-      credible: true,
-      entryPoint: "main entry",
-      guardsChecked: ["guard"],
-      description: "reachable"
-    },
-    uncertaintyStatus: "supported" as const
+    findingId
   };
 }
 
@@ -189,10 +176,6 @@ test("finding JSON preserves all v2 typed fields", () => {
   const f = snapshot.verifiedFindings[0];
 
   assert.equal(f.findingId, "F1");
-  assert.equal(f.uncertaintyStatus, "supported");
-  assert.equal(f.reachability.credible, true);
-  assert.equal(f.supportingEvidence[0].evidenceRef, "E1");
-  assert.equal(f.supportingEvidence[0].supports, "expectedBehavior");
   assert.equal(f.sourceHypothesisId, "W1");
   assert.equal(f.dependencyPathException?.reason, "transitive dependency");
   assert.equal(f.dependencyPathException?.dependencyAnchor.symbol, "helper");

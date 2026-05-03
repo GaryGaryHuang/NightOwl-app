@@ -17,28 +17,63 @@ const DEFAULT_CONTEXT = {
   headRef: "feature"
 } as const;
 
-test("createStep6DispositionResolve rejects retained candidates removed by acceptance filtering", async () => {
+test("createStep6DispositionResolve rejects modified candidates without finding updates", async () => {
   const resolve = createStep6DispositionResolve({
     filePath: DEFAULT_CONTEXT.filePath,
     diffContent: DEFAULT_CONTEXT.diffContent,
-    candidateFindingIds: ["F1"]
+    candidateFindings: [finding({ findingId: "F1" })]
   });
 
   await assert.rejects(
     () =>
       resolve(
         verifiedPayload(
-          [
-            verifiedFinding({
-              findingId: "F1",
-              uncertaintyStatus: "tentative"
-            })
-          ],
+          [],
+          [disposition({ findingId: "F1", status: "modified" })]
+        ),
+        createResolveServices()
+      ),
+    /modified.*F1.*must appear in findingUpdates/u
+  );
+});
+
+test("createStep6DispositionResolve rejects retained candidates with finding updates", async () => {
+  const resolve = createStep6DispositionResolve({
+    filePath: DEFAULT_CONTEXT.filePath,
+    diffContent: DEFAULT_CONTEXT.diffContent,
+    candidateFindings: [finding({ findingId: "F1" })]
+  });
+
+  await assert.rejects(
+    () =>
+      resolve(
+        verifiedPayload(
+          [verifiedFinding({ findingId: "F1", title: "mutated finding" })],
           [disposition({ findingId: "F1", status: "retained" })]
         ),
         createResolveServices()
       ),
-    /must be accepted.*uncertaintyStatus/u
+    /retained.*F1.*must not appear in findingUpdates/u
+  );
+});
+
+test("createStep6DispositionResolve rejects retired candidates with finding updates", async () => {
+  const resolve = createStep6DispositionResolve({
+    filePath: DEFAULT_CONTEXT.filePath,
+    diffContent: DEFAULT_CONTEXT.diffContent,
+    candidateFindings: [finding({ findingId: "F1" })]
+  });
+
+  await assert.rejects(
+    () =>
+      resolve(
+        verifiedPayload(
+          [verifiedFinding({ findingId: "F1" })],
+          [disposition({ findingId: "F1", status: "retired", reason: "REACHABILITY" })]
+        ),
+        createResolveServices()
+      ),
+    /retired.*F1.*must not appear in findingUpdates/u
   );
 });
 
@@ -56,7 +91,7 @@ test("createStructuredResolve writes accepted findings and verifier report entri
         finding({ findingId: "F1" }),
         finding({
           findingId: "F2",
-          uncertaintyStatus: "tentative"
+          title: "second finding"
         })
       ]
     }),
@@ -67,7 +102,7 @@ test("createStructuredResolve writes accepted findings and verifier report entri
 
   assert.deepEqual(
     context.getFindings()?.map((f) => f.findingId),
-    ["F1"]
+    ["F1", "F2"]
   );
   assert.deepEqual(
     context.getVerifierReportEntries()?.map((entry) => ({
@@ -102,8 +137,8 @@ test("createStructuredResolve writes accepted findings and verifier report entri
       {
         stepId: "step5-validation-interrogation",
         findingId: "F2",
-        taxonomy: "EVIDENCE",
-        outcome: "rejected",
+        taxonomy: "OK",
+        outcome: "accepted",
         gate: "acceptance"
       }
     ]
@@ -115,13 +150,13 @@ test("createStep6DispositionResolve writes accepted findings and matching dispos
   const resolve = createStep6DispositionResolve({
     filePath: DEFAULT_CONTEXT.filePath,
     diffContent: DEFAULT_CONTEXT.diffContent,
-    candidateFindingIds: ["F1"]
+    candidateFindings: [finding({ findingId: "F1", title: "original finding" })]
   });
 
   const applyTo = await resolve(
     verifiedPayload(
-      [verifiedFinding({ findingId: "F1" })],
-      [disposition({ findingId: "F1", status: "retained" })]
+      [verifiedFinding({ findingId: "F1", title: "updated finding" })],
+      [disposition({ findingId: "F1", status: "modified" })]
     ),
     createResolveServices()
   );
@@ -133,8 +168,12 @@ test("createStep6DispositionResolve writes accepted findings and matching dispos
     ["F1"]
   );
   assert.deepEqual(
+    context.getFindings()?.map((f) => f.title),
+    ["updated finding"]
+  );
+  assert.deepEqual(
     context.getDispositions()?.map((d) => ({ findingId: d.findingId, status: d.status })),
-    [{ findingId: "F1", status: "retained" }]
+    [{ findingId: "F1", status: "modified" }]
   );
   assert.deepEqual(
     context.getVerifierReportEntries()?.map((entry) => ({
@@ -158,6 +197,68 @@ test("createStep6DispositionResolve writes accepted findings and matching dispos
         taxonomy: "OK",
         outcome: "accepted",
         gate: "acceptance"
+      },
+      {
+        stepId: "step6-cognitive-simulation",
+        findingId: "F1",
+        taxonomy: "OK",
+        outcome: "accepted",
+        gate: "disposition"
+      }
+    ]
+  );
+});
+
+test("createStep6DispositionResolve retains unchanged candidate findings without updates", async () => {
+  const context = createContext();
+  const candidate = finding({ findingId: "F1", title: "original finding" });
+  const resolve = createStep6DispositionResolve({
+    filePath: DEFAULT_CONTEXT.filePath,
+    diffContent: DEFAULT_CONTEXT.diffContent,
+    candidateFindings: [candidate]
+  });
+
+  const applyTo = await resolve(
+    verifiedPayload(
+      [],
+      [disposition({ findingId: "F1", status: "retained" })]
+    ),
+    createResolveServices()
+  );
+
+  applyTo(context);
+
+  assert.deepEqual(
+    context.getFindings()?.map((f) => ({ findingId: f.findingId, title: f.title })),
+    [{ findingId: "F1", title: "original finding" }]
+  );
+  assert.deepEqual(
+    context.getDispositions()?.map((d) => ({ findingId: d.findingId, status: d.status })),
+    [{ findingId: "F1", status: "retained" }]
+  );
+  assert.deepEqual(
+    context.getVerifierReportEntries()?.map((entry) => ({
+      stepId: entry.stepId,
+      findingId: entry.findingId,
+      taxonomy: entry.taxonomy,
+      outcome: entry.outcome,
+      gate: entry.gate,
+      reason: entry.reason,
+      dispositionStatus: entry.dispositionStatus,
+      dispositionReason: entry.dispositionReason,
+      dispositionExplanation: entry.dispositionExplanation
+    })),
+    [
+      {
+        stepId: "step6-cognitive-simulation",
+        findingId: "F1",
+        taxonomy: "OK",
+        outcome: "accepted",
+        gate: "disposition",
+        reason: "candidate retained: SUPPORTED - simulation confirms",
+        dispositionStatus: "retained",
+        dispositionReason: "SUPPORTED",
+        dispositionExplanation: "simulation confirms"
       }
     ]
   );
@@ -168,7 +269,7 @@ test("createStep6DispositionResolve allows new accepted findings without disposi
   const resolve = createStep6DispositionResolve({
     filePath: DEFAULT_CONTEXT.filePath,
     diffContent: DEFAULT_CONTEXT.diffContent,
-    candidateFindingIds: ["F1"]
+    candidateFindings: [finding({ findingId: "F1" })]
   });
 
   const applyTo = await resolve(
@@ -226,13 +327,13 @@ test("createStep6DispositionResolve appends Step 6 verifier entries after existi
   const resolve = createStep6DispositionResolve({
     filePath: DEFAULT_CONTEXT.filePath,
     diffContent: DEFAULT_CONTEXT.diffContent,
-    candidateFindingIds: ["F1"]
+    candidateFindings: [finding({ findingId: "F1" })]
   });
 
   const applyTo = await resolve(
     verifiedPayload(
       [verifiedFinding({ findingId: "F1" })],
-      [disposition({ findingId: "F1", status: "retained" })]
+      [disposition({ findingId: "F1", status: "modified" })]
     ),
     createResolveServices()
   );
@@ -243,6 +344,7 @@ test("createStep6DispositionResolve appends Step 6 verifier entries after existi
     context.getVerifierReportEntries()?.map((entry) => entry.stepId),
     [
       "step5-validation-interrogation",
+      "step6-cognitive-simulation",
       "step6-cognitive-simulation",
       "step6-cognitive-simulation"
     ]
@@ -260,7 +362,7 @@ function createResolveServices(): StepResolveServices {
 }
 
 function verifiedPayload(findings: Finding[], dispositions: FindingDisposition[]): string {
-  return JSON.stringify({ schemaVersion: 2, findings, dispositions });
+  return JSON.stringify({ schemaVersion: 2, findingUpdates: findings, dispositions });
 }
 
 function finding(overrides: Partial<Finding> = {}): Finding {
@@ -274,37 +376,12 @@ function finding(overrides: Partial<Finding> = {}): Finding {
     impact: "impact",
     suggestion: "suggestion",
     findingId: "F1",
-    supportingEvidence: [
-      { evidenceRef: "E1", supports: "expectedBehavior" },
-      { evidenceRef: "E2", supports: "actualBehavior" },
-      { evidenceRef: "E3", supports: "reachability" },
-      { evidenceRef: "E4", supports: "impact" }
-    ],
-    reachability: {
-      credible: true,
-      entryPoint: "handleRequest",
-      guardsChecked: ["guard checked"]
-    },
-    uncertaintyStatus: "supported",
     ...overrides
   };
 }
 
 function verifiedFinding(overrides: Partial<Finding> = {}): Finding {
-  return finding({
-    verifierVerdict: {
-      status: "accepted",
-      checks: {
-        anchor: "pass",
-        evidence: "pass",
-        reachability: "pass",
-        impact: "pass",
-        scope: "pass",
-        duplicate: "pass"
-      }
-    },
-    ...overrides
-  });
+  return finding(overrides);
 }
 
 function disposition(

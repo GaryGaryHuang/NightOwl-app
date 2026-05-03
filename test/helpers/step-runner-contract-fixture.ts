@@ -65,7 +65,7 @@ export function makePassingJudgeServices(): StepResolveServices {
         return { payload, report: emptyReport };
       },
       validateWithDispositions(_input) {
-        return { schemaVersion: 2, findings: [], dispositions: [] };
+        return { schemaVersion: 2, findingUpdates: [], dispositions: [] };
       },
       validateDispositionCompleteness(_input) {}
     }

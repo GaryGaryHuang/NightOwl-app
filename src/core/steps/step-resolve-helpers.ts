@@ -1,4 +1,8 @@
-import type { FileReviewContext } from "../file-review-context.ts";
+import type {
+  FileReviewContext,
+  Finding,
+  FindingDisposition
+} from "../file-review-context.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { RiskLevel } from "../risk-level.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
@@ -89,9 +93,10 @@ export function createStep6DispositionResolve(input: {
   stepId?: string;
   filePath: string;
   diffContent?: string;
-  candidateFindingIds: readonly string[];
+  candidateFindings: readonly Finding[];
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
+    const candidateFindingIds = input.candidateFindings.map((f) => f.findingId);
     const validationInput = {
       responseText: response,
       filePath: input.filePath,
@@ -107,12 +112,17 @@ export function createStep6DispositionResolve(input: {
 
     const accepted = services.validator.filterByAcceptanceWithReport({
       schemaVersion: verified.schemaVersion,
-      findings: verified.findings
+      findings: verified.findingUpdates
     });
-    const acceptedFindingIds = accepted.payload.findings.map((f) => f.findingId);
+    const finalFindings = mergeStep6Findings({
+      candidateFindings: input.candidateFindings,
+      findingUpdates: accepted.payload.findings,
+      dispositions: verified.dispositions
+    });
+    const acceptedFindingIds = finalFindings.map((f) => f.findingId);
     const schemaReport =
       verifiedWithReport?.report ??
-      verified.findings.map<VerifierReportEntry>((finding) => ({
+      verified.findingUpdates.map<VerifierReportEntry>((finding) => ({
         findingId: finding.findingId,
         taxonomy: "OK",
         outcome: "accepted",
@@ -122,19 +132,20 @@ export function createStep6DispositionResolve(input: {
 
     services.validator.validateDispositionCompleteness({
       dispositions: verified.dispositions,
-      candidateFindingIds: input.candidateFindingIds,
-      acceptedFindingIds
+      candidateFindingIds,
+      acceptedFindingIds,
+      findingUpdateIds: verified.findingUpdates.map((f) => f.findingId)
     });
 
-    const candidateIdSet = new Set(input.candidateFindingIds);
+    const candidateIdSet = new Set(candidateFindingIds);
     const dispositionReport = verified.dispositions
-      .filter((d) => d.status === "retired" && candidateIdSet.has(d.findingId))
+      .filter((d) => candidateIdSet.has(d.findingId))
       .map<VerifierReportEntry>((d) => ({
         findingId: d.findingId,
         taxonomy: dispositionReasonToTaxonomy(d.reason),
-        outcome: "rejected",
+        outcome: d.status === "retired" ? "rejected" : "accepted",
         gate: "disposition",
-        reason: `candidate retired: ${d.reason} - ${d.explanation}`,
+        reason: `candidate ${d.status}: ${d.reason} - ${d.explanation}`,
         dispositionStatus: d.status,
         dispositionReason: d.reason,
         dispositionExplanation: d.explanation
@@ -147,11 +158,48 @@ export function createStep6DispositionResolve(input: {
     });
 
     return (targetContext: FileReviewContext) => {
-      targetContext.setFindings(accepted.payload.findings);
+      targetContext.setFindings(finalFindings);
       targetContext.setDispositions(verified.dispositions);
       targetContext.appendVerifierReportEntries(reportEntries);
     };
   };
+}
+
+function mergeStep6Findings(input: {
+  candidateFindings: readonly Finding[];
+  findingUpdates: readonly Finding[];
+  dispositions: readonly Pick<FindingDisposition, "findingId" | "status">[];
+}): Finding[] {
+  const candidateById = new Map(input.candidateFindings.map((f) => [f.findingId, f]));
+  const updateById = new Map(input.findingUpdates.map((f) => [f.findingId, f]));
+  const finalFindings: Finding[] = [];
+  const emittedIds = new Set<string>();
+
+  for (const disposition of input.dispositions) {
+    const candidate = candidateById.get(disposition.findingId);
+    if (!candidate || disposition.status === "retired") {
+      continue;
+    }
+
+    const finding =
+      disposition.status === "modified"
+        ? updateById.get(disposition.findingId)
+        : updateById.get(disposition.findingId) ?? candidate;
+
+    if (finding) {
+      finalFindings.push(finding);
+      emittedIds.add(finding.findingId);
+    }
+  }
+
+  for (const update of input.findingUpdates) {
+    if (!candidateById.has(update.findingId) && !emittedIds.has(update.findingId)) {
+      finalFindings.push(update);
+      emittedIds.add(update.findingId);
+    }
+  }
+
+  return finalFindings;
 }
 
 function toVerifierArtifactEntries(input: {

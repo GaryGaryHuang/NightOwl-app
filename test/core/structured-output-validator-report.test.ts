@@ -153,46 +153,6 @@ test("filterByAcceptanceWithReport accepts supported credible finding with OK ta
   assert.equal(result.report[0].gate, "acceptance");
 });
 
-test("filterByAcceptanceWithReport rejects tentative finding with EVIDENCE taxonomy", () => {
-  const validator = new StructuredOutputValidator();
-  const f = finding({ traceability: lineRangeTraceability(21, 22), uncertaintyStatus: "tentative" });
-  const validated = validator.validate({
-    responseText: payload([f]),
-    diffContent: DEFAULT_DIFF,
-    filePath: "src/app.ts"
-  });
-
-  const result = validator.filterByAcceptanceWithReport(validated);
-  assert.equal(result.payload.findings.length, 0);
-  assert.equal(result.report.length, 1);
-  assert.equal(result.report[0].taxonomy, "EVIDENCE");
-  assert.equal(result.report[0].outcome, "rejected");
-  assert.equal(result.report[0].gate, "acceptance");
-});
-
-test("filterByAcceptanceWithReport rejects non-credible reachability with REACHABILITY taxonomy", () => {
-  const validator = new StructuredOutputValidator();
-  const f = finding({
-    traceability: lineRangeTraceability(21, 22),
-    reachability: {
-      credible: false,
-      entryPoint: "handleRequest",
-      guardsChecked: ["guard checked"]
-    }
-  });
-  const validated = validator.validate({
-    responseText: payload([f]),
-    diffContent: DEFAULT_DIFF,
-    filePath: "src/app.ts"
-  });
-
-  const result = validator.filterByAcceptanceWithReport(validated);
-  assert.equal(result.payload.findings.length, 0);
-  assert.equal(result.report.length, 1);
-  assert.equal(result.report[0].taxonomy, "REACHABILITY");
-  assert.equal(result.report[0].outcome, "rejected");
-});
-
 test("filterByAcceptanceWithReport accepts finding once deterministic gates pass", () => {
   const validator = new StructuredOutputValidator();
   const f = finding({ traceability: lineRangeTraceability(21, 22) });
@@ -209,18 +169,18 @@ test("filterByAcceptanceWithReport accepts finding once deterministic gates pass
   assert.equal(result.report[0].outcome, "accepted");
 });
 
-test("filterByAcceptanceWithReport with mixed accepted and rejected findings", () => {
+test("filterByAcceptanceWithReport records OK entries for multiple accepted findings", () => {
   const validator = new StructuredOutputValidator();
-  const accepted = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22) });
-  const rejectedUncertainty = finding({ findingId: "F2", traceability: lineRangeTraceability(21, 22), uncertaintyStatus: "unsupported" });
+  const first = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22) });
+  const second = finding({ findingId: "F2", traceability: lineRangeTraceability(21, 22) });
   const validated = validator.validate({
-    responseText: payload([accepted, rejectedUncertainty]),
+    responseText: payload([first, second]),
     diffContent: DEFAULT_DIFF,
     filePath: "src/app.ts"
   });
 
   const result = validator.filterByAcceptanceWithReport(validated);
-  assert.equal(result.payload.findings.length, 1);
+  assert.equal(result.payload.findings.length, 2);
   assert.equal(result.payload.findings[0].findingId, "F1");
   assert.equal(result.report.length, 2);
 
@@ -228,7 +188,7 @@ test("filterByAcceptanceWithReport with mixed accepted and rejected findings", (
   assert.equal(okEntry?.taxonomy, "OK");
   assert.equal(okEntry?.outcome, "accepted");
 
-  const rejEntry = result.report.find(e => e.findingId === "F2");
-  assert.equal(rejEntry?.taxonomy, "EVIDENCE");
-  assert.equal(rejEntry?.outcome, "rejected");
+  const secondEntry = result.report.find(e => e.findingId === "F2");
+  assert.equal(secondEntry?.taxonomy, "OK");
+  assert.equal(secondEntry?.outcome, "accepted");
 });

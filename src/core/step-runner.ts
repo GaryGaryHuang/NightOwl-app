@@ -43,6 +43,7 @@ export interface StructuredOutputValidatorLike {
     dispositions: FindingDisposition[];
     candidateFindingIds: readonly string[];
     acceptedFindingIds: readonly string[];
+    findingUpdateIds: readonly string[];
   }): void;
 }
 
@@ -133,8 +134,10 @@ export class StepRunner {
   }
 
   async run(input: RunStepInput): Promise<StepResult> {
+    let retryFeedback: string | undefined;
+
     return retryOnce({
-      execute: async () => {
+      execute: async (attempt) => {
         const plan = input.step.prepare(input.context);
         const sessionProfile = {
           stepId: plan.stepId,
@@ -148,14 +151,19 @@ export class StepRunner {
             : { workingDirectory: input.workingDirectory })
         };
         const session = await this.#reviewSessionFactory.createSession(sessionProfile);
+        const userMessage =
+          attempt > 0 && retryFeedback
+            ? appendRetryRepairContext(plan.prompt.userMessage, retryFeedback)
+            : plan.prompt.userMessage;
         const response = await session.sendAndWait(
-          plan.prompt.userMessage,
+          userMessage,
           plan.reviewProfile.timeoutMs,
           input.signal
         );
 
         if (!response) {
           // Blank assistant output is treated as a failed step so the caller can retry or skip.
+          retryFeedback = "Previous attempt returned an empty response. Return the required output for this step.";
           throw new Error("empty review response");
         }
 
@@ -174,6 +182,7 @@ export class StepRunner {
           if (validationReport.length > 0) {
             input.context.appendVerifierReportEntries(validationReport);
           }
+          retryFeedback = buildRetryFeedback(error);
           throw error;
         }
 
@@ -202,6 +211,37 @@ export class StepRunner {
       }
     });
   }
+}
+
+function appendRetryRepairContext(userMessage: string, retryFeedback: string): string {
+  return [
+    userMessage,
+    "",
+    "<retry_repair_context>",
+    "The previous attempt failed deterministic validation or completion checking.",
+    "Repair the output so it satisfies this step's required format and contract. Do not add unrelated analysis.",
+    retryFeedback,
+    "</retry_repair_context>"
+  ].join("\n");
+}
+
+function buildRetryFeedback(error: unknown): string {
+  if (error instanceof StructuredValidationReportError) {
+    const rejectedEntries = error.report.filter((entry) => entry.outcome === "rejected");
+    const entries = rejectedEntries.length > 0 ? rejectedEntries : error.report;
+    const details = entries.map(
+      (entry) =>
+        `- findingId=${entry.findingId}; gate=${entry.gate}; taxonomy=${entry.taxonomy}; reason=${entry.reason}`
+    );
+
+    return [
+      "Structured validation report:",
+      ...details
+    ].join("\n");
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return `Failure reason: ${message}`;
 }
 
 function toValidationReportArtifactEntries(

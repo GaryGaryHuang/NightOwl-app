@@ -33,20 +33,7 @@ function createFinding(findingId: string): Finding {
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    findingId,
-    supportingEvidence: [
-      { evidenceRef: "E1", supports: "expectedBehavior" },
-      { evidenceRef: "E2", supports: "actualBehavior" },
-      { evidenceRef: "E3", supports: "reachability" },
-      { evidenceRef: "E4", supports: "impact" }
-    ],
-    reachability: {
-      credible: true,
-      entryPoint: "main entry",
-      guardsChecked: ["guard"],
-      description: "reachable"
-    },
-    uncertaintyStatus: "supported"
+    findingId
   };
 }
 
@@ -67,9 +54,16 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.match(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
   assert.match(plan.prompt.systemMessage, /smallest head-side line range/u);
   assert.match(plan.prompt.systemMessage, /changedHeadLines/u);
+  assert.match(
+    plan.prompt.systemMessage,
+    /Do not include internal verifier metadata or fields outside the JSON structure/u
+  );
+  assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
   assert.match(plan.prompt.userMessage, /expectedBehavior/);
   assert.match(plan.prompt.userMessage, /actualBehavior/);
-  assert.match(plan.prompt.userMessage, /guardsChecked/);
+  assert.doesNotMatch(plan.prompt.userMessage, /supportingEvidence/);
+  assert.doesNotMatch(plan.prompt.userMessage, /guardsChecked/);
+  assert.doesNotMatch(plan.prompt.userMessage, /uncertaintyStatus/);
 });
 
 test("Step6CognitiveSimulationStep includes full candidate findings JSON in review_state snapshot", () => {
@@ -85,13 +79,19 @@ test("Step6CognitiveSimulationStep includes full candidate findings JSON in revi
   assert.deepEqual(snapshot.candidateFindings, [candidate]);
   assert.deepEqual(snapshot.verifiedFindings, []);
   assert.equal(plan.prompt.userMessage.includes("<candidate_findings"), false);
-  assert.match(plan.prompt.userMessage, /supportingEvidence/);
-  assert.match(plan.prompt.userMessage, /reachability/);
-  assert.match(plan.prompt.userMessage, /uncertaintyStatus/);
-  assert.match(plan.prompt.userMessage, /verifierVerdict/);
+  assert.match(plan.prompt.userMessage, /findingUpdates/);
+  assert.match(
+    plan.prompt.systemMessage,
+    /Do not include internal verifier metadata or fields outside the JSON structure/u
+  );
+  assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /supportingEvidence/);
+  assert.doesNotMatch(plan.prompt.userMessage, /uncertaintyStatus/);
+  assert.doesNotMatch(plan.prompt.userMessage, /verifierVerdict/);
   assert.match(
     plan.prompt.userMessage,
-    /If no findings remain, return: \{"schemaVersion": 2, "findings": \[\], "dispositions":/u
+    /If no findings remain, return: \{"schemaVersion": 2, "findingUpdates": \[\], "dispositions":/u
   );
+  assert.match(plan.prompt.userMessage, /Retained candidates MUST NOT appear in the `findingUpdates` array/u);
   assert.match(plan.prompt.userMessage, /SUPPORTED.*ANCHOR.*EVIDENCE.*REACHABILITY.*OUT_OF_SCOPE.*DUPLICATE.*CONTRADICTION/);
 });

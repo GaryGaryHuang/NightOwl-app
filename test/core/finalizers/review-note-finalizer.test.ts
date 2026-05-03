@@ -32,23 +32,6 @@ function createContext(): FileReviewContext {
   return new FileReviewContext(DEFAULT_INPUT);
 }
 
-function supportingEvidence(): Finding["supportingEvidence"] {
-  return [
-    { evidenceRef: "E1", supports: "expectedBehavior" },
-    { evidenceRef: "E2", supports: "actualBehavior" },
-    { evidenceRef: "E3", supports: "reachability" },
-    { evidenceRef: "E4", supports: "impact" }
-  ];
-}
-
-function reachability(): Finding["reachability"] {
-  return {
-    credible: true,
-    entryPoint: "handleRequest",
-    guardsChecked: ["public route invokes handler"]
-  };
-}
-
 function makeMustFinding(title: string): Finding {
   return {
     type: "must",
@@ -59,10 +42,7 @@ function makeMustFinding(title: string): Finding {
     deviation: "test-deviation",
     impact: "test-impact",
     suggestion: "test-suggestion",
-    findingId: "F1",
-    supportingEvidence: supportingEvidence(),
-    reachability: reachability(),
-    uncertaintyStatus: "supported" as const
+    findingId: "F1"
   };
 }
 
@@ -76,10 +56,7 @@ function makeNiceFinding(title: string): Finding {
     deviation: "test-deviation",
     impact: "test-impact",
     suggestion: "test-suggestion",
-    findingId: "F2",
-    supportingEvidence: supportingEvidence(),
-    reachability: reachability(),
-    uncertaintyStatus: "supported" as const
+    findingId: "F2"
   };
 }
 
@@ -331,30 +308,21 @@ test("Finalizer renders traceability formats correctly", () => {
       title: "line-range-single",
       traceability: { kind: "line-range", lineStart: 42, lineEnd: 42 },
       expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s",
-      findingId: "F1",
-      supportingEvidence: supportingEvidence(),
-      reachability: reachability(),
-      uncertaintyStatus: "supported" as const
+      findingId: "F1"
     },
     {
       type: "must",
       title: "line-range-multi",
       traceability: { kind: "line-range", lineStart: 10, lineEnd: 20 },
       expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s",
-      findingId: "F2",
-      supportingEvidence: supportingEvidence(),
-      reachability: reachability(),
-      uncertaintyStatus: "supported" as const
+      findingId: "F2"
     },
     {
       type: "must",
       title: "diff-hunk",
       traceability: { kind: "diff-hunk", hunkHeader: "@@ -5,7 +5,7 @@" },
       expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s",
-      findingId: "F3",
-      supportingEvidence: supportingEvidence(),
-      reachability: reachability(),
-      uncertaintyStatus: "supported" as const
+      findingId: "F3"
     }
   ];
 

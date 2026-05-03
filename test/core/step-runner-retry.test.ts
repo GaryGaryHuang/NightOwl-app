@@ -19,6 +19,7 @@ import {
 
 test("StepRunner retries the whole section-step when judge rejects the first attempt and applies only the successful retry", async () => {
   const lifecycle: unknown[] = [];
+  const prompts: string[] = [];
   const context = createStepRunnerContext();
   let reviewAttempts = 0;
   let judgeAttempts = 0;
@@ -29,6 +30,7 @@ test("StepRunner retries the whole section-step when judge rejects the first att
       },
       onSendAndWait({ prompt, timeoutMs }) {
         reviewAttempts += 1;
+        prompts.push(prompt);
         lifecycle.push(["review.sendAndWait", prompt, timeoutMs, reviewAttempts]);
         return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
       },
@@ -65,6 +67,48 @@ test("StepRunner retries the whole section-step when judge rejects the first att
   assert.equal(context.getSection("overview"), "## Overview\n- 整體理解：attempt 2");
   assert.equal(reviewAttempts, 2);
   assert.equal(judgeAttempts, 2);
+  assert.doesNotMatch(prompts[0] ?? "", /retry_repair_context/u);
+  assert.match(prompts[1] ?? "", /<retry_repair_context>/u);
+  assert.match(prompts[1] ?? "", /Failure reason: judge rejected/u);
+});
+
+test("StepRunner adds empty-response repair feedback to the retry prompt", async () => {
+  const prompts: string[] = [];
+  const context = createStepRunnerContext();
+  let reviewAttempts = 0;
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait({ prompt }) {
+        reviewAttempts += 1;
+        prompts.push(prompt);
+
+        if (reviewAttempts === 1) {
+          return "";
+        }
+
+        return "## Overview\n- 整體理解：retry after empty response";
+      }
+    })
+  });
+
+  const result = await runner.run({
+    step: createSectionTestStep({}),
+    context,
+    outputBaseDir: "/workspace/output",
+    repoRoot: "/workspace/repo",
+    workingDirectory: "/workspace/repo"
+  });
+
+  result.applyTo(context);
+
+  assert.equal(reviewAttempts, 2);
+  assert.doesNotMatch(prompts[0] ?? "", /retry_repair_context/u);
+  assert.match(prompts[1] ?? "", /<retry_repair_context>/u);
+  assert.match(prompts[1] ?? "", /Previous attempt returned an empty response/u);
+  assert.equal(
+    context.getSection("overview"),
+    "## Overview\n- 整體理解：retry after empty response"
+  );
 });
 
 test("StepRunner fails after retry exhaustion on judge rejection and does not apply provisional state", async () => {
@@ -103,10 +147,12 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
 
 test("StepRunner records structured validation reports without committing partial findings", async () => {
   const context = createStepRunnerContext();
+  const prompts: string[] = [];
   let reviewAttempts = 0;
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait() {
+      onSendAndWait({ prompt }) {
+        prompts.push(prompt);
         reviewAttempts += 1;
         if (reviewAttempts === 1) {
           return structuredPayload([
@@ -158,6 +204,11 @@ test("StepRunner records structured validation reports without committing partia
   });
 
   assert.equal(reviewAttempts, 2);
+  assert.doesNotMatch(prompts[0] ?? "", /retry_repair_context/u);
+  assert.match(prompts[1] ?? "", /Structured validation report:/u);
+  assert.match(prompts[1] ?? "", /findingId=F2/u);
+  assert.match(prompts[1] ?? "", /taxonomy=SCHEMA/u);
+  assert.match(prompts[1] ?? "", /'type' must be 'must' or 'nice'/u);
   assert.equal(context.getFindings(), undefined);
   assert.deepEqual(
     context.getVerifierReportEntries()?.map((entry) => ({

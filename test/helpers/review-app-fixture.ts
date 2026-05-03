@@ -1,7 +1,4 @@
 import {
-  acceptedVerifierVerdict,
-  canonicalReachability,
-  canonicalSupportingEvidence,
   lineRangeTraceability
 } from "./orchestrator-fixture.ts";
 
@@ -83,10 +80,7 @@ export function buildSessionResponse(
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
           suggestion: "補上 guard",
-          findingId: "F1",
-          supportingEvidence: canonicalSupportingEvidence(),
-          reachability: canonicalReachability(),
-          uncertaintyStatus: "supported"
+          findingId: "F1"
         }
       ]
     });
@@ -95,7 +89,7 @@ export function buildSessionResponse(
   if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
     return JSON.stringify({
       schemaVersion: 2,
-      findings: [
+      findingUpdates: [
         {
           type: "must",
           title: "問題標題",
@@ -105,17 +99,13 @@ export function buildSessionResponse(
           deviation: "預期與實際有落差",
           impact: "會造成 correctness 問題",
           suggestion: "補上 guard",
-          findingId: "F1",
-          supportingEvidence: canonicalSupportingEvidence(),
-          reachability: canonicalReachability(),
-          uncertaintyStatus: "supported",
-          verifierVerdict: acceptedVerifierVerdict()
+          findingId: "F1"
         }
       ],
       dispositions: [
         {
           findingId: "F1",
-          status: "retained",
+          status: "modified",
           reason: "SUPPORTED",
           explanation: "simulation confirms the finding"
         }

@@ -40,20 +40,7 @@ function createFinding(
     deviation: "dev",
     impact: "impact",
     suggestion: "suggestion",
-    findingId,
-    supportingEvidence: [
-      { evidenceRef: "E1", supports: "expectedBehavior" },
-      { evidenceRef: "E2", supports: "actualBehavior" },
-      { evidenceRef: "E3", supports: "reachability" },
-      { evidenceRef: "E4", supports: "impact" }
-    ],
-    reachability: {
-      credible: true,
-      entryPoint: "main entry",
-      guardsChecked: ["guard"],
-      description: "reachable"
-    },
-    uncertaintyStatus: "supported" as const
+    findingId
   };
 }
 

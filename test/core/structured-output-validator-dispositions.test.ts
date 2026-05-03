@@ -3,7 +3,6 @@ import test from "node:test";
 
 import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import {
-  acceptedVerifierVerdict,
   assertDispositionValidationFails,
   DEFAULT_DIFF,
   disposition,
@@ -22,8 +21,8 @@ test("validateWithDispositions accepts valid findings and dispositions", () => {
     responseText: verifiedPayload([f], [d])
   });
 
-  assert.equal(result.findings.length, 1);
-  assert.equal(result.findings[0]!.findingId, "F1");
+  assert.equal(result.findingUpdates.length, 1);
+  assert.equal(result.findingUpdates[0]!.findingId, "F1");
   assert.equal(result.dispositions.length, 1);
   assert.equal(result.dispositions[0]!.findingId, "F1");
   assert.equal(result.dispositions[0]!.status, "retained");
@@ -43,7 +42,7 @@ test("validateWithDispositionsAndReport records anchor warnings without rejectin
     filePath: "src/app.ts"
   });
 
-  assert.equal(result.payload.findings.length, 1);
+  assert.equal(result.payload.findingUpdates.length, 1);
   const warning = result.report.find(
     (entry) => entry.findingId === "F1" && entry.gate === "anchor"
   );
@@ -55,7 +54,7 @@ test("validateWithDispositions accepts VerifiedFindingSet schemaVersion 2", () =
   const result = validateWithDispositions({
     responseText: JSON.stringify({
       schemaVersion: 2,
-      findings: [verifiedFinding()],
+      findingUpdates: [verifiedFinding()],
       dispositions: [disposition()]
     })
   });
@@ -68,7 +67,7 @@ test("validateWithDispositions accepts empty findings and dispositions", () => {
     responseText: verifiedPayload([], [])
   });
 
-  assert.deepEqual(result, { schemaVersion: 2, findings: [], dispositions: [] });
+  assert.deepEqual(result, { schemaVersion: 2, findingUpdates: [], dispositions: [] });
 });
 
 test("validateWithDispositions rejects missing dispositions key", () => {
@@ -78,9 +77,9 @@ test("validateWithDispositions rejects missing dispositions key", () => {
   });
 });
 
-test("validateWithDispositions rejects missing findings key", () => {
+test("validateWithDispositions rejects missing findingUpdates key", () => {
   assertDispositionValidationFails({
-    label: "missing findings",
+    label: "missing findingUpdates",
     responseText: JSON.stringify({ dispositions: [disposition()] })
   });
 });
@@ -90,7 +89,7 @@ test("validateWithDispositions rejects unknown top-level field", () => {
     () =>
       new StructuredOutputValidator().validateWithDispositions({
         responseText: JSON.stringify({
-          findings: [verifiedFinding()],
+          findingUpdates: [verifiedFinding()],
           dispositions: [disposition()],
           metadata: {}
         })
@@ -189,7 +188,7 @@ test("validateWithDispositions rejects duplicate findingId in dispositions", () 
   );
 });
 
-test("validateWithDispositions rejects duplicate findingId in findings", () => {
+test("validateWithDispositions rejects duplicate findingId in findingUpdates", () => {
   assert.throws(
     () =>
       new StructuredOutputValidator().validateWithDispositions({
@@ -240,65 +239,38 @@ test("validateWithDispositions rejects invalid disposition reason", () => {
   );
 });
 
-test("validateWithDispositions rejects finding missing verifierVerdict", () => {
-  assertDispositionValidationFails({
+test("validateWithDispositions accepts thin finding updates", () => {
+  const result = validateWithDispositions({
     responseText: verifiedPayload([finding()], [disposition()])
   });
+
+  assert.equal(result.findingUpdates.length, 1);
+  assert.equal(result.findingUpdates[0]!.findingId, "F1");
 });
 
-test("validateWithDispositions rejects non-accepted verifierVerdict", () => {
+test("validateWithDispositions rejects removed verifierVerdict metadata", () => {
   assert.throws(
     () =>
       new StructuredOutputValidator().validateWithDispositions({
         responseText: verifiedPayload(
-          [verifiedFinding({ verifierVerdict: acceptedVerifierVerdict({ status: "rejected" }) })],
+          [verifiedFinding({ verifierVerdict: { status: "accepted" } })],
           [disposition()]
         )
       }),
-    /verifierVerdict\.status.*accepted/u
+    /verifierVerdict/u
   );
 });
 
-test("validateWithDispositions rejects verifierVerdict checks that do not pass", () => {
+test("validateWithDispositions rejects removed uncertainty metadata", () => {
   assert.throws(
     () =>
       new StructuredOutputValidator().validateWithDispositions({
         responseText: verifiedPayload(
-          [
-            verifiedFinding({
-              verifierVerdict: acceptedVerifierVerdict({
-                checks: {
-                  anchor: "pass",
-                  evidence: "pass",
-                  reachability: "fail",
-                  impact: "pass",
-                  scope: "pass",
-                  duplicate: "pass"
-                }
-              })
-            })
-          ],
+          [verifiedFinding({ uncertaintyStatus: "tentative" })],
           [disposition()]
         )
       }),
-    /verifierVerdict\.checks\.reachability.*pass/u
-  );
-});
-
-test("validateWithDispositions rejects accepted findings that fail Step 6 acceptance gates", () => {
-  assert.throws(
-    () =>
-      new StructuredOutputValidator().validateWithDispositions({
-        responseText: verifiedPayload(
-          [
-            verifiedFinding({
-              uncertaintyStatus: "tentative"
-            })
-          ],
-          [disposition()]
-        )
-      }),
-    /must be accepted.*uncertaintyStatus/u
+    /uncertaintyStatus/u
   );
 });
 
@@ -310,8 +282,89 @@ test("validateDispositionCompleteness passes when all candidates accounted for",
       { findingId: "F2", status: "retired", reason: "REACHABILITY", explanation: "not reachable" }
     ],
     candidateFindingIds: ["F1", "F2"],
-    acceptedFindingIds: ["F1"]
+    acceptedFindingIds: ["F1"],
+    findingUpdateIds: []
   });
+});
+
+test("validateDispositionCompleteness rejects retained candidates with non-SUPPORTED reason", () => {
+  const validator = new StructuredOutputValidator();
+  assert.throws(
+    () =>
+      validator.validateDispositionCompleteness({
+        dispositions: [
+          { findingId: "F1", status: "retained", reason: "REACHABILITY", explanation: "not reachable" }
+        ],
+        candidateFindingIds: ["F1"],
+        acceptedFindingIds: ["F1"],
+        findingUpdateIds: []
+      }),
+    /retained.*F1.*reason.*SUPPORTED/u
+  );
+});
+
+test("validateDispositionCompleteness rejects modified candidates with non-SUPPORTED reason", () => {
+  const validator = new StructuredOutputValidator();
+  assert.throws(
+    () =>
+      validator.validateDispositionCompleteness({
+        dispositions: [
+          { findingId: "F1", status: "modified", reason: "EVIDENCE", explanation: "updated" }
+        ],
+        candidateFindingIds: ["F1"],
+        acceptedFindingIds: ["F1"],
+        findingUpdateIds: ["F1"]
+      }),
+    /modified.*F1.*reason.*SUPPORTED/u
+  );
+});
+
+test("validateDispositionCompleteness rejects retired candidates with SUPPORTED reason", () => {
+  const validator = new StructuredOutputValidator();
+  assert.throws(
+    () =>
+      validator.validateDispositionCompleteness({
+        dispositions: [
+          { findingId: "F1", status: "retired", reason: "SUPPORTED", explanation: "still valid" }
+        ],
+        candidateFindingIds: ["F1"],
+        acceptedFindingIds: [],
+        findingUpdateIds: []
+      }),
+    /retired.*F1.*must not use.*SUPPORTED/u
+  );
+});
+
+test("validateDispositionCompleteness rejects retained candidates that appear in findingUpdates", () => {
+  const validator = new StructuredOutputValidator();
+  assert.throws(
+    () =>
+      validator.validateDispositionCompleteness({
+        dispositions: [
+          { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "still valid" }
+        ],
+        candidateFindingIds: ["F1"],
+        acceptedFindingIds: ["F1"],
+        findingUpdateIds: ["F1"]
+      }),
+    /retained.*F1.*must not appear in findingUpdates/u
+  );
+});
+
+test("validateDispositionCompleteness rejects retired candidates that appear in findingUpdates", () => {
+  const validator = new StructuredOutputValidator();
+  assert.throws(
+    () =>
+      validator.validateDispositionCompleteness({
+        dispositions: [
+          { findingId: "F1", status: "retired", reason: "REACHABILITY", explanation: "gone" }
+        ],
+        candidateFindingIds: ["F1"],
+        acceptedFindingIds: [],
+        findingUpdateIds: ["F1"]
+      }),
+    /retired.*F1.*must not appear in findingUpdates/u
+  );
 });
 
 test("validateDispositionCompleteness throws when candidate is missing from dispositions", () => {
@@ -323,7 +376,8 @@ test("validateDispositionCompleteness throws when candidate is missing from disp
           { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "ok" }
         ],
         candidateFindingIds: ["F1", "F2"],
-        acceptedFindingIds: ["F1"]
+        acceptedFindingIds: ["F1"],
+        findingUpdateIds: []
       }),
     /missing disposition.*F2/u
   );
@@ -338,9 +392,27 @@ test("validateDispositionCompleteness throws when disposition references unknown
           { findingId: "F99", status: "retired", reason: "ANCHOR", explanation: "bogus" }
         ],
         candidateFindingIds: [],
-        acceptedFindingIds: []
+        acceptedFindingIds: [],
+        findingUpdateIds: []
       }),
     /unknown candidate.*F99/u
+  );
+});
+
+test("validateDispositionCompleteness throws when disposition references a new accepted finding", () => {
+  const validator = new StructuredOutputValidator();
+  assert.throws(
+    () =>
+      validator.validateDispositionCompleteness({
+        dispositions: [
+          { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "ok" },
+          { findingId: "F3", status: "retired", reason: "REACHABILITY", explanation: "new finding is retired" }
+        ],
+        candidateFindingIds: ["F1"],
+        acceptedFindingIds: ["F1", "F3"],
+        findingUpdateIds: ["F3"]
+      }),
+    /unknown candidate.*F3/u
   );
 });
 
@@ -353,7 +425,8 @@ test("validateDispositionCompleteness throws when retained candidate missing fro
           { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "ok" }
         ],
         candidateFindingIds: ["F1"],
-        acceptedFindingIds: []
+        acceptedFindingIds: [],
+        findingUpdateIds: []
       }),
     /retained.*F1.*must appear in findings/u
   );
@@ -365,10 +438,11 @@ test("validateDispositionCompleteness throws when modified candidate missing fro
     () =>
       validator.validateDispositionCompleteness({
         dispositions: [
-          { findingId: "F1", status: "modified", reason: "EVIDENCE", explanation: "updated" }
+          { findingId: "F1", status: "modified", reason: "SUPPORTED", explanation: "updated" }
         ],
         candidateFindingIds: ["F1"],
-        acceptedFindingIds: []
+        acceptedFindingIds: [],
+        findingUpdateIds: ["F1"]
       }),
     /modified.*F1.*must appear in findings/u
   );
@@ -381,7 +455,8 @@ test("validateDispositionCompleteness passes when retired candidate absent from 
       { findingId: "F1", status: "retired", reason: "REACHABILITY", explanation: "gone" }
     ],
     candidateFindingIds: ["F1"],
-    acceptedFindingIds: []
+    acceptedFindingIds: [],
+    findingUpdateIds: []
   });
 });
 
@@ -394,7 +469,8 @@ test("validateDispositionCompleteness throws when retired candidate appears in f
           { findingId: "F1", status: "retired", reason: "REACHABILITY", explanation: "gone" }
         ],
         candidateFindingIds: ["F1"],
-        acceptedFindingIds: ["F1"]
+        acceptedFindingIds: ["F1"],
+        findingUpdateIds: []
       }),
     /retired.*F1.*must not appear in findings/u
   );
@@ -407,6 +483,7 @@ test("validateDispositionCompleteness allows new findings without disposition en
       { findingId: "F1", status: "retained", reason: "SUPPORTED", explanation: "ok" }
     ],
     candidateFindingIds: ["F1"],
-    acceptedFindingIds: ["F1", "F3"]
+    acceptedFindingIds: ["F1", "F3"],
+    findingUpdateIds: ["F3"]
   });
 });

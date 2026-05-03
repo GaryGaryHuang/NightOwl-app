@@ -122,7 +122,7 @@ test("FileReviewContext stores interruption state separately and returns defensi
   });
 });
 
-test("FileReviewContext setFindings deep-clones v2 fields so mutations do not leak", () => {
+test("FileReviewContext setFindings deep-clones nested finding fields so mutations do not leak", () => {
   const context = createContext();
 
   const original: Finding = {
@@ -135,42 +135,28 @@ test("FileReviewContext setFindings deep-clones v2 fields so mutations do not le
     impact: "imp",
     suggestion: "sug",
     findingId: "F1",
-    supportingEvidence: [
-      { evidenceRef: "E1", supports: "expectedBehavior" },
-      { evidenceRef: "E2", supports: "actualBehavior" },
-      { evidenceRef: "E3", supports: "reachability" },
-      { evidenceRef: "E4", supports: "impact" }
-    ],
-    reachability: {
-      credible: true,
-      entryPoint: "handleRequest",
-      guardsChecked: ["guard checked"]
-    },
-    uncertaintyStatus: "supported" as const
+    dependencyPathException: {
+      reason: "dependency path",
+      dependencyAnchor: { filePath: "src/dep.ts", symbol: "helper" }
+    }
   };
 
   context.setFindings([original]);
 
   // Mutate the original object after setFindings
-  original.supportingEvidence[0]!.evidenceRef = "MUTATED";
-  original.supportingEvidence[0]!.supports = "impact";
-  original.reachability.credible = false;
-  original.reachability.entryPoint = "MUTATED";
-  original.reachability.guardsChecked[0] = "MUTATED";
+  original.traceability = { kind: "line-range", lineStart: 99, lineEnd: 99 };
+  original.dependencyPathException!.reason = "MUTATED";
+  original.dependencyPathException!.dependencyAnchor.symbol = "MUTATED";
   original.findingId = "MUTATED";
-  original.uncertaintyStatus = "tentative";
 
   const stored = context.getFindings()!;
   assert.equal(stored.length, 1);
   const f = stored[0]!;
 
   assert.equal(f.findingId, "F1");
-  assert.equal(f.uncertaintyStatus, "supported");
-  assert.equal(f.reachability.credible, true);
-  assert.equal(f.reachability.entryPoint, "handleRequest");
-  assert.equal(f.reachability.guardsChecked[0], "guard checked");
-  assert.equal(f.supportingEvidence[0]!.evidenceRef, "E1");
-  assert.equal(f.supportingEvidence[0]!.supports, "expectedBehavior");
+  assert.deepEqual(f.traceability, { kind: "line-range", lineStart: 1, lineEnd: 2 });
+  assert.equal(f.dependencyPathException?.reason, "dependency path");
+  assert.equal(f.dependencyPathException?.dependencyAnchor.symbol, "helper");
 });
 
 test("FileReviewContext getFindings returns defensively cloned copies", () => {
@@ -187,32 +173,22 @@ test("FileReviewContext getFindings returns defensively cloned copies", () => {
       impact: "impact",
       suggestion: "suggestion",
       findingId: "F1",
-      supportingEvidence: [
-        { evidenceRef: "E1", supports: "expectedBehavior" },
-        { evidenceRef: "E2", supports: "actualBehavior" },
-        { evidenceRef: "E3", supports: "reachability" },
-        { evidenceRef: "E4", supports: "impact" }
-      ],
-      reachability: {
-        credible: true,
-        entryPoint: "handleRequest",
-        guardsChecked: ["guard checked"]
-      },
-      uncertaintyStatus: "supported"
+      dependencyPathException: {
+        reason: "dependency path",
+        dependencyAnchor: { filePath: "src/dep.ts", symbol: "helper" }
+      }
     }
   ]);
 
   const first = context.getFindings()!;
   first[0]!.findingId = "MUTATED";
-  first[0]!.reachability.entryPoint = "MUTATED";
-  first[0]!.reachability.guardsChecked[0] = "MUTATED";
-  first[0]!.supportingEvidence[0]!.evidenceRef = "MUTATED";
+  first[0]!.traceability = { kind: "line-range", lineStart: 99, lineEnd: 99 };
+  first[0]!.dependencyPathException!.dependencyAnchor.symbol = "MUTATED";
 
   const second = context.getFindings()!;
   assert.equal(second[0]!.findingId, "F1");
-  assert.equal(second[0]!.reachability.entryPoint, "handleRequest");
-  assert.equal(second[0]!.reachability.guardsChecked[0], "guard checked");
-  assert.equal(second[0]!.supportingEvidence[0]!.evidenceRef, "E1");
+  assert.deepEqual(second[0]!.traceability, { kind: "line-range", lineStart: 1, lineEnd: 2 });
+  assert.equal(second[0]!.dependencyPathException!.dependencyAnchor.symbol, "helper");
 });
 
 test("FileReviewContext getDispositions returns undefined before set", () => {
@@ -296,8 +272,8 @@ test("FileReviewContext appends verifier report entries preserving order and dee
     findingId: "F2",
     taxonomy: "REACHABILITY",
     outcome: "rejected",
-    gate: "acceptance",
-    reason: "reachability is not credible"
+    gate: "disposition",
+    reason: "candidate retired: REACHABILITY - path is not reachable"
   };
 
   context.appendVerifierReportEntries([first]);
@@ -322,8 +298,8 @@ test("FileReviewContext appends verifier report entries preserving order and dee
       findingId: "F2",
       taxonomy: "REACHABILITY",
       outcome: "rejected",
-      gate: "acceptance",
-      reason: "reachability is not credible"
+      gate: "disposition",
+      reason: "candidate retired: REACHABILITY - path is not reachable"
     }
   ]);
 });

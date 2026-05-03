@@ -104,7 +104,7 @@ const STUB_STRATEGY_WHAT_IF = "## Strategy & What-if Scenarios";
 
 const STUB_VALIDATION_INTERROGATION = '{"schemaVersion": 2, "findings": []}';
 
-const STUB_COGNITIVE_SIMULATION = '{"schemaVersion": 2, "findings": [], "dispositions": []}';
+const STUB_COGNITIVE_SIMULATION = '{"schemaVersion": 2, "findingUpdates": [], "dispositions": []}';
 
 const STUB_SUMMARY = [
   "## Summary",
