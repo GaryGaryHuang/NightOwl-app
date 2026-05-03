@@ -69,7 +69,7 @@ Each behavior should have exactly one owner layer. Lower layers own deterministi
 
 | Layer | Owns | Does Not Own | Representative Suites |
 |---|---|---|---|
-| App integration | startup guards, lifecycle wiring, dry-run published surface, minimal MCP startup failure wiring | progress event ordering, web-fetch policy matrix, report/markdown body formatting, lower-level session config shape | [test/app/run-lifecycle-manager.test.ts](test/app/run-lifecycle-manager.test.ts), focused `review-app-*` suites |
+| App boundary | startup guards, lifecycle wiring, dry-run published surface, minimal MCP startup failure wiring | progress event ordering, web-fetch policy matrix, report/markdown body formatting, lower-level session config shape | focused `review-app-*` suites; [test/app/run-lifecycle-manager.test.ts](test/app/run-lifecycle-manager.test.ts) for lifecycle helper logic |
 | CLI | argv grammar, top-level dispatch, exit-code mapping, binary/package smoke, pure CLI presentation helpers under `src/cli/` (e.g. risk-badge formatters) | internal reducer details, report/markdown body formatters owned by finalizers, non-binary tests labeled as e2e | [test/cli/parser.test.ts](test/cli/parser.test.ts), [test/cli/package-bin.test.ts](test/cli/package-bin.test.ts), [test/cli/run-cli-check-smoke.test.ts](test/cli/run-cli-check-smoke.test.ts) |
 | Orchestrator | pre-dispatch lifecycle, abort boundary, bounded concurrency, snapshot fault policy, step dispatch, finalizer dispatch, progress event emission and ordering, failure aggregation | per-step analyzer logic, summary body rendering, index/manifest content formatting, markdown wording checks that belong to finalizers | `test/core/orchestrator-*.test.ts` |
 | Steps | per-file analyzer logic, prompt assembly, structured-output validation per step | orchestration order, fan-out, abort plumbing, finalizer rendering | `test/core/steps/*.test.ts` |
@@ -104,9 +104,9 @@ The full input → output matrix for a behavior lives in exactly one suite — t
 
 ```bash
 npm test                   # Build + verify manifest + run ALL test files
-npm run test:unit          # Build + run unit tests only
-npm run test:integration   # Build + run integration tests only
-npm run test:e2e           # Build + run e2e tests only
+npm run test:unit          # Build + verify manifest + run unit tests only
+npm run test:integration   # Build + verify manifest + run integration tests only
+npm run test:e2e           # Build + verify manifest + run e2e tests only
 ```
 
 **When to use each:**
@@ -134,7 +134,7 @@ Use it only on a machine where GitHub Copilot CLI is installed, authenticated, a
 npm run build && node --test test/core/orchestrator-bounded-concurrency.test.ts
 ```
 
-All primary commands run `npm run build` first. After modifying `src/`, always build before testing.
+All primary commands run `npm run build` first and verify `test/test-tier-manifest.json`. After modifying `src/`, always build before testing.
 
 ### Recommended inner-loop
 
@@ -167,7 +167,7 @@ These are developer conveniences, not the primary `unit / integration / e2e` ent
 
 ### Pre-push contract
 
-Before opening a PR, run `npm test` at least once. It is the only command that runs the **tier manifest verifier**; `test:unit`, `test:integration`, `test:e2e`, `test:watch`, and `test:coverage` do not. Running only the convenience commands or a single tier can let you ship a stale build, an unregistered or misregistered test file, or a tier-manifest sort violation. Also run `npm run typecheck` whenever you have edited any `test/` file. PRs that fail either gate in CI will be bounced.
+Before opening a PR, run `npm test` at least once. All primary tier entrypoints run the **tier manifest verifier**, but `npm test` is the CI-equivalent gate that builds once and runs every tier. Running only the convenience commands or a single file can let you ship a stale build, an unregistered or misregistered test file, or a tier-manifest sort violation. Also run `npm run typecheck` whenever you have edited any `test/` file. PRs that fail either gate in CI will be bounced.
 
 ---
 
@@ -257,7 +257,7 @@ The source of truth for tier assignment is `test/test-tier-manifest.json`.
 - Every entry belongs to exactly one tier: `unit`, `integration`, or `e2e`
 - Paths are repo-root-relative, forward-slash only
 - Arrays within each tier are sorted alphabetically for stable diffs
-- `npm test` runs the manifest verifier before executing tests — a missing or misplaced file fails the build
+- Primary tier commands run the manifest verifier before executing tests — a missing or misplaced file fails the build
 
 ### Adding a new test file
 

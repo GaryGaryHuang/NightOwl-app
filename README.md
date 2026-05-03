@@ -138,7 +138,7 @@ npm run typecheck    # Type check (tsc --noEmit)
 npm run build        # Produce dist/
 ```
 
-The primary test commands (`npm test`, `test:unit`, `test:integration`, `test:e2e`) run `npm run build` first and then execute source test files under `test/`.
+The primary test commands (`npm test`, `test:unit`, `test:integration`, `test:e2e`) run `npm run build` first, verify `test/test-tier-manifest.json`, and then execute source test files under `test/`.
 
 Run a single test file:
 

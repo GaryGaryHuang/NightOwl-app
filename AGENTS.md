@@ -74,9 +74,9 @@ Strictly follow these layers. Do not merge or cross boundaries:
 
 ```bash
 npm test                   # Build + verify manifest + run all tests
-npm run test:unit          # Run unit tests only
-npm run test:integration   # Run integration tests only
-npm run test:e2e           # Run e2e tests only
+npm run test:unit          # Build + verify manifest + run unit tests only
+npm run test:integration   # Build + verify manifest + run integration tests only
+npm run test:e2e           # Build + verify manifest + run e2e tests only
 npm run test:watch         # Convenience watch mode outside the primary taxonomy contract
 npm run test:coverage      # Convenience coverage run outside the primary taxonomy contract
 ```
@@ -87,7 +87,7 @@ Run a single test file (requires build first):
 npm run build && node --test test/core/orchestrator-bounded-concurrency.test.ts
 ```
 
-- Primary test commands run `npm run build` first and then execute source test files under `test/`
+- Primary test commands run `npm run build` first, verify `test/test-tier-manifest.json`, and then execute source test files under `test/`
 - After modifying `src/`, always run `npm run build` first
 - Test structure mirrors `src/`: for example, `test/core/orchestrator-bounded-concurrency.test.ts` corresponds to `src/core/orchestrator.ts`
 - Follow TDD: write or update tests before implementing
@@ -115,7 +115,7 @@ These are product safety boundaries that must not be circumvented or relaxed:
 - **Repo source tree is read-only to Agent tools**: the review process must not write outside `repo_root/.nightowl/review/**`
 - **Shell allowlist**: only read-only analysis commands are permitted (git queries, cat, ls, grep, etc.); write or side-effect operations are forbidden
 - **Path boundaries**: shell path access is restricted to the repo source tree and `repo_root/.nightowl/review/**`; `repo_root/.nightowl/reviewconfig.json` and `repo_root/.nightowl/reviewignore` remain App-managed inputs
-- **Shell composition syntax**: `;`, `||`, background execution, and command substitution are forbidden. `|` and `&&` are allowed only if each command independently complies with the shell allowlist and path boundaries.
+- **Shell composition syntax**: `|`, `&&`, and `;` are allowed only if each command independently complies with the shell allowlist and path boundaries. `||`, background execution, command substitution, redirection, and non-read-only segments are forbidden.
 - **URL retrieval security** (`web_fetch` LLM tool / `url` SDK permission kind): only public HTTPS URLs are allowed; hostname DNS classification and host allowlist/denylist are enabled
 - **Tool audit**: every tool decision (allow/deny) is logged to `tool-audit.jsonl`
 - **Tool policy fail-closed**: if shell policy evaluation itself errors, conservatively deny and log
