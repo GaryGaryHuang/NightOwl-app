@@ -23,8 +23,7 @@ export type Step0ValidationCode =
   | "PARSE"
   | "SCHEMA"
   | "COVERAGE"
-  | "PLACEHOLDER"
-  | "CORRECTNESS_JUDGMENT";
+  | "PLACEHOLDER";
 
 export class Step0OutputValidationError extends Error {
   readonly code: Step0ValidationCode;
@@ -123,24 +122,12 @@ const PLACEHOLDER_TOKEN_PATTERNS: readonly RegExp[] = [
   /<[^<>\n]+>/
 ];
 
-const CORRECTNESS_KEYWORD_PATTERNS: readonly RegExp[] = [
-  /\bbug\b/i,
-  /\bdefect\b/i,
-  /\bincorrect\b/i,
-  /\bwrong\b/i,
-  /\bbroken\b/i,
-  /缺陷/,
-  /錯誤/,
-  /有問題/
-];
-
 /**
  * Deterministic structural validator for Step 0's `ChangeMap` v1 output.
  *
  * Pure function (no I/O, no LLM). Throws `Step0OutputValidationError` with a
  * taxonomy code on any failure so the runner's existing retry path can react
- * uniformly to blank, parse, schema, coverage, placeholder, and correctness-
- * judgment failures.
+ * uniformly to blank, parse, schema, coverage, and placeholder failures.
  */
 export class Step0OutputValidator {
   validate(input: Step0OutputValidatorInput): ChangeMap {
@@ -310,7 +297,6 @@ function validateFileGroups(
 
     rejectPlaceholderText(label, `fileGroups[${index}].label`);
     rejectPlaceholderText(observedChange, `fileGroups[${index}].observedChange`);
-    rejectCorrectnessJudgment(observedChange, `fileGroups[${index}].observedChange`);
 
     if (groupIds.has(id)) {
       throw new Step0OutputValidationError(
@@ -474,10 +460,6 @@ function validateTestCoverageObservations(
       observedExpectation,
       `testCoverageObservations[${index}].observedExpectation`
     );
-    rejectCorrectnessJudgment(
-      observedExpectation,
-      `testCoverageObservations[${index}].observedExpectation`
-    );
 
     const evidenceRefs = validateEvidenceRefIds(
       entry.evidenceRefs,
@@ -515,7 +497,6 @@ function validateBehaviorChanges(
     );
 
     rejectPlaceholderText(description, `behaviorChanges[${index}].description`);
-    rejectCorrectnessJudgment(description, `behaviorChanges[${index}].description`);
 
     const filesValue = entry.files;
     if (!Array.isArray(filesValue)) {
@@ -744,17 +725,6 @@ function rejectPlaceholderText(value: string, label: string): void {
       throw new Step0OutputValidationError(
         "PLACEHOLDER",
         `${label} appears to contain a placeholder marker matching ${pattern}`
-      );
-    }
-  }
-}
-
-function rejectCorrectnessJudgment(value: string, label: string): void {
-  for (const pattern of CORRECTNESS_KEYWORD_PATTERNS) {
-    if (pattern.test(value)) {
-      throw new Step0OutputValidationError(
-        "CORRECTNESS_JUDGMENT",
-        `${label} contains a correctness-judgment keyword matching ${pattern}; Step 0 must record observations, not judgments`
       );
     }
   }

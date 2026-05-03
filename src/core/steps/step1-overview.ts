@@ -11,22 +11,23 @@ const STEP1_SYSTEM_ADDITION = [
   "- Combine `<changeset_context>` with the file-level `<diff>` to build a file-specific working overview for subsequent steps. The overview must add information value beyond what `<changeset_context>` already provides.",
   "- Describe this file's specific contribution to the changeset, not a restatement of the changeset's scope. Later steps depend on the specificity of this overview to target their analysis precisely.",
   "- Focus on this file's role in the broader changeset, its primary responsibility, the direction of the change, directly observable behavioral changes, and the directly affected area.",
+  "- If `<changeset_context>` contains user-provided expected behavior, business background, Root Cause, or review basis established by Step 0, use it as source-of-truth context for interpreting this file's role and behavior.",
   "- Keep the scope centered on this file. Only retrieve additional repo context when local evidence is insufficient to determine the file's role, change direction, affected area, or test coverage observation.",
   "- \u5f71\u97ff\u7bc4\u570d must stay at the level of this file's directly changed code paths. Do not expand into downstream consumers or dependency contracts \u2014 that is Step 2's job.",
   "- If this file has corresponding test file changes, gather the behavioral expectations and boundary conditions those tests reveal as additional context.",
-  "- This step gathers information only. Do not look for bugs, assess correctness, evaluate risk, map dependency contracts, or anticipate conclusions from later steps.",
+  "- This step gathers information only. Do not look for bugs, emit findings, make final correctness conclusions, evaluate risk, map dependency contracts, or anticipate conclusions from later steps.",
   "- Begin the response with `## Overview`."
 ].join("\n");
 
 const STEP1_INSTRUCTION = [
-  "This step gathers information only. Do not look for bugs, assess correctness, evaluate risk, or anticipate conclusions from later steps.",
+  "This step gathers information only. Do not look for bugs, emit findings, make final correctness conclusions, evaluate risk, or anticipate findings from later steps.",
   "",
   "Read `<changeset_context>` and `<diff>`, then produce an Overview for this file.",
   "",
   "Use `<changeset_context>` and `<diff>` as the primary inputs. Retrieve additional repo context only when needed to clarify this file's role, the observable direction of the change, the directly affected area, or test coverage observations.",
   "",
   "1. Explain how this file fits into the broader changeset and what role it plays in the overall change.",
-  "2. Identify observable behavioral changes introduced in this file — as observations, not correctness judgments.",
+  "2. Identify observable behavioral changes introduced in this file, and relate them to any expected behavior or business background already established in <changeset_context>. Do not emit findings or final correctness conclusions in this step.",
   "3. Identify the file's primary function and responsibility.",
   "4. Describe the observable purpose and direction of this change based on the available evidence. If the purpose is uncertain, make the uncertainty explicit.",
   "5. Describe the directly affected components, functions, or behaviors visible from this file's changes. Do not expand into dependency or contract analysis.",

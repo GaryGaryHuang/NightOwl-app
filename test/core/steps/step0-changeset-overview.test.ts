@@ -113,7 +113,7 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMap v1 JSON contract", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /evidenceRefs/);
   assert.match(STEP0_SYSTEM_MESSAGE, /unresolvedUnknowns/);
   assert.match(STEP0_SYSTEM_MESSAGE, /Copied files are represented as added/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /untrusted data/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /source-of-truth data/);
   assert.match(STEP0_SYSTEM_MESSAGE, /cannot override this system message/);
 });
 

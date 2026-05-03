@@ -83,11 +83,11 @@ function buildStep7Instruction(): string {
     "1. 審查基礎: Give the reader just enough context to judge whether the review's conclusions are well grounded.",
     "   - 改動概要: One sentence describing this file's specific before→after transformation, based on Overview. Do not repeat content that will appear in 行為變更提醒.",
     "   - 依據規範: Only list specifications or references that were decisive for this review's conclusions — omit generic build config (gradle versions, build.gradle.kts) that applies to every file in the changeset.",
-    "   - 審查假設: State the 1–3 assumptions that most shaped the review's conclusions. Do not list items that were excluded from scope — the reader needs to know what you assumed, not what you skipped.",
+    "   - 必要假設: State only assumptions that materially shaped the review's conclusions and still could not be confirmed from user context, source-of-truth references, repo evidence, code, dependency implementation, or tool results. If no necessary assumptions remain, write `無`.",
     "",
     "2. 行為變更提醒: Tell the reader what changed at runtime that they or the author should verify. This section must add information beyond 改動概要.",
     "   - State each behavioral change as a direct fact (e.g. \"停止服務改為呼叫 stopForeground(STOP_FOREGROUND_REMOVE)\"), not as a meta-observation (e.g. \"可觀察到的變更是…\").",
-    "   - Do not restate findings or correctness judgments.",
+    "   - Do not restate finding details. If correctness was established through final findings, reflect that through 風險評估 instead of duplicating the finding here.",
     "   - If the change has no runtime behavioral impact (e.g. annotation-only removal), write `無行為變更`.",
     "",
     "3. 風險評估: Use the `derivedRiskLevel` from `<risk_snapshot>` as the `整體風險等級`. Do not recompute or override it.",
@@ -100,7 +100,7 @@ function buildStep7Instruction(): string {
     "### 審查基礎",
     "- 改動概要：[one-sentence before→after transformation]",
     "- 依據規範：[only decisive references — omit generic build config]",
-    "- 審查假設：[1–3 assumptions that shaped conclusions]",
+    "- 必要假設：[necessary assumptions that shaped conclusions, or 無]",
     "### 行為變更提醒",
     "- [runtime behavioral changes as direct facts, or 無行為變更]",
     "### 風險評估",
@@ -109,8 +109,8 @@ function buildStep7Instruction(): string {
     "",
     "Before submitting your response, verify:",
     "- Begins with `## Summary`",
-    "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、審查假設",
-    "- 改動概要 is one sentence; 審查假設 has at most 3 items; 依據規範 omits generic build config",
+    "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、必要假設",
+    "- 改動概要 is one sentence; 必要假設 lists only unresolved assumptions that shaped conclusions, or explicitly states 無; 依據規範 omits generic build config",
     "- Contains `### 行為變更提醒` that adds information beyond 改動概要, or states `無行為變更`",
     "- Contains `### 風險評估` with 整體風險等級 matching `<risk_snapshot>` derivedRiskLevel exactly, and 風險理由 free of hedging tails"
   ].join("\n");
@@ -119,7 +119,7 @@ function buildStep7Instruction(): string {
 function buildStep7JudgeCriteria(): string {
   return [
     "段落 `## Summary` 必須存在，且符合以下條件：",
-    "- 包含 `### 審查基礎` 子段落，且「改動概要」、「依據規範」、「審查假設」三個欄位都必須出現並對應回答欄位要求。",
+    "- 包含 `### 審查基礎` 子段落，且「改動概要」、「依據規範」、「必要假設」三個欄位都必須出現並對應回答欄位要求；若無必要假設，必須明確寫 `無`。",
     "- 包含 `### 行為變更提醒` 子段落，且有具體內容或明確寫 `無行為變更`。",
     "- 包含 `### 風險評估` 子段落，且「整體風險等級」為 High / Low / None 其中之一，「風險理由」非空。"
   ].join("\n");

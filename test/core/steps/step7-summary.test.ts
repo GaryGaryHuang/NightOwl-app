@@ -277,6 +277,16 @@ test("Step7SummaryStep.prepare() includes <review_state> in user message", () =>
   assert.match(plan.prompt.userMessage, /<\/review_state>/);
 });
 
+test("Step7SummaryStep.prepare() allows no necessary assumptions in summary contract", () => {
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+  const context = createContext([]);
+  const plan = step.prepare(context);
+
+  assert.match(plan.prompt.userMessage, /必要假設/);
+  assert.match(plan.prompt.userMessage, /無/);
+  assert.doesNotMatch(plan.prompt.userMessage, /審查假設/);
+});
+
 test("Step7SummaryStep.prepare() resolve uses expectedRiskLevel matching snapshot", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("must", "F1")]);
@@ -294,7 +304,7 @@ function buildSummaryResponse(riskLevel: string): string {
     "### 審查基礎",
     "- 改動概要：changed value from 1 to 2",
     "- 依據規範：無",
-    "- 審查假設：values are plain constants",
+    "- 必要假設：無",
     "### 行為變更提醒",
     "- 無行為變更",
     "### 風險評估",

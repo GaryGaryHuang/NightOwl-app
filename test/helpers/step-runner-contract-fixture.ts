@@ -207,7 +207,7 @@ export const SECTION_SEEDS: Record<string, string> = {
     "## Knowledge & Source of Truth",
     "- 版本／文件參考：",
     "  - 無",
-    "- 採用規則與假設：",
+    "- 採用依據與必要假設：",
     "  - 依 repo 內設定檔推論版本約束",
     "- 排除範圍：",
     "  - 外部官方文件查證不在本次 foundation 範圍內"
@@ -265,7 +265,7 @@ export const SUMMARY_RESPONSE = [
   "### 審查基礎",
   "- 改動概要：調整主要執行流程。",
   "- 依據規範：依 repo source-of-truth 與版本假設審查。",
-  "- 審查假設：未擴張到外部知識查證。",
+  "- 必要假設：無。",
   "### 行為變更提醒",
   "- 無",
   "### 風險評估",
@@ -401,7 +401,7 @@ export function seedStep4Context(context: FileReviewContext): void {
       "## Knowledge & Source of Truth",
       "- 版本／文件參考：",
       "  - 無",
-      "- 採用規則與假設：",
+      "- 採用依據與必要假設：",
       "  - 依 repo 內設定檔推論版本約束",
       "- 排除範圍：",
       "  - 外部官方文件查證不在本次 foundation 範圍內"

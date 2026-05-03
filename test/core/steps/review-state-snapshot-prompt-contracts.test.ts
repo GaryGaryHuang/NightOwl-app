@@ -34,7 +34,7 @@ function createContext(): FileReviewContext {
   );
   context.setSection(
     "knowledge-source-of-truth",
-    "## Knowledge & Source of Truth\n- 版本／文件參考：無\n- 採用規則與假設：plain string value\n- 排除範圍：outside files"
+    "## Knowledge & Source of Truth\n- 版本／文件參考：無\n- 採用依據與必要假設：plain string value\n- 排除範圍：outside files"
   );
   context.setSection(
     "strategy-what-if-scenarios",
@@ -166,6 +166,8 @@ test("Step2DependenciesBoundariesStep prompt carries Step 1 overview and boundar
   assertDiffBlock(plan.prompt.userMessage);
   assert.match(plan.prompt.userMessage, /Contract/u);
   assert.match(plan.prompt.userMessage, /隱含相依/u);
+  assert.match(plan.prompt.userMessage, /white-box/u);
+  assert.match(plan.prompt.userMessage, /before marking uncertainty/u);
 });
 
 test("Step3KnowledgeSourceOfTruthStep prompt carries prior review state and knowledge-source instructions", () => {
@@ -191,7 +193,8 @@ test("Step3KnowledgeSourceOfTruthStep prompt carries prior review state and know
   );
   assertDiffBlock(plan.prompt.userMessage);
   assert.match(plan.prompt.userMessage, /版本／文件參考/u);
-  assert.match(plan.prompt.userMessage, /採用規則與假設/u);
+  assert.match(plan.prompt.userMessage, /採用依據與必要假設/u);
+  assert.match(plan.prompt.userMessage, /必要假設：無/u);
   assert.match(plan.prompt.userMessage, /排除範圍/u);
 });
 

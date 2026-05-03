@@ -404,32 +404,31 @@ test("Step0OutputValidator rejects placeholder markers", () => {
   }
 });
 
-test("Step0OutputValidator rejects correctness judgments in behaviorChanges", () => {
+test("Step0OutputValidator does not reject correctness keywords as a fatal validation gate", () => {
   const validator = new Step0OutputValidator();
-  const cases = [
-    "this is a bug",
-    "introduces a defect",
-    "incorrect handling",
-    "wrong order",
-    "broken pipeline",
-    "存在缺陷",
-    "計算錯誤",
-    "明顯有問題"
-  ];
-  for (const description of cases) {
-    expectFailure(
-      () =>
-        validator.validate({
-          responseText: makeValid({
-            behaviorChanges: [
-              { description, files: ["src/app.ts"], evidenceRefs: ["R1"] }
-            ]
-          }),
-          expectedChangedPaths: expectedSinglePath
-        }),
-      "CORRECTNESS_JUDGMENT"
-    );
-  }
+  const changeMap = validator.validate({
+    responseText: makeValid({
+      fileGroups: [
+        {
+          id: "G1",
+          label: "review-flow",
+          files: ["src/app.ts"],
+          observedChange: "review flow fixes a user-reported bug"
+        }
+      ],
+      behaviorChanges: [
+        {
+          description: "錯誤處理流程改為先回報 user context 指定的 Root Cause",
+          files: ["src/app.ts"],
+          evidenceRefs: ["R1"]
+        }
+      ]
+    }),
+    expectedChangedPaths: expectedSinglePath
+  });
+
+  assert.equal(changeMap.fileGroups[0].observedChange, "review flow fixes a user-reported bug");
+  assert.equal(changeMap.behaviorChanges.length, 1);
 });
 
 test("Step0OutputValidator accepts neutral observation descriptions", () => {

@@ -13,7 +13,7 @@ const STEP3_SYSTEM_ADDITION = [
   "- Use external retrieval only when genuine gaps remain that local context, repo-native evidence, or prior steps cannot resolve.",
   "- When retrieval is needed, prioritize source-of-truth material: repo-native documentation, version files, official docs, specs, standards, and version-specific API references.",
   "- Use supplementary material only when source-of-truth material is insufficient, and label it accordingly.",
-  "- Keep this step focused on establishing the governing rules, references, versions, assumptions, and out-of-scope boundaries for this review.",
+  "- Keep this step focused on establishing the governing evidence, rules, references, versions, necessary assumptions, and out-of-scope boundaries for this review.",
   "- This step is for knowledge convergence, not for broad research, bug finding, or general advice.",
   "- Begin the response with `## Knowledge & Source of Truth`."
 ].join("\n");
@@ -38,31 +38,32 @@ const STEP3_INSTRUCTION = [
   "   - Confirm only the versions that are relevant to this change. Do not collect unrelated project version information.",
   "",
   "3. Converge the scope of this review:",
-  "   - State the rules, standards, references, and assumptions that will govern later analysis",
+  "   - State the evidence, rules, standards, references, and necessary assumptions that will govern later analysis",
   "   - Explicitly list what is out of scope for this review",
-  "   - If a necessary assumption remains uncertain, make that uncertainty explicit rather than overstating certainty",
+  "   - Use assumptions only when the combined evidence from user context, repo-native sources, code, dependency implementation, and tool results still cannot confirm a needed fact",
+  "   - If no necessary assumptions remain, state `必要假設：無` explicitly rather than inventing assumptions",
   "",
   "Respond in the following format. If no applicable repo-native or external reference is needed for this change, write `無` under 版本／文件參考:",
   "",
   "## Knowledge & Source of Truth",
   "- 版本／文件參考：",
   "  - [package/framework/standard] [version if applicable] — [source link or repo-native source]",
-  "- 採用規則與假設：",
-  "  - [本次 review 依據的具體規則、版本化行為、repo 慣例或必要假設]",
+  "- 採用依據與必要假設：",
+  "  - [本次 review 依據的具體事實、使用者 context、規則、版本化行為、repo 慣例；若仍需假設，明確標記為必要假設；若無必要假設，寫「必要假設：無」]",
   "- 排除範圍：",
   "  - [明確不在本次 review 範圍內的面向]",
   "",
   "Before submitting your response, verify:",
   "- Begins with `## Knowledge & Source of Truth`",
   "- 版本／文件參考 is present with at least one entry including a source, or explicitly states `無`",
-  "- 採用規則與假設 is present with at least one concrete rule, version constraint, repo convention, or assumption",
+  "- 採用依據與必要假設 is present with at least one concrete fact, user-context basis, rule, version constraint, repo convention, or an explicit `必要假設：無`",
   "- 排除範圍 is present with at least one explicitly out-of-scope item"
 ].join("\n");
 
 const STEP3_JUDGE_CRITERIA = [
   "段落 `## Knowledge & Source of Truth` 必須存在，且符合下列條件：",
   "- 「版本／文件參考」欄位必須出現，且至少包含一筆引用，內容需含來源；若此 change 不需要額外參考，則明確寫出 `無`。",
-  "- 「採用規則與假設」欄位必須出現，且至少包含一條具體規則、版本化行為、repo 慣例或必要假設。",
+  "- 「採用依據與必要假設」欄位必須出現，且至少包含一條具體事實、使用者 context 依據、具體規則、版本化行為、repo 慣例，或明確寫出 `必要假設：無`。",
   "- 「排除範圍」欄位必須出現，且至少包含一項明確不在本次 review 範圍內的面向。"
 ].join("\n");
 

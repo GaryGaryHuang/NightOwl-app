@@ -50,7 +50,7 @@ export function buildSessionResponse(
       "## Knowledge & Source of Truth",
       "- 版本／文件參考：",
       "  - demo-lib 1.0 — https://example.com/demo-lib",
-      "- 採用規則與假設：",
+      "- 採用依據與必要假設：",
       "  - 以 repo 內設定與版本化行為作為判讀依據",
       "- 排除範圍：",
       "  - 外部非官方補充資料不在本次範圍內"
@@ -119,7 +119,7 @@ export function buildSessionResponse(
       "### 審查基礎",
       "- 改動概要：這次改動主要調整執行流程。",
       "- 依據規範：依 repo source-of-truth 與版本假設審查。",
-      "- 審查假設：未擴張到外部知識查證。",
+      "- 必要假設：無。",
       "### 行為變更提醒",
       "- 無",
       "### 風險評估",
