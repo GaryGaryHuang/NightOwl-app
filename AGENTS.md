@@ -62,7 +62,9 @@ Strictly follow these layers. Do not merge or cross boundaries:
 ### Key Design Rules
 
 - **`FileReviewContext` is the single source of truth for each file.** On-disk notes are snapshot projections only; they must not be read back.
+- **User context enters through Step 0.** Step 0 receives every ordered `RunRequest.userContext` entry and treats stated requirements, expected behavior, Root Cause, and business background as source-of-truth review context; Steps 1–7 consume the Step 0 overview projection and per-file review state unless an architecture change updates that contract.
 - **Completion check precedes state update.** Step responses must pass judge or deterministic validation before being written to `FileReviewContext`. The Orchestrator applies updates via `StepResult.applyTo(context)`.
+- **Deterministic validators enforce structure and contracts, not factual truth.** They gate parse/schema/coverage/placeholder and structured-output contracts before state mutation; prompt contracts own whether and when review judgments are made.
 - **Steps are pluggable.** Each per-file step implements the minimal `StepDefinition` interface (`stepId` + `prepare()`). The Orchestrator receives steps via an injected `perFileStepsFactory`; adding, removing, or reordering steps does not require changes to the Orchestrator or StepRunner.
 - **Step 0 is run-level**, not a per-file step. It does not go through `StepRunner` and does not implement `StepDefinition`.
 - **Bounded concurrency**: files are processed in parallel (default 5); within each file, Steps 1–7 run strictly in sequence.

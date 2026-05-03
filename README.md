@@ -50,7 +50,7 @@ review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
 | Flag | Description |
 |------|-------------|
 | `--repo <path>` | Path to the Git repository (default: current working directory) |
-| `--context <value>` | Additional context passed to the AI reviewer (e.g. PR description, spec links). Repeatable |
+| `--context <value>` | Requirement or background context passed to Step 0 (e.g. PR description, root cause, expected behavior, spec links). Repeatable |
 | `--dry-run` | Run the full pipeline with deterministic stubs instead of calling the Copilot API |
 
 **Examples:**
