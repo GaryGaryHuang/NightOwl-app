@@ -64,6 +64,9 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   const step = new Step5ValidationInterrogationStep({ promptSerializer: serializer });
   const plan = step.prepare(createContext());
 
+  assert.match(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
+  assert.match(plan.prompt.systemMessage, /smallest head-side line range/u);
+  assert.match(plan.prompt.systemMessage, /changedHeadLines/u);
   assert.match(plan.prompt.userMessage, /expectedBehavior/);
   assert.match(plan.prompt.userMessage, /actualBehavior/);
   assert.match(plan.prompt.userMessage, /guardsChecked/);

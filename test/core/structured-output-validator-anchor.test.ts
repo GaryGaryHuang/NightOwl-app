@@ -42,23 +42,9 @@ test("StructuredOutputValidator rejects invalid traceability payloads", () => {
       invalidFinding: finding({ traceability: lineRangeTraceability(1, -1) })
     },
     {
-      label: "diff-hunk header is unknown",
-      invalidFinding: finding({
-        traceability: diffHunkTraceability("@@ -40,2 +40,3 @@")
-      }),
-      diffContent: "@@ -1 +1 @@\n-old\n+new\n"
-    },
-    {
       label: "diff-hunk missing hunkHeader",
       invalidFinding: finding({ traceability: { kind: "diff-hunk" } }),
       diffContent: "@@ -1 +1 @@\n-old\n+new\n"
-    },
-    {
-      label: "diff has no hunk headers",
-      invalidFinding: finding({
-        traceability: diffHunkTraceability("@@ -1 +1 @@")
-      }),
-      diffContent: "diff --git a/src/app.ts b/src/app.ts\nindex 123..456 100644\n"
     }
   ];
 
@@ -71,36 +57,42 @@ test("StructuredOutputValidator rejects invalid traceability payloads", () => {
   }
 });
 
-test("StructuredOutputValidator rejects line-range outside changed head lines with ANCHOR tag", () => {
+test("StructuredOutputValidator accepts line-range outside changed head lines", () => {
   const offsetFinding = finding({
     traceability: lineRangeTraceability(14, 18)
   });
 
-  assert.throws(
-    () =>
-      new StructuredOutputValidator().validate({
-        responseText: payload([offsetFinding]),
-        diffContent: DEFAULT_DIFF,
-        filePath: "src/foo.ts"
-      }),
-    /deterministic validation failed: 'traceability' \[ANCHOR\] line range 14-18/u
-  );
+  const result = new StructuredOutputValidator().validate({
+    responseText: payload([offsetFinding]),
+    diffContent: DEFAULT_DIFF,
+    filePath: "src/foo.ts"
+  });
+
+  assert.equal(result.findings.length, 1);
+  assert.deepEqual(result.findings[0].traceability, {
+    kind: "line-range",
+    lineStart: 14,
+    lineEnd: 18
+  });
 });
 
-test("StructuredOutputValidator rejects line-range inside hunk span when it misses all changed lines", () => {
+test("StructuredOutputValidator accepts line-range inside hunk span when it misses all changed lines", () => {
   const unchangedSpanFinding = finding({
     traceability: lineRangeTraceability(23, 23)
   });
 
-  assert.throws(
-    () =>
-      new StructuredOutputValidator().validate({
-        responseText: payload([unchangedSpanFinding]),
-        diffContent: DEFAULT_DIFF,
-        filePath: "src/foo.ts"
-      }),
-    /deterministic validation failed: 'traceability' \[ANCHOR\] line range 23-23/u
-  );
+  const result = new StructuredOutputValidator().validate({
+    responseText: payload([unchangedSpanFinding]),
+    diffContent: DEFAULT_DIFF,
+    filePath: "src/foo.ts"
+  });
+
+  assert.equal(result.findings.length, 1);
+  assert.deepEqual(result.findings[0].traceability, {
+    kind: "line-range",
+    lineStart: 23,
+    lineEnd: 23
+  });
 });
 
 test("StructuredOutputValidator accepts diff-hunk with trimmed header through anchor verifier", () => {
@@ -120,20 +112,36 @@ test("StructuredOutputValidator accepts diff-hunk with trimmed header through an
   });
 });
 
-test("StructuredOutputValidator rejects unknown diff-hunk header with ANCHOR tag when diffContent is supplied", () => {
+test("StructuredOutputValidator accepts unknown diff-hunk header when diffContent is supplied", () => {
   const unknownHunkFinding = finding({
     traceability: diffHunkTraceability("@@ -40,2 +40,3 @@")
   });
 
-  assert.throws(
-    () =>
-      new StructuredOutputValidator().validate({
-        responseText: payload([unknownHunkFinding]),
-        diffContent: DEFAULT_DIFF,
-        filePath: "src/foo.ts"
-      }),
-    /deterministic validation failed: 'traceability' \[ANCHOR\] hunk header '@@ -40,2 \+40,3 @@'/u
-  );
+  const result = new StructuredOutputValidator().validate({
+    responseText: payload([unknownHunkFinding]),
+    diffContent: DEFAULT_DIFF,
+    filePath: "src/foo.ts"
+  });
+
+  assert.equal(result.findings.length, 1);
+  assert.deepEqual(result.findings[0].traceability, {
+    kind: "diff-hunk",
+    hunkHeader: "@@ -40,2 +40,3 @@"
+  });
+});
+
+test("StructuredOutputValidator accepts diff-hunk when diff has no hunk headers", () => {
+  const unknownHunkFinding = finding({
+    traceability: diffHunkTraceability("@@ -1 +1 @@")
+  });
+
+  const result = new StructuredOutputValidator().validate({
+    responseText: payload([unknownHunkFinding]),
+    diffContent: "diff --git a/src/app.ts b/src/app.ts\nindex 123..456 100644\n",
+    filePath: "src/foo.ts"
+  });
+
+  assert.equal(result.findings.length, 1);
 });
 
 test("StructuredOutputValidator accepts line-range outside changed lines when dependencyPathException is supplied", () => {

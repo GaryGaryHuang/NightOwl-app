@@ -82,24 +82,28 @@ test("validateWithReport throws with per-finding schema failure report entries",
   );
 });
 
-test("validateWithReport throws with per-finding anchor failure report entries", () => {
+test("validateWithReport records per-finding anchor warnings without rejecting payload", () => {
   const validator = new StructuredOutputValidator();
   const accepted = finding({ findingId: "F1", traceability: lineRangeTraceability(21, 22) });
-  const rejected = finding({ findingId: "F2", traceability: lineRangeTraceability(14, 18) });
-  const error = captureStructuredValidationReportError(
-    () =>
-      validator.validateWithReport({
-        responseText: payload([accepted, rejected]),
-        diffContent: DEFAULT_DIFF,
-        filePath: "src/app.ts"
-      })
+  const warned = finding({ findingId: "F2", traceability: lineRangeTraceability(14, 18) });
+  const result = validator.validateWithReport({
+    responseText: payload([accepted, warned]),
+    diffContent: DEFAULT_DIFF,
+    filePath: "src/app.ts"
+  });
+
+  assert.deepEqual(
+    result.payload.findings.map((finding) => finding.findingId),
+    ["F1", "F2"]
   );
 
-  const rejectedEntry = error.report.find((entry) => entry.findingId === "F2");
-  assert.equal(rejectedEntry?.taxonomy, "ANCHOR");
-  assert.equal(rejectedEntry?.outcome, "rejected");
-  assert.equal(rejectedEntry?.gate, "anchor");
-  assert.match(rejectedEntry?.reason ?? "", /\[ANCHOR\]/u);
+  const warningEntry = result.report.find(
+    (entry) => entry.findingId === "F2" && entry.gate === "anchor"
+  );
+  assert.equal(warningEntry?.taxonomy, "ANCHOR");
+  assert.equal(warningEntry?.outcome, "accepted");
+  assert.equal(warningEntry?.gate, "anchor");
+  assert.match(warningEntry?.reason ?? "", /warning: .* \[ANCHOR\]/u);
 });
 
 test("validateWithReport throws with duplicate findingId report entries", () => {

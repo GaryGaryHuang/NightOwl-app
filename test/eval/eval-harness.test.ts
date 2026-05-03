@@ -105,7 +105,7 @@ function runCase(c: CorpusCase): CaseResult {
       return verifyCaseResult(c, acceptedFindingIds, rejectedFindingIds, report, errors);
     }
 
-    // Schema/anchor validation threw — all findings are rejected
+    // Schema validation threw — all findings are rejected
     const message = err instanceof Error ? err.message : String(err);
 
     // Try to extract findingIds from the input JSON for tracking
@@ -183,7 +183,14 @@ function verifyCaseResult(
       errors.push(
         `No report entry for finding '${findingId}' to check taxonomy`
       );
-    } else if (lastEntry.taxonomy !== expectedTaxonomy) {
+    } else if (
+      expectedTaxonomy === "ANCHOR" &&
+      !entries.some((entry) => entry.taxonomy === "ANCHOR" && entry.gate === "anchor")
+    ) {
+      errors.push(
+        `Finding '${findingId}': expected anchor warning taxonomy but got '${entries.map((entry) => entry.taxonomy).join(", ")}'`
+      );
+    } else if (expectedTaxonomy !== "ANCHOR" && lastEntry.taxonomy !== expectedTaxonomy) {
       errors.push(
         `Finding '${findingId}': expected taxonomy '${expectedTaxonomy}' but got '${lastEntry.taxonomy}'`
       );
@@ -209,13 +216,12 @@ interface EvalMetrics {
   failedCases: number;
   acceptedFalsePositives: number;
   rejectedTruePositives: number;
-  wrongAnchorAccepted: number;
+  wrongAnchorMissingWarnings: number;
 }
 
 const FALSE_POSITIVE_CASE_TYPES: ReadonlySet<string> = new Set([
   "no-finding-safe-change",
   "speculative-false-positive",
-  "wrong-anchor",
   "prompt-injection"
 ]);
 
@@ -225,7 +231,7 @@ function computeMetrics(
 ): EvalMetrics {
   let acceptedFalsePositives = 0;
   let rejectedTruePositives = 0;
-  let wrongAnchorAccepted = 0;
+  let wrongAnchorMissingWarnings = 0;
 
   for (const result of results) {
     if (
@@ -247,9 +253,14 @@ function computeMetrics(
 
     if (
       result.caseType === "wrong-anchor" &&
-      result.acceptedFindingIds.length > 0
+      !result.report.some(
+        (entry) =>
+          entry.taxonomy === "ANCHOR" &&
+          entry.gate === "anchor" &&
+          entry.outcome === "accepted"
+      )
     ) {
-      wrongAnchorAccepted += 1;
+      wrongAnchorMissingWarnings += 1;
     }
   }
 
@@ -259,7 +270,7 @@ function computeMetrics(
     failedCases: results.filter((r) => !r.passed).length,
     acceptedFalsePositives,
     rejectedTruePositives,
-    wrongAnchorAccepted
+    wrongAnchorMissingWarnings
   };
 }
 
@@ -312,10 +323,10 @@ describe("Eval Harness", () => {
       corpus.some(
         (c) =>
           c.caseType === "wrong-anchor" &&
-          c.expected.acceptedFindingIds.length === 0 &&
+          c.expected.acceptedFindingIds.length > 0 &&
           Object.values(c.expected.taxonomyCodes).includes("ANCHOR")
       ),
-      "corpus must include at least one wrong-anchor slice"
+      "corpus must include at least one wrong-anchor warning slice"
     );
   });
 
@@ -348,11 +359,11 @@ describe("Eval Harness", () => {
     );
   });
 
-  it("GATE-3 wrongAnchorAccepted === 0", () => {
+  it("GATE-3 wrongAnchorMissingWarnings === 0", () => {
     assert.equal(
-      metrics.wrongAnchorAccepted,
+      metrics.wrongAnchorMissingWarnings,
       0,
-      `Expected 0 wrong-anchor accepted, got ${metrics.wrongAnchorAccepted}`
+      `Expected 0 wrong-anchor missing warnings, got ${metrics.wrongAnchorMissingWarnings}`
     );
   });
 });

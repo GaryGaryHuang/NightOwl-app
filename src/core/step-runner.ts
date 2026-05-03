@@ -35,6 +35,11 @@ export interface StructuredOutputValidatorLike {
     diffContent?: string;
     filePath?: string;
   }): VerifiedFindingsPayload;
+  validateWithDispositionsAndReport?(input: {
+    responseText: string;
+    diffContent?: string;
+    filePath?: string;
+  }): { payload: VerifiedFindingsPayload; report: VerifierReportEntry[] };
   validateDispositionCompleteness(input: {
     dispositions: FindingDisposition[];
     candidateFindingIds: readonly string[];

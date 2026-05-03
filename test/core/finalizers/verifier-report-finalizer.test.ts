@@ -35,7 +35,7 @@ test("VerifierReportFinalizer renders the exact JSONL contract for mixed-result 
           taxonomy: "OK",
           outcome: "accepted",
           gate: "schema",
-          reason: "passed schema and anchor validation"
+          reason: "passed schema validation"
         })
       ])
     ],

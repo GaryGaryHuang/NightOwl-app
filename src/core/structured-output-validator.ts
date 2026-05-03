@@ -36,6 +36,16 @@ export class StructuredValidationReportError extends Error {
   }
 }
 
+interface FindingValidationResult {
+  readonly finding: Finding;
+  readonly anchorFailure?: AnchorVerificationFailure;
+}
+
+interface TraceabilityValidationResult {
+  readonly traceability: FindingTraceability;
+  readonly anchorFailure?: AnchorVerificationFailure;
+}
+
 /**
  * Deterministically validate structured findings JSON before it is written into review state.
  */
@@ -60,10 +70,11 @@ export class StructuredOutputValidator {
     const schemaVersion = validateSchemaVersion(record.schemaVersion);
 
     const anchorContext = buildAnchorContext(input);
-    const validatedFindings = record.findings.map((finding) =>
-      validateFinding(finding, anchorContext, {
-        verifierVerdict: "disallow"
-      })
+    const validatedFindings = record.findings.map(
+      (finding) =>
+        validateFindingWithDiagnostics(finding, anchorContext, {
+          verifierVerdict: "disallow"
+        }).finding
     );
 
     assertUniqueFindingIds(validatedFindings, "findings");
@@ -132,17 +143,23 @@ export class StructuredOutputValidator {
       seenFindingIds.add(reportableFindingId);
 
       try {
-        const validated = validateFinding(rawFinding, anchorContext, {
+        const validated = validateFindingWithDiagnostics(rawFinding, anchorContext, {
           verifierVerdict: "disallow"
         });
-        validatedFindings.push(validated);
+        validatedFindings.push(validated.finding);
         report.push({
-          findingId: validated.findingId,
+          findingId: validated.finding.findingId,
           taxonomy: "OK",
           outcome: "accepted",
           gate: "schema",
-          reason: "passed schema and anchor validation"
+          reason: "passed schema validation"
         });
+        if (validated.anchorFailure) {
+          report.push(createAnchorWarningReportEntry(
+            validated.finding.findingId,
+            validated.anchorFailure
+          ));
+        }
       } catch (error) {
         report.push(createRejectedValidationReportEntry(reportableFindingId, error));
       }
@@ -151,11 +168,11 @@ export class StructuredOutputValidator {
     const hasValidationRejection = report.some(
       (entry) =>
         entry.outcome === "rejected" &&
-        (entry.gate === "schema" || entry.gate === "anchor")
+        entry.gate === "schema"
     );
     if (hasValidationRejection) {
       throw new StructuredValidationReportError(
-        "deterministic validation failed: one or more findings failed schema or anchor validation",
+        "deterministic validation failed: one or more findings failed schema validation",
         report
       );
     }
@@ -231,6 +248,14 @@ export class StructuredOutputValidator {
     diffContent?: string;
     filePath?: string;
   }): VerifiedFindingsPayload {
+    return this.validateWithDispositionsAndReport(input).payload;
+  }
+
+  validateWithDispositionsAndReport(input: {
+    responseText: string;
+    diffContent?: string;
+    filePath?: string;
+  }): { payload: VerifiedFindingsPayload; report: VerifierReportEntry[] } {
     const record = parseTopLevelObject(
       input.responseText,
       "top-level payload must be an object with 'findings' and 'dispositions' arrays"
@@ -256,12 +281,26 @@ export class StructuredOutputValidator {
     const schemaVersion = validateSchemaVersion(record.schemaVersion);
 
     const anchorContext = buildAnchorContext(input);
+    const report: VerifierReportEntry[] = [];
     const validatedFindings = record.findings.map((finding, index) => {
-      const validated = validateFinding(finding, anchorContext, {
+      const validated = validateFindingWithDiagnostics(finding, anchorContext, {
         verifierVerdict: "require-accepted"
       });
-      validateStep6AcceptedFinding(validated, index);
-      return validated;
+      validateStep6AcceptedFinding(validated.finding, index);
+      report.push({
+        findingId: validated.finding.findingId,
+        taxonomy: "OK",
+        outcome: "accepted",
+        gate: "schema",
+        reason: "passed schema validation"
+      });
+      if (validated.anchorFailure) {
+        report.push(createAnchorWarningReportEntry(
+          validated.finding.findingId,
+          validated.anchorFailure
+        ));
+      }
+      return validated.finding;
     });
 
     assertUniqueFindingIds(validatedFindings, "findings");
@@ -273,9 +312,12 @@ export class StructuredOutputValidator {
     assertUniqueFindingIds(validatedDispositions, "dispositions");
 
     return {
-      schemaVersion,
-      findings: validatedFindings,
-      dispositions: validatedDispositions
+      payload: {
+        schemaVersion,
+        findings: validatedFindings,
+        dispositions: validatedDispositions
+      },
+      report
     };
   }
 
@@ -366,6 +408,19 @@ function createRejectedValidationReportEntry(
   };
 }
 
+function createAnchorWarningReportEntry(
+  findingId: string,
+  failure: AnchorVerificationFailure
+): VerifierReportEntry {
+  return {
+    findingId,
+    taxonomy: "ANCHOR",
+    outcome: "accepted",
+    gate: "anchor",
+    reason: `warning: ${formatAnchorFailure("traceability", failure)}`
+  };
+}
+
 function validateFinding(
   input: unknown,
   anchorContext: FindingAnchorValidationContext | undefined,
@@ -373,6 +428,16 @@ function validateFinding(
     verifierVerdict: "disallow"
   }
 ): Finding {
+  return validateFindingWithDiagnostics(input, anchorContext, options).finding;
+}
+
+function validateFindingWithDiagnostics(
+  input: unknown,
+  anchorContext: FindingAnchorValidationContext | undefined,
+  options: { verifierVerdict: "disallow" | "require-accepted" } = {
+    verifierVerdict: "disallow"
+  }
+): FindingValidationResult {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(
       "deterministic validation failed: each finding must be a non-null object"
@@ -394,11 +459,12 @@ function validateFinding(
   const dependencyPathException = validateDependencyPathException(
     finding.dependencyPathException
   );
-  const traceability = validateTraceability(
+  const traceabilityResult = validateTraceability(
     finding.traceability,
     anchorContext,
     dependencyPathException
   );
+  const { traceability } = traceabilityResult;
   const expectedBehavior = validateStringField(
     finding.expectedBehavior,
     "expectedBehavior"
@@ -455,7 +521,12 @@ function validateFinding(
     );
   }
 
-  return result;
+  return {
+    finding: result,
+    ...(traceabilityResult.anchorFailure === undefined
+      ? {}
+      : { anchorFailure: traceabilityResult.anchorFailure })
+  };
 }
 
 /**
@@ -535,7 +606,7 @@ function validateTraceability(
   input: unknown,
   anchorContext: FindingAnchorValidationContext | undefined,
   dependencyPathException: DependencyPathException | undefined
-): FindingTraceability {
+): TraceabilityValidationResult {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(
       "deterministic validation failed: 'traceability' must be a non-null object"
@@ -583,11 +654,14 @@ function validateTraceability(
       });
 
       if (!verdict.ok) {
-        throw new Error(formatAnchorFailure("traceability", verdict));
+        return {
+          traceability: resolved,
+          anchorFailure: verdict
+        };
       }
     }
 
-    return resolved;
+    return { traceability: resolved };
   }
 
   if (kind === "diff-hunk") {
@@ -614,15 +688,16 @@ function validateTraceability(
       });
 
       if (!verdict.ok) {
-        throw new Error(formatAnchorFailure("traceability", verdict));
+        return {
+          traceability: resolved,
+          anchorFailure: verdict
+        };
       }
 
-      return resolved;
+      return { traceability: resolved };
     }
 
-    throw new Error(
-      "deterministic validation failed: 'traceability.hunkHeader' not found in diff"
-    );
+    return { traceability: resolved };
   }
 
   throw new Error(

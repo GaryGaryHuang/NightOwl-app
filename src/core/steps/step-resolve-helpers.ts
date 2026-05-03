@@ -92,26 +92,33 @@ export function createStep6DispositionResolve(input: {
   candidateFindingIds: readonly string[];
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
-    const verified = services.validator.validateWithDispositions({
+    const validationInput = {
       responseText: response,
       filePath: input.filePath,
       ...(input.diffContent === undefined
         ? {}
         : { diffContent: input.diffContent })
-    });
+    };
+    const verifiedWithReport =
+      services.validator.validateWithDispositionsAndReport?.(validationInput);
+    const verified =
+      verifiedWithReport?.payload ??
+      services.validator.validateWithDispositions(validationInput);
 
     const accepted = services.validator.filterByAcceptanceWithReport({
       schemaVersion: verified.schemaVersion,
       findings: verified.findings
     });
     const acceptedFindingIds = accepted.payload.findings.map((f) => f.findingId);
-    const schemaReport = verified.findings.map<VerifierReportEntry>((finding) => ({
-      findingId: finding.findingId,
-      taxonomy: "OK",
-      outcome: "accepted",
-      gate: "schema",
-      reason: "passed schema and anchor validation"
-    }));
+    const schemaReport =
+      verifiedWithReport?.report ??
+      verified.findings.map<VerifierReportEntry>((finding) => ({
+        findingId: finding.findingId,
+        taxonomy: "OK",
+        outcome: "accepted",
+        gate: "schema",
+        reason: "passed schema validation"
+      }));
 
     services.validator.validateDispositionCompleteness({
       dispositions: verified.dispositions,

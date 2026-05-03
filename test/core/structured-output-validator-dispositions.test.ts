@@ -5,8 +5,10 @@ import { StructuredOutputValidator } from "../../src/core/structured-output-vali
 import {
   acceptedVerifierVerdict,
   assertDispositionValidationFails,
+  DEFAULT_DIFF,
   disposition,
   finding,
+  lineRangeTraceability,
   payload,
   validateWithDispositions,
   verifiedFinding,
@@ -25,6 +27,28 @@ test("validateWithDispositions accepts valid findings and dispositions", () => {
   assert.equal(result.dispositions.length, 1);
   assert.equal(result.dispositions[0]!.findingId, "F1");
   assert.equal(result.dispositions[0]!.status, "retained");
+});
+
+test("validateWithDispositionsAndReport records anchor warnings without rejecting payload", () => {
+  const result = new StructuredOutputValidator().validateWithDispositionsAndReport({
+    responseText: verifiedPayload(
+      [
+        verifiedFinding({
+          traceability: lineRangeTraceability(14, 18)
+        })
+      ],
+      [disposition()]
+    ),
+    diffContent: DEFAULT_DIFF,
+    filePath: "src/app.ts"
+  });
+
+  assert.equal(result.payload.findings.length, 1);
+  const warning = result.report.find(
+    (entry) => entry.findingId === "F1" && entry.gate === "anchor"
+  );
+  assert.equal(warning?.taxonomy, "ANCHOR");
+  assert.equal(warning?.outcome, "accepted");
 });
 
 test("validateWithDispositions accepts VerifiedFindingSet schemaVersion 2", () => {
