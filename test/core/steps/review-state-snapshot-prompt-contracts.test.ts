@@ -9,6 +9,10 @@ import {
   type ReviewStateSnapshot
 } from "../../../src/core/review-state-prompt-serializer.ts";
 import { createRunContext } from "../../../src/core/run-context.ts";
+import type {
+  CandidateFindingsV3,
+  ValidationReportV1
+} from "../../../src/core/semantic-review.ts";
 import { Step1OverviewStep } from "../../../src/core/steps/step1-overview.ts";
 import { Step2DependenciesBoundariesStep } from "../../../src/core/steps/step2-dependencies-boundaries.ts";
 import { Step3KnowledgeSourceOfTruthStep } from "../../../src/core/steps/step3-knowledge-source-of-truth.ts";
@@ -60,6 +64,67 @@ function createFinding(findingId: string): Finding {
     suggestion: "suggestion",
     findingId,
     sourceHypothesisId: "W1"
+  };
+}
+
+function createCandidateFindings(): CandidateFindingsV3 {
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings: [
+      {
+        findingId: "F1",
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority: "must",
+        severity: "high",
+        confidence: "high",
+        evidenceStrength: "direct",
+        title: "candidate F1",
+        traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: "src/app.ts:1",
+            summary: "review basis state added"
+          }
+        ],
+        executionPath: ["ReviewBasisStep.prepare", "Step5ValidationInterrogationStep.prepare"],
+        triggerCondition: "Step 5 cites absent evidence ID.",
+        failureMechanism: "candidate evidence is validated against ReviewBasis evidence refs",
+        impact: "unsupported review findings would reach Step 7",
+        counterEvidenceChecked: ["ReviewBasis evidenceRefs contains E1"],
+        reproducibility: "deterministic in prompt snapshot construction",
+        fixDirection: "reject absent evidence refs",
+        testRecommendation: "keep prompt snapshot contract tests updated"
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: "candidate F1 covers H1"
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}
+
+function createValidationReport(findings: Finding[]): ValidationReportV1 {
+  return {
+    schemaVersion: 1,
+    overallStatus: "PASS",
+    perFindingResults: findings.map((finding) => ({
+      findingId: finding.findingId,
+      decision: "approve",
+      failedGates: [],
+      requiredCorrections: [],
+      reason: "semantic gates passed"
+    })),
+    approvedFindings: findings.map((finding) => ({ ...finding })),
+    missingInformationItems: [],
+    loopControl: { action: "accept", reason: "semantic gates passed" }
   };
 }
 
@@ -343,6 +408,9 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
   const context = createContext();
   const finding = createFinding("F1");
   context.setFindings([finding]);
+  context.setCandidateFindingsV3(createCandidateFindings());
+  context.setValidationReportV1(createValidationReport([finding]));
+  context.setMissingInformationItems([]);
 
   const stepPlans = [
     new Step2DependenciesBoundariesStep({ promptSerializer: serializer }).prepare(context),
@@ -374,8 +442,8 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
 
   snapshots.forEach((snapshot, index) => {
     assertBaseSnapshot(snapshot, {
-      expectSections: index !== 3,
-      expectEvidenceRefs: index === 3
+      expectSections: index <= 2 || index === 5,
+      expectEvidenceRefs: index === 3 || index === 4
     });
   });
 

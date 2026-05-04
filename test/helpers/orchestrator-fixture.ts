@@ -3,6 +3,7 @@ import type {
   Finding
 } from "../../src/core/file-review-context.ts";
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { CandidateFindingsV3, ValidationReportV1 } from "../../src/core/semantic-review.ts";
 import type { StepResult } from "../../src/core/step-runner.ts";
 
 export function escapeRegExp(value: string): string {
@@ -163,7 +164,7 @@ export function detectStepId(
     return "step5-validation-interrogation";
   }
 
-  if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
+  if (/## Current Step: (?:Cognitive Simulation|Semantic Validation)/u.test(systemMessage)) {
     return "step6-cognitive-simulation";
   }
 
@@ -195,27 +196,62 @@ export function extractDiffPath(prompt: string): string {
 
 export function buildStandardStep5JsonResponse(): string {
   return JSON.stringify({
-    schemaVersion: 2,
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
     findings: [
       {
-        type: "must",
+        findingId: "F1",
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority: "must",
+        severity: "high",
+        confidence: "high",
+        evidenceStrength: "direct",
         title: "問題標題",
         traceability: lineRangeTraceability(1, 1),
-        expectedBehavior: "應維持既有 fallback",
-        actualBehavior: "新分支略過 fallback",
-        deviation: "預期與實際有落差",
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: "src/app.ts:1",
+            summary: "新分支略過 fallback"
+          }
+        ],
+        executionPath: ["entry", "changed branch"],
+        triggerCondition: "empty input reaches the changed branch",
+        failureMechanism: "fallback guard is skipped",
         impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        findingId: "F1"
+        counterEvidenceChecked: ["fallback path is after the changed branch"],
+        reproducibility: "deterministic with empty input",
+        fixDirection: "補上 guard",
+        testRecommendation: "新增 fallback regression test"
       }
-    ]
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: "candidate F1 covers the hypothesis"
+      }
+    ],
+    criticalMissingInformation: []
   });
 }
 
 export function buildStandardStep6JsonResponse(): string {
   return JSON.stringify({
-    schemaVersion: 2,
-    findingUpdates: [
+    schemaVersion: 1,
+    overallStatus: "PASS",
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "approve",
+        failedGates: [],
+        requiredCorrections: [],
+        reason: "all semantic gates passed"
+      }
+    ],
+    approvedFindings: [
       {
         type: "must",
         title: "問題標題",
@@ -228,14 +264,8 @@ export function buildStandardStep6JsonResponse(): string {
         findingId: "F1"
       }
     ],
-    dispositions: [
-      {
-        findingId: "F1",
-        status: "modified",
-        reason: "SUPPORTED",
-        explanation: "simulation confirms the finding"
-      }
-    ]
+    missingInformationItems: [],
+    loopControl: { action: "accept", reason: "all gates passed" }
   });
 }
 
@@ -255,28 +285,23 @@ export function buildStandardStep7SummaryResponse(filePath: string): string {
 }
 
 export function buildSimulationStep5JsonResponse(): string {
-  return JSON.stringify({
-    schemaVersion: 2,
-    findings: [
-      {
-        type: "must",
-        title: "初版 findings",
-        traceability: lineRangeTraceability(1, 1),
-        expectedBehavior: "應維持既有 fallback",
-        actualBehavior: "新分支略過 fallback",
-        deviation: "預期與實際有落差",
-        impact: "會造成 correctness 問題",
-        suggestion: "補上 guard",
-        findingId: "F1"
-      }
-    ]
-  });
+  return buildStandardStep5JsonResponse();
 }
 
 export function buildSimulationStep6JsonResponse(): string {
   return JSON.stringify({
-    schemaVersion: 2,
-    findingUpdates: [
+    schemaVersion: 1,
+    overallStatus: "PASS",
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "approve",
+        failedGates: [],
+        requiredCorrections: [],
+        reason: "all semantic gates passed"
+      }
+    ],
+    approvedFindings: [
       {
         type: "must",
         title: "最終 findings",
@@ -289,14 +314,8 @@ export function buildSimulationStep6JsonResponse(): string {
         findingId: "F1"
       }
     ],
-    dispositions: [
-      {
-        findingId: "F1",
-        status: "modified",
-        reason: "SUPPORTED",
-        explanation: "simulation confirms the finding"
-      }
-    ]
+    missingInformationItems: [],
+    loopControl: { action: "accept", reason: "all gates passed" }
   });
 }
 
@@ -455,7 +474,7 @@ export function buildSuccessfulStepResult(
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {
-        targetContext.setFindings(options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath));
+        targetContext.setCandidateFindingsV3(buildCandidateFindingsForFile(filePath));
       }
     };
   }
@@ -465,15 +484,9 @@ export function buildSuccessfulStepResult(
       stepId,
       applyTo(targetContext: FileReviewContext) {
         const findings = options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath);
+        targetContext.setValidationReportV1(buildValidationReportForFindings(findings));
         targetContext.setFindings(findings);
-        targetContext.setDispositions(
-          findings.map((f) => ({
-            findingId: f.findingId,
-            status: "retained" as const,
-            reason: "SUPPORTED",
-            explanation: "simulation confirms the finding"
-          }))
-        );
+        targetContext.setMissingInformationItems([]);
       }
     };
   }
@@ -492,4 +505,65 @@ export function buildSuccessfulStepResult(
   }
 
   throw new Error(`Unexpected step: ${stepId}`);
+}
+
+function buildCandidateFindingsForFile(filePath: string): CandidateFindingsV3 {
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings: [
+      {
+        findingId: "F1",
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority: "must",
+        severity: "high",
+        confidence: "high",
+        evidenceStrength: "direct",
+        title: `${filePath} candidate`,
+        traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: filePath,
+            summary: "reviewed diff evidence"
+          }
+        ],
+        executionPath: ["entry", "changed branch"],
+        triggerCondition: "empty input reaches changed branch",
+        failureMechanism: "fallback guard is skipped",
+        impact: "會造成 correctness 問題",
+        counterEvidenceChecked: ["fallback path no longer precedes changed branch"],
+        reproducibility: "deterministic with empty input",
+        fixDirection: "補上 guard",
+        testRecommendation: "新增 fallback regression test"
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: "candidate F1 covers the hypothesis"
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}
+
+function buildValidationReportForFindings(findings: readonly Finding[]): ValidationReportV1 {
+  return {
+    schemaVersion: 1,
+    overallStatus: "PASS",
+    perFindingResults: findings.map((finding) => ({
+      findingId: finding.findingId,
+      decision: "approve",
+      failedGates: [],
+      requiredCorrections: [],
+      reason: "all semantic gates passed"
+    })),
+    approvedFindings: findings.map((finding) => ({ ...finding })),
+    missingInformationItems: [],
+    loopControl: { action: "accept", reason: "all gates passed" }
+  };
 }

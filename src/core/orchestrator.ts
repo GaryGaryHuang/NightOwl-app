@@ -32,6 +32,11 @@ import {
   type PlannedNoteFile
 } from "./review-path-resolver.ts";
 import { ReviewStatePromptSerializer } from "./review-state-prompt-serializer.ts";
+import {
+  semanticCandidateFingerprint,
+  type StopReason,
+  type ValidationReportV1
+} from "./semantic-review.ts";
 import { ReviewBasisStep } from "./steps/review-basis-step.ts";
 import { Step5ValidationInterrogationStep } from "./steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "./steps/step6-cognitive-simulation.ts";
@@ -635,7 +640,17 @@ export class ReviewOrchestrator {
       return;
     }
 
-    for (const step of input.steps) {
+    let semanticRerunCount = 0;
+    const semanticCandidateFingerprints = new Set<string>();
+    const step5Index = input.steps.findIndex(
+      (step) => step.stepId === "step5-validation-interrogation"
+    );
+
+    for (let stepIndex = 0; stepIndex < input.steps.length; stepIndex += 1) {
+      const step = input.steps[stepIndex];
+      if (!step) {
+        continue;
+      }
       if (input.abortGuard.isAborted) {
         return;
       }
@@ -708,6 +723,59 @@ export class ReviewOrchestrator {
         filePath: fileContext.filePath,
         stepId: step.stepId
       });
+
+      if (
+        step.stepId === "step6-cognitive-simulation" &&
+        shouldRerunStep5(fileContext) &&
+        step5Index >= 0
+      ) {
+        const fingerprint = buildCurrentCandidateFingerprint(fileContext);
+        if (fingerprint && semanticCandidateFingerprints.has(fingerprint)) {
+          const missingInformationItems = [
+            ...(fileContext.getMissingInformationItems() ?? []),
+            {
+              itemId: `MI-semantic-repeated-${semanticRerunCount + 1}`,
+              description: "Step 5 repeated an unsupported candidate without new evidence.",
+              whyItMatters: "The semantic validator must stop repeated unsupported claims instead of approving or looping forever."
+            }
+          ];
+          fileContext.setMissingInformationItems(missingInformationItems);
+          markSemanticLoopStopped(fileContext, {
+            stopReason: "repeated_unsupported_claim",
+            reason: "Step 5 repeated an unsupported candidate without new evidence.",
+            missingInformationItems
+          });
+          continue;
+        }
+
+        if (fingerprint) {
+          semanticCandidateFingerprints.add(fingerprint);
+        }
+
+        if (semanticRerunCount < MAX_SEMANTIC_STEP5_RERUNS) {
+          semanticRerunCount += 1;
+          fileContext.setPriorValidatorFeedback(
+            buildPriorValidatorFeedbackFromValidationReport(fileContext)
+          );
+          stepIndex = step5Index - 1;
+          continue;
+        }
+
+        const missingInformationItems = [
+          ...(fileContext.getMissingInformationItems() ?? []),
+          {
+            itemId: `MI-semantic-${semanticRerunCount + 1}`,
+            description: "Step 6 requested another Step 5 rerun after the semantic rerun budget was exhausted.",
+            whyItMatters: "The review cannot keep iterating without turning StepRunner format retry and semantic validation retry into the same budget."
+          }
+        ];
+        fileContext.setMissingInformationItems(missingInformationItems);
+        markSemanticLoopStopped(fileContext, {
+          stopReason: "max_semantic_reruns",
+          reason: "Step 6 requested another Step 5 rerun after the semantic rerun budget was exhausted.",
+          missingInformationItems
+        });
+      }
     }
 
     if (input.abortGuard.isAborted) {
@@ -843,6 +911,63 @@ interface PlannedFileWorkItem {
 type PlannedOutcomeSlot =
   | { kind: "successful"; outcome: SuccessfulFileOutcome }
   | { kind: "skipped"; outcome: SkippedFileOutcome };
+
+const MAX_SEMANTIC_STEP5_RERUNS = 2;
+
+function shouldRerunStep5(context: FileReviewContext): boolean {
+  return context.getValidationReportV1()?.loopControl.action === "rerun_step5";
+}
+
+function markSemanticLoopStopped(
+  context: FileReviewContext,
+  input: {
+    stopReason: StopReason;
+    reason: string;
+    missingInformationItems: ValidationReportV1["missingInformationItems"];
+  }
+): void {
+  const currentReport = context.getValidationReportV1();
+  const stoppedReport: ValidationReportV1 = {
+    schemaVersion: 1,
+    overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
+    perFindingResults: currentReport?.perFindingResults ?? [],
+    approvedFindings: [],
+    missingInformationItems: input.missingInformationItems,
+    loopControl: {
+      action: "stop",
+      reason: input.reason
+    },
+    stopReason: input.stopReason
+  };
+
+  context.setValidationReportV1(stoppedReport);
+  context.setFindings([]);
+}
+
+function buildCurrentCandidateFingerprint(context: FileReviewContext): string | undefined {
+  const payload = context.getCandidateFindingsV3();
+  return payload ? semanticCandidateFingerprint(payload) : undefined;
+}
+
+function buildPriorValidatorFeedbackFromValidationReport(
+  context: FileReviewContext
+): { failedGates: string[]; requiredCorrections: string[] } {
+  const report = context.getValidationReportV1();
+  if (!report) {
+    return { failedGates: [], requiredCorrections: [] };
+  }
+
+  return {
+    failedGates: [
+      ...new Set(report.perFindingResults.flatMap((result) => result.failedGates))
+    ],
+    requiredCorrections: [
+      ...new Set(
+        report.perFindingResults.flatMap((result) => result.requiredCorrections)
+      )
+    ]
+  };
+}
 
 class RunAbortGuard {
   #error?: unknown;

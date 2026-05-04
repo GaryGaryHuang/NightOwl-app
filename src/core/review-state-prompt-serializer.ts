@@ -7,6 +7,10 @@ import type {
   ReviewBasisIdentifierRegistry,
   ReviewBasisV1
 } from "./review-basis.ts";
+import type {
+  CandidateFindingV3,
+  MissingInformationItem
+} from "./semantic-review.ts";
 import {
   DEPENDENCIES_BOUNDARIES_SECTION_KEY,
   KNOWLEDGE_SOURCE_OF_TRUTH_SECTION_KEY,
@@ -14,7 +18,11 @@ import {
   STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY
 } from "./review-section-contract.ts";
 
-export type FindingsBlockKind = "candidate-findings" | "verified-findings";
+export type FindingsBlockKind =
+  | "candidate-findings"
+  | "approved-findings"
+  | "verified-findings"
+  | "missing-information";
 
 export type ReviewStateBlock =
   | "sections"
@@ -28,10 +36,13 @@ export interface ReviewStateSerializeInput {
     | "baseRef"
     | "diffContent"
     | "filePath"
+    | "getCandidateFindingsV3"
     | "getFindings"
+    | "getMissingInformationItems"
     | "getPriorValidatorFeedback"
     | "getReviewBasis"
     | "getSection"
+    | "getValidationReportV1"
     | "headRef"
   >;
   include: readonly ReviewStateBlock[];
@@ -60,7 +71,9 @@ export interface ReviewStateSnapshot {
     hunks: ReviewStateSnapshotHunk[];
   };
   sections: ReviewStateSnapshotSections;
-  candidateFindings: Finding[];
+  candidateFindings: CandidateFindingV3[];
+  approvedFindings: Finding[];
+  missingInformationItems: MissingInformationItem[];
   verifiedFindings: Finding[];
   reviewBasis: ReviewBasisV1 | null;
   evidenceRefs: ReviewBasisEvidenceRef[];
@@ -90,7 +103,16 @@ export class ReviewStatePromptSerializer {
       input.context.filePath,
       input.context.diffContent
     );
-    const findings = input.context.getFindings() ?? [];
+    const approvedFindings =
+      input.context.getValidationReportV1?.()?.approvedFindings ??
+      input.context.getFindings() ??
+      [];
+    const candidateFindings =
+      input.context.getCandidateFindingsV3?.()?.findings ?? [];
+    const missingInformationItems =
+      input.context.getMissingInformationItems?.() ??
+      input.context.getValidationReportV1?.()?.missingInformationItems ??
+      [];
     const reviewBasis = input.context.getReviewBasis?.();
     const includeReviewBasis = input.include.includes("review-basis");
 
@@ -111,10 +133,16 @@ export class ReviewStatePromptSerializer {
         ? this.buildSections(input.context)
         : emptySections(),
       candidateFindings: input.include.includes("candidate-findings")
-        ? findings
+        ? candidateFindings
+        : [],
+      approvedFindings: input.include.includes("approved-findings")
+        ? approvedFindings
+        : [],
+      missingInformationItems: input.include.includes("missing-information")
+        ? missingInformationItems
         : [],
       verifiedFindings: input.include.includes("verified-findings")
-        ? findings
+        ? approvedFindings
         : [],
       reviewBasis: includeReviewBasis ? reviewBasis ?? null : null,
       evidenceRefs: includeReviewBasis && reviewBasis

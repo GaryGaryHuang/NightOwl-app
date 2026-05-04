@@ -12,6 +12,7 @@ const STEP7_SYSTEM_ADDITION = [
   "- Produce a structured summary based on the completed review note.",
   "- The summary is the section readers check first; every sentence must earn its place. Prefer precise conclusions over generic hedging. When uncertainty is real, tie it to the exact missing fact or unresolved evidence \u2014 do not append a vague disclaimer.",
   "- Do not list specific findings, must-fix items, or paraphrased finding details \u2014 those belong in the Findings section.",
+  "- Consume only Step 6-approved findings, missing-information items, and the host risk snapshot. Do not introduce new findings, identifiers, trigger conditions, impacts, or technical claims.",
   "- The `<risk_snapshot>` block in the user message contains the host-computed `derivedRiskLevel`. You MUST use this exact value as the `整體風險等級` in your response. Do not override or recompute the risk level based on your own assessment.",
   "- Begin the response with `## Summary`."
 ].join("\n");
@@ -42,7 +43,15 @@ export class Step7SummaryStep implements StepDefinition {
       prompt: {
         systemMessage: [COMMON_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep7UserMessage(
-          this.#promptSerializer.serialize({ context, include: ["sections", "verified-findings"] }),
+          this.#promptSerializer.serialize({
+            context,
+            include: [
+              "sections",
+              "approved-findings",
+              "missing-information",
+              "verified-findings"
+            ]
+          }),
           snapshot
         )
       },
@@ -56,7 +65,10 @@ export class Step7SummaryStep implements StepDefinition {
         filePath: context.filePath,
         sectionKey: SUMMARY_SECTION_KEY,
         criteria: buildStep7JudgeCriteria(),
-        expectedRiskLevel: snapshot.derivedRiskLevel
+        expectedRiskLevel: snapshot.derivedRiskLevel,
+        allowedFindingIds: snapshot.acceptedFindingIds,
+        allowedMissingInformationIds:
+          context.getMissingInformationItems()?.map((item) => item.itemId) ?? []
       })
     };
   }
@@ -77,6 +89,7 @@ function buildStep7UserMessage(reviewState: string, snapshot: RiskSnapshot): str
 function buildStep7Instruction(): string {
   return [
     "This summary is the section readers check first. Every sentence must earn its place.",
+    "Use only Step 6-approved findings, Step 6 missing-information items, and the host risk snapshot. Do not introduce new findings or technical claims.",
     "",
     "Read <review_state> and write a structured summary with the following three sections:",
     "",

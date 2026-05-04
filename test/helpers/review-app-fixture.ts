@@ -143,27 +143,62 @@ export function buildSessionResponse(
 
   if (/## Current Step: Validation & Interrogation/u.test(systemMessage)) {
     return JSON.stringify({
-      schemaVersion: 2,
+      schemaVersion: 3,
+      result: "FINDINGS_READY",
       findings: [
         {
-          type: "must",
+          findingId: "F1",
+          sourceHypothesisIds: ["H1"],
+          classification: "confirmed_problem",
+          priority: "must",
+          severity: "high",
+          confidence: "high",
+          evidenceStrength: "direct",
           title: "問題標題",
           traceability: lineRangeTraceability(1, 1),
-          expectedBehavior: "應維持既有 fallback",
-          actualBehavior: "新分支略過 fallback",
-          deviation: "預期與實際有落差",
+          codeEvidence: [
+            {
+              evidenceId: "E1",
+              location: "src/app.ts:1",
+              summary: "新分支略過 fallback"
+            }
+          ],
+          executionPath: ["entry", "changed branch"],
+          triggerCondition: "empty input reaches the changed branch",
+          failureMechanism: "fallback guard is skipped",
           impact: "會造成 correctness 問題",
-          suggestion: "補上 guard",
-          findingId: "F1"
+          counterEvidenceChecked: ["fallback path is after the changed branch"],
+          reproducibility: "deterministic with empty input",
+          fixDirection: "補上 guard",
+          testRecommendation: "新增 fallback regression test"
         }
-      ]
+      ],
+      hypothesisClosure: [
+        {
+          hypothesisId: "H1",
+          status: "closed_by_candidate",
+          evidenceIds: ["E1"],
+          rationale: "candidate F1 covers the hypothesis"
+        }
+      ],
+      criticalMissingInformation: []
     });
   }
 
-  if (/## Current Step: Cognitive Simulation/u.test(systemMessage)) {
+  if (/## Current Step: (?:Cognitive Simulation|Semantic Validation)/u.test(systemMessage)) {
     return JSON.stringify({
-      schemaVersion: 2,
-      findingUpdates: [
+      schemaVersion: 1,
+      overallStatus: "PASS",
+      perFindingResults: [
+        {
+          findingId: "F1",
+          decision: "approve",
+          failedGates: [],
+          requiredCorrections: [],
+          reason: "all semantic gates passed"
+        }
+      ],
+      approvedFindings: [
         {
           type: "must",
           title: "問題標題",
@@ -176,14 +211,8 @@ export function buildSessionResponse(
           findingId: "F1"
         }
       ],
-      dispositions: [
-        {
-          findingId: "F1",
-          status: "modified",
-          reason: "SUPPORTED",
-          explanation: "simulation confirms the finding"
-        }
-      ]
+      missingInformationItems: [],
+      loopControl: { action: "accept", reason: "all gates passed" }
     });
   }
 

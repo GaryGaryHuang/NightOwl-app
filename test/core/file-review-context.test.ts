@@ -126,6 +126,58 @@ test("FileReviewContext returns defensive ReviewBasisV1 snapshots", () => {
   ]);
 });
 
+test("FileReviewContext stores CandidateFindingsV3 separately from approved findings", () => {
+  const context = createContext() as SemanticFileReviewContext;
+  const candidatePayload = createCandidateFindingsV3();
+
+  context.setCandidateFindingsV3(candidatePayload);
+
+  assert.equal(context.getFindings(), undefined);
+  assert.equal(context.getCandidateFindingsV3()?.schemaVersion, 3);
+  assert.equal(
+    context.getCandidateFindingsV3()?.findings[0]?.classification,
+    "confirmed_problem"
+  );
+});
+
+test("FileReviewContext returns defensive CandidateFindingsV3 snapshots", () => {
+  const context = createContext() as SemanticFileReviewContext;
+  const candidatePayload = createCandidateFindingsV3();
+
+  context.setCandidateFindingsV3(candidatePayload);
+  candidatePayload.findings[0]!.classification = "insufficient_information";
+
+  const first = context.getCandidateFindingsV3()!;
+  first.findings[0]!.codeEvidence[0]!.evidenceId = "MUTATED";
+  first.hypothesisClosure[0]!.status = "insufficient_information";
+
+  const second = context.getCandidateFindingsV3()!;
+  assert.equal(second.findings[0]!.classification, "confirmed_problem");
+  assert.equal(second.findings[0]!.codeEvidence[0]!.evidenceId, "E1");
+  assert.equal(second.hypothesisClosure[0]!.status, "closed_by_candidate");
+});
+
+test("FileReviewContext stores ValidationReportV1 and missing-information state defensively", () => {
+  const context = createContext() as SemanticFileReviewContext;
+  const report = createValidationReportV1();
+
+  context.setValidationReportV1(report);
+  context.setMissingInformationItems(report.missingInformationItems);
+  report.approvedFindings[0]!.findingId = "MUTATED";
+  report.missingInformationItems[0]!.description = "MUTATED";
+
+  const storedReport = context.getValidationReportV1()!;
+  const storedMissingInfo = context.getMissingInformationItems()!;
+  storedReport.approvedFindings[0]!.findingId = "MUTATED_AGAIN";
+  storedMissingInfo[0]!.description = "MUTATED_AGAIN";
+
+  assert.equal(context.getValidationReportV1()?.approvedFindings[0]?.findingId, "F1");
+  assert.equal(
+    context.getMissingInformationItems()?.[0]?.description,
+    "Need the external null-input contract."
+  );
+});
+
 test("FileReviewContext stores interruption state separately and returns defensive copies", () => {
   const context = createContext();
 
@@ -364,6 +416,99 @@ function createContext(
     ...DEFAULT_CONTEXT_INPUT,
     ...overrides
   });
+}
+
+type SemanticFileReviewContext = FileReviewContext & {
+  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
+  getCandidateFindingsV3(): ReturnType<typeof createCandidateFindingsV3> | undefined;
+  setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
+  getValidationReportV1(): ReturnType<typeof createValidationReportV1> | undefined;
+  setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
+  getMissingInformationItems(): ReturnType<typeof createValidationReportV1>["missingInformationItems"] | undefined;
+};
+
+function createCandidateFindingsV3() {
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings: [
+      {
+        findingId: "F1",
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority: "must",
+        severity: "high",
+        confidence: "high",
+        evidenceStrength: "direct",
+        title: "guard moved after dereference",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: "src/app.ts:1",
+            summary: "changed branch reads value before fallback"
+          }
+        ],
+        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        triggerCondition: "nullable input reaches the changed branch",
+        failureMechanism: "guard runs after dereference",
+        impact: "request fails before fallback can run",
+        counterEvidenceChecked: ["fallback no longer precedes dereference"],
+        reproducibility: "deterministic with nullable input",
+        fixDirection: "restore guard before dereference",
+        testRecommendation: "add nullable input regression coverage"
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: "F1 validates the hypothesis."
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}
+
+function createValidationReportV1() {
+  return {
+    schemaVersion: 1,
+    overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "convert_to_missing_information",
+        failedGates: ["missing_information_honest"],
+        requiredCorrections: [],
+        reason: "external contract is unavailable"
+      }
+    ],
+    approvedFindings: [
+      {
+        type: "must" as const,
+        title: "guard moved after dereference",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        expectedBehavior: "nullable input returns fallback",
+        actualBehavior: "changed branch reads value first",
+        deviation: "fallback no longer runs before dereference",
+        impact: "request fails before fallback can run",
+        suggestion: "restore guard before dereference",
+        findingId: "F1",
+        sourceHypothesisId: "H1"
+      }
+    ],
+    missingInformationItems: [
+      {
+        itemId: "MI1",
+        findingId: "F1",
+        description: "Need the external null-input contract.",
+        whyItMatters: "Without it the validator cannot prove expected behavior."
+      }
+    ],
+    loopControl: { action: "stop", reason: "missing critical contract" },
+    stopReason: "missing_critical_contract"
+  };
 }
 
 function createReviewBasis(): ReviewBasisV1 {

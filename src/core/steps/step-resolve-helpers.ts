@@ -3,8 +3,13 @@ import type {
   Finding,
   FindingDisposition
 } from "../file-review-context.ts";
+import type { ReviewBasisV1 } from "../review-basis.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { RiskLevel } from "../risk-level.ts";
+import type {
+  CandidateFindingsV3,
+  ValidationReportV1
+} from "../semantic-review.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
 import type {
   VerifierReportArtifactEntry,
@@ -77,6 +82,72 @@ export function createStructuredResolve(input: {
 
     return (targetContext: FileReviewContext) => {
       targetContext.setFindings(accepted.payload.findings);
+      targetContext.appendVerifierReportEntries(reportEntries);
+    };
+  };
+}
+
+export function createCandidateFindingsV3Resolve(input: {
+  stepId?: string;
+  filePath: string;
+  diffContent?: string;
+  reviewBasis: ReviewBasisV1;
+}): StepExecutionPlan["resolve"] {
+  return async (response, services) => {
+    if (!services.validator.validateCandidateFindingsV3WithReport) {
+      throw new Error("CandidateFindingsV3 validator is not configured");
+    }
+    const validated = services.validator.validateCandidateFindingsV3WithReport({
+      responseText: response,
+      reviewBasis: input.reviewBasis,
+      filePath: input.filePath,
+      ...(input.diffContent === undefined
+        ? {}
+        : { diffContent: input.diffContent })
+    });
+    const reportEntries = toVerifierArtifactEntries({
+      filePath: input.filePath,
+      stepId: input.stepId ?? "step5-validation-interrogation",
+      report: validated.report
+    });
+
+    return (targetContext: FileReviewContext) => {
+      targetContext.setCandidateFindingsV3(validated.payload);
+      targetContext.appendVerifierReportEntries(reportEntries);
+    };
+  };
+}
+
+export function createValidationReportV1Resolve(input: {
+  stepId?: string;
+  filePath: string;
+  diffContent?: string;
+  reviewBasis?: ReviewBasisV1;
+  candidatePayload: CandidateFindingsV3 | Record<string, unknown>;
+}): StepExecutionPlan["resolve"] {
+  return async (response, services) => {
+    if (!services.validator.validateValidationReportV1WithReport) {
+      throw new Error("ValidationReportV1 validator is not configured");
+    }
+    const validated = services.validator.validateValidationReportV1WithReport({
+      responseText: response,
+      candidateFindings: input.candidatePayload,
+      ...(input.reviewBasis === undefined ? {} : { reviewBasis: input.reviewBasis }),
+      filePath: input.filePath,
+      ...(input.diffContent === undefined
+        ? {}
+        : { diffContent: input.diffContent })
+    });
+    const reportEntries = toVerifierArtifactEntries({
+      filePath: input.filePath,
+      stepId: input.stepId ?? "step6-cognitive-simulation",
+      report: validated.report
+    });
+
+    return (targetContext: FileReviewContext) => {
+      targetContext.setValidationReportV1(validated.payload);
+      targetContext.setMissingInformationItems(validated.payload.missingInformationItems);
+      targetContext.setFindings(validated.payload.approvedFindings);
       targetContext.appendVerifierReportEntries(reportEntries);
     };
   };
@@ -247,6 +318,8 @@ export function createStep7HybridResolve(input: {
   sectionKey: ReviewSectionKey;
   criteria: string;
   expectedRiskLevel: RiskLevel;
+  allowedFindingIds?: readonly string[];
+  allowedMissingInformationIds?: readonly string[];
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
     // Deterministic pre-check: risk level must match snapshot
@@ -256,6 +329,8 @@ export function createStep7HybridResolve(input: {
         `整體風險等級 risk mismatch: expected "${input.expectedRiskLevel}" but got "${parsed ?? "(unparseable)"}"`
       );
     }
+
+    rejectUnknownStep7Claims(response, input);
 
     // Judge check: section structure validation
     if (!services.judgeService) {
@@ -277,4 +352,44 @@ export function createStep7HybridResolve(input: {
       targetContext.setSection(input.sectionKey, response);
     };
   };
+}
+
+function rejectUnknownStep7Claims(
+  response: string,
+  input: {
+    allowedFindingIds?: readonly string[];
+    allowedMissingInformationIds?: readonly string[];
+  }
+): void {
+  const allowedFindingIds = new Set(input.allowedFindingIds ?? []);
+  if (input.allowedFindingIds) {
+    for (const findingId of extractTokenIds(response, /\bF(?:[0-9][0-9A-Za-z_-]*|-[0-9A-Za-z_-]+)\b/gu)) {
+      if (!allowedFindingIds.has(findingId)) {
+        throw new Error(
+          `Step 7 packaging introduced a new claim outside approved findings: ${findingId}`
+        );
+      }
+    }
+  }
+
+  const allowedMissingInformationIds = new Set(input.allowedMissingInformationIds ?? []);
+  if (input.allowedMissingInformationIds) {
+    for (const missingInfoId of extractTokenIds(response, /\bMI(?:[0-9][0-9A-Za-z_-]*|-[0-9A-Za-z_-]+)\b/gu)) {
+      if (!allowedMissingInformationIds.has(missingInfoId)) {
+        throw new Error(
+          `Step 7 packaging introduced a new missing-information claim outside Step 6 state: ${missingInfoId}`
+        );
+      }
+    }
+  }
+}
+
+function extractTokenIds(response: string, pattern: RegExp): string[] {
+  const ids = new Set<string>();
+  for (const match of response.matchAll(pattern)) {
+    if (match[0]) {
+      ids.add(match[0]);
+    }
+  }
+  return [...ids];
 }

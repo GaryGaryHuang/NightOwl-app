@@ -231,9 +231,9 @@ const STUB_REVIEW_BASIS = buildDryRunReviewBasisResponse(
   '<diff path="dry-run.ts" base="main" head="HEAD">\n</diff>'
 );
 
-const STUB_VALIDATION_INTERROGATION = '{"schemaVersion": 2, "findings": []}';
+const STUB_VALIDATION_INTERROGATION = '{"schemaVersion": 3, "result": "NO_FINDINGS", "findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "evidenceIds": ["E1"], "rationale": "dry-run stub has no findings"}], "criticalMissingInformation": []}';
 
-const STUB_COGNITIVE_SIMULATION = '{"schemaVersion": 2, "findingUpdates": [], "dispositions": []}';
+const STUB_COGNITIVE_SIMULATION = '{"schemaVersion": 1, "overallStatus": "PASS", "perFindingResults": [], "approvedFindings": [], "missingInformationItems": [], "loopControl": {"action": "accept", "reason": "dry-run stub has no candidates"}}';
 
 const STUB_SUMMARY = [
   "## Summary",

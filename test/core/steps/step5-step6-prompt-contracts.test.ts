@@ -25,20 +25,6 @@ function createContext(findings: Finding[] = []): FileReviewContext {
   return context;
 }
 
-function createFinding(findingId: string): Finding {
-  return {
-    type: "must",
-    title: `finding ${findingId}`,
-    traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    expectedBehavior: "expected",
-    actualBehavior: "actual",
-    deviation: "dev",
-    impact: "impact",
-    suggestion: "suggestion",
-    findingId
-  };
-}
-
 const serializer = new ReviewStatePromptSerializer();
 
 function parseReviewStateFromPrompt(prompt: string): unknown {
@@ -54,22 +40,23 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   const plan = step.prepare(createContext());
 
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1\.hypothesisLedger/u);
+  assert.match(plan.prompt.systemMessage, /CandidateFindingsV3/u);
+  assert.match(plan.prompt.systemMessage, /final approved findings/u);
   assert.match(plan.prompt.userMessage, /<review_basis format="json">/u);
   assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
   assert.match(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
   assert.match(plan.prompt.systemMessage, /smallest head-side line range/u);
   assert.match(plan.prompt.systemMessage, /changedHeadLines/u);
-  assert.match(
-    plan.prompt.systemMessage,
-    /Do not include internal verifier metadata or fields outside the JSON structure/u
-  );
+  assert.match(plan.prompt.systemMessage, /classification/u);
+  assert.match(plan.prompt.systemMessage, /evidenceStrength/u);
+  assert.match(plan.prompt.systemMessage, /counterEvidenceChecked/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
-  assert.match(plan.prompt.userMessage, /expectedBehavior/);
-  assert.match(plan.prompt.userMessage, /actualBehavior/);
-  assert.match(plan.prompt.userMessage, /sourceHypothesisId/);
-  assert.doesNotMatch(plan.prompt.userMessage, /supportingEvidence/);
-  assert.doesNotMatch(plan.prompt.userMessage, /guardsChecked/);
-  assert.doesNotMatch(plan.prompt.userMessage, /uncertaintyStatus/);
+  assert.match(plan.prompt.userMessage, /"schemaVersion": 3/u);
+  assert.match(plan.prompt.userMessage, /sourceHypothesisIds/u);
+  assert.match(plan.prompt.userMessage, /hypothesisClosure/u);
+  assert.match(plan.prompt.userMessage, /criticalMissingInformation/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /"schemaVersion": 2/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /"sourceHypothesisId"/u);
 });
 
 test("Step5ValidationInterrogationStep fails before prompt construction without ReviewBasis", () => {
@@ -161,32 +148,79 @@ function createReviewBasis(): ReviewBasisV1 {
   };
 }
 
-test("Step6CognitiveSimulationStep includes full candidate findings JSON in review_state snapshot", () => {
-  const candidate = createFinding("F1");
+test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests ValidationReportV1", () => {
+  const candidatePayload = createCandidateFindingsV3();
   const step = new Step6CognitiveSimulationStep({ promptSerializer: serializer });
-  const plan = step.prepare(createContext([candidate]));
+  const context = createContext() as SemanticFileReviewContext;
+  context.setCandidateFindingsV3(candidatePayload);
+  const plan = step.prepare(context);
 
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
-    candidateFindings: Finding[];
+    candidateFindings: ReturnType<typeof createCandidateFindingsV3>["findings"];
     verifiedFindings: Finding[];
   };
 
-  assert.deepEqual(snapshot.candidateFindings, [candidate]);
+  assert.deepEqual(snapshot.candidateFindings, candidatePayload.findings);
   assert.deepEqual(snapshot.verifiedFindings, []);
   assert.equal(plan.prompt.userMessage.includes("<candidate_findings"), false);
-  assert.match(plan.prompt.userMessage, /findingUpdates/);
-  assert.match(
-    plan.prompt.systemMessage,
-    /Do not include internal verifier metadata or fields outside the JSON structure/u
-  );
+  assert.match(plan.prompt.systemMessage, /Semantic Validation/u);
+  assert.match(plan.prompt.systemMessage, /ValidationReportV1/u);
+  assert.match(plan.prompt.systemMessage, /not a bug hunt/u);
+  assert.match(plan.prompt.systemMessage, /Do not introduce new defects/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
-  assert.doesNotMatch(plan.prompt.userMessage, /supportingEvidence/);
-  assert.doesNotMatch(plan.prompt.userMessage, /uncertaintyStatus/);
-  assert.doesNotMatch(plan.prompt.userMessage, /verifierVerdict/);
-  assert.match(
-    plan.prompt.userMessage,
-    /If no findings remain, return: \{"schemaVersion": 2, "findingUpdates": \[\], "dispositions":/u
-  );
-  assert.match(plan.prompt.userMessage, /Retained candidates MUST NOT appear in the `findingUpdates` array/u);
-  assert.match(plan.prompt.userMessage, /SUPPORTED.*ANCHOR.*EVIDENCE.*REACHABILITY.*OUT_OF_SCOPE.*DUPLICATE.*CONTRADICTION/);
+  assert.match(plan.prompt.userMessage, /perFindingResults/u);
+  assert.match(plan.prompt.userMessage, /approvedFindings/u);
+  assert.match(plan.prompt.userMessage, /missingInformationItems/u);
+  assert.match(plan.prompt.userMessage, /loopControl/u);
+  assert.match(plan.prompt.userMessage, /rerun_step5/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /findingUpdates/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /dispositions/u);
 });
+
+type SemanticFileReviewContext = FileReviewContext & {
+  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
+};
+
+function createCandidateFindingsV3() {
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings: [
+      {
+        findingId: "F1",
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority: "must",
+        severity: "high",
+        confidence: "high",
+        evidenceStrength: "direct",
+        title: "guard moved after dereference",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: "src/app.ts:1",
+            summary: "changed branch reads value before fallback"
+          }
+        ],
+        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        triggerCondition: "nullable input reaches the changed branch",
+        failureMechanism: "guard runs after dereference",
+        impact: "request fails before fallback can run",
+        counterEvidenceChecked: ["fallback no longer precedes dereference"],
+        reproducibility: "deterministic with nullable input",
+        fixDirection: "restore guard before dereference",
+        testRecommendation: "add nullable input regression coverage"
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: "F1 validates the hypothesis."
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}

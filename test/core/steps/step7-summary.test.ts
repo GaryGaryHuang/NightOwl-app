@@ -203,6 +203,72 @@ test("createStep7HybridResolve does not call judge when risk mismatches", async 
   assert.equal(judgeCalled, false, "judge should not be called on risk mismatch");
 });
 
+test("createStep7HybridResolve rejects new finding claims outside Step 6 approved results", async () => {
+  let judgeCalled = false;
+  const resolve = createStep7HybridResolve({
+    stepId: "step7-summary",
+    filePath: "src/app.ts",
+    sectionKey: "summary",
+    criteria: "test criteria",
+    expectedRiskLevel: "Low",
+    allowedFindingIds: ["F1"],
+    allowedMissingInformationIds: ["MI1"]
+  });
+
+  const response = [
+    buildSummaryResponse("Low"),
+    "",
+    "- 風險理由：F2 reveals a new trigger not present in Step 6 approved findings."
+  ].join("\n");
+
+  await assert.rejects(
+    () =>
+      resolve(
+        response,
+        createResolveServices({
+          judgePasses: true,
+          onJudgeCall: () => {
+            judgeCalled = true;
+          }
+        })
+      ),
+    /new.*claim|approved findings|F2/i
+  );
+  assert.equal(judgeCalled, false, "judge should not be called when packaging adds a new claim");
+});
+
+test("createStep7HybridResolve does not treat ordinary words as finding IDs", async () => {
+  let judgeCalled = false;
+  const resolve = createStep7HybridResolve({
+    stepId: "step7-summary",
+    filePath: "src/app.ts",
+    sectionKey: "summary",
+    criteria: "test criteria",
+    expectedRiskLevel: "Low",
+    allowedFindingIds: [],
+    allowedMissingInformationIds: []
+  });
+
+  const response = [
+    buildSummaryResponse("Low"),
+    "",
+    "- 風險理由：Feature packaging stayed within the approved review state."
+  ].join("\n");
+
+  const mutation = await resolve(
+    response,
+    createResolveServices({
+      judgePasses: true,
+      onJudgeCall: () => {
+        judgeCalled = true;
+      }
+    })
+  );
+
+  assert.equal(typeof mutation, "function");
+  assert.equal(judgeCalled, true);
+});
+
 // --- Step 7 prepare() prompt tests ---
 
 test("Step7SummaryStep.prepare() includes <risk_snapshot> in user message when findings exist", () => {
@@ -277,6 +343,32 @@ test("Step7SummaryStep.prepare() includes <review_state> in user message", () =>
   assert.match(plan.prompt.userMessage, /<\/review_state>/);
 });
 
+test("Step7SummaryStep.prepare() consumes approved findings and missing-information state", () => {
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+  const context = createContext([createFinding("nice", "F1")]) as SemanticFileReviewContext;
+  context.setCandidateFindingsV3(createCandidateFindingsV3("must"));
+  context.setValidationReportV1(createValidationReportV1());
+  context.setMissingInformationItems(createValidationReportV1().missingInformationItems);
+  const plan = step.prepare(context);
+
+  const reviewState = parseReviewStateFromPrompt(plan.prompt.userMessage);
+  assert.deepEqual(reviewState.candidateFindings, []);
+  assert.deepEqual(
+    reviewState.approvedFindings.map((finding: Finding) => finding.findingId),
+    ["F1"]
+  );
+  assert.deepEqual(reviewState.missingInformationItems, [
+    {
+      itemId: "MI1",
+      findingId: "F1",
+      description: "Need the external null-input contract.",
+      whyItMatters: "Without it the validator cannot prove expected behavior."
+    }
+  ]);
+  assert.match(plan.prompt.userMessage, /Step 6-approved findings/i);
+  assert.match(plan.prompt.userMessage, /Do not introduce new findings/i);
+});
+
 test("Step7SummaryStep.prepare() allows no necessary assumptions in summary contract", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([]);
@@ -325,5 +417,93 @@ function createResolveServices(
       }
     },
     validator: new StructuredOutputValidator()
+  };
+}
+
+type SemanticFileReviewContext = FileReviewContext & {
+  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
+  setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
+  setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
+};
+
+function parseReviewStateFromPrompt(prompt: string): {
+  candidateFindings: unknown[];
+  approvedFindings: Finding[];
+  missingInformationItems: ReturnType<typeof createValidationReportV1>["missingInformationItems"];
+} {
+  const match = prompt.match(
+    /<review_state format="json">\n([\s\S]*?)\n<\/review_state>/u
+  );
+  assert.ok(match, "review_state JSON block should be present");
+  return JSON.parse(match[1]);
+}
+
+function createCandidateFindingsV3(priority: "must" | "nice") {
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings: [
+      {
+        findingId: "F-raw-candidate",
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority,
+        severity: priority === "must" ? "high" : "low",
+        confidence: "high",
+        evidenceStrength: "direct",
+        title: "raw candidate must not shape Step 7",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: "src/app.ts:1",
+            summary: "candidate evidence"
+          }
+        ],
+        executionPath: ["entry", "changed branch"],
+        triggerCondition: "candidate trigger",
+        failureMechanism: "candidate mechanism",
+        impact: "candidate impact",
+        counterEvidenceChecked: ["candidate counter-evidence"],
+        reproducibility: "candidate reproduction",
+        fixDirection: "candidate fix",
+        testRecommendation: "candidate test"
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: "candidate closes H1"
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}
+
+function createValidationReportV1() {
+  return {
+    schemaVersion: 1,
+    overallStatus: "PASS",
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "approve",
+        failedGates: [],
+        requiredCorrections: [],
+        reason: "all gates passed"
+      }
+    ],
+    approvedFindings: [createFinding("nice", "F1")],
+    missingInformationItems: [
+      {
+        itemId: "MI1",
+        findingId: "F1",
+        description: "Need the external null-input contract.",
+        whyItMatters: "Without it the validator cannot prove expected behavior."
+      }
+    ],
+    loopControl: { action: "accept", reason: "all gates passed" }
   };
 }

@@ -8,6 +8,11 @@ import {
   StructuredValidationReportError
 } from "./structured-output-validator.ts";
 import type { FindingsPayload, FindingDisposition, VerifiedFindingsPayload } from "./file-review-context.ts";
+import type { ReviewBasisV1 } from "./review-basis.ts";
+import type {
+  CandidateFindingsV3,
+  ValidationReportV1
+} from "./semantic-review.ts";
 import type {
   VerifierReportArtifactEntry,
   VerifierReportEntry
@@ -45,6 +50,19 @@ export interface StructuredOutputValidatorLike {
     acceptedFindingIds: readonly string[];
     findingUpdateIds: readonly string[];
   }): void;
+  validateCandidateFindingsV3WithReport?(input: {
+    responseText: string;
+    reviewBasis: ReviewBasisV1;
+    diffContent?: string;
+    filePath?: string;
+  }): { payload: CandidateFindingsV3; report: VerifierReportEntry[] };
+  validateValidationReportV1WithReport?(input: {
+    responseText: string;
+    candidateFindings: CandidateFindingsV3 | Record<string, unknown>;
+    reviewBasis?: ReviewBasisV1;
+    diffContent?: string;
+    filePath?: string;
+  }): { payload: ValidationReportV1; report: VerifierReportEntry[] };
 }
 
 export interface StepResolveServices {

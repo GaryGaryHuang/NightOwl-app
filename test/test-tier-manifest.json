@@ -40,6 +40,7 @@
     "test/core/structured-output-validator-anchor.test.ts",
     "test/core/structured-output-validator-dispositions.test.ts",
     "test/core/structured-output-validator-report.test.ts",
+    "test/core/structured-output-validator-semantic-review.test.ts",
     "test/core/structured-output-validator.test.ts",
     "test/core/verifier-report.test.ts",
     "test/core/web-fetch-hostname-normalization.test.ts",

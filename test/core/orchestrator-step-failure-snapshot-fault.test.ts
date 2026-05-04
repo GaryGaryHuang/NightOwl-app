@@ -212,7 +212,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     );
     assert.match(
       writtenNotes.get(failedNotePath) ?? "",
-      /^# [\s\S]*^## Findings/mu
+      /^# [\s\S]*^- Status: Review not yet generated\./mu
     );
     assert.doesNotMatch(
       writtenNotes.get(failedNotePath) ?? "",

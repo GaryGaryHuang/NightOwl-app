@@ -5,6 +5,14 @@ import {
   type PriorValidatorFeedback,
   type ReviewBasisV1
 } from "./review-basis.ts";
+import {
+  cloneCandidateFindingsV3,
+  cloneMissingInformationItems,
+  cloneValidationReportV1,
+  type CandidateFindingsV3,
+  type MissingInformationItem,
+  type ValidationReportV1
+} from "./semantic-review.ts";
 import type { VerifierReportArtifactEntry } from "./verifier-report.ts";
 
 export interface FileReviewContextInput {
@@ -112,6 +120,9 @@ export class FileReviewContext {
   #findingsInsertionIndex?: number;
   #reviewBasis?: ReviewBasisV1;
   #priorValidatorFeedback?: PriorValidatorFeedback;
+  #candidateFindingsV3?: CandidateFindingsV3;
+  #validationReportV1?: ValidationReportV1;
+  #missingInformationItems?: MissingInformationItem[];
 
   constructor(input: FileReviewContextInput) {
     this.filePath = input.filePath;
@@ -158,6 +169,36 @@ export class FileReviewContext {
   getPriorValidatorFeedback(): PriorValidatorFeedback | undefined {
     return this.#priorValidatorFeedback
       ? clonePriorValidatorFeedback(this.#priorValidatorFeedback)
+      : undefined;
+  }
+
+  setCandidateFindingsV3(payload: CandidateFindingsV3): void {
+    this.#candidateFindingsV3 = cloneCandidateFindingsV3(payload);
+  }
+
+  getCandidateFindingsV3(): CandidateFindingsV3 | undefined {
+    return this.#candidateFindingsV3
+      ? cloneCandidateFindingsV3(this.#candidateFindingsV3)
+      : undefined;
+  }
+
+  setValidationReportV1(report: ValidationReportV1): void {
+    this.#validationReportV1 = cloneValidationReportV1(report);
+  }
+
+  getValidationReportV1(): ValidationReportV1 | undefined {
+    return this.#validationReportV1
+      ? cloneValidationReportV1(this.#validationReportV1)
+      : undefined;
+  }
+
+  setMissingInformationItems(items: MissingInformationItem[]): void {
+    this.#missingInformationItems = cloneMissingInformationItems(items);
+  }
+
+  getMissingInformationItems(): MissingInformationItem[] | undefined {
+    return this.#missingInformationItems
+      ? cloneMissingInformationItems(this.#missingInformationItems)
       : undefined;
   }
 

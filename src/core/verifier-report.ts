@@ -15,6 +15,7 @@ export const TAXONOMY_CODES = [
   "OUT_OF_SCOPE",
   "DUPLICATE",
   "CONTRADICTION",
+  "SEMANTIC",
   "OK"
 ] as const;
 
@@ -44,7 +45,7 @@ export interface VerifierReportEntry {
   readonly findingId: string;
   readonly taxonomy: VerifierTaxonomyCode;
   readonly outcome: "accepted" | "rejected";
-  readonly gate: "schema" | "anchor" | "acceptance" | "disposition";
+  readonly gate: "schema" | "anchor" | "acceptance" | "disposition" | "semantic";
   readonly reason: string;
   readonly dispositionStatus?: "retained" | "modified" | "retired";
   readonly dispositionReason?: string;

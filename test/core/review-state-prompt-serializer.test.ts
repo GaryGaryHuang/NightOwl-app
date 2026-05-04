@@ -50,6 +50,17 @@ function serializeSnapshot(
 
 const serializer = new ReviewStatePromptSerializer();
 
+type SemanticFileReviewContext = FileReviewContext & {
+  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
+  setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
+  setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
+};
+
+type SemanticReviewStateSnapshot = ReviewStateSnapshot & {
+  approvedFindings: Finding[];
+  missingInformationItems: ReturnType<typeof createValidationReportV1>["missingInformationItems"];
+};
+
 test("serializes one stable review_state JSON block", () => {
   const ctx = createContext();
   const result = serializer.serialize({ context: ctx, include: ["sections"] });
@@ -76,6 +87,8 @@ test("snapshot includes stable file refs and diff summary hunks derived from the
     }
   ]);
   assert.deepEqual(snapshot.candidateFindings, []);
+  assert.deepEqual((snapshot as SemanticReviewStateSnapshot).approvedFindings, []);
+  assert.deepEqual((snapshot as SemanticReviewStateSnapshot).missingInformationItems, []);
   assert.deepEqual(snapshot.verifiedFindings, []);
   assert.deepEqual(snapshot.evidenceRefs, []);
 });
@@ -132,26 +145,48 @@ test("JSON encoding prevents raw section content from creating XML-ish child blo
   assert.equal(result.includes("</review_state> and"), false);
 });
 
-test("candidate findings populate candidateFindings only", () => {
-  const ctx = createContext();
-  ctx.setFindings([createFinding("F1")]);
+test("CandidateFindingsV3 populates candidateFindings without promoting approved findings", () => {
+  const ctx = createContext() as SemanticFileReviewContext;
+  ctx.setCandidateFindingsV3(createCandidateFindingsV3());
 
   const snapshot = serializeSnapshot(ctx, ["candidate-findings"]);
 
   assert.equal(snapshot.candidateFindings.length, 1);
   assert.equal(snapshot.candidateFindings[0].findingId, "F1");
+  assert.equal(snapshot.candidateFindings[0].classification, "confirmed_problem");
+  assert.deepEqual((snapshot as SemanticReviewStateSnapshot).approvedFindings, []);
   assert.deepEqual(snapshot.verifiedFindings, []);
 });
 
-test("verified findings populate verifiedFindings only", () => {
-  const ctx = createContext();
+test("approved findings populate approvedFindings and verifiedFindings compatibility projection", () => {
+  const ctx = createContext() as SemanticFileReviewContext;
   ctx.setFindings([createFinding("F1")]);
+  ctx.setValidationReportV1(createValidationReportV1());
 
-  const snapshot = serializeSnapshot(ctx, ["verified-findings"]);
+  const snapshot = serializeSnapshot(ctx, ["approved-findings", "verified-findings"]);
 
   assert.deepEqual(snapshot.candidateFindings, []);
+  assert.equal((snapshot as SemanticReviewStateSnapshot).approvedFindings.length, 1);
+  assert.equal((snapshot as SemanticReviewStateSnapshot).approvedFindings[0].findingId, "F1");
   assert.equal(snapshot.verifiedFindings.length, 1);
   assert.equal(snapshot.verifiedFindings[0].findingId, "F1");
+});
+
+test("missing-information items are serialized only when requested", () => {
+  const ctx = createContext() as SemanticFileReviewContext;
+  ctx.setMissingInformationItems(createValidationReportV1().missingInformationItems);
+
+  assert.deepEqual((serializeSnapshot(ctx, []) as SemanticReviewStateSnapshot).missingInformationItems, []);
+
+  const snapshot = serializeSnapshot(ctx, ["missing-information"]);
+  assert.deepEqual((snapshot as SemanticReviewStateSnapshot).missingInformationItems, [
+    {
+      itemId: "MI1",
+      findingId: "F1",
+      description: "Need the external null-input contract.",
+      whyItMatters: "Without it the validator cannot prove expected behavior."
+    }
+  ]);
 });
 
 test("empty findings array is preserved when findings are requested", () => {
@@ -214,6 +249,76 @@ test("prior validator feedback is serialized only when requested", () => {
     requiredCorrections: ["cite E1 before resubmitting"]
   });
 });
+
+function createCandidateFindingsV3() {
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings: [
+      {
+        findingId: "F1",
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority: "must",
+        severity: "high",
+        confidence: "high",
+        evidenceStrength: "direct",
+        title: "guard moved after dereference",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: "src/app.ts:1",
+            summary: "changed branch reads value before fallback"
+          }
+        ],
+        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        triggerCondition: "nullable input reaches the changed branch",
+        failureMechanism: "guard runs after dereference",
+        impact: "request fails before fallback can run",
+        counterEvidenceChecked: ["fallback no longer precedes dereference"],
+        reproducibility: "deterministic with nullable input",
+        fixDirection: "restore guard before dereference",
+        testRecommendation: "add nullable input regression coverage"
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: "F1 validates the hypothesis."
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}
+
+function createValidationReportV1() {
+  return {
+    schemaVersion: 1,
+    overallStatus: "PASS",
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "approve",
+        failedGates: [],
+        requiredCorrections: [],
+        reason: "all gates passed"
+      }
+    ],
+    approvedFindings: [createFinding("F1")],
+    missingInformationItems: [
+      {
+        itemId: "MI1",
+        findingId: "F1",
+        description: "Need the external null-input contract.",
+        whyItMatters: "Without it the validator cannot prove expected behavior."
+      }
+    ],
+    loopControl: { action: "accept", reason: "all gates passed" }
+  };
+}
 
 function createReviewBasis(): ReviewBasisV1 {
   return {

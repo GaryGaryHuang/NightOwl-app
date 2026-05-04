@@ -8,6 +8,29 @@ import type {
   FindingTraceability,
   VerifiedFindingsPayload
 } from "./file-review-context.ts";
+import type { ReviewBasisV1 } from "./review-basis.ts";
+import type {
+  CandidateClassification,
+  CandidateConfidence,
+  CandidateFindingV3,
+  CandidateFindingsResult,
+  CandidateFindingsV3,
+  CandidatePriority,
+  CandidateSeverity,
+  CriticalMissingInformation,
+  EvidenceStrength,
+  HypothesisClosure,
+  HypothesisClosureStatus,
+  LoopAction,
+  LoopControl,
+  MissingInformationItem,
+  PerFindingValidationResult,
+  SemanticGateId,
+  StopReason,
+  ValidationDecision,
+  ValidationOverallStatus,
+  ValidationReportV1
+} from "./semantic-review.ts";
 import {
   buildFindingAnchorValidationContext,
   type FindingAnchorValidationContext
@@ -213,6 +236,134 @@ export class StructuredOutputValidator {
     };
   }
 
+  validateCandidateFindingsV3WithReport(input: {
+    responseText: string;
+    reviewBasis: ReviewBasisV1;
+    diffContent?: string;
+    filePath?: string;
+  }): { payload: CandidateFindingsV3; report: VerifierReportEntry[] } {
+    const report: VerifierReportEntry[] = [];
+
+    try {
+      const record = parseTopLevelObject(
+        input.responseText,
+        "top-level payload must be an object with a CandidateFindingsV3 shape"
+      );
+      const payload = validateCandidateFindingsV3Record({
+        record,
+        reviewBasis: input.reviewBasis,
+        anchorContext: buildAnchorContext(input),
+        report
+      });
+
+      for (const finding of payload.findings) {
+        report.push({
+          findingId: finding.findingId,
+          taxonomy: "OK",
+          outcome: "accepted",
+          gate: "schema",
+          reason: "passed CandidateFindingsV3 schema validation"
+        });
+        report.push({
+          findingId: finding.findingId,
+          taxonomy: "OK",
+          outcome: "accepted",
+          gate: "semantic",
+          reason: "passed CandidateFindingsV3 semantic gates"
+        });
+      }
+
+      return { payload, report };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      if (report.length === 0 || report.every((entry) => entry.outcome !== "rejected")) {
+        report.push({
+          findingId: extractReportableFindingIdFromText(input.responseText) ?? "<payload>",
+          taxonomy: reason.includes("schemaVersion") ? "SCHEMA" : "SEMANTIC",
+          outcome: "rejected",
+          gate: reason.includes("schemaVersion") ? "schema" : "semantic",
+          reason
+        });
+      }
+      throw new StructuredValidationReportError(
+        "deterministic validation failed: CandidateFindingsV3 failed validation",
+        report
+      );
+    }
+  }
+
+  validateValidationReportV1WithReport(input: {
+    responseText: string;
+    candidateFindings: CandidateFindingsV3 | Record<string, unknown>;
+    reviewBasis?: ReviewBasisV1;
+    diffContent?: string;
+    filePath?: string;
+  }): { payload: ValidationReportV1; report: VerifierReportEntry[] } {
+    const report: VerifierReportEntry[] = [];
+
+    try {
+      const record = parseTopLevelObject(
+        input.responseText,
+        "top-level payload must be an object with a ValidationReportV1 shape"
+      );
+      const candidatePayload = coerceCandidateFindingsV3ForValidation(
+        input.candidateFindings
+      );
+      const payload = validateValidationReportV1Record({
+        record,
+        candidatePayload,
+        anchorContext: buildAnchorContext(input),
+        report
+      });
+
+      for (const finding of payload.approvedFindings) {
+        report.push({
+          findingId: finding.findingId,
+          taxonomy: "OK",
+          outcome: "accepted",
+          gate: "schema",
+          reason: "passed ValidationReportV1 schema validation"
+        });
+        report.push({
+          findingId: finding.findingId,
+          taxonomy: "OK",
+          outcome: "accepted",
+          gate: "semantic",
+          reason: "passed ValidationReportV1 semantic gates"
+        });
+      }
+
+      if (payload.approvedFindings.length === 0) {
+        for (const result of payload.perFindingResults) {
+          report.push({
+            findingId: result.findingId,
+            taxonomy: result.decision === "approve" ? "OK" : "SEMANTIC",
+            outcome: result.decision === "approve" ? "accepted" : "rejected",
+            gate: "semantic",
+            reason: result.reason ?? `candidate ${result.decision}`
+          });
+        }
+      }
+
+      return { payload, report };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      if (report.length === 0 || report.every((entry) => entry.outcome !== "rejected")) {
+        report.push({
+          findingId: extractReportableFindingIdFromText(input.responseText) ?? "<payload>",
+          taxonomy: reason.includes("schemaVersion") ? "SCHEMA" : "SEMANTIC",
+          outcome: "rejected",
+          gate: reason.includes("schemaVersion") ? "schema" : "semantic",
+          reason
+        });
+      }
+      throw new StructuredValidationReportError(
+        "deterministic validation failed: ValidationReportV1 failed validation",
+        report
+      );
+    }
+  }
+
   validateWithDispositions(input: {
     responseText: string;
     diffContent?: string;
@@ -376,6 +527,698 @@ function validateCandidateDispositionReason(disposition: FindingDisposition): vo
   }
 }
 
+function validateCandidateFindingsV3Record(input: {
+  record: Record<string, unknown>;
+  reviewBasis: ReviewBasisV1;
+  anchorContext: FindingAnchorValidationContext | undefined;
+  report: VerifierReportEntry[];
+}): CandidateFindingsV3 {
+  rejectUnknownFields(
+    input.record,
+    ALLOWED_CANDIDATE_TOP_LEVEL_KEYS,
+    "CandidateFindingsV3"
+  );
+
+  if (input.record.schemaVersion !== 3) {
+    throw new Error(
+      "deterministic validation failed: CandidateFindingsV3 schemaVersion must be 3"
+    );
+  }
+
+  const result = validateEnum<CandidateFindingsResult>(
+    input.record.result,
+    VALID_CANDIDATE_RESULTS,
+    "result"
+  );
+  const findings = validateArray(input.record.findings, "findings").map(
+    (finding, index) =>
+      validateCandidateFindingV3({
+        input: finding,
+        index,
+        reviewBasis: input.reviewBasis,
+        anchorContext: input.anchorContext,
+        report: input.report
+      })
+  );
+  assertUniqueFindingIds(findings, "findings");
+
+  const hypothesisClosure = validateArray(
+    input.record.hypothesisClosure,
+    "hypothesisClosure"
+  ).map((closure, index) =>
+    validateHypothesisClosure(closure, index, input.reviewBasis)
+  );
+  assertHypothesisClosureCoversReviewBasis(
+    hypothesisClosure,
+    input.reviewBasis
+  );
+
+  const criticalMissingInformation = validateArray(
+    input.record.criticalMissingInformation,
+    "criticalMissingInformation"
+  ).map((item, index) => validateCriticalMissingInformation(item, index));
+
+  return {
+    schemaVersion: 3,
+    result,
+    findings,
+    hypothesisClosure,
+    criticalMissingInformation
+  };
+}
+
+function validateCandidateFindingV3(input: {
+  input: unknown;
+  index: number;
+  reviewBasis: ReviewBasisV1;
+  anchorContext: FindingAnchorValidationContext | undefined;
+  report: VerifierReportEntry[];
+}): CandidateFindingV3 {
+  if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
+    throw new Error(
+      `deterministic validation failed: findings[${input.index}] must be a non-null object`
+    );
+  }
+
+  const record = input.input as Record<string, unknown>;
+  rejectUnknownFields(
+    record,
+    ALLOWED_CANDIDATE_FINDING_KEYS,
+    `findings[${input.index}]`
+  );
+
+  const findingId = validateStringField(record.findingId, "findingId");
+  const sourceHypothesisIds = validateStringArray(
+    record.sourceHypothesisIds,
+    "sourceHypothesisIds",
+    { nonEmpty: true }
+  );
+  const reviewBasisHypothesisIds = new Set(
+    input.reviewBasis.hypothesisLedger.map((h) => h.hypothesisId)
+  );
+  for (const hypothesisId of sourceHypothesisIds) {
+    if (!reviewBasisHypothesisIds.has(hypothesisId)) {
+      throw new Error(
+        `deterministic validation failed: sourceHypothesisId ${hypothesisId} is not present in ReviewBasisV1 hypothesisLedger`
+      );
+    }
+  }
+
+  const classification = validateEnum<CandidateClassification>(
+    record.classification,
+    VALID_CANDIDATE_CLASSIFICATIONS,
+    "classification"
+  );
+  const priority = validateEnum<CandidatePriority>(
+    record.priority,
+    VALID_CANDIDATE_PRIORITIES,
+    "priority"
+  );
+  const severity = validateEnum<CandidateSeverity>(
+    record.severity,
+    VALID_CANDIDATE_SEVERITIES,
+    "severity"
+  );
+  const confidence = validateEnum<CandidateConfidence>(
+    record.confidence,
+    VALID_CANDIDATE_CONFIDENCES,
+    "confidence"
+  );
+  const evidenceStrength = validateEnum<EvidenceStrength>(
+    record.evidenceStrength,
+    VALID_EVIDENCE_STRENGTHS,
+    "evidenceStrength"
+  );
+
+  validateClassificationPrioritySeverity({
+    classification,
+    priority,
+    severity
+  });
+
+  const dependencyPathException = validateDependencyPathException(
+    record.dependencyPathException
+  );
+  const traceabilityResult = validateTraceability(
+    record.traceability,
+    input.anchorContext,
+    dependencyPathException
+  );
+  if (traceabilityResult.anchorFailure) {
+    input.report.push({
+      findingId,
+      taxonomy: "ANCHOR",
+      outcome: "rejected",
+      gate: "semantic",
+      reason: formatAnchorFailure("traceability", traceabilityResult.anchorFailure)
+    });
+    throw new Error(formatAnchorFailure("traceability", traceabilityResult.anchorFailure));
+  }
+
+  const codeEvidence = validateCodeEvidenceArray(
+    record.codeEvidence,
+    input.reviewBasis
+  );
+  const executionPath = validateStringArray(
+    record.executionPath,
+    "executionPath",
+    { nonEmpty: classification === "confirmed_problem" }
+  );
+  const triggerCondition = validateStringField(
+    record.triggerCondition,
+    "triggerCondition"
+  );
+  const failureMechanism = validateStringField(
+    record.failureMechanism,
+    "failureMechanism"
+  );
+  const impact = validateStringField(record.impact, "impact");
+  const counterEvidenceChecked = validateStringArray(
+    record.counterEvidenceChecked,
+    "counterEvidenceChecked",
+    { nonEmpty: classification === "confirmed_problem" }
+  );
+  const reproducibility = validateStringField(
+    record.reproducibility,
+    "reproducibility"
+  );
+  const fixDirection = validateStringField(record.fixDirection, "fixDirection");
+  const testRecommendation = validateStringField(
+    record.testRecommendation,
+    "testRecommendation"
+  );
+
+  if (classification === "confirmed_problem" && codeEvidence.length === 0) {
+    throw new Error(
+      "deterministic validation failed: confirmed_problem requires non-empty codeEvidence"
+    );
+  }
+
+  return {
+    findingId,
+    sourceHypothesisIds,
+    classification,
+    priority,
+    severity,
+    confidence,
+    evidenceStrength,
+    title: validateStringField(record.title, "title"),
+    traceability: traceabilityResult.traceability,
+    codeEvidence,
+    executionPath,
+    triggerCondition,
+    failureMechanism,
+    impact,
+    counterEvidenceChecked,
+    reproducibility,
+    fixDirection,
+    testRecommendation
+  };
+}
+
+function validateValidationReportV1Record(input: {
+  record: Record<string, unknown>;
+  candidatePayload: CandidateFindingsV3;
+  anchorContext: FindingAnchorValidationContext | undefined;
+  report: VerifierReportEntry[];
+}): ValidationReportV1 {
+  rejectUnknownFields(
+    input.record,
+    ALLOWED_VALIDATION_REPORT_TOP_LEVEL_KEYS,
+    "ValidationReportV1"
+  );
+
+  if (input.record.schemaVersion !== 1) {
+    throw new Error(
+      "deterministic validation failed: ValidationReportV1 schemaVersion must be 1"
+    );
+  }
+
+  const overallStatus = validateEnum<ValidationOverallStatus>(
+    input.record.overallStatus,
+    VALID_VALIDATION_OVERALL_STATUSES,
+    "overallStatus"
+  );
+  const candidateIds = input.candidatePayload.findings.map((f) => f.findingId);
+  const candidateIdSet = new Set(candidateIds);
+  const perFindingResults = validateArray(
+    input.record.perFindingResults,
+    "perFindingResults"
+  ).map((item, index) =>
+    validatePerFindingValidationResult(item, index, candidateIdSet)
+  );
+  assertPerFindingResultsCoverCandidates(perFindingResults, candidateIds);
+
+  const approvedFindings = validateArray(
+    input.record.approvedFindings,
+    "approvedFindings"
+  ).map((finding, index) => {
+    const validated = validateFindingWithDiagnostics(
+      finding,
+      input.anchorContext
+    ).finding;
+    if (!candidateIdSet.has(validated.findingId)) {
+      throw new Error(
+        `deterministic validation failed: ${validated.findingId} in approvedFindings must reference a Step 5 candidate`
+      );
+    }
+    return validated;
+  });
+  assertUniqueFindingIds(approvedFindings, "findings");
+  assertApprovedFindingsMatchDecisions(perFindingResults, approvedFindings);
+
+  const missingInformationItems = validateArray(
+    input.record.missingInformationItems,
+    "missingInformationItems"
+  ).map((item, index) => validateMissingInformationItem(item, index, candidateIdSet));
+
+  const loopControl = validateLoopControl(input.record.loopControl);
+  const stopReason =
+    input.record.stopReason === undefined
+      ? undefined
+      : validateEnum<StopReason>(
+          input.record.stopReason,
+          VALID_STOP_REASONS,
+          "stopReason"
+        );
+  validateLoopControlStatusAlignment({
+    overallStatus,
+    approvedFindings,
+    loopControl,
+    stopReason
+  });
+
+  return {
+    schemaVersion: 1,
+    overallStatus,
+    perFindingResults,
+    approvedFindings,
+    missingInformationItems,
+    loopControl,
+    ...(stopReason === undefined ? {} : { stopReason })
+  };
+}
+
+function validateLoopControlStatusAlignment(input: {
+  overallStatus: ValidationOverallStatus;
+  approvedFindings: readonly Finding[];
+  loopControl: LoopControl;
+  stopReason: StopReason | undefined;
+}): void {
+  if (input.overallStatus === "PASS" && input.loopControl.action !== "accept") {
+    throw new Error(
+      "deterministic validation failed: overallStatus PASS requires loopControl.action accept"
+    );
+  }
+
+  if (
+    input.overallStatus === "RERUN_STEP5" &&
+    input.loopControl.action !== "rerun_step5"
+  ) {
+    throw new Error(
+      "deterministic validation failed: overallStatus RERUN_STEP5 requires loopControl.action rerun_step5"
+    );
+  }
+
+  if (
+    (input.overallStatus === "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW" ||
+      input.overallStatus === "STOPPED") &&
+    input.loopControl.action !== "stop"
+  ) {
+    throw new Error(
+      "deterministic validation failed: stopped or insufficient-information ValidationReportV1 requires loopControl.action stop"
+    );
+  }
+
+  if (input.loopControl.action === "accept" && input.stopReason !== undefined) {
+    throw new Error(
+      "deterministic validation failed: accepted ValidationReportV1 must not include stopReason"
+    );
+  }
+
+  if (input.loopControl.action === "rerun_step5") {
+    if (input.stopReason !== undefined) {
+      throw new Error(
+        "deterministic validation failed: rerun_step5 ValidationReportV1 must not include stopReason"
+      );
+    }
+    if (input.approvedFindings.length > 0) {
+      throw new Error(
+        "deterministic validation failed: rerun_step5 ValidationReportV1 must not approve findings before semantic validation accepts them"
+      );
+    }
+  }
+
+  if (input.loopControl.action === "stop" && input.stopReason === undefined) {
+    throw new Error(
+      "deterministic validation failed: stopped ValidationReportV1 requires stopReason"
+    );
+  }
+}
+
+function validateClassificationPrioritySeverity(input: {
+  classification: CandidateClassification;
+  priority: CandidatePriority;
+  severity: CandidateSeverity;
+}): void {
+  if (input.classification === "reasonable_risk" && input.priority === "must") {
+    throw new Error(
+      "deterministic validation failed: reasonable_risk cannot use priority must"
+    );
+  }
+
+  if (input.classification === "reasonable_risk" && input.severity === "high") {
+    throw new Error(
+      "deterministic validation failed: reasonable_risk cannot use severity high"
+    );
+  }
+
+  if (input.classification === "insufficient_information" && input.priority === "must") {
+    throw new Error(
+      "deterministic validation failed: insufficient_information cannot use priority must"
+    );
+  }
+
+  if (input.classification === "insufficient_information" && input.severity !== "none") {
+    throw new Error(
+      "deterministic validation failed: insufficient_information severity must be none"
+    );
+  }
+}
+
+function validateCodeEvidenceArray(
+  input: unknown,
+  reviewBasis: ReviewBasisV1
+): CandidateFindingV3["codeEvidence"] {
+  const evidenceRefs = new Set(reviewBasis.evidenceRefs.map((ref) => ref.evidenceId));
+  return validateArray(input, "codeEvidence").map((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(
+        `deterministic validation failed: codeEvidence[${index}] must be a non-null object`
+      );
+    }
+    const record = item as Record<string, unknown>;
+    rejectUnknownFields(
+      record,
+      ALLOWED_CODE_EVIDENCE_KEYS,
+      `codeEvidence[${index}]`
+    );
+    const evidenceId = validateStringField(
+      record.evidenceId,
+      `codeEvidence[${index}].evidenceId`
+    );
+    if (!evidenceRefs.has(evidenceId)) {
+      throw new Error(
+        `deterministic validation failed: evidenceId ${evidenceId} is not present in ReviewBasisV1 evidenceRefs`
+      );
+    }
+    return {
+      evidenceId,
+      location: validateStringField(record.location, `codeEvidence[${index}].location`),
+      summary: validateStringField(record.summary, `codeEvidence[${index}].summary`)
+    };
+  });
+}
+
+function validateHypothesisClosure(
+  input: unknown,
+  index: number,
+  reviewBasis: ReviewBasisV1
+): HypothesisClosure {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      `deterministic validation failed: hypothesisClosure[${index}] must be a non-null object`
+    );
+  }
+  const record = input as Record<string, unknown>;
+  rejectUnknownFields(
+    record,
+    ALLOWED_HYPOTHESIS_CLOSURE_KEYS,
+    `hypothesisClosure[${index}]`
+  );
+  const hypothesisId = validateStringField(
+    record.hypothesisId,
+    `hypothesisClosure[${index}].hypothesisId`
+  );
+  if (!reviewBasis.hypothesisLedger.some((h) => h.hypothesisId === hypothesisId)) {
+    throw new Error(
+      `deterministic validation failed: ${hypothesisId} is not present in ReviewBasisV1 hypothesisLedger`
+    );
+  }
+  return {
+    hypothesisId,
+    status: validateEnum<HypothesisClosureStatus>(
+      record.status,
+      VALID_HYPOTHESIS_CLOSURE_STATUSES,
+      `hypothesisClosure[${index}].status`
+    ),
+    evidenceIds: validateStringArray(
+      record.evidenceIds,
+      `hypothesisClosure[${index}].evidenceIds`
+    ),
+    rationale: validateStringField(
+      record.rationale,
+      `hypothesisClosure[${index}].rationale`
+    )
+  };
+}
+
+function assertHypothesisClosureCoversReviewBasis(
+  closures: readonly HypothesisClosure[],
+  reviewBasis: ReviewBasisV1
+): void {
+  const closureIds = new Set(closures.map((closure) => closure.hypothesisId));
+  for (const hypothesis of reviewBasis.hypothesisLedger) {
+    if (!closureIds.has(hypothesis.hypothesisId)) {
+      throw new Error(
+        `deterministic validation failed: ${hypothesis.hypothesisId} missing from hypothesisClosure`
+      );
+    }
+  }
+}
+
+function validateCriticalMissingInformation(
+  input: unknown,
+  index: number
+): CriticalMissingInformation {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      `deterministic validation failed: criticalMissingInformation[${index}] must be a non-null object`
+    );
+  }
+  const record = input as Record<string, unknown>;
+  rejectUnknownFields(
+    record,
+    ALLOWED_CRITICAL_MISSING_INFORMATION_KEYS,
+    `criticalMissingInformation[${index}]`
+  );
+  const result: CriticalMissingInformation = {
+    itemId: validateStringField(record.itemId, `criticalMissingInformation[${index}].itemId`),
+    description: validateStringField(record.description, `criticalMissingInformation[${index}].description`),
+    whyItMatters: validateStringField(record.whyItMatters, `criticalMissingInformation[${index}].whyItMatters`)
+  };
+  if (record.sourceHypothesisIds !== undefined) {
+    result.sourceHypothesisIds = validateStringArray(
+      record.sourceHypothesisIds,
+      `criticalMissingInformation[${index}].sourceHypothesisIds`
+    );
+  }
+  return result;
+}
+
+function validatePerFindingValidationResult(
+  input: unknown,
+  index: number,
+  candidateIdSet: ReadonlySet<string>
+): PerFindingValidationResult {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      `deterministic validation failed: perFindingResults[${index}] must be a non-null object`
+    );
+  }
+  const record = input as Record<string, unknown>;
+  rejectUnknownFields(
+    record,
+    ALLOWED_PER_FINDING_RESULT_KEYS,
+    `perFindingResults[${index}]`
+  );
+  const findingId = validateStringField(
+    record.findingId,
+    `perFindingResults[${index}].findingId`
+  );
+  if (!candidateIdSet.has(findingId)) {
+    throw new Error(
+      `deterministic validation failed: perFindingResults entry ${findingId} references unknown candidate`
+    );
+  }
+  const result: PerFindingValidationResult = {
+    findingId,
+    decision: validateEnum<ValidationDecision>(
+      record.decision,
+      VALID_VALIDATION_DECISIONS,
+      `perFindingResults[${index}].decision`
+    ),
+    failedGates: validateSemanticGateArray(
+      record.failedGates,
+      `perFindingResults[${index}].failedGates`
+    ),
+    requiredCorrections: validateStringArray(
+      record.requiredCorrections,
+      `perFindingResults[${index}].requiredCorrections`
+    )
+  };
+
+  if (record.recommendedClassification !== undefined) {
+    result.recommendedClassification = validateEnum<CandidateClassification>(
+      record.recommendedClassification,
+      VALID_CANDIDATE_CLASSIFICATIONS,
+      `perFindingResults[${index}].recommendedClassification`
+    );
+  }
+  if (record.recommendedPriority !== undefined) {
+    result.recommendedPriority = validateEnum<CandidatePriority>(
+      record.recommendedPriority,
+      VALID_CANDIDATE_PRIORITIES,
+      `perFindingResults[${index}].recommendedPriority`
+    );
+  }
+  if (record.recommendedSeverity !== undefined) {
+    result.recommendedSeverity = validateEnum<CandidateSeverity>(
+      record.recommendedSeverity,
+      VALID_CANDIDATE_SEVERITIES,
+      `perFindingResults[${index}].recommendedSeverity`
+    );
+  }
+  if (record.reason !== undefined) {
+    result.reason = validateStringField(
+      record.reason,
+      `perFindingResults[${index}].reason`
+    );
+  }
+
+  return result;
+}
+
+function assertPerFindingResultsCoverCandidates(
+  results: readonly PerFindingValidationResult[],
+  candidateIds: readonly string[]
+): void {
+  const resultIds = new Set(results.map((result) => result.findingId));
+  for (const candidateId of candidateIds) {
+    if (!resultIds.has(candidateId)) {
+      throw new Error(
+        `deterministic validation failed: candidate ${candidateId} is missing from perFindingResults`
+      );
+    }
+  }
+}
+
+function assertApprovedFindingsMatchDecisions(
+  results: readonly PerFindingValidationResult[],
+  approvedFindings: readonly Finding[]
+): void {
+  const approvedIds = new Set(approvedFindings.map((finding) => finding.findingId));
+  for (const result of results) {
+    if (
+      (result.decision === "drop" ||
+        result.decision === "convert_to_missing_information") &&
+      approvedIds.has(result.findingId)
+    ) {
+      throw new Error(
+        `deterministic validation failed: ${result.decision} candidate ${result.findingId} must not appear in approvedFindings`
+      );
+    }
+  }
+}
+
+function validateMissingInformationItem(
+  input: unknown,
+  index: number,
+  candidateIdSet: ReadonlySet<string>
+): MissingInformationItem {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      `deterministic validation failed: missingInformationItems[${index}] must be a non-null object`
+    );
+  }
+  const record = input as Record<string, unknown>;
+  rejectUnknownFields(
+    record,
+    ALLOWED_MISSING_INFORMATION_ITEM_KEYS,
+    `missingInformationItems[${index}]`
+  );
+  const result: MissingInformationItem = {
+    itemId: validateStringField(record.itemId, `missingInformationItems[${index}].itemId`),
+    description: validateStringField(record.description, `missingInformationItems[${index}].description`),
+    whyItMatters: validateStringField(record.whyItMatters, `missingInformationItems[${index}].whyItMatters`)
+  };
+  if (record.findingId !== undefined) {
+    const findingId = validateStringField(
+      record.findingId,
+      `missingInformationItems[${index}].findingId`
+    );
+    if (!candidateIdSet.has(findingId)) {
+      throw new Error(
+        `deterministic validation failed: missingInformationItems entry ${findingId} references unknown candidate`
+      );
+    }
+    result.findingId = findingId;
+  }
+  return result;
+}
+
+function validateLoopControl(input: unknown): { action: LoopAction; reason: string } {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      "deterministic validation failed: loopControl must be a non-null object"
+    );
+  }
+  const record = input as Record<string, unknown>;
+  rejectUnknownFields(record, ALLOWED_LOOP_CONTROL_KEYS, "loopControl");
+  return {
+    action: validateEnum<LoopAction>(
+      record.action,
+      VALID_LOOP_ACTIONS,
+      "loopControl.action"
+    ),
+    reason: validateStringField(record.reason, "loopControl.reason")
+  };
+}
+
+function coerceCandidateFindingsV3ForValidation(
+  input: CandidateFindingsV3 | Record<string, unknown>
+): CandidateFindingsV3 {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(
+      "deterministic validation failed: candidateFindings must be CandidateFindingsV3"
+    );
+  }
+  const record = input as Record<string, unknown>;
+  const findings = validateArray(record.findings, "candidateFindings.findings").map(
+    (finding, index) => {
+      if (!finding || typeof finding !== "object" || Array.isArray(finding)) {
+        throw new Error(
+          `deterministic validation failed: candidateFindings.findings[${index}] must be an object`
+        );
+      }
+      const findingRecord = finding as Record<string, unknown>;
+      return {
+        findingId: validateStringField(
+          findingRecord.findingId,
+          `candidateFindings.findings[${index}].findingId`
+        )
+      } as CandidateFindingV3;
+    }
+  );
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings,
+    hypothesisClosure: [],
+    criticalMissingInformation: []
+  };
+}
+
 function extractReportableFindingId(input: unknown): string | undefined {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     return undefined;
@@ -383,6 +1226,33 @@ function extractReportableFindingId(input: unknown): string | undefined {
 
   const value = (input as Record<string, unknown>).findingId;
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function extractReportableFindingIdFromText(responseText: string): string | undefined {
+  try {
+    const parsed = JSON.parse(responseText) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const record = parsed as Record<string, unknown>;
+    const findings = Array.isArray(record.findings)
+      ? record.findings
+      : Array.isArray(record.approvedFindings)
+        ? record.approvedFindings
+        : undefined;
+    if (!findings) {
+      return undefined;
+    }
+    for (const finding of findings) {
+      const id = extractReportableFindingId(finding);
+      if (id) {
+        return id;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
 }
 
 function createRejectedValidationReportEntry(
@@ -712,6 +1582,57 @@ function validateStringField(value: unknown, fieldName: string): string {
   return trimmed;
 }
 
+function validateArray(value: unknown, fieldName: string): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `deterministic validation failed: '${fieldName}' must be an array`
+    );
+  }
+  return value;
+}
+
+function validateStringArray(
+  value: unknown,
+  fieldName: string,
+  options: { nonEmpty?: boolean } = {}
+): string[] {
+  const array = validateArray(value, fieldName).map((item, index) =>
+    validateStringField(item, `${fieldName}[${index}]`)
+  );
+  if (options.nonEmpty && array.length === 0) {
+    throw new Error(
+      `deterministic validation failed: '${fieldName}' must be a non-empty array`
+    );
+  }
+  return array;
+}
+
+function validateEnum<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fieldName: string
+): T {
+  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
+    throw new Error(
+      `deterministic validation failed: '${fieldName}' must be one of ${allowed.join(", ")}`
+    );
+  }
+  return value as T;
+}
+
+function validateSemanticGateArray(
+  value: unknown,
+  fieldName: string
+): SemanticGateId[] {
+  return validateArray(value, fieldName).map((item, index) =>
+    validateEnum<SemanticGateId>(
+      item,
+      VALID_SEMANTIC_GATES,
+      `${fieldName}[${index}]`
+    )
+  );
+}
+
 function validateSchemaVersion(value: unknown): 2 {
   if (value !== 2) {
     throw new Error(
@@ -831,6 +1752,86 @@ const ALLOWED_VERIFIED_TOP_LEVEL_KEYS = [
   "dispositions"
 ] as const;
 
+const ALLOWED_CANDIDATE_TOP_LEVEL_KEYS = [
+  "schemaVersion",
+  "result",
+  "findings",
+  "hypothesisClosure",
+  "criticalMissingInformation"
+] as const;
+
+const ALLOWED_CANDIDATE_FINDING_KEYS = [
+  "findingId",
+  "sourceHypothesisIds",
+  "classification",
+  "priority",
+  "severity",
+  "confidence",
+  "evidenceStrength",
+  "title",
+  "traceability",
+  "dependencyPathException",
+  "codeEvidence",
+  "executionPath",
+  "triggerCondition",
+  "failureMechanism",
+  "impact",
+  "counterEvidenceChecked",
+  "reproducibility",
+  "fixDirection",
+  "testRecommendation"
+] as const;
+
+const ALLOWED_CODE_EVIDENCE_KEYS = [
+  "evidenceId",
+  "location",
+  "summary"
+] as const;
+
+const ALLOWED_HYPOTHESIS_CLOSURE_KEYS = [
+  "hypothesisId",
+  "status",
+  "evidenceIds",
+  "rationale"
+] as const;
+
+const ALLOWED_CRITICAL_MISSING_INFORMATION_KEYS = [
+  "itemId",
+  "description",
+  "whyItMatters",
+  "sourceHypothesisIds"
+] as const;
+
+const ALLOWED_VALIDATION_REPORT_TOP_LEVEL_KEYS = [
+  "schemaVersion",
+  "overallStatus",
+  "perFindingResults",
+  "approvedFindings",
+  "missingInformationItems",
+  "loopControl",
+  "stopReason"
+] as const;
+
+const ALLOWED_PER_FINDING_RESULT_KEYS = [
+  "findingId",
+  "decision",
+  "failedGates",
+  "requiredCorrections",
+  "recommendedClassification",
+  "recommendedPriority",
+  "recommendedSeverity",
+  "reason"
+] as const;
+
+const ALLOWED_MISSING_INFORMATION_ITEM_KEYS = [
+  "itemId",
+  "findingId",
+  "description",
+  "whyItMatters"
+] as const;
+
+const ALLOWED_LOOP_CONTROL_KEYS = ["action", "reason"] as const;
+
 const ALLOWED_DISPOSITION_KEYS = [
   "findingId",
   "status",
@@ -845,6 +1846,95 @@ const VALID_DISPOSITION_STATUSES: readonly string[] = [
 ];
 
 const VALID_DISPOSITION_REASONS: readonly string[] = DISPOSITION_REASONS;
+
+const VALID_CANDIDATE_RESULTS: readonly CandidateFindingsResult[] = [
+  "FINDINGS_READY",
+  "NO_FINDINGS",
+  "INSUFFICIENT_INFORMATION"
+];
+
+const VALID_CANDIDATE_CLASSIFICATIONS: readonly CandidateClassification[] = [
+  "confirmed_problem",
+  "reasonable_risk",
+  "insufficient_information"
+];
+
+const VALID_CANDIDATE_PRIORITIES: readonly CandidatePriority[] = [
+  "must",
+  "nice",
+  "none"
+];
+
+const VALID_CANDIDATE_SEVERITIES: readonly CandidateSeverity[] = [
+  "high",
+  "medium",
+  "low",
+  "none"
+];
+
+const VALID_CANDIDATE_CONFIDENCES: readonly CandidateConfidence[] = [
+  "high",
+  "medium",
+  "low"
+];
+
+const VALID_EVIDENCE_STRENGTHS: readonly EvidenceStrength[] = [
+  "direct",
+  "indirect",
+  "insufficient"
+];
+
+const VALID_HYPOTHESIS_CLOSURE_STATUSES: readonly HypothesisClosureStatus[] = [
+  "closed_by_candidate",
+  "rejected_by_evidence",
+  "insufficient_information"
+];
+
+const VALID_VALIDATION_OVERALL_STATUSES: readonly ValidationOverallStatus[] = [
+  "PASS",
+  "RERUN_STEP5",
+  "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
+  "STOPPED"
+];
+
+const VALID_VALIDATION_DECISIONS: readonly ValidationDecision[] = [
+  "approve",
+  "rewrite_required",
+  "downgrade",
+  "drop",
+  "convert_to_missing_information"
+];
+
+const VALID_SEMANTIC_GATES: readonly SemanticGateId[] = [
+  "schema_complete",
+  "anchor_valid",
+  "evidence_refs_exist",
+  "identifiers_valid",
+  "execution_path_concrete",
+  "trigger_concrete",
+  "mechanism_concrete",
+  "impact_proportionate",
+  "counter_evidence_checked",
+  "severity_confidence_aligned",
+  "duplicate_low_value",
+  "hypothesis_closed",
+  "missing_information_honest",
+  "no_new_bug",
+  "repeated_unsupported_claim"
+];
+
+const VALID_LOOP_ACTIONS: readonly LoopAction[] = [
+  "accept",
+  "rerun_step5",
+  "stop"
+];
+
+const VALID_STOP_REASONS: readonly StopReason[] = [
+  "missing_critical_contract",
+  "repeated_unsupported_claim",
+  "unresolved_identifier_hallucination",
+  "max_semantic_reruns"
+];
 
 // --- Helper functions ---
 
