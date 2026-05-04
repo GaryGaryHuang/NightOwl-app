@@ -32,6 +32,20 @@ import type {
   ValidationReportV1
 } from "./semantic-review.ts";
 import {
+  CANDIDATE_CLASSIFICATIONS as RUNTIME_CANDIDATE_CLASSIFICATIONS,
+  CANDIDATE_CONFIDENCES as RUNTIME_CANDIDATE_CONFIDENCES,
+  CANDIDATE_FINDINGS_RESULTS as RUNTIME_CANDIDATE_FINDINGS_RESULTS,
+  CANDIDATE_PRIORITIES as RUNTIME_CANDIDATE_PRIORITIES,
+  CANDIDATE_SEVERITIES as RUNTIME_CANDIDATE_SEVERITIES,
+  EVIDENCE_STRENGTHS as RUNTIME_EVIDENCE_STRENGTHS,
+  HYPOTHESIS_CLOSURE_STATUSES as RUNTIME_HYPOTHESIS_CLOSURE_STATUSES,
+  LOOP_ACTIONS as RUNTIME_LOOP_ACTIONS,
+  SEMANTIC_GATE_IDS as RUNTIME_SEMANTIC_GATE_IDS,
+  STOP_REASONS as RUNTIME_STOP_REASONS,
+  VALIDATION_DECISIONS as RUNTIME_VALIDATION_DECISIONS,
+  VALIDATION_OVERALL_STATUSES as RUNTIME_VALIDATION_OVERALL_STATUSES
+} from "./semantic-review.ts";
+import {
   buildFindingAnchorValidationContext,
   type FindingAnchorValidationContext
 } from "./finding-anchor-context.ts";
@@ -1898,94 +1912,39 @@ const VALID_DISPOSITION_STATUSES: readonly string[] = [
 
 const VALID_DISPOSITION_REASONS: readonly string[] = DISPOSITION_REASONS;
 
-const VALID_CANDIDATE_RESULTS: readonly CandidateFindingsResult[] = [
-  "FINDINGS_READY",
-  "NO_FINDINGS",
-  "INSUFFICIENT_INFORMATION"
-];
+const VALID_CANDIDATE_RESULTS: readonly CandidateFindingsResult[] =
+  RUNTIME_CANDIDATE_FINDINGS_RESULTS;
 
-const VALID_CANDIDATE_CLASSIFICATIONS: readonly CandidateClassification[] = [
-  "confirmed_problem",
-  "reasonable_risk",
-  "insufficient_information"
-];
+const VALID_CANDIDATE_CLASSIFICATIONS: readonly CandidateClassification[] =
+  RUNTIME_CANDIDATE_CLASSIFICATIONS;
 
-const VALID_CANDIDATE_PRIORITIES: readonly CandidatePriority[] = [
-  "must",
-  "nice",
-  "none"
-];
+const VALID_CANDIDATE_PRIORITIES: readonly CandidatePriority[] =
+  RUNTIME_CANDIDATE_PRIORITIES;
 
-const VALID_CANDIDATE_SEVERITIES: readonly CandidateSeverity[] = [
-  "high",
-  "medium",
-  "low",
-  "none"
-];
+const VALID_CANDIDATE_SEVERITIES: readonly CandidateSeverity[] =
+  RUNTIME_CANDIDATE_SEVERITIES;
 
-const VALID_CANDIDATE_CONFIDENCES: readonly CandidateConfidence[] = [
-  "high",
-  "medium",
-  "low"
-];
+const VALID_CANDIDATE_CONFIDENCES: readonly CandidateConfidence[] =
+  RUNTIME_CANDIDATE_CONFIDENCES;
 
-const VALID_EVIDENCE_STRENGTHS: readonly EvidenceStrength[] = [
-  "direct",
-  "indirect",
-  "insufficient"
-];
+const VALID_EVIDENCE_STRENGTHS: readonly EvidenceStrength[] =
+  RUNTIME_EVIDENCE_STRENGTHS;
 
-const VALID_HYPOTHESIS_CLOSURE_STATUSES: readonly HypothesisClosureStatus[] = [
-  "closed_by_candidate",
-  "rejected_by_evidence",
-  "insufficient_information"
-];
+const VALID_HYPOTHESIS_CLOSURE_STATUSES: readonly HypothesisClosureStatus[] =
+  RUNTIME_HYPOTHESIS_CLOSURE_STATUSES;
 
-const VALID_VALIDATION_OVERALL_STATUSES: readonly ValidationOverallStatus[] = [
-  "PASS",
-  "RERUN_STEP5",
-  "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-  "STOPPED"
-];
+const VALID_VALIDATION_OVERALL_STATUSES: readonly ValidationOverallStatus[] =
+  RUNTIME_VALIDATION_OVERALL_STATUSES;
 
-const VALID_VALIDATION_DECISIONS: readonly ValidationDecision[] = [
-  "approve",
-  "rewrite_required",
-  "downgrade",
-  "drop",
-  "convert_to_missing_information"
-];
+const VALID_VALIDATION_DECISIONS: readonly ValidationDecision[] =
+  RUNTIME_VALIDATION_DECISIONS;
 
-const VALID_SEMANTIC_GATES: readonly SemanticGateId[] = [
-  "schema_complete",
-  "anchor_valid",
-  "evidence_refs_exist",
-  "identifiers_valid",
-  "execution_path_concrete",
-  "trigger_concrete",
-  "mechanism_concrete",
-  "impact_proportionate",
-  "counter_evidence_checked",
-  "severity_confidence_aligned",
-  "duplicate_low_value",
-  "hypothesis_closed",
-  "missing_information_honest",
-  "no_new_bug",
-  "repeated_unsupported_claim"
-];
+const VALID_SEMANTIC_GATES: readonly SemanticGateId[] =
+  RUNTIME_SEMANTIC_GATE_IDS;
 
-const VALID_LOOP_ACTIONS: readonly LoopAction[] = [
-  "accept",
-  "rerun_step5",
-  "stop"
-];
+const VALID_LOOP_ACTIONS: readonly LoopAction[] = RUNTIME_LOOP_ACTIONS;
 
-const VALID_STOP_REASONS: readonly StopReason[] = [
-  "missing_critical_contract",
-  "repeated_unsupported_claim",
-  "unresolved_identifier_hallucination",
-  "max_semantic_reruns"
-];
+const VALID_STOP_REASONS: readonly StopReason[] = RUNTIME_STOP_REASONS;
 
 // --- Helper functions ---
 

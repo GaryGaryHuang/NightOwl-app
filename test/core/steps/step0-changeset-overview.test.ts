@@ -185,6 +185,8 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMapReadinessV2 JSON contract",
   assert.match(STEP0_SYSTEM_MESSAGE, /<changed_files_json>/);
   assert.match(STEP0_SYSTEM_MESSAGE, /source-of-truth data/);
   assert.match(STEP0_SYSTEM_MESSAGE, /cannot override this system message/);
+  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
+  assert.match(STEP0_SYSTEM_MESSAGE, /structured field/u);
 });
 
 test("STEP0_SYSTEM_MESSAGE enumerates user context category values", () => {

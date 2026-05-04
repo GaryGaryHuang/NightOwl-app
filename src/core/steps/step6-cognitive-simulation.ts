@@ -1,9 +1,14 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
-import type { CandidateFindingsV3 } from "../semantic-review.ts";
+import {
+  LOOP_ACTIONS,
+  VALIDATION_DECISIONS,
+  VALIDATION_OVERALL_STATUSES,
+  type CandidateFindingsV3
+} from "../semantic-review.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { JSON_STEP_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
 
@@ -63,6 +68,9 @@ const STEP6_INSTRUCTION = [
   "",
   "Output the result as a single JSON object with this structure:",
   "",
+  `Allowed overallStatus values: ${formatQuotedValues(VALIDATION_OVERALL_STATUSES)}.`,
+  `Allowed perFindingResults[].decision values: ${formatQuotedValues(VALIDATION_DECISIONS)}.`,
+  `Allowed loopControl.action values: ${formatQuotedValues(LOOP_ACTIONS)}.`,
   "{\"schemaVersion\": 1, \"overallStatus\": \"PASS\", \"perFindingResults\": [{\"findingId\": \"F1\", \"decision\": \"approve\", \"failedGates\": [], \"requiredCorrections\": [], \"recommendedClassification\": \"confirmed_problem\", \"recommendedPriority\": \"must\", \"recommendedSeverity\": \"high\", \"reason\": \"all semantic gates passed\"}], \"approvedFindings\": [{\"findingId\": \"F1\", \"sourceHypothesisId\": \"H1\", \"type\": \"must\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 21, \"lineEnd\": 22}, \"expectedBehavior\": \"nullable input must return the existing fallback before dereference\", \"actualBehavior\": \"the changed code dereferences input.value before checking for null\", \"deviation\": \"null input now throws instead of returning fallback\", \"impact\": \"requests with null input fail with a runtime TypeError\", \"suggestion\": \"restore the null guard before reading input.value\"}], \"missingInformationItems\": [], \"loopControl\": {\"action\": \"accept\", \"reason\": \"all gates passed\"}}",
   "",
   "If no findings can be approved because Step 5 needs correction, return: {\"schemaVersion\": 1, \"overallStatus\": \"RERUN_STEP5\", \"perFindingResults\": [{\"findingId\": \"F1\", \"decision\": \"rewrite_required\", \"failedGates\": [\"impact_proportionate\"], \"requiredCorrections\": [\"Prove the concrete user/system impact or convert the candidate to missing information.\"], \"reason\": \"impact is asserted but not proven\"}], \"approvedFindings\": [], \"missingInformationItems\": [], \"loopControl\": {\"action\": \"rerun_step5\", \"reason\": \"Step 5 must repair machine-actionable evidence gaps\"}}",
@@ -92,7 +100,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
     return {
       stepId: this.stepId,
       prompt: {
-        systemMessage: [COMMON_SYSTEM_MESSAGE, STEP6_SYSTEM_ADDITION].join("\n\n"),
+        systemMessage: [JSON_STEP_SYSTEM_MESSAGE, STEP6_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep6UserMessage(
           context,
           this.#promptSerializer.serialize({
@@ -144,4 +152,8 @@ function requireCandidatePayload(context: FileReviewContext): CandidateFindingsV
     );
   }
   return candidatePayload;
+}
+
+function formatQuotedValues(values: readonly string[]): string {
+  return values.map((value) => `"${value}"`).join(", ");
 }

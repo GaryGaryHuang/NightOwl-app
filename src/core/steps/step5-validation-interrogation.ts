@@ -1,9 +1,17 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewBasisV1 } from "../review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
+import {
+  CANDIDATE_CLASSIFICATIONS,
+  CANDIDATE_CONFIDENCES,
+  CANDIDATE_PRIORITIES,
+  CANDIDATE_SEVERITIES,
+  EVIDENCE_STRENGTHS,
+  HYPOTHESIS_CLOSURE_STATUSES
+} from "../semantic-review.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { JSON_STEP_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createCandidateFindingsV3Resolve } from "./step-resolve-helpers.ts";
 
 
@@ -74,6 +82,12 @@ const STEP5_INSTRUCTION = [
   "Output the result as a single JSON object with this structure:",
   "",
   "Top-level `schemaVersion` must be `3`.",
+  `Allowed classification values: ${formatQuotedValues(CANDIDATE_CLASSIFICATIONS)}.`,
+  `Allowed priority values: ${formatQuotedValues(CANDIDATE_PRIORITIES)}.`,
+  `Allowed severity values: ${formatQuotedValues(CANDIDATE_SEVERITIES)}.`,
+  `Allowed confidence values: ${formatQuotedValues(CANDIDATE_CONFIDENCES)}.`,
+  `Allowed evidenceStrength values: ${formatQuotedValues(EVIDENCE_STRENGTHS)}.`,
+  `Allowed hypothesisClosure.status values: ${formatQuotedValues(HYPOTHESIS_CLOSURE_STATUSES)}.`,
   "{\"schemaVersion\": 3, \"result\": \"FINDINGS_READY\", \"findings\": [{\"findingId\": \"F1\", \"sourceHypothesisIds\": [\"H1\"], \"classification\": \"confirmed_problem\", \"priority\": \"must\", \"severity\": \"high\", \"confidence\": \"high\", \"evidenceStrength\": \"direct\", \"title\": \"問題標題\", \"traceability\": {\"kind\": \"line-range\", \"lineStart\": 21, \"lineEnd\": 22}, \"codeEvidence\": [{\"evidenceId\": \"E1\", \"location\": \"src/app.ts:21\", \"summary\": \"changed branch dereferences input.value before fallback\"}], \"executionPath\": [\"entry handler receives nullable input\", \"changed branch reads input.value\"], \"triggerCondition\": \"nullable input reaches the changed branch\", \"failureMechanism\": \"guard was moved after dereference\", \"impact\": \"requests with null input fail with a runtime TypeError\", \"counterEvidenceChecked\": [\"existing fallback path no longer runs before dereference\"], \"reproducibility\": \"deterministic with nullable input\", \"fixDirection\": \"restore guard before dereference\", \"testRecommendation\": \"add nullable input regression coverage\"}], \"hypothesisClosure\": [{\"hypothesisId\": \"H1\", \"status\": \"closed_by_candidate\", \"evidenceIds\": [\"E1\"], \"rationale\": \"candidate F1 covers the hypothesis\"}], \"criticalMissingInformation\": []}",
   "",
   "If no findings remain, return: {\"schemaVersion\": 3, \"result\": \"NO_FINDINGS\", \"findings\": [], \"hypothesisClosure\": [{\"hypothesisId\": \"H1\", \"status\": \"rejected_by_evidence\", \"evidenceIds\": [\"E1\"], \"rationale\": \"changed path preserves fallback\"}], \"criticalMissingInformation\": []}",
@@ -101,7 +115,7 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
     return {
       stepId: this.stepId,
       prompt: {
-        systemMessage: [COMMON_SYSTEM_MESSAGE, STEP5_SYSTEM_ADDITION].join("\n\n"),
+        systemMessage: [JSON_STEP_SYSTEM_MESSAGE, STEP5_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep5UserMessage(
           context,
           reviewBasis,
@@ -169,4 +183,8 @@ function stringifyForXmlishBlock(value: unknown): string {
         return char;
     }
   });
+}
+
+function formatQuotedValues(values: readonly string[]): string {
+  return values.map((value) => `"${value}"`).join(", ");
 }

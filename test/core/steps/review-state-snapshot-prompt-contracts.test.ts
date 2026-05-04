@@ -324,6 +324,8 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
+  assert.match(plan.prompt.systemMessage, /structured field/u);
   assert.match(plan.prompt.userMessage, /<change_map format="json">/u);
   assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts"/u);
   assert.match(plan.prompt.userMessage, /identifierRegistry/u);

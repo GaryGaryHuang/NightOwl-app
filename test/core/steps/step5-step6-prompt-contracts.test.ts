@@ -5,6 +5,17 @@ import { FileReviewContext, type Finding } from "../../../src/core/file-review-c
 import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import { ReviewStatePromptSerializer } from "../../../src/core/review-state-prompt-serializer.ts";
+import {
+  CANDIDATE_CLASSIFICATIONS,
+  CANDIDATE_CONFIDENCES,
+  CANDIDATE_PRIORITIES,
+  CANDIDATE_SEVERITIES,
+  EVIDENCE_STRENGTHS,
+  HYPOTHESIS_CLOSURE_STATUSES,
+  LOOP_ACTIONS,
+  VALIDATION_DECISIONS,
+  VALIDATION_OVERALL_STATUSES
+} from "../../../src/core/semantic-review.ts";
 import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
 
@@ -57,6 +68,26 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.match(plan.prompt.userMessage, /sourceHypothesisIds/u);
   assert.match(plan.prompt.userMessage, /hypothesisClosure/u);
   assert.match(plan.prompt.userMessage, /criticalMissingInformation/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
+  assert.match(plan.prompt.systemMessage, /structured field/u);
+  for (const value of CANDIDATE_CLASSIFICATIONS) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
+  for (const value of CANDIDATE_PRIORITIES) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
+  for (const value of CANDIDATE_SEVERITIES) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
+  for (const value of CANDIDATE_CONFIDENCES) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
+  for (const value of EVIDENCE_STRENGTHS) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
+  for (const value of HYPOTHESIS_CLOSURE_STATUSES) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
   assert.doesNotMatch(plan.prompt.userMessage, /"schemaVersion": 2/u);
   assert.doesNotMatch(plan.prompt.userMessage, /"sourceHypothesisId"/u);
 });
@@ -170,12 +201,23 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   assert.match(plan.prompt.systemMessage, /ValidationReportV1/u);
   assert.match(plan.prompt.systemMessage, /not a bug hunt/u);
   assert.match(plan.prompt.systemMessage, /Do not introduce new defects/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
+  assert.match(plan.prompt.systemMessage, /structured field/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
   assert.match(plan.prompt.userMessage, /perFindingResults/u);
   assert.match(plan.prompt.userMessage, /approvedFindings/u);
   assert.match(plan.prompt.userMessage, /missingInformationItems/u);
   assert.match(plan.prompt.userMessage, /loopControl/u);
   assert.match(plan.prompt.userMessage, /rerun_step5/u);
+  for (const value of VALIDATION_OVERALL_STATUSES) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
+  for (const value of VALIDATION_DECISIONS) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
+  for (const value of LOOP_ACTIONS) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
   assert.doesNotMatch(plan.prompt.userMessage, /findingUpdates/u);
   assert.doesNotMatch(plan.prompt.userMessage, /dispositions/u);
 });

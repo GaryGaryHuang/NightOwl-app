@@ -3,7 +3,7 @@ import { ReviewBasisValidator } from "../review-basis-validator.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { RunContext } from "../run-context.ts";
 import type { StepDefinition, StepExecutionPlan } from "../step-runner.ts";
-import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { JSON_STEP_SYSTEM_MESSAGE } from "./common-system-message.ts";
 
 const REVIEW_BASIS_SYSTEM_ADDITION = [
   "## Current Step: ReviewBasis",
@@ -83,7 +83,7 @@ export class ReviewBasisStep implements StepDefinition {
       stepId: this.stepId,
       prompt: {
         systemMessage: [
-          COMMON_SYSTEM_MESSAGE,
+          JSON_STEP_SYSTEM_MESSAGE,
           REVIEW_BASIS_SYSTEM_ADDITION
         ].join("\n\n"),
         userMessage: buildReviewBasisUserMessage(context, this.#runContext)

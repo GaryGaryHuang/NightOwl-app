@@ -1,4 +1,4 @@
-import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { JSON_STEP_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { normalizeChangesetEntriesForChangeMap } from "../change-map.ts";
 import type { ReviewKnowledgeMode } from "../review-knowledge-mode.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
@@ -20,7 +20,7 @@ export const STEP0_REVIEW_PROFILE = {
 };
 
 export const STEP0_SYSTEM_MESSAGE = [
-  COMMON_SYSTEM_MESSAGE,
+  JSON_STEP_SYSTEM_MESSAGE,
   "",
   "## Current Step: Changeset Overview",
   "- This is a run-level step. Establish a high-level understanding of the overall changeset before per-file review begins.",
