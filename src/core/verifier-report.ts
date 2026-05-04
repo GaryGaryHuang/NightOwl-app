@@ -6,6 +6,14 @@
  */
 
 import type { DispositionReason } from "./file-review-context.ts";
+import type {
+  CandidateClassification,
+  CandidatePriority,
+  CandidateSeverity,
+  SemanticGateId,
+  StopReason,
+  ValidationDecision
+} from "./semantic-review.ts";
 
 export const TAXONOMY_CODES = [
   "SCHEMA",
@@ -50,6 +58,16 @@ export interface VerifierReportEntry {
   readonly dispositionStatus?: "retained" | "modified" | "retired";
   readonly dispositionReason?: string;
   readonly dispositionExplanation?: string;
+  readonly semanticIteration?: number;
+  readonly semanticGate?: SemanticGateId;
+  readonly validationDecision?: ValidationDecision;
+  readonly requiredCorrections?: readonly string[];
+  readonly recommendedClassification?: CandidateClassification;
+  readonly recommendedPriority?: CandidatePriority;
+  readonly recommendedSeverity?: CandidateSeverity;
+  readonly missingInformationItemId?: string;
+  readonly repeatedUnsupportedClaimId?: string;
+  readonly stopReason?: StopReason;
 }
 
 export interface VerifierReportArtifactEntry extends VerifierReportEntry {
@@ -86,6 +104,39 @@ export function pickDispositionFields(
     ...(entry.dispositionExplanation === undefined
       ? {}
       : { dispositionExplanation: entry.dispositionExplanation })
+  };
+}
+
+export function pickSemanticFields(
+  entry: VerifierReportEntry
+): Partial<VerifierReportEntry> {
+  return {
+    ...(entry.semanticIteration === undefined
+      ? {}
+      : { semanticIteration: entry.semanticIteration }),
+    ...(entry.semanticGate === undefined ? {} : { semanticGate: entry.semanticGate }),
+    ...(entry.validationDecision === undefined
+      ? {}
+      : { validationDecision: entry.validationDecision }),
+    ...(entry.requiredCorrections === undefined
+      ? {}
+      : { requiredCorrections: [...entry.requiredCorrections] }),
+    ...(entry.recommendedClassification === undefined
+      ? {}
+      : { recommendedClassification: entry.recommendedClassification }),
+    ...(entry.recommendedPriority === undefined
+      ? {}
+      : { recommendedPriority: entry.recommendedPriority }),
+    ...(entry.recommendedSeverity === undefined
+      ? {}
+      : { recommendedSeverity: entry.recommendedSeverity }),
+    ...(entry.missingInformationItemId === undefined
+      ? {}
+      : { missingInformationItemId: entry.missingInformationItemId }),
+    ...(entry.repeatedUnsupportedClaimId === undefined
+      ? {}
+      : { repeatedUnsupportedClaimId: entry.repeatedUnsupportedClaimId }),
+    ...(entry.stopReason === undefined ? {} : { stopReason: entry.stopReason })
   };
 }
 

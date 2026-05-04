@@ -53,7 +53,10 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
             );
 
             if (resolved.status === "successful") {
-              const prefix = `[${deriveFileRiskLevel(resolved.outcome.findings)}]`;
+              const prefix = [
+                `[${deriveFileRiskLevel(resolved.outcome.findings)}]`,
+                formatSemanticBadge(resolved.outcome.semanticReview)
+              ].filter(Boolean).join("");
               return `- ${prefix} [\`${note.filePath}\`](${link})`;
             }
 
@@ -74,6 +77,8 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
       `- [changeset-overview.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.changesetOverviewPath)})`,
       `- [summary.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.summaryPath)})`,
       `- [skipped.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.skippedPath)})`,
+      `- [verifier-report.jsonl](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.verifierReportPath)})`,
+      `- [manifest.json](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.manifestPath)})`,
       "",
       "## File Notes",
       ...fileNoteLines
@@ -81,6 +86,31 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
 }
 
 export type ReviewIndexRenderer = typeof renderReviewIndex;
+
+function formatSemanticBadge(input: {
+  status: string;
+  stopReason?: string;
+  missingInformationCount: number;
+} | undefined): string {
+  if (!input) {
+    return "";
+  }
+
+  const badges: string[] = [];
+  if (input.status === "passed") {
+    badges.push("[Passed]");
+  } else if (input.status === "passed_with_limitations") {
+    badges.push("[Limited]");
+  } else if (input.status === "stopped") {
+    badges.push(`[Stopped:${input.stopReason ?? "unknown"}]`);
+  }
+
+  if (input.missingInformationCount > 0) {
+    badges.push("[MissingInfo]");
+  }
+
+  return badges.join("");
+}
 
 function toRelativeLink(basePath: string, targetPath: string): string {
   const normalizedBasePath = normalizeForLink(basePath);

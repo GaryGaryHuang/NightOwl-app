@@ -4,7 +4,9 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "../review-path-resolver.ts";
+import type { RunCoverageBuckets } from "../run-coverage.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
+import type { SemanticReviewStats } from "../run-outcomes.ts";
 
 export const MANIFEST_SCHEMA_VERSION = 3 as const;
 
@@ -15,6 +17,7 @@ export interface SuccessfulFileEntry {
   riskLevel: RiskLevel;
   mustCount: number;
   niceCount: number;
+  semanticReview: SemanticReviewStats;
 }
 
 export interface SkippedFileEntry {
@@ -23,6 +26,7 @@ export interface SkippedFileEntry {
   status: "skipped";
   failedStepId: string;
   reason: string;
+  semanticReview: SemanticReviewStats;
 }
 
 export type ManifestFileEntry = SuccessfulFileEntry | SkippedFileEntry;
@@ -35,8 +39,19 @@ export interface ManifestSchema {
   plannedFileCount: number;
   successfulFileCount: number;
   skippedFileCount: number;
+  coverage: RunCoverageBuckets;
+  semanticLoopStats: ManifestSemanticLoopStats;
   artifacts: OutputTarget;
   files: ManifestFileEntry[];
+}
+
+export interface ManifestSemanticLoopStats {
+  maxIterationsUsed: number;
+  files: ManifestSemanticFileStats[];
+}
+
+export interface ManifestSemanticFileStats extends SemanticReviewStats {
+  filePath: string;
 }
 
 export interface RunManifestRenderInput {
@@ -46,6 +61,7 @@ export interface RunManifestRenderInput {
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
   resolvedOutcomes: ResolvedFileOutcome[];
+  coverage?: RunCoverageBuckets;
 }
 
 /**
@@ -56,10 +72,21 @@ export function renderRunManifest(input: RunManifestRenderInput): string {
 
     const successfulCount = resolvedOutcomes.filter((r) => r.status === "successful").length;
     const skippedCount = resolvedOutcomes.filter((r) => r.status === "skipped").length;
+    const coverage = input.coverage ?? {
+      totalChangedPaths: input.plannedNotes.length,
+      reviewableNonDeletedPaths: input.plannedNotes.length,
+      plannedReviewableNotePaths: input.plannedNotes.length,
+      deletedPaths: 0,
+      binaryOrNonReviewablePaths: 0,
+      successfulPlannedFiles: successfulCount,
+      skippedPlannedFiles: skippedCount,
+      changedTests: []
+    };
 
     const files: ManifestFileEntry[] = input.plannedNotes.map(
       (plannedNote, index): ManifestFileEntry => {
         const resolved = resolvedOutcomes[index];
+        const semanticReview = getSemanticReview(resolved);
 
         if (resolved.status === "successful") {
           const mustCount = countMustFindings(resolved.outcome.findings);
@@ -71,7 +98,8 @@ export function renderRunManifest(input: RunManifestRenderInput): string {
             status: "successful",
             riskLevel: deriveFileRiskLevel(resolved.outcome.findings),
             mustCount,
-            niceCount
+            niceCount,
+            semanticReview
           };
         }
 
@@ -80,10 +108,23 @@ export function renderRunManifest(input: RunManifestRenderInput): string {
           notePath: plannedNote.noteFilePath,
           status: "skipped",
           failedStepId: resolved.outcome.stepId,
-          reason: resolved.outcome.reason
+          reason: resolved.outcome.reason,
+          semanticReview
         };
       }
     );
+    const semanticLoopStats: ManifestSemanticLoopStats = {
+      maxIterationsUsed: Math.max(
+        0,
+        ...input.resolvedOutcomes.map((outcome) =>
+          getSemanticReview(outcome).semanticIterationCount
+        )
+      ),
+      files: input.plannedNotes.map((plannedNote, index) => ({
+        filePath: plannedNote.filePath,
+        ...getSemanticReview(input.resolvedOutcomes[index])
+      }))
+    };
 
     const manifest: ManifestSchema = {
       schemaVersion: MANIFEST_SCHEMA_VERSION,
@@ -93,6 +134,8 @@ export function renderRunManifest(input: RunManifestRenderInput): string {
       plannedFileCount: input.plannedNotes.length,
       successfulFileCount: successfulCount,
       skippedFileCount: skippedCount,
+      coverage,
+      semanticLoopStats,
       artifacts: {
         basePath: input.outputTarget.basePath,
         changesetOverviewPath: input.outputTarget.changesetOverviewPath,
@@ -111,3 +154,21 @@ export function renderRunManifest(input: RunManifestRenderInput): string {
 }
 
 export type RunManifestRenderer = typeof renderRunManifest;
+
+function getSemanticReview(outcome: ResolvedFileOutcome): SemanticReviewStats {
+  return outcome.outcome.semanticReview ?? createEmptySemanticReviewStats();
+}
+
+function createEmptySemanticReviewStats(): SemanticReviewStats {
+  return {
+    status: "not_run",
+    semanticIterationCount: 0,
+    candidateFindingCount: 0,
+    approvedFindingCount: 0,
+    missingInformationCount: 0,
+    missingInformationConversionCount: 0,
+    failedGateCounts: {},
+    decisionCounts: {},
+    repeatedUnsupportedClaimStopCount: 0
+  };
+}

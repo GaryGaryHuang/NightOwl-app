@@ -3,7 +3,12 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "../../src/core/review-path-resolver.ts";
+import type { RunCoverageBuckets } from "../../src/core/run-coverage.ts";
 import { resolveFileOutcomes, type ResolvedFileOutcome } from "../../src/core/run-outcome-resolver.ts";
+import type {
+  SemanticReviewStats
+} from "../../src/core/run-outcomes.ts";
+import type { RiskSnapshot } from "../../src/core/risk-level.ts";
 import type { VerifierReportArtifactEntry } from "../../src/core/verifier-report.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../../src/core/run-outcomes.ts";
 
@@ -33,18 +38,99 @@ export function createFinding(
 export function createSuccessfulFile(
   filePath: string,
   findings: Finding[],
-  verifierReportEntries: VerifierReportArtifactEntry[] = []
+  verifierReportEntries: VerifierReportArtifactEntry[] = [],
+  semanticReview?: Partial<SemanticReviewStats>
 ): SuccessfulFileOutcome {
-  return { filePath, findings, verifierReportEntries };
+  return {
+    filePath,
+    findings,
+    verifierReportEntries,
+    semanticReview: createSemanticReviewStats(semanticReview),
+    riskSnapshot: createRiskSnapshot(findings, semanticReview),
+    dispositions: []
+  };
 }
 
 export function createSkippedFile(
   filePath: string,
   stepId: string,
   reason: string,
-  verifierReportEntries: VerifierReportArtifactEntry[] = []
+  verifierReportEntries: VerifierReportArtifactEntry[] = [],
+  semanticReview?: Partial<SemanticReviewStats>
 ): SkippedFileOutcome {
-  return { filePath, stepId, reason, verifierReportEntries };
+  return {
+    filePath,
+    stepId,
+    reason,
+    verifierReportEntries,
+    semanticReview: createSemanticReviewStats(semanticReview),
+    riskSnapshot: createRiskSnapshot([], semanticReview),
+    dispositions: []
+  };
+}
+
+export function createSemanticReviewStats(
+  overrides: Partial<SemanticReviewStats> = {}
+): SemanticReviewStats {
+  const status = overrides.status ?? "not_run";
+  return {
+    status,
+    ...(overrides.overallStatus === undefined
+      ? {}
+      : { overallStatus: overrides.overallStatus }),
+    ...(overrides.loopAction === undefined
+      ? {}
+      : { loopAction: overrides.loopAction }),
+    semanticIterationCount:
+      overrides.semanticIterationCount ?? (status === "not_run" ? 0 : 1),
+    candidateFindingCount: overrides.candidateFindingCount ?? 0,
+    approvedFindingCount: overrides.approvedFindingCount ?? 0,
+    missingInformationCount: overrides.missingInformationCount ?? 0,
+    missingInformationConversionCount:
+      overrides.missingInformationConversionCount ?? 0,
+    failedGateCounts: overrides.failedGateCounts ?? {},
+    decisionCounts: overrides.decisionCounts ?? {},
+    repeatedUnsupportedClaimStopCount:
+      overrides.repeatedUnsupportedClaimStopCount ?? 0,
+    ...(overrides.stopReason === undefined
+      ? {}
+      : { stopReason: overrides.stopReason })
+  };
+}
+
+function createRiskSnapshot(
+  findings: readonly Finding[],
+  semanticReview?: Partial<SemanticReviewStats>
+): RiskSnapshot {
+  const mustCount = findings.filter((finding) => finding.type === "must").length;
+  const niceCount = findings.filter((finding) => finding.type === "nice").length;
+  return {
+    schemaVersion: 1,
+    derivedRiskLevel: mustCount > 0 ? "High" : niceCount > 0 ? "Low" : "None",
+    mustCount,
+    niceCount,
+    acceptedFindingIds: findings.map((finding) => finding.findingId),
+    retiredFindingCount: 0,
+    riskBasis:
+      semanticReview?.status === "stopped"
+        ? "No approved findings; semantic validation stopped with limitations."
+        : "Derived from approved findings."
+  };
+}
+
+export function createCoverageBuckets(
+  overrides: Partial<RunCoverageBuckets> = {}
+): RunCoverageBuckets {
+  return {
+    totalChangedPaths: overrides.totalChangedPaths ?? 4,
+    reviewableNonDeletedPaths: overrides.reviewableNonDeletedPaths ?? 3,
+    plannedReviewableNotePaths: overrides.plannedReviewableNotePaths ?? 2,
+    deletedPaths: overrides.deletedPaths ?? 1,
+    binaryOrNonReviewablePaths: overrides.binaryOrNonReviewablePaths ?? 1,
+    successfulPlannedFiles: overrides.successfulPlannedFiles ?? 1,
+    skippedPlannedFiles: overrides.skippedPlannedFiles ?? 1,
+    changedTests: overrides.changedTests ?? ["test/app.test.ts"]
+  };
 }
 
 export function createVerifierReportArtifactEntry(
@@ -66,8 +152,9 @@ export function createVerifierReportArtifactEntry(
       : { dispositionReason: overrides.dispositionReason }),
     ...(overrides.dispositionExplanation === undefined
       ? {}
-      : { dispositionExplanation: overrides.dispositionExplanation })
-  };
+      : { dispositionExplanation: overrides.dispositionExplanation }),
+    ...overrides
+  } as VerifierReportArtifactEntry;
 }
 
 // Builds a complete OutputTarget from the given basePath (or DEFAULT_BASE_PATH

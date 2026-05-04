@@ -12,6 +12,7 @@ import type {
 import type { PlannedNoteFile } from "../../../src/core/review-path-resolver.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../../../src/core/run-outcomes.ts";
 import {
+  createCoverageBuckets,
   createFinding,
   createOutputTarget,
   createPlannedNotes,
@@ -29,6 +30,7 @@ function renderManifest(
     plannedNotes?: PlannedNoteFile[];
     successfulFiles?: SuccessfulFileOutcome[];
     skippedFiles?: SkippedFileOutcome[];
+    coverage?: ReturnType<typeof createCoverageBuckets>;
   } = {}
 ): ManifestSchema {
   const plannedNotes = overrides.plannedNotes ?? [];
@@ -41,8 +43,9 @@ function renderManifest(
     headRef: overrides.headRef ?? "feature-branch",
     outputTarget: overrides.outputTarget ?? createOutputTarget(),
     plannedNotes,
-    resolvedOutcomes: createResolvedOutcomes(plannedNotes, successfulFiles, skippedFiles)
-  });
+    resolvedOutcomes: createResolvedOutcomes(plannedNotes, successfulFiles, skippedFiles),
+    ...(overrides.coverage === undefined ? {} : { coverage: overrides.coverage })
+  } as Parameters<typeof renderRunManifest>[0]);
 
   return JSON.parse(rendered) as ManifestSchema;
 }
@@ -76,6 +79,8 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     "plannedFileCount",
     "successfulFileCount",
     "skippedFileCount",
+    "coverage",
+    "semanticLoopStats",
     "artifacts",
     "files"
   ]);
@@ -120,16 +125,116 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
       status: "successful",
       riskLevel: "High",
       mustCount: 1,
-      niceCount: 1
+      niceCount: 1,
+      semanticReview: {
+        status: "not_run",
+        semanticIterationCount: 0,
+        candidateFindingCount: 0,
+        approvedFindingCount: 0,
+        missingInformationCount: 0,
+        missingInformationConversionCount: 0,
+        failedGateCounts: {},
+        decisionCounts: {},
+        repeatedUnsupportedClaimStopCount: 0
+      }
     },
     {
       filePath: "src/b.ts",
       notePath: "/workspace/.nightowl/review/feature-branch_03131430/files/src__b.ts.md",
       status: "skipped",
       failedStepId: "step5-validation-interrogation",
-      reason: "review timeout after retry"
+      reason: "review timeout after retry",
+      semanticReview: {
+        status: "not_run",
+        semanticIterationCount: 0,
+        candidateFindingCount: 0,
+        approvedFindingCount: 0,
+        missingInformationCount: 0,
+        missingInformationConversionCount: 0,
+        failedGateCounts: {},
+        decisionCounts: {},
+        repeatedUnsupportedClaimStopCount: 0
+      }
     }
   ]);
+});
+
+test("RunManifestFinalizer renders Phase 3 coverage buckets and semantic loop stats", () => {
+  const parsed = renderManifest({
+    plannedNotes: createPlannedNotes([
+      ["src/a.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__a.ts.md"],
+      ["src/b.ts", "/workspace/.nightowl/review/feature-branch_03131430/files/src__b.ts.md"]
+    ]),
+    coverage: createCoverageBuckets({
+      totalChangedPaths: 5,
+      reviewableNonDeletedPaths: 4,
+      plannedReviewableNotePaths: 2,
+      deletedPaths: 1,
+      binaryOrNonReviewablePaths: 2,
+      successfulPlannedFiles: 1,
+      skippedPlannedFiles: 1,
+      changedTests: ["test/app.test.ts"]
+    }),
+    successfulFiles: [
+      createSuccessfulFile("src/a.ts", [], [], {
+        status: "stopped",
+        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
+        loopAction: "stop",
+        stopReason: "repeated_unsupported_claim",
+        semanticIterationCount: 2,
+        candidateFindingCount: 1,
+        approvedFindingCount: 0,
+        missingInformationCount: 1,
+        missingInformationConversionCount: 1,
+        failedGateCounts: { repeated_unsupported_claim: 1 },
+        decisionCounts: { convert_to_missing_information: 1 },
+        repeatedUnsupportedClaimStopCount: 1
+      })
+    ],
+    skippedFiles: [
+      createSkippedFile("src/b.ts", "review-basis", "judge rejected", [], {
+        status: "not_run",
+        overallStatus: undefined,
+        loopAction: undefined,
+        semanticIterationCount: 0,
+        candidateFindingCount: 0,
+        approvedFindingCount: 0
+      })
+    ]
+  }) as ManifestSchema & {
+    coverage: Record<string, unknown>;
+    semanticLoopStats: {
+      maxIterationsUsed: number;
+      files: Array<Record<string, unknown>>;
+    };
+  };
+
+  assert.deepEqual(parsed.coverage, {
+    totalChangedPaths: 5,
+    reviewableNonDeletedPaths: 4,
+    plannedReviewableNotePaths: 2,
+    deletedPaths: 1,
+    binaryOrNonReviewablePaths: 2,
+    successfulPlannedFiles: 1,
+    skippedPlannedFiles: 1,
+    changedTests: ["test/app.test.ts"]
+  });
+  assert.equal(parsed.semanticLoopStats.maxIterationsUsed, 2);
+  assert.deepEqual(parsed.semanticLoopStats.files[0], {
+    filePath: "src/a.ts",
+    status: "stopped",
+    overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
+    loopAction: "stop",
+    stopReason: "repeated_unsupported_claim",
+    semanticIterationCount: 2,
+    candidateFindingCount: 1,
+    approvedFindingCount: 0,
+    missingInformationCount: 1,
+    missingInformationConversionCount: 1,
+    failedGateCounts: { repeated_unsupported_claim: 1 },
+    decisionCounts: { convert_to_missing_information: 1 },
+    repeatedUnsupportedClaimStopCount: 1
+  });
 });
 
 test("RunManifestFinalizer preserves planned file order and reuses collision-resolved note paths", () => {

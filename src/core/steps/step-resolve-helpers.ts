@@ -17,7 +17,8 @@ import type {
 } from "../verifier-report.ts";
 import {
   dispositionReasonToTaxonomy,
-  pickDispositionFields
+  pickDispositionFields,
+  pickSemanticFields
 } from "../verifier-report.ts";
 
 /**
@@ -286,7 +287,8 @@ function toVerifierArtifactEntries(input: {
     outcome: entry.outcome,
     gate: entry.gate,
     reason: entry.reason,
-    ...pickDispositionFields(entry)
+    ...pickDispositionFields(entry),
+    ...pickSemanticFields(entry)
   }));
 }
 

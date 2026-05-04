@@ -24,6 +24,9 @@ import { resolveFileOutcomes, type ResolvedFileOutcome } from "./run-outcome-res
 import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";
+import { buildRiskSnapshot } from "./risk-level.ts";
+import { buildRunCoverageBuckets } from "./run-coverage.ts";
+import type { SemanticReviewStats } from "./run-outcomes.ts";
 import type { StepDefinition, StepResult, StepRunner } from "./step-runner.ts";
 import {
   buildOutputTarget,
@@ -274,6 +277,7 @@ export class ReviewOrchestrator {
       outputTarget,
       request,
       repoRoot,
+      runContext,
       signal: options?.signal,
       steps,
       abortGuard
@@ -305,6 +309,7 @@ export class ReviewOrchestrator {
       plannedNoteFiles,
       resolvedOutcomes,
       repoRoot,
+      runContext,
       request
     });
 
@@ -383,9 +388,20 @@ export class ReviewOrchestrator {
     plannedNoteFiles: PlannedNoteFile[];
     resolvedOutcomes: ResolvedFileOutcome[];
     repoRoot: string;
+    runContext: RunContext;
     request: RunRequest;
   }): Promise<FinalizerFailure[]> {
     const failures: FinalizerFailure[] = [];
+    const coverage = buildRunCoverageBuckets({
+      changesetOverview: input.runContext.changesetOverview,
+      plannedReviewableNotePaths: input.plannedNoteFiles.length,
+      successfulPlannedFiles: input.resolvedOutcomes.filter(
+        (outcome) => outcome.status === "successful"
+      ).length,
+      skippedPlannedFiles: input.resolvedOutcomes.filter(
+        (outcome) => outcome.status === "skipped"
+      ).length
+    });
 
     const summaryPublished = await this.#tryPublishFinalizer("summary", failures, () =>
       input.outputPublisher.publishArtifact("summary", {
@@ -393,7 +409,8 @@ export class ReviewOrchestrator {
           repoRoot: input.repoRoot,
           baseRef: input.request.baseRef,
           headRef: input.request.headRef,
-          resolvedOutcomes: input.resolvedOutcomes
+          resolvedOutcomes: input.resolvedOutcomes,
+          coverage
         })
       })
     );
@@ -436,7 +453,8 @@ export class ReviewOrchestrator {
           headRef: input.request.headRef,
           resolvedOutcomes: input.resolvedOutcomes,
           outputTarget: input.outputTarget,
-          plannedNotes: input.plannedNoteFiles
+          plannedNotes: input.plannedNoteFiles,
+          coverage
         })
       })
     );
@@ -449,6 +467,7 @@ export class ReviewOrchestrator {
     fileContext: FileReviewContext;
     outputTarget: OutputTarget;
     stepId: string;
+    semanticValidationCount: number;
     outcomeSlots: (PlannedOutcomeSlot | undefined)[];
     plannedIndex: number;
     outputPublisher: RunOutputPublisher;
@@ -484,7 +503,8 @@ export class ReviewOrchestrator {
       outcomeSlots: input.outcomeSlots,
       plannedIndex: input.plannedIndex,
       outputPublisher: input.outputPublisher,
-      abortGuard: input.abortGuard
+      abortGuard: input.abortGuard,
+      semanticValidationCount: input.semanticValidationCount
     });
   }
 
@@ -512,6 +532,7 @@ export class ReviewOrchestrator {
     outputTarget: OutputTarget;
     request: RunRequest;
     repoRoot: string;
+    runContext: RunContext;
     signal?: AbortSignal;
     abortGuard: RunAbortGuard;
     steps: StepDefinition[];
@@ -570,6 +591,7 @@ export class ReviewOrchestrator {
               outputTarget: input.outputTarget,
               request: input.request,
               repoRoot: input.repoRoot,
+              runContext: input.runContext,
               signal: input.signal,
               abortGuard: input.abortGuard,
               steps: input.steps
@@ -592,6 +614,7 @@ export class ReviewOrchestrator {
     outputTarget: OutputTarget;
     request: RunRequest;
     repoRoot: string;
+    runContext: RunContext;
     signal?: AbortSignal;
     abortGuard: RunAbortGuard;
     steps: StepDefinition[];
@@ -622,7 +645,8 @@ export class ReviewOrchestrator {
         outcomeSlots: input.outcomeSlots,
         plannedIndex: input.workItem.plannedIndex,
         outputPublisher: input.outputPublisher,
-        abortGuard: input.abortGuard
+        abortGuard: input.abortGuard,
+        semanticValidationCount: 0
       });
 
       return;
@@ -641,6 +665,7 @@ export class ReviewOrchestrator {
     }
 
     let semanticRerunCount = 0;
+    let semanticValidationCount = 0;
     const semanticCandidateFingerprints = new Set<string>();
     const step5Index = input.steps.findIndex(
       (step) => step.stepId === "step5-validation-interrogation"
@@ -682,7 +707,8 @@ export class ReviewOrchestrator {
           outcomeSlots: input.outcomeSlots,
           plannedIndex: input.workItem.plannedIndex,
           outputPublisher: input.outputPublisher,
-          abortGuard: input.abortGuard
+          abortGuard: input.abortGuard,
+          semanticValidationCount
         });
 
         return;
@@ -693,6 +719,9 @@ export class ReviewOrchestrator {
       }
 
       result.applyTo(fileContext);
+      if (step.stepId === "step6-cognitive-simulation") {
+        semanticValidationCount += 1;
+      }
 
       if (input.abortGuard.isAborted) {
         return;
@@ -709,6 +738,7 @@ export class ReviewOrchestrator {
           fileContext,
           outputTarget: input.outputTarget,
           stepId: step.stepId,
+          semanticValidationCount,
           outcomeSlots: input.outcomeSlots,
           plannedIndex: input.workItem.plannedIndex,
           outputPublisher: input.outputPublisher,
@@ -787,7 +817,16 @@ export class ReviewOrchestrator {
       outcome: {
         filePath: fileContext.filePath,
         findings: fileContext.getFindings() ?? [],
-        verifierReportEntries: fileContext.getVerifierReportEntries() ?? []
+        verifierReportEntries: fileContext.getVerifierReportEntries() ?? [],
+        semanticReview: buildSemanticReviewStats(
+          fileContext,
+          semanticValidationCount
+        ),
+        riskSnapshot: buildRiskSnapshot(
+          fileContext.getFindings() ?? [],
+          fileContext.getDispositions() ?? []
+        ),
+        dispositions: fileContext.getDispositions() ?? []
       }
     };
 
@@ -805,6 +844,7 @@ export class ReviewOrchestrator {
     plannedIndex: number;
     outputPublisher: RunOutputPublisher;
     abortGuard: RunAbortGuard;
+    semanticValidationCount: number;
   }): Promise<void> {
     input.fileContext.markInterrupted(input.stepId, input.reason);
 
@@ -835,7 +875,16 @@ export class ReviewOrchestrator {
       filePath: input.fileContext.filePath,
       stepId: input.stepId,
       reason: input.reason,
-      verifierReportEntries: input.fileContext.getVerifierReportEntries() ?? []
+      verifierReportEntries: input.fileContext.getVerifierReportEntries() ?? [],
+      semanticReview: buildSemanticReviewStats(
+        input.fileContext,
+        input.semanticValidationCount
+      ),
+      riskSnapshot: buildRiskSnapshot(
+        input.fileContext.getFindings() ?? [],
+        input.fileContext.getDispositions() ?? []
+      ),
+      dispositions: input.fileContext.getDispositions() ?? []
     });
   }
 
@@ -846,6 +895,9 @@ export class ReviewOrchestrator {
     stepId: string;
     reason: string;
     verifierReportEntries: SuccessfulFileOutcome["verifierReportEntries"];
+    semanticReview: SemanticReviewStats;
+    riskSnapshot: SuccessfulFileOutcome["riskSnapshot"];
+    dispositions: SuccessfulFileOutcome["dispositions"];
   }): void {
     input.outcomeSlots[input.plannedIndex] = {
       kind: "skipped",
@@ -853,7 +905,10 @@ export class ReviewOrchestrator {
         filePath: input.filePath,
         stepId: input.stepId,
         reason: input.reason,
-        verifierReportEntries: input.verifierReportEntries
+        verifierReportEntries: input.verifierReportEntries,
+        semanticReview: input.semanticReview,
+        riskSnapshot: input.riskSnapshot,
+        dispositions: input.dispositions
       }
     };
 
@@ -942,6 +997,48 @@ function markSemanticLoopStopped(
 
   context.setValidationReportV1(stoppedReport);
   context.setFindings([]);
+
+  const firstResult = stoppedReport.perFindingResults[0];
+  const firstCandidate = context.getCandidateFindingsV3()?.findings[0];
+  const findingId =
+    firstResult?.findingId ?? firstCandidate?.findingId ?? "<semantic-loop>";
+  const lastMissingInformationItem =
+    input.missingInformationItems[input.missingInformationItems.length - 1];
+  const matchingMissingInformationItem = input.missingInformationItems.find(
+    (item) => item.findingId === findingId
+  );
+
+  context.appendVerifierReportEntries([
+    {
+      filePath: context.filePath,
+      stepId: "step6-cognitive-simulation",
+      findingId,
+      taxonomy: "SEMANTIC",
+      outcome: "rejected",
+      gate: "semantic",
+      reason: input.reason,
+      validationDecision:
+        firstResult?.decision ?? "convert_to_missing_information",
+      ...(firstResult?.requiredCorrections === undefined
+        ? {}
+        : { requiredCorrections: firstResult.requiredCorrections }),
+      ...(matchingMissingInformationItem?.itemId ??
+      lastMissingInformationItem?.itemId
+        ? {
+            missingInformationItemId:
+              matchingMissingInformationItem?.itemId ??
+              lastMissingInformationItem?.itemId
+          }
+        : {}),
+      ...(input.stopReason === "repeated_unsupported_claim"
+        ? {
+            semanticGate: "repeated_unsupported_claim",
+            repeatedUnsupportedClaimId: findingId
+          }
+        : {}),
+      stopReason: input.stopReason
+    }
+  ]);
 }
 
 function buildCurrentCandidateFingerprint(context: FileReviewContext): string | undefined {
@@ -967,6 +1064,91 @@ function buildPriorValidatorFeedbackFromValidationReport(
       )
     ]
   };
+}
+
+function buildSemanticReviewStats(
+  context: FileReviewContext,
+  semanticValidationCount: number
+): SemanticReviewStats {
+  const candidatePayload = context.getCandidateFindingsV3();
+  const validationReport = context.getValidationReportV1();
+  const missingInformationItems =
+    context.getMissingInformationItems() ??
+    validationReport?.missingInformationItems ??
+    [];
+  const perFindingResults = validationReport?.perFindingResults ?? [];
+  const decisionCounts = countBy(
+    perFindingResults.map((result) => result.decision)
+  );
+  const failedGateCounts = countBy(
+    perFindingResults.flatMap((result) => result.failedGates)
+  );
+
+  return {
+    status: deriveSemanticReviewStatus(
+      validationReport,
+      missingInformationItems.length
+    ),
+    ...(validationReport?.overallStatus === undefined
+      ? {}
+      : { overallStatus: validationReport.overallStatus }),
+    ...(validationReport?.loopControl.action === undefined
+      ? {}
+      : { loopAction: validationReport.loopControl.action }),
+    ...(validationReport?.stopReason === undefined
+      ? {}
+      : { stopReason: validationReport.stopReason }),
+    semanticIterationCount: semanticValidationCount,
+    candidateFindingCount: candidatePayload?.findings.length ?? 0,
+    approvedFindingCount:
+      validationReport?.approvedFindings.length ??
+      context.getFindings()?.length ??
+      0,
+    missingInformationCount: missingInformationItems.length,
+    missingInformationConversionCount:
+      decisionCounts.convert_to_missing_information ?? 0,
+    failedGateCounts,
+    decisionCounts,
+    repeatedUnsupportedClaimStopCount:
+      validationReport?.stopReason === "repeated_unsupported_claim" ? 1 : 0
+  };
+}
+
+function deriveSemanticReviewStatus(
+  validationReport: ValidationReportV1 | undefined,
+  missingInformationCount: number
+): SemanticReviewStats["status"] {
+  if (!validationReport) {
+    return "not_run";
+  }
+
+  if (
+    validationReport.loopControl.action === "stop" ||
+    validationReport.stopReason !== undefined ||
+    validationReport.overallStatus === "STOPPED" ||
+    validationReport.overallStatus ===
+      "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW"
+  ) {
+    return "stopped";
+  }
+
+  if (validationReport.loopControl.action === "rerun_step5") {
+    return "rerun_requested";
+  }
+
+  if (missingInformationCount > 0) {
+    return "passed_with_limitations";
+  }
+
+  return "passed";
+}
+
+function countBy(values: readonly string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const value of values) {
+    counts[value] = (counts[value] ?? 0) + 1;
+  }
+  return counts;
 }
 
 class RunAbortGuard {

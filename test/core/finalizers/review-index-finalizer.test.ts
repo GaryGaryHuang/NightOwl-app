@@ -214,6 +214,51 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
   ]);
 });
 
+test("ReviewIndexFinalizer distinguishes missing-information semantic stops from clean reviews", () => {
+  const rendered = renderIndex({
+    repoRoot: "/workspace/repo",
+    baseRef: "main",
+    headRef: "feature-branch",
+    outputTarget: createOutputTarget(),
+    plannedNotes: createPlannedNotes([
+      plannedNote("src/clean.ts"),
+      plannedNote("src/blocked.ts")
+    ]),
+    successfulFiles: [
+      createSuccessfulFile("src/clean.ts", [], [], {
+        status: "passed",
+        semanticIterationCount: 1,
+        candidateFindingCount: 0,
+        approvedFindingCount: 0,
+        missingInformationCount: 0,
+        decisionCounts: {}
+      }),
+      createSuccessfulFile("src/blocked.ts", [], [], {
+        status: "stopped",
+        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
+        loopAction: "stop",
+        stopReason: "missing_critical_contract",
+        semanticIterationCount: 1,
+        candidateFindingCount: 1,
+        approvedFindingCount: 0,
+        missingInformationCount: 1,
+        missingInformationConversionCount: 1,
+        decisionCounts: { convert_to_missing_information: 1 }
+      })
+    ],
+    skippedFiles: []
+  });
+
+  assert.match(
+    rendered,
+    /- \[None\]\[Passed\] \[`src\/clean\.ts`\]\(\.\/files\/src\/clean\.ts\.md\)/u
+  );
+  assert.match(
+    rendered,
+    /- \[None\]\[Stopped:missing_critical_contract\]\[MissingInfo\] \[`src\/blocked\.ts`\]\(\.\/files\/src\/blocked\.ts\.md\)/u
+  );
+});
+
 function assertTextContainsInOrder(text: string, fragments: string[]): void {
   let cursor = 0;
 
@@ -230,7 +275,9 @@ function assertRunArtifacts(rendered: string): void {
     "## Run Artifacts",
     "- [changeset-overview.md](./changeset-overview.md)",
     "- [summary.md](./summary.md)",
-    "- [skipped.md](./skipped.md)"
+    "- [skipped.md](./skipped.md)",
+    "- [verifier-report.jsonl](./verifier-report.jsonl)",
+    "- [manifest.json](./manifest.json)"
   ]);
 }
 

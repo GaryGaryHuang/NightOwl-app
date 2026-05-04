@@ -45,6 +45,7 @@
     "test/core/verifier-report.test.ts",
     "test/core/web-fetch-hostname-normalization.test.ts",
     "test/eval/eval-harness.test.ts",
+    "test/eval/semantic-eval-harness.test.ts",
     "test/providers/local-git-provider-unit.test.ts",
     "test/providers/resolve-output-write-failure-assessment.test.ts",
     "test/providers/review-config-field-resolvers.test.ts",

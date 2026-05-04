@@ -316,7 +316,14 @@ export class StructuredOutputValidator {
         report
       });
 
+      const validationResultByFindingId = new Map(
+        payload.perFindingResults.map((result) => [result.findingId, result])
+      );
+
       for (const finding of payload.approvedFindings) {
+        const validationResult = validationResultByFindingId.get(
+          finding.findingId
+        );
         report.push({
           findingId: finding.findingId,
           taxonomy: "OK",
@@ -329,7 +336,8 @@ export class StructuredOutputValidator {
           taxonomy: "OK",
           outcome: "accepted",
           gate: "semantic",
-          reason: "passed ValidationReportV1 semantic gates"
+          reason: "passed ValidationReportV1 semantic gates",
+          ...buildValidationReportSemanticFields(validationResult, payload)
         });
       }
 
@@ -340,7 +348,8 @@ export class StructuredOutputValidator {
             taxonomy: result.decision === "approve" ? "OK" : "SEMANTIC",
             outcome: result.decision === "approve" ? "accepted" : "rejected",
             gate: "semantic",
-            reason: result.reason ?? `candidate ${result.decision}`
+            reason: result.reason ?? `candidate ${result.decision}`,
+            ...buildValidationReportSemanticFields(result, payload)
           });
         }
       }
@@ -525,6 +534,48 @@ function validateCandidateDispositionReason(disposition: FindingDisposition): vo
       `deterministic validation failed: retired candidate '${disposition.findingId}' must not use disposition reason 'SUPPORTED'`
     );
   }
+}
+
+function buildValidationReportSemanticFields(
+  result: PerFindingValidationResult | undefined,
+  payload: ValidationReportV1
+): Partial<VerifierReportEntry> {
+  const missingInformationItem =
+    result === undefined
+      ? undefined
+      : payload.missingInformationItems.find(
+          (item) => item.findingId === result.findingId
+        );
+
+  return {
+    ...(result?.decision === undefined
+      ? {}
+      : { validationDecision: result.decision }),
+    ...(result?.failedGates[0] === undefined
+      ? {}
+      : { semanticGate: result.failedGates[0] }),
+    ...(result?.requiredCorrections === undefined ||
+    result.requiredCorrections.length === 0
+      ? {}
+      : { requiredCorrections: [...result.requiredCorrections] }),
+    ...(result?.recommendedClassification === undefined
+      ? {}
+      : { recommendedClassification: result.recommendedClassification }),
+    ...(result?.recommendedPriority === undefined
+      ? {}
+      : { recommendedPriority: result.recommendedPriority }),
+    ...(result?.recommendedSeverity === undefined
+      ? {}
+      : { recommendedSeverity: result.recommendedSeverity }),
+    ...(missingInformationItem?.itemId === undefined
+      ? {}
+      : { missingInformationItemId: missingInformationItem.itemId }),
+    ...(payload.stopReason === "repeated_unsupported_claim" &&
+    result?.findingId !== undefined
+      ? { repeatedUnsupportedClaimId: result.findingId }
+      : {}),
+    ...(payload.stopReason === undefined ? {} : { stopReason: payload.stopReason })
+  };
 }
 
 function validateCandidateFindingsV3Record(input: {

@@ -1,5 +1,5 @@
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
-import { pickDispositionFields } from "../verifier-report.ts";
+import { pickDispositionFields, pickSemanticFields } from "../verifier-report.ts";
 
 export interface VerifierReportRenderInput {
   resolvedOutcomes: ResolvedFileOutcome[];
@@ -17,7 +17,8 @@ export function renderVerifierReport(input: VerifierReportRenderInput): string {
           outcome: entry.outcome,
           gate: entry.gate,
           reason: entry.reason,
-          ...pickDispositionFields(entry)
+          ...pickDispositionFields(entry),
+          ...pickSemanticFields(entry)
         })
       )
       .join("\n");

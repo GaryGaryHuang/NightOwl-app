@@ -1,11 +1,14 @@
 import { countMustFindings, countNiceFindings, deriveFileRiskLevel, RISK_ORDER, type RiskLevel } from "../risk-level.ts";
+import type { RunCoverageBuckets } from "../run-coverage.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
+import type { SemanticReviewStats } from "../run-outcomes.ts";
 
 export interface RunSummaryRenderInput {
   repoRoot: string;
   baseRef: string;
   headRef: string;
   resolvedOutcomes: ResolvedFileOutcome[];
+  coverage?: RunCoverageBuckets;
 }
 
 /**
@@ -19,6 +22,16 @@ export function renderRunSummary(input: RunSummaryRenderInput): string {
     const skippedFiles = input.resolvedOutcomes
       .filter((r): r is Extract<ResolvedFileOutcome, { status: "skipped" }> => r.status === "skipped")
       .map((r) => r.outcome);
+    const coverage = input.coverage ?? {
+      totalChangedPaths: plannedFileCount,
+      reviewableNonDeletedPaths: plannedFileCount,
+      plannedReviewableNotePaths: plannedFileCount,
+      deletedPaths: 0,
+      binaryOrNonReviewablePaths: 0,
+      successfulPlannedFiles: successfulFiles.length,
+      skippedPlannedFiles: skippedFiles.length,
+      changedTests: []
+    };
 
     const totalMust = successfulFiles.reduce(
       (count, file) => count + countMustFindings(file.findings),
@@ -62,6 +75,7 @@ export function renderRunSummary(input: RunSummaryRenderInput): string {
         : skippedFiles.map(
             (file) => `- \`${file.filePath}\` — ${file.stepId} — ${file.reason}`
           );
+    const semanticSummary = buildSemanticSummary(input.resolvedOutcomes);
 
     return [
       "# Review Summary",
@@ -74,10 +88,30 @@ export function renderRunSummary(input: RunSummaryRenderInput): string {
       `- Skipped files: ${skippedFiles.length}`,
       `- Final findings totals: must=${totalMust}, nice=${totalNice}`,
       "",
+      "## Coverage",
+      `- Total changed paths: ${coverage.totalChangedPaths}`,
+      `- Reviewable non-deleted paths: ${coverage.reviewableNonDeletedPaths}`,
+      `- Planned reviewable notes: ${coverage.plannedReviewableNotePaths}`,
+      `- Successful planned files: ${coverage.successfulPlannedFiles}`,
+      `- Skipped planned files: ${coverage.skippedPlannedFiles}`,
+      `- Deleted paths: ${coverage.deletedPaths}`,
+      `- Binary/non-reviewable paths: ${coverage.binaryOrNonReviewablePaths}`,
+      `- Changed tests: ${formatChangedTests(coverage.changedTests)}`,
+      "",
       "## Risk Distribution",
       `- High: ${riskCounts.High}`,
       `- Low: ${riskCounts.Low}`,
       `- None: ${riskCounts.None}`,
+      "",
+      "## Semantic Validation",
+      `- Passed cleanly: ${semanticSummary.passedCleanly}`,
+      `- Passed with limitations: ${semanticSummary.passedWithLimitations}`,
+      `- Stopped or insufficient information: ${semanticSummary.stoppedOrInsufficient}`,
+      `- Missing-information items: ${semanticSummary.missingInformationItems}`,
+      `- Dropped/converted candidates: ${semanticSummary.droppedOrConvertedCandidates}`,
+      `- Repeated unsupported claim stops: ${semanticSummary.repeatedUnsupportedClaimStops}`,
+      `- Max semantic iterations used: ${semanticSummary.maxIterationsUsed}`,
+      ...semanticSummary.lines,
       "",
       "## Successful Files",
       ...successfulLines,
@@ -88,3 +122,82 @@ export function renderRunSummary(input: RunSummaryRenderInput): string {
 }
 
 export type RunSummaryRenderer = typeof renderRunSummary;
+
+function buildSemanticSummary(outcomes: ResolvedFileOutcome[]): {
+  passedCleanly: number;
+  passedWithLimitations: number;
+  stoppedOrInsufficient: number;
+  missingInformationItems: number;
+  droppedOrConvertedCandidates: number;
+  repeatedUnsupportedClaimStops: number;
+  maxIterationsUsed: number;
+  lines: string[];
+} {
+  let passedCleanly = 0;
+  let passedWithLimitations = 0;
+  let stoppedOrInsufficient = 0;
+  let missingInformationItems = 0;
+  let droppedOrConvertedCandidates = 0;
+  let repeatedUnsupportedClaimStops = 0;
+  let maxIterationsUsed = 0;
+  const lines: string[] = [];
+
+  for (const outcome of outcomes) {
+    const semantic = outcome.outcome.semanticReview ?? createEmptySemanticReviewStats();
+    maxIterationsUsed = Math.max(maxIterationsUsed, semantic.semanticIterationCount);
+    missingInformationItems += semantic.missingInformationCount;
+    droppedOrConvertedCandidates +=
+      (semantic.decisionCounts.drop ?? 0) +
+      (semantic.decisionCounts.convert_to_missing_information ?? 0);
+    repeatedUnsupportedClaimStops += semantic.repeatedUnsupportedClaimStopCount;
+
+    if (semantic.status === "passed") {
+      passedCleanly += 1;
+    } else if (semantic.status === "passed_with_limitations") {
+      passedWithLimitations += 1;
+    } else if (semantic.status === "stopped") {
+      stoppedOrInsufficient += 1;
+    }
+
+    if (
+      semantic.status === "stopped" ||
+      semantic.missingInformationCount > 0 ||
+      semantic.repeatedUnsupportedClaimStopCount > 0
+    ) {
+      lines.push(
+        `- \`${outcome.outcome.filePath}\` — ${semantic.status}: ${semantic.stopReason ?? semantic.overallStatus ?? "unknown"}; approved=${semantic.approvedFindingCount}; missing-information=${semantic.missingInformationCount}`
+      );
+    }
+  }
+
+  return {
+    passedCleanly,
+    passedWithLimitations,
+    stoppedOrInsufficient,
+    missingInformationItems,
+    droppedOrConvertedCandidates,
+    repeatedUnsupportedClaimStops,
+    maxIterationsUsed,
+    lines: lines.length === 0 ? ["- 無"] : lines
+  };
+}
+
+function formatChangedTests(changedTests: readonly string[]): string {
+  return changedTests.length === 0
+    ? "無"
+    : changedTests.map((filePath) => `\`${filePath}\``).join(", ");
+}
+
+function createEmptySemanticReviewStats(): SemanticReviewStats {
+  return {
+    status: "not_run",
+    semanticIterationCount: 0,
+    candidateFindingCount: 0,
+    approvedFindingCount: 0,
+    missingInformationCount: 0,
+    missingInformationConversionCount: 0,
+    failedGateCounts: {},
+    decisionCounts: {},
+    repeatedUnsupportedClaimStopCount: 0
+  };
+}

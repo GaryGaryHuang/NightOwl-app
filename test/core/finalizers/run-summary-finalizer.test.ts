@@ -6,6 +6,7 @@ import {
   type RunSummaryRenderInput
 } from "../../../src/core/finalizers/run-summary-finalizer.ts";
 import {
+  createCoverageBuckets,
   createFinding,
   createPlannedNotesFromPaths,
   createResolvedOutcomes,
@@ -20,6 +21,7 @@ function renderSummary(overrides: {
   repoRoot?: string;
   baseRef?: string;
   headRef?: string;
+  coverage?: ReturnType<typeof createCoverageBuckets>;
 } = {}): string {
   const plannedNotes = overrides.plannedNotes ?? [];
   const successfulFiles = overrides.successfulFiles ?? [];
@@ -29,8 +31,9 @@ function renderSummary(overrides: {
     repoRoot: overrides.repoRoot ?? "/workspace/repo",
     baseRef: overrides.baseRef ?? "main",
     headRef: overrides.headRef ?? "feature-branch",
-    resolvedOutcomes: createResolvedOutcomes(plannedNotes, successfulFiles, skippedFiles)
-  });
+    resolvedOutcomes: createResolvedOutcomes(plannedNotes, successfulFiles, skippedFiles),
+    ...(overrides.coverage === undefined ? {} : { coverage: overrides.coverage })
+  } as Parameters<typeof renderRunSummary>[0]);
 }
 
 test("RunSummaryFinalizer renders the exact aggregate summary contract with rebased derived risk levels", () => {
@@ -154,6 +157,65 @@ test("RunSummaryFinalizer renders Risk Distribution section with High, Low, and 
   assert.match(rendered, /- High: 2/u);
   assert.match(rendered, /- Low: 1/u);
   assert.match(rendered, /- None: 1/u);
+});
+
+test("RunSummaryFinalizer reports coverage and semantic limitations without inflating risk", () => {
+  const rendered = renderSummary({
+    coverage: createCoverageBuckets({
+      totalChangedPaths: 5,
+      reviewableNonDeletedPaths: 4,
+      plannedReviewableNotePaths: 2,
+      deletedPaths: 1,
+      binaryOrNonReviewablePaths: 2,
+      successfulPlannedFiles: 2,
+      skippedPlannedFiles: 0,
+      changedTests: ["test/app.test.ts"]
+    }),
+    plannedNotes: createPlannedNotesFromPaths(["src/clean.ts", "src/blocked.ts"]),
+    successfulFiles: [
+      createSuccessfulFile("src/clean.ts", [], [], {
+        status: "passed",
+        semanticIterationCount: 1,
+        candidateFindingCount: 0,
+        approvedFindingCount: 0,
+        missingInformationCount: 0,
+        decisionCounts: {}
+      }),
+      createSuccessfulFile("src/blocked.ts", [], [], {
+        status: "stopped",
+        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
+        loopAction: "stop",
+        stopReason: "repeated_unsupported_claim",
+        semanticIterationCount: 2,
+        candidateFindingCount: 1,
+        approvedFindingCount: 0,
+        missingInformationCount: 1,
+        missingInformationConversionCount: 1,
+        failedGateCounts: { repeated_unsupported_claim: 1 },
+        decisionCounts: { convert_to_missing_information: 1 },
+        repeatedUnsupportedClaimStopCount: 1
+      })
+    ]
+  });
+
+  assert.match(rendered, /^## Coverage$/mu);
+  assert.match(rendered, /- Total changed paths: 5/u);
+  assert.match(rendered, /- Planned reviewable notes: 2/u);
+  assert.match(rendered, /- Deleted paths: 1/u);
+  assert.match(rendered, /- Binary\/non-reviewable paths: 2/u);
+  assert.match(rendered, /- Changed tests: `test\/app\.test\.ts`/u);
+  assert.match(rendered, /^## Semantic Validation$/mu);
+  assert.match(rendered, /- Passed cleanly: 1/u);
+  assert.match(rendered, /- Stopped or insufficient information: 1/u);
+  assert.match(rendered, /- Missing-information items: 1/u);
+  assert.match(rendered, /- Dropped\/converted candidates: 1/u);
+  assert.match(rendered, /- Repeated unsupported claim stops: 1/u);
+  assert.match(
+    rendered,
+    /`src\/blocked\.ts` — stopped: repeated_unsupported_claim; approved=0; missing-information=1/u
+  );
+  assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
+  assert.match(rendered, /- None: 2/u);
 });
 
 function assertTextContainsInOrder(text: string, fragments: string[]): void {

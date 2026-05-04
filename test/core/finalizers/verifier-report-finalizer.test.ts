@@ -133,6 +133,58 @@ test("VerifierReportFinalizer persists retired disposition audit fields", () => 
   });
 });
 
+test("VerifierReportFinalizer preserves optional semantic loop metadata", () => {
+  const rendered = renderReport({
+    plannedNotes: createPlannedNotes([
+      ["src/a.ts", "/workspace/.nightowl/review/feature/files/src__a.ts.md"]
+    ]),
+    successfulFiles: [
+      createSuccessfulFile("src/a.ts", [], [
+        createVerifierReportArtifactEntry({
+          filePath: "src/a.ts",
+          stepId: "step6-cognitive-simulation",
+          findingId: "F1",
+          taxonomy: "SEMANTIC",
+          outcome: "rejected",
+          gate: "semantic",
+          reason: "impact is unsupported",
+          semanticIteration: 2,
+          semanticGate: "impact_proportionate",
+          validationDecision: "convert_to_missing_information",
+          requiredCorrections: ["Prove concrete impact or convert to missing information."],
+          recommendedClassification: "insufficient_information",
+          recommendedPriority: "none",
+          recommendedSeverity: "none",
+          missingInformationItemId: "MI1",
+          repeatedUnsupportedClaimId: "F1",
+          stopReason: "repeated_unsupported_claim"
+        } as Partial<ReturnType<typeof createVerifierReportArtifactEntry>>)
+      ])
+    ],
+    skippedFiles: []
+  });
+
+  assert.deepEqual(JSON.parse(rendered), {
+    filePath: "src/a.ts",
+    stepId: "step6-cognitive-simulation",
+    findingId: "F1",
+    taxonomy: "SEMANTIC",
+    outcome: "rejected",
+    gate: "semantic",
+    reason: "impact is unsupported",
+    semanticIteration: 2,
+    semanticGate: "impact_proportionate",
+    validationDecision: "convert_to_missing_information",
+    requiredCorrections: ["Prove concrete impact or convert to missing information."],
+    recommendedClassification: "insufficient_information",
+    recommendedPriority: "none",
+    recommendedSeverity: "none",
+    missingInformationItemId: "MI1",
+    repeatedUnsupportedClaimId: "F1",
+    stopReason: "repeated_unsupported_claim"
+  });
+});
+
 test("VerifierReportFinalizer renders empty content for zero-file runs", () => {
   const rendered = renderReport({
     plannedNotes: [],
