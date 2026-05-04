@@ -1,25 +1,30 @@
-import type { ChangeMap } from "../../src/core/change-map.ts";
+import type { ChangeMapReadinessV2 } from "../../src/core/change-map.ts";
 
 /**
- * Build a minimal `ChangeMap` for tests that previously stubbed Step 0 with
+ * Build a minimal `ChangeMapReadinessV2` for tests that stub Step 0 with
  * a Markdown string only. Defaults to empty structured arrays; callers can
  * override per test.
  */
 export function stubChangeMap(
   overviewMarkdown: string,
-  overrides: Partial<Omit<ChangeMap, "schemaVersion" | "overviewMarkdown">> = {}
-): ChangeMap {
+  overrides: Partial<Omit<ChangeMapReadinessV2, "schemaVersion" | "overviewMarkdown">> = {}
+): ChangeMapReadinessV2 {
   return Object.freeze({
-    schemaVersion: 1,
-    overviewMarkdown,
-    changedFiles: Object.freeze(overrides.changedFiles ?? []),
-    fileGroups: Object.freeze(overrides.fileGroups ?? []),
-    crossFileBoundaries: Object.freeze(overrides.crossFileBoundaries ?? []),
-    testCoverageObservations: Object.freeze(
-      overrides.testCoverageObservations ?? []
+    schemaVersion: 2,
+    reviewObjective: Object.freeze(
+      overrides.reviewObjective ?? {
+        summary: "Test review context.",
+        requestedFocus: Object.freeze([]),
+        expectedBehaviorSummary: Object.freeze([])
+      }
     ),
+    userContextSSOT: Object.freeze(overrides.userContextSSOT ?? []),
+    expectedBehaviorLedger: Object.freeze(
+      overrides.expectedBehaviorLedger ?? []
+    ),
+    missingInformation: Object.freeze(overrides.missingInformation ?? []),
+    overviewMarkdown,
     behaviorChanges: Object.freeze(overrides.behaviorChanges ?? []),
-    evidenceRefs: Object.freeze(overrides.evidenceRefs ?? []),
     unresolvedUnknowns: Object.freeze(overrides.unresolvedUnknowns ?? [])
-  }) as ChangeMap;
+  }) as ChangeMapReadinessV2;
 }

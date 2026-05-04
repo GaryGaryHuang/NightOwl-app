@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ChangeMap } from "../../../src/core/change-map.ts";
+import type { ChangeMapReadinessV2 } from "../../../src/core/change-map.ts";
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
 import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
@@ -17,7 +17,10 @@ import type {
 import { Step1OverviewStep } from "../../../src/core/steps/step1-overview.ts";
 import { Step2DependenciesBoundariesStep } from "../../../src/core/steps/step2-dependencies-boundaries.ts";
 import { Step3KnowledgeSourceOfTruthStep } from "../../../src/core/steps/step3-knowledge-source-of-truth.ts";
-import { Step4StrategyWhatIfScenariosStep } from "../../../src/core/steps/step4-strategy-what-if-scenarios.ts";
+import {
+  Step4StrategyWhatIfScenariosStep,
+  type Step4FileCategoryMap
+} from "../../../src/core/steps/step4-strategy-what-if-scenarios.ts";
 import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
 import { Step7SummaryStep } from "../../../src/core/steps/step7-summary.ts";
@@ -131,32 +134,36 @@ function createValidationReport(findings: Finding[]): ValidationReportV1 {
 
 function createChangeMap(
   overviewMarkdown = "## Changeset Overview\n"
-): ChangeMap {
+): ChangeMapReadinessV2 {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    reviewObjective: {
+      summary: "Test review context.",
+      requestedFocus: [],
+      expectedBehaviorSummary: []
+    },
+    userContextSSOT: [],
+    expectedBehaviorLedger: [],
+    missingInformation: [],
     overviewMarkdown,
+    behaviorChanges: [
+      {
+        description: "app changed",
+        files: ["src/app.ts"]
+      }
+    ],
+    unresolvedUnknowns: []
+  };
+}
+
+function createStep4FileCategoryMap(): Step4FileCategoryMap {
+  return {
     changedFiles: [
       {
         path: "src/app.ts",
-        status: "M",
-        category: "feature",
-        group: "app",
-        basis: "diff-inspected"
+        category: "feature"
       }
-    ],
-    fileGroups: [
-      {
-        id: "G1",
-        label: "app",
-        files: ["src/app.ts"],
-        observedChange: "app changed"
-      }
-    ],
-    crossFileBoundaries: [],
-    testCoverageObservations: [],
-    behaviorChanges: [],
-    evidenceRefs: [],
-    unresolvedUnknowns: []
+    ]
   };
 }
 
@@ -421,7 +428,7 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
     new Step3KnowledgeSourceOfTruthStep({ promptSerializer: serializer }).prepare(context),
     new Step4StrategyWhatIfScenariosStep({
       promptSerializer: serializer,
-      changeMap: createChangeMap()
+      fileCategoryMap: createStep4FileCategoryMap()
     }).prepare(context),
     new Step5ValidationInterrogationStep({ promptSerializer: serializer }).prepare(context),
     new Step6CognitiveSimulationStep({ promptSerializer: serializer }).prepare(context),

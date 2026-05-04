@@ -11,42 +11,36 @@ import {
 interface ChangeMapJsonOptions {
   readonly overviewMarkdown?: string;
   readonly paths?: readonly string[];
-  readonly statuses?: Readonly<Record<string, "A" | "M" | "D" | "R">>;
   readonly behaviorChanges?: readonly {
     description: string;
     files: readonly string[];
-    evidenceRefs: readonly string[];
   }[];
 }
 
 function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
   const paths = options.paths ?? ["src/app.ts"];
   return JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
+    reviewObjective: {
+      summary: "Test review context.",
+      requestedFocus: [],
+      expectedBehaviorSummary: []
+    },
+    userContextSSOT: [],
+    expectedBehaviorLedger: [],
+    missingInformation: [],
     overviewMarkdown:
       options.overviewMarkdown ?? "## Changeset Overview\n- 調整範圍：feature",
-    changedFiles: paths.map((path) => ({
-      path,
-      status: options.statuses?.[path] ?? "M",
-      category: "feature",
-      group: "review-flow",
-      basis: "diff-inspected"
-    })),
-    fileGroups:
+    behaviorChanges: options.behaviorChanges ?? (
       paths.length === 0
         ? []
         : [
             {
-              id: "G1",
-              label: "review-flow",
-              files: paths,
-              observedChange: "review flow updates shared run context"
+              description: "review flow updates shared run context",
+              files: paths
             }
-          ],
-    crossFileBoundaries: [],
-    testCoverageObservations: [],
-    behaviorChanges: options.behaviorChanges ?? [],
-    evidenceRefs: [],
+          ]
+    ),
     unresolvedUnknowns: []
   });
 }
@@ -57,7 +51,7 @@ function createChangesetEntries(
   return entries;
 }
 
-test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMap response", async () => {
+test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMapReadinessV2 response", async () => {
   const prompts: string[] = [];
   const profiles: unknown[] = [];
   const runner = new ChangesetOverviewRunner({
@@ -81,9 +75,8 @@ test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMa
     userContext: []
   });
 
-  assert.equal(runContext.changesetOverview.schemaVersion, 1);
-  assert.equal(runContext.changesetOverview.changedFiles.length, 1);
-  assert.equal(runContext.changesetOverview.changedFiles[0].path, "src/app.ts");
+  assert.equal(runContext.changesetOverview.schemaVersion, 2);
+  assert.equal(runContext.changesetOverview.behaviorChanges[0]?.files[0], "src/app.ts");
   assert.equal(
     runContext.changesetOverviewMarkdown,
     "## Changeset Overview\n- 調整範圍：feature\n"
@@ -140,7 +133,7 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   assert.match(prompts[1], /"actualSummary": "empty_response"/u);
 });
 
-test("ChangesetOverviewRunner retries once when the first response fails ChangeMap validation", async () => {
+test("ChangesetOverviewRunner retries once when the first response fails ChangeMapReadiness validation", async () => {
   let createCalls = 0;
   const prompts: string[] = [];
   const logMessages: string[] = [];
@@ -172,7 +165,7 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   });
 
   assert.equal(createCalls, 2);
-  assert.equal(runContext.changesetOverview.schemaVersion, 1);
+  assert.equal(runContext.changesetOverview.schemaVersion, 2);
   assert.equal(prompts.length, 2);
   assert.match(prompts[0], /<validator_feedback format="json">\nnull\n<\/validator_feedback>/u);
   assert.match(prompts[1], /<validator_feedback format="json">/u);
@@ -265,7 +258,7 @@ test("ChangesetOverviewRunner retry feedback includes structured enum diagnostic
           async sendAndWait(prompt) {
             prompts.push(prompt);
             return createCalls === 1
-              ? buildChangeMapJson().replace("\"schemaVersion\":1", "\"schemaVersion\":\"1\"")
+              ? buildChangeMapJson().replace("\"schemaVersion\":2", "\"schemaVersion\":\"2\"")
               : buildChangeMapJson();
           }
         };
@@ -310,7 +303,7 @@ test("ChangesetOverviewRunner aborts after two consecutive validation failures",
         changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
         userContext: []
       }),
-    /Step 0 ChangeMap validation failed \[PARSE\]/
+    /Step 0 ChangeMapReadiness validation failed \[PARSE\]/
   );
   assert.equal(createCalls, 2);
 });
@@ -351,8 +344,7 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
         return {
           async sendAndWait() {
             return buildChangeMapJson({
-              paths: ["src/new.ts"],
-              statuses: { "src/new.ts": "R" }
+              paths: ["src/new.ts"]
             });
           }
         };
@@ -375,7 +367,7 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
   assert.equal(runContext.changesetFiles[0].path, "src/new.ts");
 });
 
-test("ChangesetOverviewRunner accepts copied paths as added ChangeMap entries", async () => {
+test("ChangesetOverviewRunner accepts copied paths as added host descriptors", async () => {
   const prompts: string[] = [];
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
@@ -384,8 +376,7 @@ test("ChangesetOverviewRunner accepts copied paths as added ChangeMap entries", 
           async sendAndWait(prompt) {
             prompts.push(prompt);
             return buildChangeMapJson({
-              paths: ["src/copied.ts"],
-              statuses: { "src/copied.ts": "A" }
+              paths: ["src/copied.ts"]
             });
           }
         };

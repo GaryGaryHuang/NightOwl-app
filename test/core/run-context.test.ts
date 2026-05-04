@@ -1,24 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ChangeMap } from "../../src/core/change-map.ts";
+import type { ChangeMapReadinessV2 } from "../../src/core/change-map.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 
-function makeChangeMap(overviewMarkdown: string): ChangeMap {
+function makeChangeMap(overviewMarkdown: string): ChangeMapReadinessV2 {
   return Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
+    reviewObjective: Object.freeze({
+      summary: "Test review context.",
+      requestedFocus: Object.freeze([]),
+      expectedBehaviorSummary: Object.freeze([])
+    }),
+    userContextSSOT: Object.freeze([]),
+    expectedBehaviorLedger: Object.freeze([]),
+    missingInformation: Object.freeze([]),
     overviewMarkdown,
-    changedFiles: Object.freeze([]),
-    fileGroups: Object.freeze([]),
-    crossFileBoundaries: Object.freeze([]),
-    testCoverageObservations: Object.freeze([]),
     behaviorChanges: Object.freeze([]),
-    evidenceRefs: Object.freeze([]),
     unresolvedUnknowns: Object.freeze([])
-  }) as ChangeMap;
+  }) as ChangeMapReadinessV2;
 }
 
-test("createRunContext exposes the ChangeMap as changesetOverview by reference", () => {
+test("createRunContext exposes the ChangeMapReadinessV2 as changesetOverview by reference", () => {
   const changeMap = makeChangeMap("## Changeset Overview\n- x\n");
   const ctx = createRunContext({
     changesetOverview: changeMap,
@@ -26,7 +29,7 @@ test("createRunContext exposes the ChangeMap as changesetOverview by reference",
   });
 
   assert.equal(ctx.changesetOverview, changeMap);
-  assert.equal(ctx.changesetOverview.schemaVersion, 1);
+  assert.equal(ctx.changesetOverview.schemaVersion, 2);
 });
 
 test("changesetOverviewMarkdown equals overviewMarkdown when it already ends with a newline", () => {
@@ -52,7 +55,7 @@ test("changesetOverviewMarkdown appends a trailing newline without mutating the 
   assert.equal(
     ctx.changesetOverview.overviewMarkdown,
     overviewMarkdown,
-    "createRunContext must not mutate the source ChangeMap.overviewMarkdown"
+    "createRunContext must not mutate the source ChangeMapReadinessV2.overviewMarkdown"
   );
 });
 

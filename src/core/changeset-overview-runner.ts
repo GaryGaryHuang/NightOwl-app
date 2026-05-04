@@ -57,7 +57,7 @@ export class ChangesetOverviewRunner {
     const expectedChangedPaths = extractChangedPathsFromChangesetEntries(
       input.changesetEntries
     );
-    const expectedChangedFiles = normalizeChangesetEntriesForChangeMap(
+    const changesetFiles = normalizeChangesetEntriesForChangeMap(
       input.changesetEntries
     );
     let retryRepairFailure: Step0ValidationDiagnostic | undefined;
@@ -102,7 +102,6 @@ export class ChangesetOverviewRunner {
           const validationResult = this.#validator.validateDetailed({
             responseText: response,
             expectedChangedPaths,
-            expectedChangedFiles,
             expectedUserContext: input.userContext
           });
           this.#emitSyntaxRepairLog(attempt, validationResult.parseMetadata);
@@ -119,7 +118,7 @@ export class ChangesetOverviewRunner {
         return createRunContext({
           changesetOverview: changeMap,
           userContext: input.userContext,
-          changesetFiles: expectedChangedFiles
+          changesetFiles
         });
       },
       buildFinalError(lastCause) {

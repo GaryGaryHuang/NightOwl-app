@@ -13,7 +13,7 @@ export interface RunCoverageBuckets {
 }
 
 export function buildRunCoverageBuckets(input: {
-  runContext: Pick<RunContext, "changesetFiles" | "changesetOverview">;
+  runContext: Pick<RunContext, "changesetFiles">;
   plannedReviewableNotePaths: number;
   successfulPlannedFiles: number;
   skippedPlannedFiles: number;
@@ -43,25 +43,9 @@ export function buildRunCoverageBuckets(input: {
 }
 
 function deriveCoverageFiles(
-  runContext: Pick<RunContext, "changesetFiles" | "changesetOverview">
+  runContext: Pick<RunContext, "changesetFiles">
 ): readonly ExpectedChangedFileDescriptor[] {
-  if (runContext.changesetFiles.length > 0) {
-    return runContext.changesetFiles;
-  }
-
-  const overview = runContext.changesetOverview;
-  if ("changedFiles" in overview) {
-    return overview.changedFiles.map((file) => ({
-      originalStatus: file.status,
-      status: file.status,
-      path: file.path,
-      deleted: file.status === "D",
-      copiedAsAdded: false,
-      reviewableNonDeleted: file.status !== "D"
-    }));
-  }
-
-  return [];
+  return runContext.changesetFiles;
 }
 
 function deriveChangedTests(

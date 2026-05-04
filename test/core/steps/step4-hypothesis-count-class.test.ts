@@ -1,10 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
-import type { ChangeMap, ChangeMapCategory } from "../../../src/core/change-map.ts";
 import { FileReviewContext } from "../../../src/core/file-review-context.ts";
 import {
   resolveHypothesisCountClass,
+  type Step4FileCategory,
+  type Step4FileCategoryMap,
   Step4StrategyWhatIfScenariosStep,
   type HypothesisCountClass
 } from "../../../src/core/steps/step4-strategy-what-if-scenarios.ts";
@@ -14,7 +15,7 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("resolveHypothesisCountClass", () => {
-  const cases: [ChangeMapCategory, HypothesisCountClass][] = [
+  const cases: [Step4FileCategory, HypothesisCountClass][] = [
     ["docs", "zero"],
     ["test", "zero"],
     ["config", "low"],
@@ -35,37 +36,12 @@ describe("resolveHypothesisCountClass", () => {
 // ---------------------------------------------------------------------------
 
 function makeChangeMap(
-  files: { path: string; category: ChangeMapCategory }[]
-): ChangeMap {
-  const changedFiles = Object.freeze(
-    files.map((f) =>
-      Object.freeze({
-        path: f.path,
-        status: "M" as const,
-        category: f.category,
-        group: "count-class",
-        basis: "diff-inspected" as const
-      })
-    )
-  );
-
+  files: { path: string; category: Step4FileCategory }[]
+): Step4FileCategoryMap {
   return Object.freeze({
-    schemaVersion: 1 as const,
-    overviewMarkdown: "## Changeset Overview\n",
-    changedFiles,
-    fileGroups: Object.freeze([
-      Object.freeze({
-        id: "G1",
-        label: "count-class",
-        files: Object.freeze(files.map((f) => f.path)),
-        observedChange: "count class fixture groups reviewed files"
-      })
-    ]),
-    crossFileBoundaries: Object.freeze([]),
-    testCoverageObservations: Object.freeze([]),
-    behaviorChanges: Object.freeze([]),
-    evidenceRefs: Object.freeze([]),
-    unresolvedUnknowns: Object.freeze([])
+    changedFiles: Object.freeze(
+      files.map((file) => Object.freeze({ ...file }))
+    )
   });
 }
 
@@ -79,10 +55,10 @@ function makeContext(filePath: string): FileReviewContext {
   });
 }
 
-function buildStep(changeMap: ChangeMap): Step4StrategyWhatIfScenariosStep {
+function buildStep(fileCategoryMap: Step4FileCategoryMap): Step4StrategyWhatIfScenariosStep {
   return new Step4StrategyWhatIfScenariosStep({
     promptSerializer: { serialize: () => "<review_state/>" },
-    changeMap
+    fileCategoryMap
   });
 }
 
@@ -140,7 +116,7 @@ describe("Step4StrategyWhatIfScenariosStep.prepare — count class", () => {
   });
 
   it("prohibits 6+ scenarios in all count classes", () => {
-    for (const category of ["feature", "bugfix", "config", "refactor", "docs", "test"] as ChangeMapCategory[]) {
+    for (const category of ["feature", "bugfix", "config", "refactor", "docs", "test"] as Step4FileCategory[]) {
       const step = buildStep(makeChangeMap([{ path: "f.ts", category }]));
       const plan = step.prepare(makeContext("f.ts"));
 

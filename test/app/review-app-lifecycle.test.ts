@@ -259,7 +259,7 @@ test("createLocalReviewRunApp persists Step 0 audit records when Step 0 fails be
           userContext: [],
           dryRun: false
         }),
-      /Step 0 ChangeMap validation failed/u
+      /Step 0 ChangeMapReadiness validation failed/u
     );
 
     const auditRecords = readFileSync(expectedAuditPath, "utf8")
@@ -386,50 +386,22 @@ function buildValidStep0ChangeMapJson(): string {
   ];
 
   return JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
+    reviewObjective: {
+      summary: "Test review context.",
+      requestedFocus: [],
+      expectedBehaviorSummary: []
+    },
+    userContextSSOT: [],
+    expectedBehaviorLedger: [],
+    missingInformation: [],
     overviewMarkdown: "## Changeset Overview\n- 調整範圍：feature",
-    changedFiles: [
+    behaviorChanges: [
       {
-        path: "dist/app.js",
-        status: "M",
-        category: "feature",
-        group: "review-flow",
-        basis: "name-status"
-      },
-      {
-        path: "obsolete.txt",
-        status: "D",
-        category: "feature",
-        group: "review-flow",
-        basis: "name-status"
-      },
-      {
-        path: "packages/app/index.ts",
-        status: "M",
-        category: "feature",
-        group: "review-flow",
-        basis: "name-status"
-      },
-      {
-        path: "src/app.ts",
-        status: "M",
-        category: "feature",
-        group: "review-flow",
-        basis: "name-status"
-      }
-    ],
-    fileGroups: [
-      {
-        id: "G1",
-        label: "review-flow",
+        description: "review flow updates shared run context",
         files: paths,
-        observedChange: "review flow updates shared run context"
       }
     ],
-    crossFileBoundaries: [],
-    testCoverageObservations: [],
-    behaviorChanges: [],
-    evidenceRefs: [],
     unresolvedUnknowns: []
   });
 }

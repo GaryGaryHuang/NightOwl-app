@@ -1,4 +1,3 @@
-import type { ChangeMap, ChangeMapCategory } from "../change-map.ts";
 import type { FileReviewContext } from "../file-review-context.ts";
 import { STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY } from "../review-section-contract.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
@@ -9,12 +8,30 @@ import { createSectionResolve } from "./step-resolve-helpers.ts";
 
 // --- Hypothesis count class ------------------------------------------------
 
-/** Drives Step 4 scenario count rules based on ChangeMap file category. */
+export const STEP4_FILE_CATEGORIES = [
+  "feature",
+  "bugfix",
+  "refactor",
+  "config",
+  "test",
+  "docs"
+] as const;
+
+export type Step4FileCategory = (typeof STEP4_FILE_CATEGORIES)[number];
+
+export interface Step4FileCategoryMap {
+  readonly changedFiles: readonly {
+    readonly path: string;
+    readonly category: Step4FileCategory;
+  }[];
+}
+
+/** Drives Step 4 scenario count rules based on file category. */
 export type HypothesisCountClass = "zero" | "low" | "normal";
 
-/** Map a `ChangeMapCategory` to the hypothesis count class. */
+/** Map a file category to the hypothesis count class. */
 export function resolveHypothesisCountClass(
-  category: ChangeMapCategory
+  category: Step4FileCategory
 ): HypothesisCountClass {
   switch (category) {
     case "docs":
@@ -172,7 +189,7 @@ function buildStep4JudgeCriteria(countClass: HypothesisCountClass): string {
 
 export interface Step4StrategyWhatIfScenariosStepOptions {
   promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
-  changeMap: ChangeMap;
+  fileCategoryMap: Step4FileCategoryMap;
 }
 
 /**
@@ -181,11 +198,11 @@ export interface Step4StrategyWhatIfScenariosStepOptions {
 export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
   readonly stepId = "step4-strategy-what-if-scenarios";
   readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
-  readonly #changeMap: ChangeMap;
+  readonly #fileCategoryMap: Step4FileCategoryMap;
 
   constructor(options: Step4StrategyWhatIfScenariosStepOptions) {
     this.#promptSerializer = options.promptSerializer;
-    this.#changeMap = options.changeMap;
+    this.#fileCategoryMap = options.fileCategoryMap;
   }
 
   prepare(context: FileReviewContext): StepExecutionPlan {
@@ -216,7 +233,7 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
   }
 
   #resolveCountClassForFile(filePath: string): HypothesisCountClass {
-    const entry = this.#changeMap.changedFiles.find((f) => f.path === filePath);
+    const entry = this.#fileCategoryMap.changedFiles.find((f) => f.path === filePath);
     if (!entry) return "normal";
     return resolveHypothesisCountClass(entry.category);
   }
