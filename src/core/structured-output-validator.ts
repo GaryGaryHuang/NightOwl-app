@@ -320,9 +320,12 @@ export class StructuredOutputValidator {
         input.responseText,
         "top-level payload must be an object with a ValidationReportV1 shape"
       );
-      const candidatePayload = coerceCandidateFindingsV3ForValidation(
-        input.candidateFindings
-      );
+      const candidatePayload = coerceCandidateFindingsV3ForValidation({
+        input: input.candidateFindings,
+        reviewBasis: input.reviewBasis,
+        anchorContext: buildAnchorContext(input),
+        report
+      });
       const payload = validateValidationReportV1Record({
         record,
         candidatePayload,
@@ -642,6 +645,11 @@ function validateCandidateFindingsV3Record(input: {
     input.record.criticalMissingInformation,
     "criticalMissingInformation"
   ).map((item, index) => validateCriticalMissingInformation(item, index));
+  validateCandidateFindingsResultConsistency({
+    result,
+    findings,
+    criticalMissingInformation
+  });
 
   return {
     schemaVersion: 3,
@@ -856,6 +864,12 @@ function validateValidationReportV1Record(input: {
     input.record.missingInformationItems,
     "missingInformationItems"
   ).map((item, index) => validateMissingInformationItem(item, index, candidateIdSet));
+  assertValidationReportMatchesCandidatePayload({
+    candidatePayload: input.candidatePayload,
+    perFindingResults,
+    approvedFindings,
+    missingInformationItems
+  });
 
   const loopControl = validateLoopControl(input.record.loopControl);
   const stopReason =
@@ -1091,6 +1105,33 @@ function validateCriticalMissingInformation(
   return result;
 }
 
+function validateCandidateFindingsResultConsistency(input: {
+  result: CandidateFindingsResult;
+  findings: readonly CandidateFindingV3[];
+  criticalMissingInformation: readonly CriticalMissingInformation[];
+}): void {
+  if (input.result === "FINDINGS_READY" && input.findings.length === 0) {
+    throw new Error(
+      "deterministic validation failed: CandidateFindingsV3 result FINDINGS_READY requires at least one finding"
+    );
+  }
+
+  if (input.result === "NO_FINDINGS" && input.findings.length > 0) {
+    throw new Error(
+      "deterministic validation failed: CandidateFindingsV3 result NO_FINDINGS must not include findings"
+    );
+  }
+
+  if (
+    input.result === "INSUFFICIENT_INFORMATION" &&
+    input.criticalMissingInformation.length === 0
+  ) {
+    throw new Error(
+      "deterministic validation failed: CandidateFindingsV3 result INSUFFICIENT_INFORMATION requires criticalMissingInformation"
+    );
+  }
+}
+
 function validatePerFindingValidationResult(
   input: unknown,
   index: number,
@@ -1184,15 +1225,43 @@ function assertApprovedFindingsMatchDecisions(
 ): void {
   const approvedIds = new Set(approvedFindings.map((finding) => finding.findingId));
   for (const result of results) {
-    if (
-      (result.decision === "drop" ||
-        result.decision === "convert_to_missing_information") &&
-      approvedIds.has(result.findingId)
-    ) {
+    if (result.decision === "approve" && !approvedIds.has(result.findingId)) {
+      throw new Error(
+        `deterministic validation failed: approve candidate ${result.findingId} must appear in approvedFindings`
+      );
+    }
+    if (result.decision !== "approve" && approvedIds.has(result.findingId)) {
       throw new Error(
         `deterministic validation failed: ${result.decision} candidate ${result.findingId} must not appear in approvedFindings`
       );
     }
+  }
+}
+
+function assertValidationReportMatchesCandidatePayload(input: {
+  candidatePayload: CandidateFindingsV3;
+  perFindingResults: readonly PerFindingValidationResult[];
+  approvedFindings: readonly Finding[];
+  missingInformationItems: readonly MissingInformationItem[];
+}): void {
+  const hasApproval =
+    input.approvedFindings.length > 0 ||
+    input.perFindingResults.some((result) => result.decision === "approve");
+
+  if (input.candidatePayload.result !== "FINDINGS_READY" && hasApproval) {
+    throw new Error(
+      `deterministic validation failed: CandidateFindingsV3 result ${input.candidatePayload.result} cannot approve findings`
+    );
+  }
+
+  if (
+    input.candidatePayload.result === "INSUFFICIENT_INFORMATION" &&
+    input.candidatePayload.criticalMissingInformation.length > 0 &&
+    input.missingInformationItems.length === 0
+  ) {
+    throw new Error(
+      "deterministic validation failed: CandidateFindingsV3 criticalMissingInformation must be represented in ValidationReportV1 missingInformationItems"
+    );
   }
 }
 
@@ -1250,38 +1319,29 @@ function validateLoopControl(input: unknown): { action: LoopAction; reason: stri
   };
 }
 
-function coerceCandidateFindingsV3ForValidation(
-  input: CandidateFindingsV3 | Record<string, unknown>
-): CandidateFindingsV3 {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
+function coerceCandidateFindingsV3ForValidation(input: {
+  input: CandidateFindingsV3 | Record<string, unknown>;
+  reviewBasis: ReviewBasisV1 | undefined;
+  anchorContext: FindingAnchorValidationContext | undefined;
+  report: VerifierReportEntry[];
+}): CandidateFindingsV3 {
+  if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
     throw new Error(
       "deterministic validation failed: candidateFindings must be CandidateFindingsV3"
     );
   }
-  const record = input as Record<string, unknown>;
-  const findings = validateArray(record.findings, "candidateFindings.findings").map(
-    (finding, index) => {
-      if (!finding || typeof finding !== "object" || Array.isArray(finding)) {
-        throw new Error(
-          `deterministic validation failed: candidateFindings.findings[${index}] must be an object`
-        );
-      }
-      const findingRecord = finding as Record<string, unknown>;
-      return {
-        findingId: validateStringField(
-          findingRecord.findingId,
-          `candidateFindings.findings[${index}].findingId`
-        )
-      } as CandidateFindingV3;
-    }
-  );
-  return {
-    schemaVersion: 3,
-    result: "FINDINGS_READY",
-    findings,
-    hypothesisClosure: [],
-    criticalMissingInformation: []
-  };
+  if (input.reviewBasis === undefined) {
+    throw new Error(
+      "deterministic validation failed: reviewBasis is required to validate complete CandidateFindingsV3 before ValidationReportV1"
+    );
+  }
+
+  return validateCandidateFindingsV3Record({
+    record: input.input as Record<string, unknown>,
+    reviewBasis: input.reviewBasis,
+    anchorContext: input.anchorContext,
+    report: input.report
+  });
 }
 
 function extractReportableFindingId(input: unknown): string | undefined {

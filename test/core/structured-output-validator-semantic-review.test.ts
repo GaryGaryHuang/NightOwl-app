@@ -494,6 +494,24 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
         hypothesisClosure: [hypothesisClosure({ hypothesisId: "H1" })]
       }),
       reason: /H2.*hypothesisClosure/u
+    },
+    {
+      label: "FINDINGS_READY requires at least one finding",
+      payload: candidateFindingsV3({ findings: [] }),
+      reason: /FINDINGS_READY.*finding/u
+    },
+    {
+      label: "NO_FINDINGS cannot carry findings",
+      payload: candidateFindingsV3({ result: "NO_FINDINGS" }),
+      reason: /NO_FINDINGS.*findings/u
+    },
+    {
+      label: "INSUFFICIENT_INFORMATION requires critical missing information",
+      payload: candidateFindingsV3({
+        result: "INSUFFICIENT_INFORMATION",
+        findings: []
+      }),
+      reason: /INSUFFICIENT_INFORMATION.*criticalMissingInformation/u
     }
   ];
 
@@ -573,12 +591,70 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
       reason: /F404.*approvedFindings.*candidate/u
     },
     {
+      label: "candidateFindings must be the complete CandidateFindingsV3 payload",
+      payload: validationReportV1(),
+      candidates: { findings: [{ findingId: "F1" }] },
+      reason: /CandidateFindingsV3.*schemaVersion.*3|schemaVersion.*3/u
+    },
+    {
+      label: "approved decisions must be reflected in approvedFindings",
+      payload: validationReportV1({
+        approvedFindings: []
+      }),
+      reason: /approve.*approvedFindings/u
+    },
+    {
       label: "dropped candidates cannot be approved",
       payload: validationReportV1({
         perFindingResults: [perFindingResult({ decision: "drop" })],
         approvedFindings: [approvedFinding()]
       }),
       reason: /drop.*approvedFindings/u
+    },
+    {
+      label: "blocked candidate payloads cannot be approved",
+      payload: validationReportV1(),
+      candidates: candidateFindingsV3({
+        result: "INSUFFICIENT_INFORMATION",
+        criticalMissingInformation: [
+          {
+            itemId: "CMI1",
+            description: "Need the external null-input service contract.",
+            whyItMatters: "Without this contract Step 6 cannot approve F1.",
+            sourceHypothesisIds: ["H1"]
+          }
+        ]
+      }),
+      reason: /INSUFFICIENT_INFORMATION.*cannot approve/u
+    },
+    {
+      label: "critical missing information must be represented in validation report",
+      payload: validationReportV1({
+        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
+        perFindingResults: [
+          perFindingResult({
+            decision: "convert_to_missing_information",
+            failedGates: ["missing_information_honest"],
+            reason: "external contract is unavailable"
+          })
+        ],
+        approvedFindings: [],
+        missingInformationItems: [],
+        loopControl: { action: "stop", reason: "missing critical contract" },
+        stopReason: "missing_critical_contract"
+      }),
+      candidates: candidateFindingsV3({
+        result: "INSUFFICIENT_INFORMATION",
+        criticalMissingInformation: [
+          {
+            itemId: "CMI1",
+            description: "Need the external null-input service contract.",
+            whyItMatters: "Without this contract Step 6 cannot approve F1.",
+            sourceHypothesisIds: ["H1"]
+          }
+        ]
+      }),
+      reason: /criticalMissingInformation.*missingInformationItems/u
     },
     {
       label: "converted candidates cannot be approved",
@@ -703,7 +779,6 @@ test("validateValidationReportV1WithReport validates loopControl actions and sto
     {
       label: "PASS requires accept",
       payload: validationReportV1({
-        approvedFindings: [],
         loopControl: {
           action: "rerun_step5",
           reason: "status/action mismatch"

@@ -462,7 +462,16 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
     });
   });
 
-  assert.equal(snapshots[4].candidateFindings[0].findingId, "F1");
+  assert.equal(snapshots[4].candidateFindings?.result, "FINDINGS_READY");
+  assert.equal(snapshots[4].candidateFindings?.findings[0]?.findingId, "F1");
+  assert.equal(
+    snapshots[4].candidateFindings?.hypothesisClosure[0]?.hypothesisId,
+    "H1"
+  );
+  assert.deepEqual(
+    snapshots[4].candidateFindings?.criticalMissingInformation,
+    []
+  );
   assert.deepEqual(snapshots[4].verifiedFindings, []);
   assert.equal(
     snapshots[5].reviewBasis?.roleInChangeset,
@@ -475,7 +484,7 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
     hypothesisPack: null
   });
   assert.equal(snapshots[5].verifiedFindings[0].findingId, "F1");
-  assert.deepEqual(snapshots[5].candidateFindings, []);
+  assert.equal(snapshots[5].candidateFindings, null);
   assert.match(
     stepPlans[5].prompt.userMessage,
     /ReviewBasisV1\.roleInChangeset/u

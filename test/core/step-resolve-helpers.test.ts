@@ -204,6 +204,7 @@ test("createValidationReportV1Resolve writes approved findings and missing-infor
   const resolve = createValidationReportV1Resolve({
     filePath: DEFAULT_CONTEXT.filePath,
     diffContent: DEFAULT_CONTEXT.diffContent,
+    reviewBasis: createReviewBasis(),
     candidatePayload
   });
 

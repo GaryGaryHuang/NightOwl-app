@@ -86,7 +86,7 @@ test("snapshot includes stable file refs and diff summary hunks derived from the
       changedHeadLines: [1]
     }
   ]);
-  assert.deepEqual(snapshot.candidateFindings, []);
+  assert.equal(snapshot.candidateFindings, null);
   assert.deepEqual((snapshot as SemanticReviewStateSnapshot).approvedFindings, []);
   assert.deepEqual((snapshot as SemanticReviewStateSnapshot).missingInformationItems, []);
   assert.deepEqual(snapshot.verifiedFindings, []);
@@ -150,10 +150,15 @@ test("CandidateFindingsV3 populates candidateFindings without promoting approved
   ctx.setCandidateFindingsV3(createCandidateFindingsV3());
 
   const snapshot = serializeSnapshot(ctx, ["candidate-findings"]);
+  const candidateFindings = snapshot.candidateFindings;
 
-  assert.equal(snapshot.candidateFindings.length, 1);
-  assert.equal(snapshot.candidateFindings[0].findingId, "F1");
-  assert.equal(snapshot.candidateFindings[0].classification, "confirmed_problem");
+  assert.ok(candidateFindings);
+  assert.equal(candidateFindings.result, "FINDINGS_READY");
+  assert.equal(candidateFindings.findings.length, 1);
+  assert.equal(candidateFindings.findings[0].findingId, "F1");
+  assert.equal(candidateFindings.findings[0].classification, "confirmed_problem");
+  assert.equal(candidateFindings.hypothesisClosure[0]?.hypothesisId, "H1");
+  assert.deepEqual(candidateFindings.criticalMissingInformation, []);
   assert.deepEqual((snapshot as SemanticReviewStateSnapshot).approvedFindings, []);
   assert.deepEqual(snapshot.verifiedFindings, []);
 });
@@ -165,7 +170,7 @@ test("approved findings populate approvedFindings and verifiedFindings compatibi
 
   const snapshot = serializeSnapshot(ctx, ["approved-findings", "verified-findings"]);
 
-  assert.deepEqual(snapshot.candidateFindings, []);
+  assert.equal(snapshot.candidateFindings, null);
   assert.equal((snapshot as SemanticReviewStateSnapshot).approvedFindings.length, 1);
   assert.equal((snapshot as SemanticReviewStateSnapshot).approvedFindings[0].findingId, "F1");
   assert.equal(snapshot.verifiedFindings.length, 1);

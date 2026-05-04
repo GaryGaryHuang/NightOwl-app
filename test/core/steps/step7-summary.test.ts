@@ -352,7 +352,7 @@ test("Step7SummaryStep.prepare() consumes approved findings and missing-informat
   const plan = step.prepare(context);
 
   const reviewState = parseReviewStateFromPrompt(plan.prompt.userMessage);
-  assert.deepEqual(reviewState.candidateFindings, []);
+  assert.equal(reviewState.candidateFindings, null);
   assert.deepEqual(
     reviewState.approvedFindings.map((finding: Finding) => finding.findingId),
     ["F1"]

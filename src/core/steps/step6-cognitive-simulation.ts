@@ -26,8 +26,9 @@ const STEP6_SYSTEM_ADDITION = [
 const STEP6_INSTRUCTION = [
   "Validate this file's Step 5 `CandidateFindingsV3` payload and return `ValidationReportV1`.",
   "",
-  "1. Start from the candidateFindings array in <review_state>.",
-  "   - These are Step 5 candidate findings, not approved defects.",
+  "1. Start from the complete candidateFindings CandidateFindingsV3 object in <review_state>.",
+  "   - Use `candidateFindings.result`, `candidateFindings.findings`, `candidateFindings.hypothesisClosure`, and `candidateFindings.criticalMissingInformation` together.",
+  "   - These are Step 5 candidate findings and closure/missing-information state, not approved defects.",
   "   - Validate each candidate against the diff, `ReviewBasisV1`, evidence refs, identifier registry, hypothesis closure, prior validation feedback, and semantic gate expectations.",
   "   - Do not introduce new approved findings outside the Step 5 candidate set.",
   "",

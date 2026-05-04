@@ -190,11 +190,15 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
 
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
-    candidateFindings: ReturnType<typeof createCandidateFindingsV3>["findings"];
+    candidateFindings: ReturnType<typeof createCandidateFindingsV3>;
     verifiedFindings: Finding[];
   };
 
-  assert.deepEqual(snapshot.candidateFindings, candidatePayload.findings);
+  assert.deepEqual(snapshot.candidateFindings, candidatePayload);
+  assert.equal(snapshot.candidateFindings.result, "FINDINGS_READY");
+  assert.equal(snapshot.candidateFindings.findings[0]?.findingId, "F1");
+  assert.equal(snapshot.candidateFindings.hypothesisClosure[0]?.hypothesisId, "H1");
+  assert.deepEqual(snapshot.candidateFindings.criticalMissingInformation, []);
   assert.deepEqual(snapshot.verifiedFindings, []);
   assert.equal(plan.prompt.userMessage.includes("<candidate_findings"), false);
   assert.match(plan.prompt.systemMessage, /Semantic Validation/u);
@@ -209,6 +213,10 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   assert.match(plan.prompt.userMessage, /missingInformationItems/u);
   assert.match(plan.prompt.userMessage, /loopControl/u);
   assert.match(plan.prompt.userMessage, /rerun_step5/u);
+  assert.match(plan.prompt.userMessage, /complete candidateFindings CandidateFindingsV3 object/u);
+  assert.match(plan.prompt.userMessage, /candidateFindings\.result/u);
+  assert.match(plan.prompt.userMessage, /candidateFindings\.hypothesisClosure/u);
+  assert.match(plan.prompt.userMessage, /candidateFindings\.criticalMissingInformation/u);
   for (const value of VALIDATION_OVERALL_STATUSES) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
