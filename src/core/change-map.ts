@@ -203,6 +203,39 @@ export interface ChangeMapReadinessV2 extends Omit<ChangeMap, "schemaVersion"> {
 
 export type ChangeMapReadiness = ChangeMap | ChangeMapReadinessV2;
 
+export interface ExpectedChangedFileDescriptor {
+  readonly originalStatus: ReviewChangesetEntry["status"];
+  readonly status: ChangeMapStatus;
+  readonly path: string;
+  readonly previousPath?: string;
+  readonly similarityScore?: number;
+  readonly deleted: boolean;
+  readonly copiedAsAdded: boolean;
+  readonly reviewableNonDeleted: boolean;
+}
+
+export function normalizeChangesetEntriesForChangeMap(
+  entries: readonly ReviewChangesetEntry[]
+): readonly ExpectedChangedFileDescriptor[] {
+  return entries
+    .filter((entry) => entry.path.length > 0)
+    .map((entry) => {
+      const status = normalizeChangeMapStatus(entry.status);
+      return {
+        originalStatus: entry.status,
+        status,
+        path: entry.path,
+        previousPath:
+          "previousPath" in entry ? entry.previousPath : undefined,
+        similarityScore:
+          "similarityScore" in entry ? entry.similarityScore : undefined,
+        deleted: status === "D",
+        copiedAsAdded: entry.status === "C",
+        reviewableNonDeleted: status !== "D"
+      };
+    });
+}
+
 /**
  * Extract the set of head-side changed paths from provider-normalized changeset
  * entries. Rename / copy entries already expose the head-side path through
@@ -215,13 +248,21 @@ export type ChangeMapReadiness = ChangeMap | ChangeMapReadinessV2;
 export function extractChangedPathsFromChangesetEntries(
   entries: readonly ReviewChangesetEntry[]
 ): readonly string[] {
-  const result: string[] = [];
+  return normalizeChangesetEntriesForChangeMap(entries).map((entry) => entry.path);
+}
 
-  for (const entry of entries) {
-    if (entry.path.length > 0) {
-      result.push(entry.path);
-    }
+function normalizeChangeMapStatus(
+  status: ReviewChangesetEntry["status"]
+): ChangeMapStatus {
+  switch (status) {
+    case "A":
+    case "M":
+    case "D":
+    case "R":
+      return status;
+    case "C":
+      return "A";
   }
 
-  return result;
+  return "M";
 }

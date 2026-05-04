@@ -258,7 +258,7 @@ test("Step0OutputValidator rejects duplicate ChangeMapReadinessV2 user context I
 
 test("Step0OutputValidator rejects user context categories outside the documented enum", () => {
   const validator = new Step0OutputValidator();
-  expectFailure(
+  const error = expectFailure(
     () =>
       validator.validate({
         responseText: makeValidV2({
@@ -277,6 +277,8 @@ test("Step0OutputValidator rejects user context categories outside the documente
     "SCHEMA",
     /userContextSSOT\[0\]\.categories\[0\] must be one of/u
   );
+  assert.equal(error.diagnostic.offendingPath, "userContextSSOT[0].categories[0]");
+  assert.deepEqual(error.diagnostic.allowedValues, [...USER_CONTEXT_CATEGORIES]);
 });
 
 test("Step0OutputValidator accepts every documented user context category", () => {
@@ -342,6 +344,57 @@ test("Step0OutputValidator rejects invalid JSON with PARSE", () => {
       }),
     "PARSE"
   );
+});
+
+test("Step0OutputValidator syntax-repairs a wrapping JSON code fence", () => {
+  const validator = new Step0OutputValidator();
+  const result = validator.validateDetailed({
+    responseText: ["```json", makeValid(), "```"].join("\n"),
+    expectedChangedPaths: expectedSinglePath
+  });
+
+  assert.equal(result.changeMap.schemaVersion, 1);
+  assert.equal(result.parseMetadata.repairKind, "code_fence");
+});
+
+test("Step0OutputValidator syntax-repairs harmless prose around one JSON object", () => {
+  const validator = new Step0OutputValidator();
+  const result = validator.validateDetailed({
+    responseText: ["Here is the result:", makeValid(), "Done."].join("\n"),
+    expectedChangedPaths: expectedSinglePath
+  });
+
+  assert.equal(result.changeMap.schemaVersion, 1);
+  assert.equal(result.parseMetadata.repairKind, "object_extraction");
+});
+
+test("Step0OutputValidator rejects ambiguous multiple root objects", () => {
+  const validator = new Step0OutputValidator();
+  const error = expectFailure(
+    () =>
+      validator.validate({
+        responseText: [makeValid(), makeValid()].join("\n"),
+        expectedChangedPaths: expectedSinglePath
+      }),
+    "PARSE",
+    /multiple root JSON objects/u
+  );
+
+  assert.equal(error.diagnostic.parseStage, "root_object_detection");
+});
+
+test("Step0OutputValidator rejects truncated JSON without inventing braces", () => {
+  const validator = new Step0OutputValidator();
+  const error = expectFailure(
+    () =>
+      validator.validate({
+        responseText: "{\"schemaVersion\":2",
+        expectedChangedPaths: []
+      }),
+    "PARSE"
+  );
+
+  assert.equal(error.diagnostic.parseStage, "initial_parse");
 });
 
 test("Step0OutputValidator rejects non-object payload with SCHEMA", () => {
@@ -758,6 +811,80 @@ test("Step0OutputValidator rejects invalid status / category / basis enums", () 
   );
   // ensure tweak helper compiles (typed) but is not exercised
   void tweak;
+});
+
+test("Step0OutputValidator rejects status drift against expected changed-file descriptors", () => {
+  const validator = new Step0OutputValidator();
+  expectFailure(
+    () =>
+      validator.validate({
+        responseText: makeValid({
+          changedFiles: [
+            {
+              path: "src/app.ts",
+              status: "M",
+              category: "feature",
+              group: "review-flow",
+              basis: "diff-inspected"
+            }
+          ]
+        }),
+        expectedChangedPaths: ["src/app.ts"],
+        expectedChangedFiles: [
+          {
+            originalStatus: "D",
+            status: "D",
+            path: "src/app.ts",
+            deleted: true,
+            copiedAsAdded: false,
+            reviewableNonDeleted: false
+          }
+        ]
+      }),
+    "COVERAGE",
+    /status for "src\/app\.ts" must be "D"/u
+  );
+});
+
+test("Step0OutputValidator rejects ChangeMapReadinessV2 deleted bucket drift against expected descriptors", () => {
+  const validator = new Step0OutputValidator();
+  expectFailure(
+    () =>
+      validator.validate({
+        responseText: makeValidV2({
+          changeScope: {
+            totalChangedPaths: 2,
+            reviewableNonDeletedPaths: 2,
+            deletedPaths: 0,
+            binaryOrNonReviewablePaths: 0,
+            changedTests: [],
+            highRiskAreas: []
+          }
+        }),
+        expectedChangedPaths: ["src/app.ts", "src/old.ts"],
+        expectedChangedFiles: [
+          {
+            originalStatus: "M",
+            status: "M",
+            path: "src/app.ts",
+            deleted: false,
+            copiedAsAdded: false,
+            reviewableNonDeleted: true
+          },
+          {
+            originalStatus: "D",
+            status: "D",
+            path: "src/old.ts",
+            deleted: true,
+            copiedAsAdded: false,
+            reviewableNonDeleted: false
+          }
+        ],
+        expectedUserContext: ["Root Cause: context loss before Step 5"]
+      }),
+    "COVERAGE",
+    /deletedPaths/u
+  );
 });
 
 test("Step0OutputValidator rejects unresolvedUnknowns with non-boolean blocksFinding", () => {

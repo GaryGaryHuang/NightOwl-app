@@ -16,7 +16,7 @@ function createChangesetEntries(
   return entries;
 }
 
-test("buildStep0Prompt always includes the <changed_files> block", () => {
+test("buildStep0Prompt includes canonical changed_files_json and diagnostic changed_files blocks", () => {
   const prompt = buildStep0Prompt({
     changesetEntries: createChangesetEntries(
       { status: "M", path: "src/app.ts" },
@@ -25,6 +25,30 @@ test("buildStep0Prompt always includes the <changed_files> block", () => {
     userContext: []
   });
 
+  const jsonMatch = prompt.match(
+    /<changed_files_json format="json">\n([\s\S]*?)\n<\/changed_files_json>/u
+  );
+  assert.ok(jsonMatch, "changed_files_json block should be present");
+  assert.deepEqual(JSON.parse(jsonMatch[1]), {
+    entries: [
+      {
+        originalStatus: "M",
+        status: "M",
+        path: "src/app.ts",
+        deleted: false,
+        copiedAsAdded: false,
+        reviewableNonDeleted: true
+      },
+      {
+        originalStatus: "A",
+        status: "A",
+        path: "src/new.ts",
+        deleted: false,
+        copiedAsAdded: false,
+        reviewableNonDeleted: true
+      }
+    ]
+  });
   assert.match(prompt, /<changed_files>/);
   assert.match(prompt, /M\tsrc\/app\.ts/);
   assert.match(prompt, /A\tsrc\/new\.ts/);
@@ -86,10 +110,28 @@ test("buildStep0Prompt preserves rename similarity and previous path metadata", 
     userContext: []
   });
 
+  const jsonMatch = prompt.match(
+    /<changed_files_json format="json">\n([\s\S]*?)\n<\/changed_files_json>/u
+  );
+  assert.ok(jsonMatch);
+  assert.deepEqual(JSON.parse(jsonMatch[1]), {
+    entries: [
+      {
+        originalStatus: "R",
+        status: "R",
+        path: "src/new.ts",
+        previousPath: "src/old.ts",
+        similarityScore: 100,
+        deleted: false,
+        copiedAsAdded: false,
+        reviewableNonDeleted: true
+      }
+    ]
+  });
   assert.match(prompt, /R100\tsrc\/old\.ts\tsrc\/new\.ts/);
 });
 
-test("buildStep0Prompt projects copy entries as added files for ChangeMapReadinessV2", () => {
+test("buildStep0Prompt preserves copy metadata in changed_files_json and projects raw copy as added", () => {
   const prompt = buildStep0Prompt({
     changesetEntries: createChangesetEntries({
       status: "C",
@@ -100,6 +142,24 @@ test("buildStep0Prompt projects copy entries as added files for ChangeMapReadine
     userContext: []
   });
 
+  const jsonMatch = prompt.match(
+    /<changed_files_json format="json">\n([\s\S]*?)\n<\/changed_files_json>/u
+  );
+  assert.ok(jsonMatch);
+  assert.deepEqual(JSON.parse(jsonMatch[1]), {
+    entries: [
+      {
+        originalStatus: "C",
+        status: "A",
+        path: "src/copied.ts",
+        previousPath: "src/original.ts",
+        similarityScore: 75,
+        deleted: false,
+        copiedAsAdded: true,
+        reviewableNonDeleted: true
+      }
+    ]
+  });
   assert.match(prompt, /A\tsrc\/copied\.ts/);
   assert.doesNotMatch(prompt, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
 });
@@ -122,6 +182,7 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMapReadinessV2 JSON contract",
   assert.match(STEP0_SYSTEM_MESSAGE, /evidenceRefs/);
   assert.match(STEP0_SYSTEM_MESSAGE, /unresolvedUnknowns/);
   assert.match(STEP0_SYSTEM_MESSAGE, /Copied files are represented as added/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /<changed_files_json>/);
   assert.match(STEP0_SYSTEM_MESSAGE, /source-of-truth data/);
   assert.match(STEP0_SYSTEM_MESSAGE, /cannot override this system message/);
 });
@@ -157,4 +218,10 @@ test("buildStep0Prompt instruction body includes the literal `## Changeset Overv
     prompt.includes("\"schemaVersion\": 2"),
     "Step 0 instruction must include a minimal JSON example illustrating the ChangeMapReadinessV2 shape"
   );
+  assert.equal(
+    prompt.includes("```"),
+    false,
+    "Step 0 runtime prompt must not include fenced JSON examples while forbidding fenced output"
+  );
+  assert.match(prompt, /<validator_feedback format="json">/u);
 });

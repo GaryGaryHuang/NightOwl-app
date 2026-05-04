@@ -1,5 +1,6 @@
 import {
   extractChangedPathsFromChangesetEntries,
+  normalizeChangesetEntriesForChangeMap,
   type ChangeMapReadiness
 } from "./change-map.ts";
 import { createRunContext, type RunContext } from "./run-context.ts";
@@ -8,6 +9,7 @@ import type { ReviewChangesetEntry } from "../providers/review-source-provider.t
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import {
   Step0OutputValidationError,
+  type Step0ValidationDiagnostic,
   Step0OutputValidator
 } from "./step0-output-validator.ts";
 import {
@@ -48,7 +50,10 @@ export class ChangesetOverviewRunner {
     const expectedChangedPaths = extractChangedPathsFromChangesetEntries(
       input.changesetEntries
     );
-    let retryRepairFailure: string | undefined;
+    const expectedChangedFiles = normalizeChangesetEntriesForChangeMap(
+      input.changesetEntries
+    );
+    let retryRepairFailure: Step0ValidationDiagnostic | undefined;
 
     return retryOnce({
       execute: async () => {
@@ -64,31 +69,40 @@ export class ChangesetOverviewRunner {
         const prompt = retryRepairFailure
           ? buildStep0RetryRepairPrompt(input, retryRepairFailure)
           : buildStep0Prompt(input);
-        const response = (
-          await session.sendAndWait(
+        const response = await session.sendAndWait(
             prompt,
             STEP0_REVIEW_PROFILE.timeoutMs,
             input.signal
-          )
-        )?.trim();
+          );
 
-        if (!response) {
-          throw new Error(
+        if (!response || response.trim().length === 0) {
+          retryRepairFailure = {
+            code: "PARSE",
+            message:
+              "Step 0 changeset overview did not produce a non-empty response.",
+            actualSummary: "empty_response",
+            repairHint:
+              "Return exactly one ChangeMapReadinessV2 JSON object with no surrounding text."
+          };
+          throw new Step0OutputValidationError(
+            "PARSE",
             "Step 0 changeset overview did not produce a non-empty response."
           );
         }
 
         let changeMap: ChangeMapReadiness;
         try {
-          changeMap = this.#validator.validate({
+          const validationResult = this.#validator.validateDetailed({
             responseText: response,
             expectedChangedPaths,
+            expectedChangedFiles,
             expectedUserContext: input.userContext
           });
+          changeMap = validationResult.changeMap;
           retryRepairFailure = undefined;
         } catch (error) {
           if (error instanceof Step0OutputValidationError) {
-            retryRepairFailure = error.message;
+            retryRepairFailure = error.diagnostic;
           }
           throw error;
         }

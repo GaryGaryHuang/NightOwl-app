@@ -12,6 +12,18 @@ function buildPrompt(body: string): string {
   return ["<changed_files>", body, "</changed_files>"].join("\n");
 }
 
+function buildJsonPrompt(entries: unknown[]): string {
+  return [
+    '<changed_files_json format="json">',
+    JSON.stringify({ entries }, null, 2),
+    "</changed_files_json>",
+    "",
+    "<changed_files>",
+    "M\tignored/raw.ts",
+    "</changed_files>"
+  ].join("\n");
+}
+
 test("buildDryRunChangesetOverviewResponse normalizes git rename/copy status (with or without similarity score) to R/A and uses head-side path", () => {
   const prompt = buildPrompt(
     [
@@ -35,6 +47,39 @@ test("buildDryRunChangesetOverviewResponse normalizes git rename/copy status (wi
       { path: "src/bare-copy-new.ts", status: "A" }
     ]
   );
+});
+
+test("buildDryRunChangesetOverviewResponse prefers changed_files_json over raw changed_files", () => {
+  const prompt = buildJsonPrompt([
+    {
+      originalStatus: "C",
+      status: "A",
+      path: "src/copied-from-json.ts",
+      previousPath: "src/original.ts",
+      copiedAsAdded: true
+    },
+    {
+      originalStatus: "D",
+      status: "D",
+      path: "src/deleted-from-json.ts",
+      deleted: true
+    }
+  ]);
+
+  const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
+    changedFiles: { path: string; status: string }[];
+    changeScope: { deletedPaths: number; reviewableNonDeletedPaths: number };
+  };
+
+  assert.deepEqual(
+    parsed.changedFiles.map(({ path, status }) => ({ path, status })),
+    [
+      { path: "src/copied-from-json.ts", status: "A" },
+      { path: "src/deleted-from-json.ts", status: "D" }
+    ]
+  );
+  assert.equal(parsed.changeScope.deletedPaths, 1);
+  assert.equal(parsed.changeScope.reviewableNonDeletedPaths, 1);
 });
 
 test("buildDryRunChangesetOverviewResponse falls back to M for unknown status tokens", () => {

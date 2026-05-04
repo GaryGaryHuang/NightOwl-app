@@ -21,6 +21,7 @@ import {
   type ChangeMapStatus,
   type CrossFileBoundaryEntry,
   type EvidenceRefEntry,
+  type ExpectedChangedFileDescriptor,
   type ExpectedBehaviorConfidence,
   type ExpectedBehaviorSourceType,
   type FileGroupEntry,
@@ -38,18 +39,58 @@ export type Step0ValidationCode =
 
 export class Step0OutputValidationError extends Error {
   readonly code: Step0ValidationCode;
+  readonly diagnostic: Step0ValidationDiagnostic;
 
-  constructor(code: Step0ValidationCode, message: string) {
+  constructor(
+    code: Step0ValidationCode,
+    message: string,
+    diagnostic: Partial<Omit<Step0ValidationDiagnostic, "code" | "message">> = {}
+  ) {
     super(`Step 0 ChangeMap validation failed [${code}]: ${message}`);
     this.name = "Step0OutputValidationError";
     this.code = code;
+    this.diagnostic = {
+      code,
+      message,
+      ...diagnostic
+    };
   }
+}
+
+export interface Step0ValidationDiagnostic {
+  readonly code: Step0ValidationCode;
+  readonly message: string;
+  readonly offendingPath?: string;
+  readonly allowedValues?: readonly string[];
+  readonly actualSummary?: string;
+  readonly repairHint?: string;
+  readonly parseStage?: string;
+  readonly repairKind?: Step0JsonRepairKind;
+  readonly responseByteLength?: number;
 }
 
 export interface Step0OutputValidatorInput {
   readonly responseText: string;
   readonly expectedChangedPaths: readonly string[];
+  readonly expectedChangedFiles?: readonly ExpectedChangedFileDescriptor[];
   readonly expectedUserContext?: readonly string[];
+}
+
+export type Step0JsonRepairKind =
+  | "none"
+  | "trimmed"
+  | "code_fence"
+  | "object_extraction";
+
+export interface Step0JsonParseMetadata {
+  readonly repairKind: Step0JsonRepairKind;
+  readonly responseByteLength: number;
+  readonly parsedByteLength: number;
+}
+
+export interface Step0OutputValidationResult {
+  readonly changeMap: ChangeMapReadiness;
+  readonly parseMetadata: Step0JsonParseMetadata;
 }
 
 const ALLOWED_TOP_LEVEL_KEYS = new Set([
@@ -170,29 +211,41 @@ const PLACEHOLDER_TOKEN_PATTERNS: readonly RegExp[] = [
  */
 export class Step0OutputValidator {
   validate(input: Step0OutputValidatorInput): ChangeMapReadiness {
-    const parsed = parseJson(input.responseText);
+    return this.validateDetailed(input).changeMap;
+  }
+
+  validateDetailed(input: Step0OutputValidatorInput): Step0OutputValidationResult {
+    const { value: parsed, metadata: parseMetadata } = parseJson(input.responseText);
     const obj = ensurePlainObject(parsed, "top-level payload");
 
     const schemaVersion = obj.schemaVersion;
+    let changeMap: ChangeMapReadiness;
     if (schemaVersion === 1) {
       rejectUnknownKeys(obj, ALLOWED_TOP_LEVEL_KEYS, "top-level");
-      return validateLegacyChangeMap(obj, input.expectedChangedPaths);
-    }
-    if (schemaVersion === 2) {
+      changeMap = validateLegacyChangeMap(obj, input);
+    } else if (schemaVersion === 2) {
       rejectUnknownKeys(obj, ALLOWED_TOP_LEVEL_KEYS_V2, "top-level");
-      return validateChangeMapReadinessV2(obj, input);
+      changeMap = validateChangeMapReadinessV2(obj, input);
+    } else {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `schemaVersion must be the literal number 1 or 2 (received ${describe(schemaVersion)})`,
+        {
+          offendingPath: "schemaVersion",
+          allowedValues: ["1", "2"],
+          actualSummary: describe(schemaVersion),
+          repairHint: "Use schemaVersion: 2 for ChangeMapReadinessV2."
+        }
+      );
     }
 
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      `schemaVersion must be the literal number 1 or 2 (received ${describe(schemaVersion)})`
-    );
+    return { changeMap, parseMetadata };
   }
 }
 
 function validateLegacyChangeMap(
   obj: Record<string, unknown>,
-  expectedChangedPaths: readonly string[]
+  input: Step0OutputValidatorInput
 ): ChangeMap {
   const overviewMarkdown = obj.overviewMarkdown;
   if (typeof overviewMarkdown !== "string") {
@@ -229,7 +282,7 @@ function validateLegacyChangeMap(
   );
   const unresolvedUnknowns = validateUnresolvedUnknowns(obj.unresolvedUnknowns);
 
-  enforceCoverage(changedFiles, expectedChangedPaths);
+  enforceCoverage(changedFiles, input);
 
   const changeMap: ChangeMap = {
     schemaVersion: 1,
@@ -252,7 +305,7 @@ function validateChangeMapReadinessV2(
 ): ChangeMapReadinessV2 {
   const legacy = validateLegacyChangeMap(
     { ...obj, schemaVersion: 1 },
-    input.expectedChangedPaths
+    input
   );
   const proceedRationale = requireNonEmptyString(
     obj.proceedRationale,
@@ -273,7 +326,7 @@ function validateChangeMapReadinessV2(
       obj.userContextSSOT,
       input.expectedUserContext
     ),
-    changeScope: validateChangeScope(obj.changeScope, input.expectedChangedPaths),
+    changeScope: validateChangeScope(obj.changeScope, input),
     coveragePlan: validateCoveragePlan(obj.coveragePlan),
     expectedBehaviorLedger: validateExpectedBehaviorLedger(
       obj.expectedBehaviorLedger
@@ -283,15 +336,159 @@ function validateChangeMapReadinessV2(
   });
 }
 
-function parseJson(responseText: string): unknown {
+function parseJson(
+  responseText: string
+): { readonly value: unknown; readonly metadata: Step0JsonParseMetadata } {
+  const responseByteLength = Buffer.byteLength(responseText, "utf8");
+  const trimmed = responseText.replace(/^\uFEFF/u, "").trim();
+  const directRepairKind: Step0JsonRepairKind =
+    trimmed === responseText ? "none" : "trimmed";
+
   try {
-    return JSON.parse(responseText);
+    return {
+      value: JSON.parse(trimmed),
+      metadata: {
+        repairKind: directRepairKind,
+        responseByteLength,
+        parsedByteLength: Buffer.byteLength(trimmed, "utf8")
+      }
+    };
   } catch (cause) {
-    throw new Step0OutputValidationError(
-      "PARSE",
-      `response is not valid JSON (${(cause as Error).message ?? "unknown error"})`
-    );
+    const fenced = extractWrappingJsonFence(trimmed);
+    if (fenced !== undefined) {
+      try {
+        return {
+          value: JSON.parse(fenced),
+          metadata: {
+            repairKind: "code_fence",
+            responseByteLength,
+            parsedByteLength: Buffer.byteLength(fenced, "utf8")
+          }
+        };
+      } catch {
+        throwParseFailure(responseText, cause, "code_fence_inner_parse");
+      }
+    }
+
+    const extracted = extractSingleRootObject(trimmed);
+    if (extracted.status === "multiple") {
+      throw new Step0OutputValidationError(
+        "PARSE",
+        "response contains multiple root JSON objects",
+        {
+          parseStage: "root_object_detection",
+          actualSummary: summarizeResponse(responseText),
+          repairHint: "Return exactly one JSON object and no second object or trailing payload.",
+          responseByteLength
+        }
+      );
+    }
+    if (extracted.status === "single") {
+      try {
+        return {
+          value: JSON.parse(extracted.text),
+          metadata: {
+            repairKind:
+              extracted.text === trimmed ? directRepairKind : "object_extraction",
+            responseByteLength,
+            parsedByteLength: Buffer.byteLength(extracted.text, "utf8")
+          }
+        };
+      } catch {
+        throwParseFailure(responseText, cause, "root_object_parse");
+      }
+    }
+
+    throwParseFailure(responseText, cause, "initial_parse");
   }
+}
+
+function throwParseFailure(
+  responseText: string,
+  cause: unknown,
+  parseStage: string
+): never {
+  throw new Step0OutputValidationError(
+    "PARSE",
+    `response is not valid JSON (${(cause as Error).message ?? "unknown error"})`,
+    {
+      parseStage,
+      actualSummary: summarizeResponse(responseText),
+      repairHint: "Return exactly one JSON object with no Markdown fence or explanatory text.",
+      responseByteLength: Buffer.byteLength(responseText, "utf8")
+    }
+  );
+}
+
+function extractWrappingJsonFence(value: string): string | undefined {
+  const match = value.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/u);
+  return match?.[1]?.trim();
+}
+
+function extractSingleRootObject(
+  value: string
+):
+  | { readonly status: "none" }
+  | { readonly status: "multiple" }
+  | { readonly status: "single"; readonly text: string } {
+  const spans: { start: number; end: number }[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      if (depth === 0) {
+        start = index;
+      }
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      if (depth === 0) {
+        return { status: "none" };
+      }
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        spans.push({ start, end: index + 1 });
+        start = -1;
+      }
+    }
+  }
+
+  if (depth !== 0 || spans.length === 0) {
+    return { status: "none" };
+  }
+  if (spans.length > 1) {
+    return { status: "multiple" };
+  }
+  const [span] = spans;
+  return { status: "single", text: value.slice(span.start, span.end) };
+}
+
+function summarizeResponse(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return "empty_response";
+  }
+  return `length=${Buffer.byteLength(value, "utf8")}, prefix=${JSON.stringify(trimmed.slice(0, 40))}`;
 }
 
 function ensurePlainObject(value: unknown, label: string): Record<string, unknown> {
@@ -804,7 +1001,7 @@ function validateUserContextSSOT(
 
 function validateChangeScope(
   value: unknown,
-  expectedChangedPaths: readonly string[]
+  input: Step0OutputValidatorInput
 ): ChangeMapReadinessV2["changeScope"] {
   const obj = ensurePlainObject(value, "changeScope");
   const totalChangedPaths = requireNonNegativeInteger(
@@ -823,11 +1020,57 @@ function validateChangeScope(
     obj.binaryOrNonReviewablePaths,
     "changeScope.binaryOrNonReviewablePaths"
   );
-  if (totalChangedPaths !== expectedChangedPaths.length) {
+  if (totalChangedPaths !== input.expectedChangedPaths.length) {
     throw new Step0OutputValidationError(
       "COVERAGE",
-      `changeScope.totalChangedPaths must equal expected changed path count ${expectedChangedPaths.length}`
+      `changeScope.totalChangedPaths must equal expected changed path count ${input.expectedChangedPaths.length}`,
+      {
+        offendingPath: "changeScope.totalChangedPaths",
+        actualSummary: `expected=${input.expectedChangedPaths.length}, actual=${totalChangedPaths}`,
+        repairHint: "Set changeScope.totalChangedPaths to the number of host-normalized changed files."
+      }
     );
+  }
+  if (input.expectedChangedFiles) {
+    const expectedDeleted = input.expectedChangedFiles.filter((entry) => entry.deleted).length;
+    const expectedReviewable = input.expectedChangedFiles.filter(
+      (entry) => entry.reviewableNonDeleted
+    ).length;
+    const expectedNonReviewable =
+      input.expectedChangedFiles.length - expectedDeleted - expectedReviewable;
+    if (deletedPaths !== expectedDeleted) {
+      throw new Step0OutputValidationError(
+        "COVERAGE",
+        `changeScope.deletedPaths must equal expected deleted path count ${expectedDeleted}`,
+        {
+          offendingPath: "changeScope.deletedPaths",
+          actualSummary: `expected=${expectedDeleted}, actual=${deletedPaths}`,
+          repairHint: "Count entries with normalized status D from changed_files_json."
+        }
+      );
+    }
+    if (reviewableNonDeletedPaths !== expectedReviewable) {
+      throw new Step0OutputValidationError(
+        "COVERAGE",
+        `changeScope.reviewableNonDeletedPaths must equal expected reviewable non-deleted path count ${expectedReviewable}`,
+        {
+          offendingPath: "changeScope.reviewableNonDeletedPaths",
+          actualSummary: `expected=${expectedReviewable}, actual=${reviewableNonDeletedPaths}`,
+          repairHint: "Count non-deleted entries from changed_files_json."
+        }
+      );
+    }
+    if (binaryOrNonReviewablePaths !== expectedNonReviewable) {
+      throw new Step0OutputValidationError(
+        "COVERAGE",
+        `changeScope.binaryOrNonReviewablePaths must equal expected binary/non-reviewable path count ${expectedNonReviewable}`,
+        {
+          offendingPath: "changeScope.binaryOrNonReviewablePaths",
+          actualSummary: `expected=${expectedNonReviewable}, actual=${binaryOrNonReviewablePaths}`,
+          repairHint: "Use host-provided reviewability metadata from changed_files_json."
+        }
+      );
+    }
   }
   if (
     reviewableNonDeletedPaths + deletedPaths + binaryOrNonReviewablePaths >
@@ -956,14 +1199,20 @@ function validateMissingInformation(
 
 function enforceCoverage(
   changedFiles: readonly ChangedFileEntry[],
-  expectedChangedPaths: readonly string[]
+  input: Step0OutputValidatorInput
 ): void {
+  const expectedChangedPaths = input.expectedChangedPaths;
   const seenExpectedPaths = new Set<string>();
   for (const expected of expectedChangedPaths) {
     if (seenExpectedPaths.has(expected)) {
       throw new Step0OutputValidationError(
         "COVERAGE",
-        `expectedChangedPaths contains duplicate path "${expected}"`
+        `expectedChangedPaths contains duplicate path "${expected}"`,
+        {
+          offendingPath: "expectedChangedPaths",
+          actualSummary: `duplicate=${expected}`,
+          repairHint: "Host-normalized changed file paths must be unique before Step 0 validation."
+        }
       );
     }
     seenExpectedPaths.add(expected);
@@ -976,7 +1225,12 @@ function enforceCoverage(
     if (seenPaths.has(entry.path)) {
       throw new Step0OutputValidationError(
         "COVERAGE",
-        `changedFiles[] contains duplicate path "${entry.path}"`
+        `changedFiles[] contains duplicate path "${entry.path}"`,
+        {
+          offendingPath: "changedFiles",
+          actualSummary: `duplicate=${entry.path}`,
+          repairHint: "List each host-normalized changed file exactly once."
+        }
       );
     }
     seenPaths.add(entry.path);
@@ -986,7 +1240,12 @@ function enforceCoverage(
     if (!seenPaths.has(expected)) {
       throw new Step0OutputValidationError(
         "COVERAGE",
-        `changedFiles[] is missing expected path "${expected}"`
+        `changedFiles[] is missing expected path "${expected}"`,
+        {
+          offendingPath: "changedFiles",
+          actualSummary: `missing=${expected}`,
+          repairHint: "Add the missing head-side path from changed_files_json."
+        }
       );
     }
   }
@@ -994,8 +1253,33 @@ function enforceCoverage(
     if (!seenExpectedPaths.has(actual)) {
       throw new Step0OutputValidationError(
         "COVERAGE",
-        `changedFiles[] reports path "${actual}" that is not in the expected changeset`
+        `changedFiles[] reports path "${actual}" that is not in the expected changeset`,
+        {
+          offendingPath: "changedFiles",
+          actualSummary: `extra=${actual}`,
+          repairHint: "Remove paths that are absent from changed_files_json."
+        }
       );
+    }
+  }
+
+  if (input.expectedChangedFiles) {
+    const expectedByPath = new Map(
+      input.expectedChangedFiles.map((entry) => [entry.path, entry.status] as const)
+    );
+    for (const entry of changedFiles) {
+      const expectedStatus = expectedByPath.get(entry.path);
+      if (expectedStatus && entry.status !== expectedStatus) {
+        throw new Step0OutputValidationError(
+          "COVERAGE",
+          `changedFiles[] status for "${entry.path}" must be "${expectedStatus}" (received "${entry.status}")`,
+          {
+            offendingPath: "changedFiles",
+            actualSummary: `path=${entry.path}, expectedStatus=${expectedStatus}, actualStatus=${entry.status}`,
+            repairHint: "Use the normalized status from changed_files_json; copied files use A."
+          }
+        );
+      }
     }
   }
 }
@@ -1022,9 +1306,16 @@ function requireEnum(
   label: string
 ): string {
   if (typeof value !== "string" || !allowed.has(value)) {
+    const allowedValues = [...allowed];
     throw new Step0OutputValidationError(
       "SCHEMA",
-      `${label} must be one of ${[...allowed].join(", ")} (received ${describe(value)})`
+      `${label} must be one of ${allowedValues.join(", ")} (received ${describe(value)})`,
+      {
+        offendingPath: label,
+        allowedValues,
+        actualSummary: describe(value),
+        repairHint: `Use one of the allowed values for ${label}.`
+      }
     );
   }
   return value;

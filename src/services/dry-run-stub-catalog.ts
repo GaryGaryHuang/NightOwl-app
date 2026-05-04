@@ -157,6 +157,11 @@ export function buildDryRunReviewBasisResponse(prompt: string): string {
 }
 
 function extractChangedFilesBlockEntries(prompt: string): DryRunChangedFileEntry[] {
+  const jsonEntries = extractChangedFilesJsonEntries(prompt);
+  if (jsonEntries) {
+    return jsonEntries;
+  }
+
   const startIdx = prompt.indexOf("<changed_files>");
   const endIdx = prompt.indexOf("</changed_files>");
   if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) {
@@ -176,6 +181,41 @@ function extractChangedFilesBlockEntries(prompt: string): DryRunChangedFileEntry
     }
   }
   return entries;
+}
+
+function extractChangedFilesJsonEntries(
+  prompt: string
+): DryRunChangedFileEntry[] | undefined {
+  const match = prompt.match(
+    /<changed_files_json format="json">\n([\s\S]*?)\n<\/changed_files_json>/u
+  );
+  if (!match) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(match[1]) as { entries?: unknown };
+    if (!Array.isArray(parsed.entries)) {
+      return [];
+    }
+
+    return parsed.entries.flatMap((entry): DryRunChangedFileEntry[] => {
+      if (!entry || typeof entry !== "object") {
+        return [];
+      }
+      const record = entry as { path?: unknown; status?: unknown };
+      if (typeof record.path !== "string" || record.path.length === 0) {
+        return [];
+      }
+      const status =
+        typeof record.status === "string"
+          ? normalizeDryRunStatus(record.status)
+          : "M";
+      return [{ path: record.path, status }];
+    });
+  } catch {
+    return [];
+  }
 }
 
 function extractUserContextEntries(prompt: string): string[] {

@@ -11,6 +11,7 @@ import {
 interface ChangeMapJsonOptions {
   readonly overviewMarkdown?: string;
   readonly paths?: readonly string[];
+  readonly statuses?: Readonly<Record<string, "A" | "M" | "D" | "R">>;
   readonly behaviorChanges?: readonly {
     description: string;
     files: readonly string[];
@@ -26,7 +27,7 @@ function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
       options.overviewMarkdown ?? "## Changeset Overview\n- 調整範圍：feature",
     changedFiles: paths.map((path) => ({
       path,
-      status: "M",
+      status: options.statuses?.[path] ?? "M",
       category: "feature",
       group: "review-flow",
       basis: "diff-inspected"
@@ -135,6 +136,8 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
     "## Changeset Overview\n- 調整範圍：retry\n"
   );
   assert.equal(prompts.length, 2);
+  assert.match(prompts[1], /<validator_feedback format="json">/u);
+  assert.match(prompts[1], /"actualSummary": "empty_response"/u);
 });
 
 test("ChangesetOverviewRunner retries once when the first response fails ChangeMap validation", async () => {
@@ -167,10 +170,44 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   assert.equal(createCalls, 2);
   assert.equal(runContext.changesetOverview.schemaVersion, 1);
   assert.equal(prompts.length, 2);
-  assert.doesNotMatch(prompts[0], /<retry_repair_context>/u);
-  assert.match(prompts[1], /<retry_repair_context>/u);
-  assert.match(prompts[1], /Step 0 ChangeMap validation failed \[PARSE\]/u);
+  assert.match(prompts[0], /<validator_feedback format="json">\nnull\n<\/validator_feedback>/u);
+  assert.match(prompts[1], /<validator_feedback format="json">/u);
+  assert.match(prompts[1], /"code": "PARSE"/u);
+  assert.match(prompts[1], /"parseStage": "initial_parse"/u);
   assert.match(prompts[1], /Return a corrected ChangeMapReadinessV2 JSON object/u);
+});
+
+test("ChangesetOverviewRunner retry feedback includes structured enum diagnostics", async () => {
+  let createCalls = 0;
+  const prompts: string[] = [];
+  const runner = new ChangesetOverviewRunner({
+    reviewSessionFactory: {
+      async createSession() {
+        createCalls += 1;
+
+        return {
+          async sendAndWait(prompt) {
+            prompts.push(prompt);
+            return createCalls === 1
+              ? buildChangeMapJson().replace("\"schemaVersion\":1", "\"schemaVersion\":\"1\"")
+              : buildChangeMapJson();
+          }
+        };
+      }
+    }
+  });
+
+  await runner.run({
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
+    userContext: []
+  });
+
+  assert.equal(createCalls, 2);
+  assert.match(prompts[1], /"code": "SCHEMA"/u);
+  assert.match(prompts[1], /"offendingPath": "schemaVersion"/u);
+  assert.match(prompts[1], /"allowedValues": \[/u);
 });
 
 test("ChangesetOverviewRunner aborts after two consecutive validation failures", async () => {
@@ -237,7 +274,10 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
       async createSession() {
         return {
           async sendAndWait() {
-            return buildChangeMapJson({ paths: ["src/new.ts"] });
+            return buildChangeMapJson({
+              paths: ["src/new.ts"],
+              statuses: { "src/new.ts": "R" }
+            });
           }
         };
       }
@@ -267,7 +307,10 @@ test("ChangesetOverviewRunner accepts copied paths as added ChangeMap entries", 
         return {
           async sendAndWait(prompt) {
             prompts.push(prompt);
-            return buildChangeMapJson({ paths: ["src/copied.ts"] });
+            return buildChangeMapJson({
+              paths: ["src/copied.ts"],
+              statuses: { "src/copied.ts": "A" }
+            });
           }
         };
       }
@@ -286,6 +329,9 @@ test("ChangesetOverviewRunner accepts copied paths as added ChangeMap entries", 
     userContext: []
   });
 
+  assert.match(prompts[0]!, /<changed_files_json format="json">/u);
+  assert.match(prompts[0]!, /"originalStatus": "C"/u);
+  assert.match(prompts[0]!, /"copiedAsAdded": true/u);
   assert.match(prompts[0]!, /A\tsrc\/copied\.ts/);
   assert.doesNotMatch(prompts[0]!, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
   assert.equal(runContext.changesetOverview.changedFiles[0].path, "src/copied.ts");
