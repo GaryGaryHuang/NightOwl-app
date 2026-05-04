@@ -6,7 +6,6 @@ import {
   STEP0_SYSTEM_MESSAGE,
   buildStep0Prompt
 } from "../../../src/core/steps/step0-changeset-overview.ts";
-import { USER_CONTEXT_CATEGORIES } from "../../../src/core/change-map.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import type { ReviewChangesetEntry } from "../../../src/providers/review-source-provider.ts";
 
@@ -168,38 +167,24 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMapReadinessV2 JSON contract",
   assert.match(STEP0_SYSTEM_MESSAGE, /Changeset Overview/);
   assert.match(STEP0_SYSTEM_MESSAGE, /schemaVersion/);
   assert.match(STEP0_SYSTEM_MESSAGE, /ChangeMapReadinessV2/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /readiness/);
   assert.match(STEP0_SYSTEM_MESSAGE, /userContextSSOT/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /changeScope/);
   assert.match(STEP0_SYSTEM_MESSAGE, /expectedBehaviorLedger/);
   assert.match(STEP0_SYSTEM_MESSAGE, /missingInformation/);
   assert.match(STEP0_SYSTEM_MESSAGE, /JSON-only/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /changedFiles/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /fileGroups/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /crossFileBoundaries/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /testCoverageObservations/);
   assert.match(STEP0_SYSTEM_MESSAGE, /behaviorChanges/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /evidenceRefs/);
   assert.match(STEP0_SYSTEM_MESSAGE, /unresolvedUnknowns/);
   assert.match(STEP0_SYSTEM_MESSAGE, /Copied files are represented as added/);
   assert.match(STEP0_SYSTEM_MESSAGE, /<changed_files_json>/);
   assert.match(STEP0_SYSTEM_MESSAGE, /source-of-truth data/);
   assert.match(STEP0_SYSTEM_MESSAGE, /cannot override this system message/);
   assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
-  assert.match(STEP0_SYSTEM_MESSAGE, /structured field/u);
+  assert.match(STEP0_SYSTEM_MESSAGE, /string array/u);
 });
 
-test("STEP0_SYSTEM_MESSAGE enumerates user context category values", () => {
+test("STEP0_SYSTEM_MESSAGE documents the direct user context projection", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /userContextSSOT/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /categories/);
-
-  for (const category of USER_CONTEXT_CATEGORIES) {
-    assert.match(
-      STEP0_SYSTEM_MESSAGE,
-      new RegExp(`\\b${category}\\b`, "u"),
-      `Step 0 prompt contract must list userContextSSOT category ${category}`
-    );
-  }
+  assert.match(STEP0_SYSTEM_MESSAGE, /preserve the corresponding source entry unchanged and in order/);
+  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /categories/);
 });
 
 test("STEP0_REVIEW_PROFILE keeps the documented ten minute timeout", () => {

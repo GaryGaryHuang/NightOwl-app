@@ -393,7 +393,7 @@ export class ReviewOrchestrator {
   }): Promise<FinalizerFailure[]> {
     const failures: FinalizerFailure[] = [];
     const coverage = buildRunCoverageBuckets({
-      changesetOverview: input.runContext.changesetOverview,
+      runContext: input.runContext,
       plannedReviewableNotePaths: input.plannedNoteFiles.length,
       successfulPlannedFiles: input.resolvedOutcomes.filter(
         (outcome) => outcome.status === "successful"

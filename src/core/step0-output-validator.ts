@@ -2,13 +2,9 @@ import {
   CHANGE_MAP_BASES,
   CHANGE_MAP_CATEGORIES,
   CHANGE_MAP_EVIDENCE_SOURCE_KINDS,
-  CHANGE_MAP_READINESS_VALUES,
   CHANGE_MAP_RELATIONSHIPS,
   CHANGE_MAP_STATUSES,
   EXPECTED_BEHAVIOR_CONFIDENCES,
-  EXPECTED_BEHAVIOR_SOURCE_TYPES,
-  MISSING_INFORMATION_BLOCKING_LEVELS,
-  USER_CONTEXT_CATEGORIES,
   type BehaviorChangeEntry,
   type ChangedFileEntry,
   type ChangeMap,
@@ -23,11 +19,10 @@ import {
   type EvidenceRefEntry,
   type ExpectedChangedFileDescriptor,
   type ExpectedBehaviorConfidence,
-  type ExpectedBehaviorSourceType,
   type FileGroupEntry,
-  type MissingInformationBlockingLevel,
+  type ReadinessBehaviorChangeEntry,
+  type ReadinessUnresolvedUnknownEntry,
   type TestCoverageObservationEntry,
-  type UserContextCategory,
   type UnresolvedUnknownEntry
 } from "./change-map.ts";
 
@@ -67,6 +62,10 @@ export interface Step0ValidationDiagnostic {
   readonly parseStage?: string;
   readonly repairKind?: Step0JsonRepairKind;
   readonly responseByteLength?: number;
+  readonly errorPosition?: number;
+  readonly errorLine?: number;
+  readonly errorColumn?: number;
+  readonly responseExcerpt?: string;
 }
 
 export interface Step0OutputValidatorInput {
@@ -106,15 +105,14 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
 ]);
 
 const ALLOWED_TOP_LEVEL_KEYS_V2 = new Set([
-  ...ALLOWED_TOP_LEVEL_KEYS,
-  "readiness",
+  "schemaVersion",
   "reviewObjective",
   "userContextSSOT",
-  "changeScope",
-  "coveragePlan",
   "expectedBehaviorLedger",
   "missingInformation",
-  "proceedRationale"
+  "overviewMarkdown",
+  "behaviorChanges",
+  "unresolvedUnknowns"
 ]);
 
 const ALLOWED_CHANGED_FILE_KEYS = new Set([
@@ -152,6 +150,11 @@ const ALLOWED_BEHAVIOR_CHANGE_KEYS = new Set([
   "evidenceRefs"
 ]);
 
+const ALLOWED_READINESS_BEHAVIOR_CHANGE_KEYS = new Set([
+  "description",
+  "files"
+]);
+
 const ALLOWED_EVIDENCE_REF_KEYS = new Set([
   "id",
   "sourceKind",
@@ -166,6 +169,11 @@ const ALLOWED_UNRESOLVED_UNKNOWN_KEYS = new Set([
   "resolutionPath"
 ]);
 
+const ALLOWED_READINESS_UNRESOLVED_UNKNOWN_KEYS = new Set([
+  "question",
+  "resolutionPath"
+]);
+
 const ALLOWED_STATUSES: ReadonlySet<string> = new Set(CHANGE_MAP_STATUSES);
 const ALLOWED_CATEGORIES: ReadonlySet<string> = new Set(CHANGE_MAP_CATEGORIES);
 const ALLOWED_BASES: ReadonlySet<string> = new Set(CHANGE_MAP_BASES);
@@ -173,20 +181,8 @@ const ALLOWED_RELATIONSHIPS: ReadonlySet<string> = new Set(CHANGE_MAP_RELATIONSH
 const ALLOWED_EVIDENCE_SOURCE_KINDS: ReadonlySet<string> = new Set(
   CHANGE_MAP_EVIDENCE_SOURCE_KINDS
 );
-const ALLOWED_READINESS_VALUES: ReadonlySet<string> = new Set(
-  CHANGE_MAP_READINESS_VALUES
-);
-const ALLOWED_USER_CONTEXT_CATEGORIES: ReadonlySet<string> = new Set(
-  USER_CONTEXT_CATEGORIES
-);
-const ALLOWED_EXPECTED_BEHAVIOR_SOURCE_TYPES: ReadonlySet<string> = new Set(
-  EXPECTED_BEHAVIOR_SOURCE_TYPES
-);
 const ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES: ReadonlySet<string> = new Set(
   EXPECTED_BEHAVIOR_CONFIDENCES
-);
-const ALLOWED_MISSING_INFORMATION_BLOCKING_LEVELS: ReadonlySet<string> = new Set(
-  MISSING_INFORMATION_BLOCKING_LEVELS
 );
 
 const OVERVIEW_MARKDOWN_PREFIX = "## Changeset Overview";
@@ -303,36 +299,25 @@ function validateChangeMapReadinessV2(
   obj: Record<string, unknown>,
   input: Step0OutputValidatorInput
 ): ChangeMapReadinessV2 {
-  const legacy = validateLegacyChangeMap(
-    { ...obj, schemaVersion: 1 },
-    input
-  );
-  const proceedRationale = requireNonEmptyString(
-    obj.proceedRationale,
-    "proceedRationale"
-  );
-  rejectPlaceholderText(proceedRationale, "proceedRationale");
-
   return deepFreeze({
-    ...legacy,
     schemaVersion: 2,
-    readiness: requireEnum(
-      obj.readiness,
-      ALLOWED_READINESS_VALUES,
-      "readiness"
-    ) as ChangeMapReadinessV2["readiness"],
     reviewObjective: validateReviewObjective(obj.reviewObjective),
     userContextSSOT: validateUserContextSSOT(
       obj.userContextSSOT,
       input.expectedUserContext
     ),
-    changeScope: validateChangeScope(obj.changeScope, input),
-    coveragePlan: validateCoveragePlan(obj.coveragePlan),
     expectedBehaviorLedger: validateExpectedBehaviorLedger(
       obj.expectedBehaviorLedger
     ),
     missingInformation: validateMissingInformation(obj.missingInformation),
-    proceedRationale
+    overviewMarkdown: validateOverviewMarkdown(obj.overviewMarkdown),
+    behaviorChanges: validateReadinessBehaviorChanges(
+      obj.behaviorChanges,
+      new Set(input.expectedChangedPaths)
+    ),
+    unresolvedUnknowns: validateReadinessUnresolvedUnknowns(
+      obj.unresolvedUnknowns
+    )
   });
 }
 
@@ -408,16 +393,76 @@ function throwParseFailure(
   cause: unknown,
   parseStage: string
 ): never {
+  const causeMessage = cause instanceof Error && cause.message
+    ? cause.message
+    : "unknown error";
   throw new Step0OutputValidationError(
     "PARSE",
-    `response is not valid JSON (${(cause as Error).message ?? "unknown error"})`,
+    `response is not valid JSON (${causeMessage})`,
     {
       parseStage,
       actualSummary: summarizeResponse(responseText),
       repairHint: "Return exactly one JSON object with no Markdown fence or explanatory text.",
-      responseByteLength: Buffer.byteLength(responseText, "utf8")
+      responseByteLength: Buffer.byteLength(responseText, "utf8"),
+      ...buildParseFailureContext(responseText, causeMessage)
     }
   );
+}
+
+function buildParseFailureContext(
+  responseText: string,
+  causeMessage: string
+): Partial<Step0ValidationDiagnostic> {
+  const errorPosition = extractJsonParseErrorPosition(causeMessage);
+  if (errorPosition === undefined) {
+    return {};
+  }
+
+  const location = lineColumnAt(responseText, errorPosition);
+  return {
+    errorPosition,
+    errorLine: location.line,
+    errorColumn: location.column,
+    responseExcerpt: excerptAround(responseText, errorPosition)
+  };
+}
+
+function extractJsonParseErrorPosition(message: string): number | undefined {
+  const match = message.match(/position (\d+)/u);
+  if (!match) {
+    return undefined;
+  }
+
+  const position = Number(match[1]);
+  return Number.isSafeInteger(position) && position >= 0 ? position : undefined;
+}
+
+function lineColumnAt(value: string, position: number): { line: number; column: number } {
+  const target = Math.min(position, value.length);
+  let line = 1;
+  let column = 1;
+
+  for (let index = 0; index < target; index += 1) {
+    if (value[index] === "\n") {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+
+  return { line, column };
+}
+
+function excerptAround(value: string, position: number): string {
+  const radius = 120;
+  const safePosition = Math.min(Math.max(position, 0), value.length);
+  const start = Math.max(0, safePosition - radius);
+  const end = Math.min(value.length, safePosition + radius);
+  const prefix = start === 0 ? "" : "...";
+  const suffix = end === value.length ? "" : "...";
+
+  return `${prefix}${value.slice(start, safePosition)}<<<ERROR>>>${value.slice(safePosition, end)}${suffix}`;
 }
 
 function extractWrappingJsonFence(value: string): string | undefined {
@@ -488,7 +533,7 @@ function summarizeResponse(value: string): string {
   if (trimmed.length === 0) {
     return "empty_response";
   }
-  return `length=${Buffer.byteLength(value, "utf8")}, prefix=${JSON.stringify(trimmed.slice(0, 40))}`;
+  return `length=${Buffer.byteLength(value, "utf8")}, prefix=${JSON.stringify(trimmed.slice(0, 40))}, suffix=${JSON.stringify(trimmed.slice(-40))}`;
 }
 
 function ensurePlainObject(value: unknown, label: string): Record<string, unknown> {
@@ -849,7 +894,7 @@ function validateKnownPathsArray(
   value: unknown,
   knownPaths: ReadonlySet<string>,
   label: string,
-  options: { allowEmpty: boolean }
+  options: { allowEmpty: boolean; knownPathsLabel?: string }
 ): readonly string[] {
   if (!Array.isArray(value)) {
     throw new Step0OutputValidationError("SCHEMA", `${label} must be an array`);
@@ -864,7 +909,7 @@ function validateKnownPathsArray(
     if (!knownPaths.has(path)) {
       throw new Step0OutputValidationError(
         "SCHEMA",
-        `${label}[${index}] "${path}" is not present in changedFiles[].path`
+        `${label}[${index}] "${path}" is not present in ${options.knownPathsLabel ?? "changedFiles[].path"}`
       );
     }
     if (seen.has(path)) {
@@ -926,6 +971,59 @@ function validateUnresolvedUnknowns(
   });
 }
 
+function validateReadinessUnresolvedUnknowns(
+  value: unknown
+): readonly ReadinessUnresolvedUnknownEntry[] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "unresolvedUnknowns must be an array"
+    );
+  }
+
+  return value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `unresolvedUnknowns[${index}]`);
+    rejectUnknownKeys(
+      entry,
+      ALLOWED_READINESS_UNRESOLVED_UNKNOWN_KEYS,
+      `unresolvedUnknowns[${index}]`
+    );
+
+    const question = requireNonEmptyString(
+      entry.question,
+      `unresolvedUnknowns[${index}].question`
+    );
+    const resolutionPath = requireNonEmptyString(
+      entry.resolutionPath,
+      `unresolvedUnknowns[${index}].resolutionPath`
+    );
+    rejectPlaceholderText(question, `unresolvedUnknowns[${index}].question`);
+    rejectPlaceholderText(
+      resolutionPath,
+      `unresolvedUnknowns[${index}].resolutionPath`
+    );
+
+    return { question, resolutionPath };
+  });
+}
+
+function validateOverviewMarkdown(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "overviewMarkdown must be a string"
+    );
+  }
+  if (!value.startsWith(OVERVIEW_MARKDOWN_PREFIX)) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      `overviewMarkdown must begin with the literal prefix "${OVERVIEW_MARKDOWN_PREFIX}"`
+    );
+  }
+
+  return value;
+}
+
 function validateReviewObjective(value: unknown): ChangeMapReadinessV2["reviewObjective"] {
   const obj = ensurePlainObject(value, "reviewObjective");
   const summary = requireNonEmptyString(obj.summary, "reviewObjective.summary");
@@ -957,153 +1055,20 @@ function validateUserContextSSOT(
     );
   }
 
-  const seenIds = new Set<string>();
   return value.map((rawEntry, index) => {
-    const entry = ensurePlainObject(rawEntry, `userContextSSOT[${index}]`);
-    const contextId = requireNonEmptyString(
-      entry.contextId,
-      `userContextSSOT[${index}].contextId`
-    );
-    if (seenIds.has(contextId)) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `userContextSSOT[${index}].contextId duplicates "${contextId}"`
-      );
-    }
-    seenIds.add(contextId);
-
     const rawText = requireNonEmptyString(
-      entry.rawText,
-      `userContextSSOT[${index}].rawText`
+      rawEntry,
+      `userContextSSOT[${index}]`
     );
     if (expectedUserContext && rawText !== expectedUserContext[index]) {
       throw new Step0OutputValidationError(
         "SCHEMA",
-        `userContextSSOT[${index}].rawText must preserve user context order`
+        `userContextSSOT[${index}] must preserve user context order`
       );
     }
 
-    return {
-      contextId,
-      rawText,
-      categories: validateEnumArray(
-        entry.categories,
-        ALLOWED_USER_CONTEXT_CATEGORIES,
-        `userContextSSOT[${index}].categories`
-      ) as readonly UserContextCategory[],
-      extractedFacts: validateStringArray(
-        entry.extractedFacts,
-        `userContextSSOT[${index}].extractedFacts`
-      )
-    };
+    return rawText;
   });
-}
-
-function validateChangeScope(
-  value: unknown,
-  input: Step0OutputValidatorInput
-): ChangeMapReadinessV2["changeScope"] {
-  const obj = ensurePlainObject(value, "changeScope");
-  const totalChangedPaths = requireNonNegativeInteger(
-    obj.totalChangedPaths,
-    "changeScope.totalChangedPaths"
-  );
-  const reviewableNonDeletedPaths = requireNonNegativeInteger(
-    obj.reviewableNonDeletedPaths,
-    "changeScope.reviewableNonDeletedPaths"
-  );
-  const deletedPaths = requireNonNegativeInteger(
-    obj.deletedPaths,
-    "changeScope.deletedPaths"
-  );
-  const binaryOrNonReviewablePaths = requireNonNegativeInteger(
-    obj.binaryOrNonReviewablePaths,
-    "changeScope.binaryOrNonReviewablePaths"
-  );
-  if (totalChangedPaths !== input.expectedChangedPaths.length) {
-    throw new Step0OutputValidationError(
-      "COVERAGE",
-      `changeScope.totalChangedPaths must equal expected changed path count ${input.expectedChangedPaths.length}`,
-      {
-        offendingPath: "changeScope.totalChangedPaths",
-        actualSummary: `expected=${input.expectedChangedPaths.length}, actual=${totalChangedPaths}`,
-        repairHint: "Set changeScope.totalChangedPaths to the number of host-normalized changed files."
-      }
-    );
-  }
-  if (input.expectedChangedFiles) {
-    const expectedDeleted = input.expectedChangedFiles.filter((entry) => entry.deleted).length;
-    const expectedReviewable = input.expectedChangedFiles.filter(
-      (entry) => entry.reviewableNonDeleted
-    ).length;
-    const expectedNonReviewable =
-      input.expectedChangedFiles.length - expectedDeleted - expectedReviewable;
-    if (deletedPaths !== expectedDeleted) {
-      throw new Step0OutputValidationError(
-        "COVERAGE",
-        `changeScope.deletedPaths must equal expected deleted path count ${expectedDeleted}`,
-        {
-          offendingPath: "changeScope.deletedPaths",
-          actualSummary: `expected=${expectedDeleted}, actual=${deletedPaths}`,
-          repairHint: "Count entries with normalized status D from changed_files_json."
-        }
-      );
-    }
-    if (reviewableNonDeletedPaths !== expectedReviewable) {
-      throw new Step0OutputValidationError(
-        "COVERAGE",
-        `changeScope.reviewableNonDeletedPaths must equal expected reviewable non-deleted path count ${expectedReviewable}`,
-        {
-          offendingPath: "changeScope.reviewableNonDeletedPaths",
-          actualSummary: `expected=${expectedReviewable}, actual=${reviewableNonDeletedPaths}`,
-          repairHint: "Count non-deleted entries from changed_files_json."
-        }
-      );
-    }
-    if (binaryOrNonReviewablePaths !== expectedNonReviewable) {
-      throw new Step0OutputValidationError(
-        "COVERAGE",
-        `changeScope.binaryOrNonReviewablePaths must equal expected binary/non-reviewable path count ${expectedNonReviewable}`,
-        {
-          offendingPath: "changeScope.binaryOrNonReviewablePaths",
-          actualSummary: `expected=${expectedNonReviewable}, actual=${binaryOrNonReviewablePaths}`,
-          repairHint: "Use host-provided reviewability metadata from changed_files_json."
-        }
-      );
-    }
-  }
-  if (
-    reviewableNonDeletedPaths + deletedPaths + binaryOrNonReviewablePaths >
-    totalChangedPaths
-  ) {
-    throw new Step0OutputValidationError(
-      "COVERAGE",
-      "changeScope buckets must not exceed totalChangedPaths"
-    );
-  }
-
-  return {
-    totalChangedPaths,
-    reviewableNonDeletedPaths,
-    deletedPaths,
-    binaryOrNonReviewablePaths,
-    changedTests: validateStringArray(obj.changedTests, "changeScope.changedTests"),
-    highRiskAreas: validateStringArray(obj.highRiskAreas, "changeScope.highRiskAreas")
-  };
-}
-
-function validateCoveragePlan(value: unknown): ChangeMapReadinessV2["coveragePlan"] {
-  const obj = ensurePlainObject(value, "coveragePlan");
-  if (typeof obj.mustDistinguishDeletedAndBinaryPaths !== "boolean") {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      "coveragePlan.mustDistinguishDeletedAndBinaryPaths must be a boolean"
-    );
-  }
-  return {
-    mustDistinguishDeletedAndBinaryPaths: obj.mustDistinguishDeletedAndBinaryPaths,
-    notes: validateStringArray(obj.notes, "coveragePlan.notes")
-  };
 }
 
 function validateExpectedBehaviorLedger(
@@ -1115,33 +1080,15 @@ function validateExpectedBehaviorLedger(
       "expectedBehaviorLedger must be an array"
     );
   }
-  const seenIds = new Set<string>();
   return value.map((rawEntry, index) => {
     const entry = ensurePlainObject(rawEntry, `expectedBehaviorLedger[${index}]`);
-    const expectationId = requireNonEmptyString(
-      entry.expectationId,
-      `expectedBehaviorLedger[${index}].expectationId`
-    );
-    if (seenIds.has(expectationId)) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `expectedBehaviorLedger[${index}].expectationId duplicates "${expectationId}"`
-      );
-    }
-    seenIds.add(expectationId);
     const statement = requireNonEmptyString(
       entry.statement,
       `expectedBehaviorLedger[${index}].statement`
     );
     rejectPlaceholderText(statement, `expectedBehaviorLedger[${index}].statement`);
     return {
-      expectationId,
       statement,
-      sourceType: requireEnum(
-        entry.sourceType,
-        ALLOWED_EXPECTED_BEHAVIOR_SOURCE_TYPES,
-        `expectedBehaviorLedger[${index}].sourceType`
-      ) as ExpectedBehaviorSourceType,
       confidence: requireEnum(
         entry.confidence,
         ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES,
@@ -1160,20 +1107,8 @@ function validateMissingInformation(
       "missingInformation must be an array"
     );
   }
-  const seenIds = new Set<string>();
   return value.map((rawEntry, index) => {
     const entry = ensurePlainObject(rawEntry, `missingInformation[${index}]`);
-    const gapId = requireNonEmptyString(
-      entry.gapId,
-      `missingInformation[${index}].gapId`
-    );
-    if (seenIds.has(gapId)) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `missingInformation[${index}].gapId duplicates "${gapId}"`
-      );
-    }
-    seenIds.add(gapId);
     const description = requireNonEmptyString(
       entry.description,
       `missingInformation[${index}].description`
@@ -1185,14 +1120,48 @@ function validateMissingInformation(
     rejectPlaceholderText(description, `missingInformation[${index}].description`);
     rejectPlaceholderText(whyItMatters, `missingInformation[${index}].whyItMatters`);
     return {
-      gapId,
       description,
-      whyItMatters,
-      blockingLevel: requireEnum(
-        entry.blockingLevel,
-        ALLOWED_MISSING_INFORMATION_BLOCKING_LEVELS,
-        `missingInformation[${index}].blockingLevel`
-      ) as MissingInformationBlockingLevel
+      whyItMatters
+    };
+  });
+}
+
+function validateReadinessBehaviorChanges(
+  value: unknown,
+  knownPaths: ReadonlySet<string>
+): readonly ReadinessBehaviorChangeEntry[] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "behaviorChanges must be an array"
+    );
+  }
+
+  return value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `behaviorChanges[${index}]`);
+    rejectUnknownKeys(
+      entry,
+      ALLOWED_READINESS_BEHAVIOR_CHANGE_KEYS,
+      `behaviorChanges[${index}]`
+    );
+
+    const description = requireNonEmptyString(
+      entry.description,
+      `behaviorChanges[${index}].description`
+    );
+    rejectPlaceholderText(description, `behaviorChanges[${index}].description`);
+
+    return {
+      description,
+      files: validateKnownPathsArray(
+        entry.files,
+        knownPaths,
+        `behaviorChanges[${index}].files`,
+        {
+          allowEmpty: false,
+          knownPathsLabel: "<changed_files_json>.entries[].path"
+        }
+      )
     };
   });
 }

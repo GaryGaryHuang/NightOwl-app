@@ -93,21 +93,15 @@ describe("Dry-run stub catalog completeness", () => {
     const parsed = JSON.parse(response) as {
       schemaVersion: number;
       overviewMarkdown: string;
-      changedFiles: { path: string; status: string }[];
-      changeScope: { totalChangedPaths: number; deletedPaths: number };
+      behaviorChanges: { files: string[] }[];
     };
     assert.equal(parsed.schemaVersion, 2);
-    assert.equal(parsed.changeScope.totalChangedPaths, 4);
-    assert.equal(parsed.changeScope.deletedPaths, 1);
-    assert.deepEqual(
-      parsed.changedFiles.map(({ path, status }) => ({ path, status })),
-      [
-        { path: "src/added.ts", status: "A" },
-        { path: "src/foo.ts", status: "M" },
-        { path: "src/deleted.ts", status: "D" },
-        { path: "src/copied.ts", status: "A" }
-      ]
-    );
+    assert.deepEqual(parsed.behaviorChanges[0]?.files, [
+      "src/added.ts",
+      "src/foo.ts",
+      "src/deleted.ts",
+      "src/copied.ts"
+    ]);
     assert.match(parsed.overviewMarkdown, /^## Changeset Overview\n- Scope:/u);
     assert.equal(parsed.overviewMarkdown.includes("### Scope"), false);
   });

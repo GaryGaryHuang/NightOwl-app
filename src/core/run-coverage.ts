@@ -1,4 +1,5 @@
-import type { ChangeMapReadiness } from "./change-map.ts";
+import type { ExpectedChangedFileDescriptor } from "./change-map.ts";
+import type { RunContext } from "./run-context.ts";
 
 export interface RunCoverageBuckets {
   totalChangedPaths: number;
@@ -12,28 +13,22 @@ export interface RunCoverageBuckets {
 }
 
 export function buildRunCoverageBuckets(input: {
-  changesetOverview: ChangeMapReadiness;
+  runContext: Pick<RunContext, "changesetFiles" | "changesetOverview">;
   plannedReviewableNotePaths: number;
   successfulPlannedFiles: number;
   skippedPlannedFiles: number;
 }): RunCoverageBuckets {
-  const overview = input.changesetOverview;
-  const changedFiles = overview.changedFiles;
-  const deletedPaths = "changeScope" in overview
-    ? overview.changeScope.deletedPaths
-    : changedFiles.filter((file) => file.status === "D").length;
-  const totalChangedPaths = "changeScope" in overview
-    ? overview.changeScope.totalChangedPaths
-    : changedFiles.length;
-  const reviewableNonDeletedPaths = "changeScope" in overview
-    ? overview.changeScope.reviewableNonDeletedPaths
-    : changedFiles.filter((file) => file.status !== "D").length;
-  const binaryOrNonReviewablePaths = "changeScope" in overview
-    ? overview.changeScope.binaryOrNonReviewablePaths
-    : Math.max(0, totalChangedPaths - deletedPaths - input.plannedReviewableNotePaths);
-  const changedTests = "changeScope" in overview
-    ? [...overview.changeScope.changedTests]
-    : deriveChangedTests(overview);
+  const changedFiles = deriveCoverageFiles(input.runContext);
+  const deletedPaths = changedFiles.filter((file) => file.deleted).length;
+  const totalChangedPaths = changedFiles.length;
+  const reviewableNonDeletedPaths = changedFiles.filter(
+    (file) => file.reviewableNonDeleted
+  ).length;
+  const binaryOrNonReviewablePaths = Math.max(
+    0,
+    totalChangedPaths - deletedPaths - reviewableNonDeletedPaths
+  );
+  const changedTests = deriveChangedTests(changedFiles);
 
   return {
     totalChangedPaths,
@@ -47,11 +42,32 @@ export function buildRunCoverageBuckets(input: {
   };
 }
 
-function deriveChangedTests(overview: ChangeMapReadiness): string[] {
-  return [
-    ...overview.changedFiles
-      .filter((file) => file.category === "test")
-      .map((file) => file.path),
-    ...overview.testCoverageObservations.map((entry) => entry.testFile)
-  ];
+function deriveCoverageFiles(
+  runContext: Pick<RunContext, "changesetFiles" | "changesetOverview">
+): readonly ExpectedChangedFileDescriptor[] {
+  if (runContext.changesetFiles.length > 0) {
+    return runContext.changesetFiles;
+  }
+
+  const overview = runContext.changesetOverview;
+  if ("changedFiles" in overview) {
+    return overview.changedFiles.map((file) => ({
+      originalStatus: file.status,
+      status: file.status,
+      path: file.path,
+      deleted: file.status === "D",
+      copiedAsAdded: false,
+      reviewableNonDeleted: file.status !== "D"
+    }));
+  }
+
+  return [];
+}
+
+function deriveChangedTests(
+  changedFiles: readonly ExpectedChangedFileDescriptor[]
+): string[] {
+  return changedFiles
+    .filter((file) => /(?:^|\/)(?:test|tests|__tests__)\//u.test(file.path) || /(?:\.test|\.spec)\.[^.]+$/u.test(file.path))
+    .map((file) => file.path);
 }

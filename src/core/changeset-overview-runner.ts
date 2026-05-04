@@ -32,6 +32,11 @@ export interface ChangesetOverviewRunnerOptions {
   reviewSessionFactory: ReviewSessionFactoryLike;
   /** Optional injection point; defaults to a fresh `Step0OutputValidator`. */
   step0OutputValidator?: Step0OutputValidator;
+  onStep0LogEvent?: (event: Step0LogEvent) => void;
+}
+
+export interface Step0LogEvent {
+  readonly message: string;
 }
 
 /**
@@ -40,10 +45,12 @@ export interface ChangesetOverviewRunnerOptions {
 export class ChangesetOverviewRunner {
   readonly #reviewSessionFactory: ReviewSessionFactoryLike;
   readonly #validator: Step0OutputValidator;
+  readonly #onStep0LogEvent?: (event: Step0LogEvent) => void;
 
   constructor(options: ChangesetOverviewRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
     this.#validator = options.step0OutputValidator ?? new Step0OutputValidator();
+    this.#onStep0LogEvent = options.onStep0LogEvent;
   }
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
@@ -56,7 +63,7 @@ export class ChangesetOverviewRunner {
     let retryRepairFailure: Step0ValidationDiagnostic | undefined;
 
     return retryOnce({
-      execute: async () => {
+      execute: async (attempt) => {
         const session = await this.#reviewSessionFactory.createSession({
           stepId: "changeset-overview",
           knowledgeMode: STEP0_REVIEW_PROFILE.knowledgeMode,
@@ -98,23 +105,74 @@ export class ChangesetOverviewRunner {
             expectedChangedFiles,
             expectedUserContext: input.userContext
           });
+          this.#emitSyntaxRepairLog(attempt, validationResult.parseMetadata);
           changeMap = validationResult.changeMap;
           retryRepairFailure = undefined;
         } catch (error) {
           if (error instanceof Step0OutputValidationError) {
             retryRepairFailure = error.diagnostic;
+            this.#emitValidationFailureLog(attempt, error.diagnostic);
           }
           throw error;
         }
 
         return createRunContext({
           changesetOverview: changeMap,
-          userContext: input.userContext
+          userContext: input.userContext,
+          changesetFiles: expectedChangedFiles
         });
       },
       buildFinalError(lastCause) {
         return new Error(lastCause);
       }
     });
+  }
+
+  #emitSyntaxRepairLog(
+    attempt: number,
+    metadata: { repairKind: string; responseByteLength: number; parsedByteLength: number }
+  ): void {
+    if (metadata.repairKind === "none") {
+      return;
+    }
+
+    this.#emitLog(
+      `Step 0 JSON syntax repair applied (attempt ${attempt + 1}, repair=${metadata.repairKind}, responseBytes=${metadata.responseByteLength}, parsedBytes=${metadata.parsedByteLength})`
+    );
+  }
+
+  #emitValidationFailureLog(
+    attempt: number,
+    diagnostic: Step0ValidationDiagnostic
+  ): void {
+    const fields = [
+      `attempt ${attempt + 1}`,
+      `code=${diagnostic.code}`,
+      diagnostic.parseStage ? `stage=${diagnostic.parseStage}` : undefined,
+      diagnostic.offendingPath ? `path=${diagnostic.offendingPath}` : undefined,
+      diagnostic.responseByteLength === undefined
+        ? undefined
+        : `responseBytes=${diagnostic.responseByteLength}`,
+      diagnostic.errorPosition === undefined
+        ? undefined
+        : `position=${diagnostic.errorPosition}`,
+      diagnostic.errorLine === undefined ? undefined : `line=${diagnostic.errorLine}`,
+      diagnostic.errorColumn === undefined
+        ? undefined
+        : `column=${diagnostic.errorColumn}`,
+      diagnostic.allowedValues === undefined
+        ? undefined
+        : `allowed=${JSON.stringify(diagnostic.allowedValues)}`,
+      diagnostic.responseExcerpt === undefined
+        ? undefined
+        : `excerpt=${JSON.stringify(diagnostic.responseExcerpt)}`,
+      `message=${JSON.stringify(diagnostic.message)}`
+    ].filter((field): field is string => field !== undefined);
+
+    this.#emitLog(`Step 0 validation failed (${fields.join(", ")})`);
+  }
+
+  #emitLog(message: string): void {
+    this.#onStep0LogEvent?.({ message });
   }
 }

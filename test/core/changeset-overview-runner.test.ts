@@ -143,7 +143,11 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
 test("ChangesetOverviewRunner retries once when the first response fails ChangeMap validation", async () => {
   let createCalls = 0;
   const prompts: string[] = [];
+  const logMessages: string[] = [];
   const runner = new ChangesetOverviewRunner({
+    onStep0LogEvent(event) {
+      logMessages.push(event.message);
+    },
     reviewSessionFactory: {
       async createSession() {
         createCalls += 1;
@@ -175,6 +179,78 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   assert.match(prompts[1], /"code": "PARSE"/u);
   assert.match(prompts[1], /"parseStage": "initial_parse"/u);
   assert.match(prompts[1], /Return a corrected ChangeMapReadinessV2 JSON object/u);
+  assert.equal(logMessages.length, 1);
+  assert.match(logMessages[0]!, /Step 0 validation failed \(attempt 1, code=PARSE/u);
+  assert.match(logMessages[0]!, /stage=initial_parse/u);
+  assert.match(logMessages[0]!, /responseBytes=/u);
+});
+
+test("ChangesetOverviewRunner logs parse excerpts for trailing response content", async () => {
+  let createCalls = 0;
+  const logMessages: string[] = [];
+  const runner = new ChangesetOverviewRunner({
+    onStep0LogEvent(event) {
+      logMessages.push(event.message);
+    },
+    reviewSessionFactory: {
+      async createSession() {
+        createCalls += 1;
+
+        return {
+          async sendAndWait() {
+            return createCalls === 1
+              ? '"not an object" trailing assistant text'
+              : buildChangeMapJson();
+          }
+        };
+      }
+    }
+  });
+
+  await runner.run({
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
+    userContext: []
+  });
+
+  assert.equal(logMessages.length, 1);
+  assert.match(logMessages[0]!, /position=16/u);
+  assert.match(logMessages[0]!, /line=1/u);
+  assert.match(logMessages[0]!, /column=17/u);
+  assert.match(logMessages[0]!, /excerpt=/u);
+  assert.match(logMessages[0]!, /<<<ERROR>>>trailing assistant text/u);
+});
+
+test("ChangesetOverviewRunner logs successful syntax repairs", async () => {
+  const logMessages: string[] = [];
+  const runner = new ChangesetOverviewRunner({
+    onStep0LogEvent(event) {
+      logMessages.push(event.message);
+    },
+    reviewSessionFactory: {
+      async createSession() {
+        return {
+          async sendAndWait() {
+            return ["Here is the result:", buildChangeMapJson(), "Done."].join("\n");
+          }
+        };
+      }
+    }
+  });
+
+  await runner.run({
+    outputBaseDir: "/workspace/repo",
+    repoRoot: "/workspace/repo",
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
+    userContext: []
+  });
+
+  assert.equal(logMessages.length, 1);
+  assert.match(logMessages[0]!, /Step 0 JSON syntax repair applied \(attempt 1/u);
+  assert.match(logMessages[0]!, /repair=object_extraction/u);
+  assert.match(logMessages[0]!, /responseBytes=/u);
+  assert.match(logMessages[0]!, /parsedBytes=/u);
 });
 
 test("ChangesetOverviewRunner retry feedback includes structured enum diagnostics", async () => {
@@ -296,7 +372,7 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
     userContext: []
   });
 
-  assert.equal(runContext.changesetOverview.changedFiles[0].path, "src/new.ts");
+  assert.equal(runContext.changesetFiles[0].path, "src/new.ts");
 });
 
 test("ChangesetOverviewRunner accepts copied paths as added ChangeMap entries", async () => {
@@ -334,7 +410,7 @@ test("ChangesetOverviewRunner accepts copied paths as added ChangeMap entries", 
   assert.match(prompts[0]!, /"copiedAsAdded": true/u);
   assert.match(prompts[0]!, /A\tsrc\/copied\.ts/);
   assert.doesNotMatch(prompts[0]!, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
-  assert.equal(runContext.changesetOverview.changedFiles[0].path, "src/copied.ts");
+  assert.equal(runContext.changesetFiles[0].path, "src/copied.ts");
 });
 
 test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
@@ -360,7 +436,7 @@ test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
     userContext: []
   });
 
-  assert.equal(runContext.changesetOverview.changedFiles.length, 0);
+  assert.equal(runContext.changesetFiles.length, 0);
 });
 
 test("ChangesetOverviewRunner aborts an in-flight Step 0 turn without consuming the retry budget", async () => {

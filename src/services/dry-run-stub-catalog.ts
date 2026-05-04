@@ -24,60 +24,27 @@ interface DryRunChangedFileEntry {
 export function buildDryRunChangesetOverviewResponse(prompt: string): string {
   const changedFileEntries = extractChangedFilesBlockEntries(prompt);
   const userContextEntries = extractUserContextEntries(prompt);
-  const changedFiles = changedFileEntries.map((entry) => ({
-    path: entry.path,
-    status: entry.status,
-    category: "feature" as const,
-    group: "dry-run" as const,
-    basis: "name-status" as const
-  }));
-  const deletedPathCount = changedFiles.filter((entry) => entry.status === "D").length;
+  const changedPaths = changedFileEntries.map((entry) => entry.path);
 
   return JSON.stringify({
     schemaVersion: 2,
-    readiness: "READY_WITH_LIMITATIONS",
     reviewObjective: {
       summary: "Dry-run review context.",
       requestedFocus: [],
       expectedBehaviorSummary: []
     },
-    userContextSSOT: userContextEntries.map((entry, index) => ({
-      contextId: `UC${index + 1}`,
-      rawText: entry,
-      categories: ["other"],
-      extractedFacts: []
-    })),
-    changeScope: {
-      totalChangedPaths: changedFiles.length,
-      reviewableNonDeletedPaths: changedFiles.length - deletedPathCount,
-      deletedPaths: deletedPathCount,
-      binaryOrNonReviewablePaths: 0,
-      changedTests: [],
-      highRiskAreas: []
-    },
-    coveragePlan: {
-      mustDistinguishDeletedAndBinaryPaths: true,
-      notes: ["Dry-run review treats every non-deleted changed path as reviewable."]
-    },
+    userContextSSOT: userContextEntries,
     expectedBehaviorLedger: [],
     missingInformation: [],
-    proceedRationale: "Dry-run response is deterministic and suitable for exercising the review pipeline.",
     overviewMarkdown: STUB_CHANGESET_OVERVIEW_MARKDOWN,
-    changedFiles,
-    fileGroups: changedFiles.length === 0
+    behaviorChanges: changedPaths.length === 0
       ? []
       : [
           {
-            id: "G1",
-            label: "dry-run",
-            files: changedFiles.map((entry) => entry.path),
-            observedChange: "Dry-run stub."
+            description: "Dry-run stub.",
+            files: changedPaths
           }
         ],
-    crossFileBoundaries: [],
-    testCoverageObservations: [],
-    behaviorChanges: [],
-    evidenceRefs: [],
     unresolvedUnknowns: []
   });
 }

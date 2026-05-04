@@ -210,7 +210,16 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
 
   const changesetOverviewRunner =
     shared.changesetOverviewRunner ??
-    new ChangesetOverviewRunner({ reviewSessionFactory });
+    new ChangesetOverviewRunner({
+      reviewSessionFactory,
+      onStep0LogEvent(event) {
+        shared.onProgressEvent?.({
+          type: "review-session-log",
+          stepId: "changeset-overview",
+          message: event.message
+        });
+      }
+    });
   const stepRunner =
     shared.stepRunner ??
     new StepRunner({

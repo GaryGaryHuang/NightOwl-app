@@ -35,17 +35,12 @@ test("buildDryRunChangesetOverviewResponse normalizes git rename/copy status (wi
   );
 
   const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
-    changedFiles: { path: string; status: string }[];
+    behaviorChanges: { files: string[] }[];
   };
 
   assert.deepEqual(
-    parsed.changedFiles.map(({ path, status }) => ({ path, status })),
-    [
-      { path: "src/new-name.ts", status: "R" },
-      { path: "src/copied.ts", status: "A" },
-      { path: "src/bare-rename-new.ts", status: "R" },
-      { path: "src/bare-copy-new.ts", status: "A" }
-    ]
+    parsed.behaviorChanges[0]?.files,
+    ["src/new-name.ts", "src/copied.ts", "src/bare-rename-new.ts", "src/bare-copy-new.ts"]
   );
 });
 
@@ -67,19 +62,13 @@ test("buildDryRunChangesetOverviewResponse prefers changed_files_json over raw c
   ]);
 
   const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
-    changedFiles: { path: string; status: string }[];
-    changeScope: { deletedPaths: number; reviewableNonDeletedPaths: number };
+    behaviorChanges: { files: string[] }[];
   };
 
-  assert.deepEqual(
-    parsed.changedFiles.map(({ path, status }) => ({ path, status })),
-    [
-      { path: "src/copied-from-json.ts", status: "A" },
-      { path: "src/deleted-from-json.ts", status: "D" }
-    ]
-  );
-  assert.equal(parsed.changeScope.deletedPaths, 1);
-  assert.equal(parsed.changeScope.reviewableNonDeletedPaths, 1);
+  assert.deepEqual(parsed.behaviorChanges[0]?.files, [
+    "src/copied-from-json.ts",
+    "src/deleted-from-json.ts"
+  ]);
 });
 
 test("buildDryRunChangesetOverviewResponse falls back to M for unknown status tokens", () => {
@@ -92,13 +81,14 @@ test("buildDryRunChangesetOverviewResponse falls back to M for unknown status to
   );
 
   const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
-    changedFiles: { path: string; status: string }[];
+    behaviorChanges: { files: string[] }[];
   };
 
-  assert.deepEqual(
-    parsed.changedFiles.map(({ status }) => status),
-    ["M", "M", "M"]
-  );
+  assert.deepEqual(parsed.behaviorChanges[0]?.files, [
+    "src/type-change.ts",
+    "src/unmerged.ts",
+    "src/unknown.ts"
+  ]);
 });
 
 test("buildDryRunChangesetOverviewResponse skips lines without a tab separator and skips entries with empty path", () => {
@@ -111,10 +101,10 @@ test("buildDryRunChangesetOverviewResponse skips lines without a tab separator a
   );
 
   const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
-    changedFiles: { path: string }[];
+    behaviorChanges: { files: string[] }[];
   };
 
-  assert.deepEqual(parsed.changedFiles.map(({ path }) => path), ["src/kept.ts"]);
+  assert.deepEqual(parsed.behaviorChanges[0]?.files, ["src/kept.ts"]);
 });
 
 test("buildDryRunChangesetOverviewResponse emits a zero-file ChangeMapReadinessV2 when the prompt has no changed_files block", () => {
@@ -122,15 +112,13 @@ test("buildDryRunChangesetOverviewResponse emits a zero-file ChangeMapReadinessV
     buildDryRunChangesetOverviewResponse("(no block at all)")
   ) as {
     schemaVersion: number;
-    changeScope: { totalChangedPaths: number };
-    changedFiles: unknown[];
-    fileGroups: unknown[];
+    behaviorChanges: unknown[];
+    userContextSSOT: unknown[];
   };
 
   assert.equal(parsed.schemaVersion, 2);
-  assert.equal(parsed.changeScope.totalChangedPaths, 0);
-  assert.deepEqual(parsed.changedFiles, []);
-  assert.deepEqual(parsed.fileGroups, []);
+  assert.deepEqual(parsed.behaviorChanges, []);
+  assert.deepEqual(parsed.userContextSSOT, []);
 });
 
 test("buildDryRunChangesetOverviewResponse preserves user context order in userContextSSOT", () => {
@@ -145,29 +133,22 @@ test("buildDryRunChangesetOverviewResponse preserves user context order in userC
   ].join("\n");
 
   const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
-    userContextSSOT: { contextId: string; rawText: string }[];
+    userContextSSOT: string[];
   };
 
-  assert.deepEqual(
-    parsed.userContextSSOT.map(({ contextId, rawText }) => ({ contextId, rawText })),
-    [
-    { contextId: "UC1", rawText: "first" },
-    { contextId: "UC2", rawText: "second" }
-    ]
-  );
+  assert.deepEqual(parsed.userContextSSOT, ["first", "second"]);
 });
 
-test("buildDryRunChangesetOverviewResponse emits a single dry-run fileGroup listing every changed path when at least one file is present", () => {
+test("buildDryRunChangesetOverviewResponse emits a single behaviorChanges entry listing every changed path when at least one file is present", () => {
   const prompt = buildPrompt(["A\tsrc/a.ts", "M\tsrc/b.ts"].join("\n"));
 
   const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
-    fileGroups: { id: string; label: string; files: string[] }[];
+    behaviorChanges: { description: string; files: string[] }[];
   };
 
-  assert.equal(parsed.fileGroups.length, 1);
-  assert.equal(parsed.fileGroups[0].id, "G1");
-  assert.equal(parsed.fileGroups[0].label, "dry-run");
-  assert.deepEqual(parsed.fileGroups[0].files, ["src/a.ts", "src/b.ts"]);
+  assert.equal(parsed.behaviorChanges.length, 1);
+  assert.equal(parsed.behaviorChanges[0].description, "Dry-run stub.");
+  assert.deepEqual(parsed.behaviorChanges[0].files, ["src/a.ts", "src/b.ts"]);
 });
 
 test("getDryRunResponseProvider routes changeset-overview to the prompt-driven builder", () => {
@@ -175,10 +156,10 @@ test("getDryRunResponseProvider routes changeset-overview to the prompt-driven b
   const prompt = buildPrompt("M\tsrc/dispatched.ts");
 
   const parsed = JSON.parse(provider(prompt)) as {
-    changedFiles: { path: string }[];
+    behaviorChanges: { files: string[] }[];
   };
 
-  assert.deepEqual(parsed.changedFiles.map(({ path }) => path), ["src/dispatched.ts"]);
+  assert.deepEqual(parsed.behaviorChanges[0]?.files, ["src/dispatched.ts"]);
 });
 
 test("getDryRunResponseProvider returns a constant stub for known per-file step IDs and ignores prompt content", () => {
