@@ -107,6 +107,102 @@ export interface ChangeMap {
   readonly unresolvedUnknowns: readonly UnresolvedUnknownEntry[];
 }
 
+export const CHANGE_MAP_READINESS_VALUES = [
+  "READY",
+  "READY_WITH_LIMITATIONS",
+  "INSUFFICIENT_INFORMATION"
+] as const;
+export type ChangeMapReadinessValue =
+  (typeof CHANGE_MAP_READINESS_VALUES)[number];
+
+export const USER_CONTEXT_CATEGORIES = [
+  "requirement",
+  "expected_behavior",
+  "root_cause",
+  "business_context",
+  "release_constraint",
+  "reviewer_focus",
+  "other"
+] as const;
+export type UserContextCategory = (typeof USER_CONTEXT_CATEGORIES)[number];
+
+export const EXPECTED_BEHAVIOR_SOURCE_TYPES = [
+  "user_context",
+  "tests",
+  "code",
+  "docs"
+] as const;
+export type ExpectedBehaviorSourceType =
+  (typeof EXPECTED_BEHAVIOR_SOURCE_TYPES)[number];
+
+export const EXPECTED_BEHAVIOR_CONFIDENCES = ["explicit", "inferred"] as const;
+export type ExpectedBehaviorConfidence =
+  (typeof EXPECTED_BEHAVIOR_CONFIDENCES)[number];
+
+export const MISSING_INFORMATION_BLOCKING_LEVELS = [
+  "none",
+  "severity_only",
+  "classification_only",
+  "full_review"
+] as const;
+export type MissingInformationBlockingLevel =
+  (typeof MISSING_INFORMATION_BLOCKING_LEVELS)[number];
+
+export interface ReviewObjective {
+  readonly summary: string;
+  readonly requestedFocus: readonly string[];
+  readonly expectedBehaviorSummary: readonly string[];
+}
+
+export interface UserContextSSOTEntry {
+  readonly contextId: string;
+  readonly rawText: string;
+  readonly categories: readonly UserContextCategory[];
+  readonly extractedFacts: readonly string[];
+}
+
+export interface ChangeScope {
+  readonly totalChangedPaths: number;
+  readonly reviewableNonDeletedPaths: number;
+  readonly deletedPaths: number;
+  readonly binaryOrNonReviewablePaths: number;
+  readonly changedTests: readonly string[];
+  readonly highRiskAreas: readonly string[];
+}
+
+export interface CoveragePlan {
+  readonly mustDistinguishDeletedAndBinaryPaths: boolean;
+  readonly notes: readonly string[];
+}
+
+export interface ExpectedBehaviorLedgerEntry {
+  readonly expectationId: string;
+  readonly statement: string;
+  readonly sourceType: ExpectedBehaviorSourceType;
+  readonly confidence: ExpectedBehaviorConfidence;
+}
+
+export interface MissingInformationEntry {
+  readonly gapId: string;
+  readonly description: string;
+  readonly whyItMatters: string;
+  readonly blockingLevel: MissingInformationBlockingLevel;
+}
+
+export interface ChangeMapReadinessV2 extends Omit<ChangeMap, "schemaVersion"> {
+  readonly schemaVersion: 2;
+  readonly readiness: ChangeMapReadinessValue;
+  readonly reviewObjective: ReviewObjective;
+  readonly userContextSSOT: readonly UserContextSSOTEntry[];
+  readonly changeScope: ChangeScope;
+  readonly coveragePlan: CoveragePlan;
+  readonly expectedBehaviorLedger: readonly ExpectedBehaviorLedgerEntry[];
+  readonly missingInformation: readonly MissingInformationEntry[];
+  readonly proceedRationale: string;
+}
+
+export type ChangeMapReadiness = ChangeMap | ChangeMapReadinessV2;
+
 /**
  * Extract the set of head-side changed paths from provider-normalized changeset
  * entries. Rename / copy entries already expose the head-side path through

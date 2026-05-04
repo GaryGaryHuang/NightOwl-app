@@ -45,6 +45,80 @@ export function buildSessionResponse(
     ].join("\n");
   }
 
+  if (/## Current Step: ReviewBasis/u.test(systemMessage)) {
+    const filePath = extractDiffPath(prompt) ?? "src/app.ts";
+    return JSON.stringify({
+      schemaVersion: 1,
+      filePath,
+      roleInChangeset: "Maintains app value behavior.",
+      changedBehavior: [
+        {
+          changeId: "CB1",
+          before: "old value path",
+          after: "new value path",
+          evidenceIds: ["E1"]
+        }
+      ],
+      facts: [
+        {
+          factId: "FCT1",
+          statement: "The diff changes the reviewed file.",
+          evidenceIds: ["E1"]
+        }
+      ],
+      inferences: [
+        {
+          inferenceId: "INF1",
+          statement: "The changed branch may affect fallback behavior.",
+          basedOnEvidenceIds: ["E1"],
+          confidence: "medium"
+        }
+      ],
+      dependencyMap: {
+        upstreamCallers: [],
+        downstreamConsumers: [],
+        externalContracts: [],
+        sharedStateOrSideEffects: []
+      },
+      flowMap: {
+        entryPoints: [],
+        stateTransitions: [],
+        asyncBoundaries: [],
+        errorPaths: []
+      },
+      testCoverage: {
+        changedTests: [],
+        observedCoverageSignals: [],
+        coverageGaps: []
+      },
+      identifierRegistry: {
+        files: [filePath],
+        symbols: [],
+        resourceKeys: [],
+        apiNames: [],
+        stateNames: []
+      },
+      hypothesisLedger: [
+        {
+          hypothesisId: "H1",
+          statement: "Fallback behavior could be skipped.",
+          triggerCondition: "empty input reaches the changed branch",
+          whyRelevantHere: "The diff changes the control flow for this file.",
+          closureCriteria: ["Trace the changed branch against fallback behavior."]
+        }
+      ],
+      missingInformation: [],
+      evidenceRefs: [
+        {
+          evidenceId: "E1",
+          sourceType: "diff",
+          location: filePath,
+          summary: "Reviewed file diff."
+        }
+      ]
+    });
+  }
+
   if (/## Current Step: Knowledge & Source of Truth/u.test(systemMessage)) {
     return [
       "## Knowledge & Source of Truth",
@@ -144,11 +218,22 @@ export function extractSystemMessageContent(systemMessage: unknown): string {
   return "";
 }
 
+function extractDiffPath(prompt: string): string | undefined {
+  const match = prompt.match(/<diff path="([^"]+)"/u);
+  return match?.[1];
+}
+
 // Each predicate matches the step-identifying header embedded in the session's
 // system message; used by tests to locate specific session configs in recorded
 // arrays without coupling to session index order.
 export function isKnowledgeSourceOfTruthSystemMessage(systemMessage: unknown): boolean {
   return /## Current Step: Knowledge & Source of Truth/u.test(
+    extractSystemMessageContent(systemMessage)
+  );
+}
+
+export function isReviewBasisSystemMessage(systemMessage: unknown): boolean {
+  return /## Current Step: ReviewBasis/u.test(
     extractSystemMessageContent(systemMessage)
   );
 }

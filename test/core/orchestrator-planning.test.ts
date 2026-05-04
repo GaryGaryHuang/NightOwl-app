@@ -239,7 +239,7 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
     });
 
     assert.equal(result.plannedFileCount, 0, "zero planned files");
-    assert.equal(createSessionCalls, 0, "Step 1-7 sessions must not be created");
+    assert.equal(createSessionCalls, 0, "per-file review sessions must not be created");
     assert.equal(
       existsSync(result.outputTarget.changesetOverviewPath),
       true,

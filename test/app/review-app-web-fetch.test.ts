@@ -10,7 +10,7 @@ import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
   buildSessionResponse,
-  isKnowledgeSourceOfTruthSystemMessage
+  isReviewBasisSystemMessage
 } from "../helpers/review-app-fixture.ts";
 
 type PreToolUseHook = NonNullable<NonNullable<SessionConfig["hooks"]>["onPreToolUse"]>;
@@ -30,7 +30,7 @@ function createAllowingHostnameClassifier(): WebFetchHostnameClassifier {
  * App-level wiring smoke for the web-fetch tool policy.
  *
  * Confirms that createLocalReviewRunApp installs an onPreToolUse hook on the
- * Step 3 (Knowledge & Source of Truth) session so the configured tool policy
+ * ReviewBasis session so the configured tool policy
  * actually reaches the SDK boundary.
  *
  * Detailed URL policy behaviour (https gate, allowlist/denylist semantics,
@@ -114,13 +114,13 @@ describe("createLocalReviewRunApp web-fetch tool policy wiring", () => {
     assert.ok(result.plannedFileCount >= 2);
     assert.ok(result.successfulFileCount >= 1);
 
-    const step3Config = sessionConfigs.find(
+    const reviewBasisConfig = sessionConfigs.find(
       (config) =>
-        isKnowledgeSourceOfTruthSystemMessage(config.systemMessage) &&
+        isReviewBasisSystemMessage(config.systemMessage) &&
         config.hooks?.onPreToolUse
     );
-    const hook = step3Config?.hooks?.onPreToolUse;
-    assert.ok(hook, "Step 3 session must have an onPreToolUse hook installed by the composition root");
+    const hook = reviewBasisConfig?.hooks?.onPreToolUse;
+    assert.ok(hook, "ReviewBasis session must have an onPreToolUse hook installed by the composition root");
     preToolUse = hook;
   });
 
@@ -128,7 +128,7 @@ describe("createLocalReviewRunApp web-fetch tool policy wiring", () => {
     fixture.cleanup();
   });
 
-  test("Step 3 session has the tool-policy guard wired in (composition smoke)", async () => {
+  test("ReviewBasis session has the tool-policy guard wired in (composition smoke)", async () => {
     // A single representative deny case proves the hook is a real policy
     // hook and not a no-op placeholder. The exhaustive URL policy matrix
     // lives in test/services/tool-policy-web-fetch-policy.test.ts.

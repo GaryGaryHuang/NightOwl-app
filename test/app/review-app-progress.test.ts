@@ -94,7 +94,7 @@ describe("createLocalReviewRunApp progress wiring", () => {
         async run({ step, context }) {
           if (
             context.filePath === "packages/app/index.ts" &&
-            step.stepId === "step2-dependencies-boundaries"
+            step.stepId === "review-basis"
           ) {
             throw new Error("deterministic validation failed");
           }

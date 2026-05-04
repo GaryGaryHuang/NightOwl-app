@@ -171,10 +171,10 @@ async function assertRunInterrupted(
   });
 }
 
-function recordStep1Calls(step1Calls: string[]): StepRunnerDouble {
+function recordReviewBasisCalls(reviewBasisCalls: string[]): StepRunnerDouble {
   return createStepRunnerDouble(({ step, context }) => {
-    if (step.stepId === "step1-overview") {
-      step1Calls.push(context.filePath);
+    if (step.stepId === "review-basis") {
+      reviewBasisCalls.push(context.filePath);
     }
   });
 }
@@ -198,9 +198,9 @@ function assertNoRunLevelArtifactsPublished(sink: TrackingOutputSink): void {
 test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already aborted before dispatch", async () => {
   const controller = new AbortController();
   controller.abort();
-  const step1Calls: string[] = [];
+  const reviewBasisCalls: string[] = [];
   const orchestrator = createBaseOrchestrator({
-    stepRunner: recordStep1Calls(step1Calls)
+    stepRunner: recordReviewBasisCalls(reviewBasisCalls)
   });
 
   await assertRunInterrupted(
@@ -208,12 +208,12 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already
     undefined,
     "pre-aborted signal should interrupt the run"
   );
-  assert.deepEqual(step1Calls, []);
+  assert.deepEqual(reviewBasisCalls, []);
 });
 
 test("ReviewOrchestrator maps an aborted Step 0 review turn to ReviewRunInterruptedError", async () => {
   const controller = new AbortController();
-  const step1Calls: string[] = [];
+  const reviewBasisCalls: string[] = [];
   const orchestrator = createBaseOrchestrator({
     changesetOverviewRunner: {
       async run() {
@@ -221,20 +221,20 @@ test("ReviewOrchestrator maps an aborted Step 0 review turn to ReviewRunInterrup
         throw new SessionTurnAbortedError();
       }
     },
-    stepRunner: recordStep1Calls(step1Calls)
+    stepRunner: recordReviewBasisCalls(reviewBasisCalls)
   });
 
   await assertRunInterrupted(
     () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
     "SIGINT"
   );
-  assert.deepEqual(step1Calls, []);
+  assert.deepEqual(reviewBasisCalls, []);
 });
 
 test("ReviewOrchestrator stops before per-file dispatch when signal aborts during post-Step0 planning", async () => {
   const controller = new AbortController();
   const sink = createTrackingOutputSink();
-  const step1Calls: string[] = [];
+  const reviewBasisCalls: string[] = [];
   const orchestrator = createBaseOrchestrator({
     outputSink: defineOutputSinkDouble({
       ...sink,
@@ -244,21 +244,21 @@ test("ReviewOrchestrator stops before per-file dispatch when signal aborts durin
         return publisher;
       }
     }),
-    stepRunner: recordStep1Calls(step1Calls)
+    stepRunner: recordReviewBasisCalls(reviewBasisCalls)
   });
 
   await assertRunInterrupted(
     () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
     "SIGINT"
   );
-  assert.deepEqual(step1Calls, []);
+  assert.deepEqual(reviewBasisCalls, []);
   assertNoRunLevelArtifactsPublished(sink);
 });
 
-test("ReviewOrchestrator stops before Step 1 when signal aborts during bootstrap snapshot publication", async () => {
+test("ReviewOrchestrator stops before ReviewBasis when signal aborts during bootstrap snapshot publication", async () => {
   const controller = new AbortController();
   const sink = createTrackingOutputSink();
-  const step1Calls: string[] = [];
+  const reviewBasisCalls: string[] = [];
   let bootstrapAbortFired = false;
   const orchestrator = createBaseOrchestrator({
     outputSink: defineOutputSinkDouble({
@@ -271,28 +271,28 @@ test("ReviewOrchestrator stops before Step 1 when signal aborts during bootstrap
         }
       }
     }),
-    stepRunner: recordStep1Calls(step1Calls)
+    stepRunner: recordReviewBasisCalls(reviewBasisCalls)
   });
 
   await assertRunInterrupted(
     () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
     "SIGINT"
   );
-  assert.deepEqual(step1Calls, []);
+  assert.deepEqual(reviewBasisCalls, []);
   assertNoRunLevelArtifactsPublished(sink);
 });
 
 test("ReviewOrchestrator stops new file dispatch when signal aborts during fan-out", async () => {
   const threeFiles = ["src/app.ts", "packages/app/index.ts", "extra/helper.ts"];
   const controller = new AbortController();
-  const step1Calls: string[] = [];
+  const reviewBasisCalls: string[] = [];
   let abortFired = false;
   const orchestrator = createBaseOrchestrator({
     sourceProvider: createMockSourceProvider(threeFiles),
     maxConcurrentFiles: 2,
     stepRunner: createStepRunnerDouble(({ step, context }) => {
-      if (step.stepId === "step1-overview") {
-        step1Calls.push(context.filePath);
+      if (step.stepId === "review-basis") {
+        reviewBasisCalls.push(context.filePath);
 
         if (!abortFired) {
           abortFired = true;
@@ -307,9 +307,9 @@ test("ReviewOrchestrator stops new file dispatch when signal aborts during fan-o
     undefined
   );
   assert.equal(
-    step1Calls.includes("extra/helper.ts"),
+    reviewBasisCalls.includes("extra/helper.ts"),
     false,
-    "third file should not enter Step 1 after abort"
+    "third file should not enter ReviewBasis after abort"
   );
 });
 
@@ -319,7 +319,7 @@ test("ReviewOrchestrator worker stops at the next safe boundary and does not sta
   const orchestrator = createBaseOrchestrator({
     stepRunner: createStepRunnerDouble(({ step }) => {
       stepsExecuted.push(step.stepId);
-      if (step.stepId === "step1-overview") {
+      if (step.stepId === "review-basis") {
         controller.abort();
       }
     })
@@ -329,8 +329,8 @@ test("ReviewOrchestrator worker stops at the next safe boundary and does not sta
     () => orchestrator.run(TEST_REQUEST, { signal: controller.signal }),
     undefined
   );
-  assert.equal(stepsExecuted.includes("step1-overview"), true);
-  assert.equal(stepsExecuted.includes("step2-dependencies-boundaries"), false);
+  assert.equal(stepsExecuted.includes("review-basis"), true);
+  assert.equal(stepsExecuted.includes("step5-validation-interrogation"), false);
 });
 
 test("ReviewOrchestrator does not publish a new per-file snapshot after abort signal", async () => {
@@ -349,7 +349,7 @@ test("ReviewOrchestrator does not publish a new per-file snapshot after abort si
       }
     }),
     stepRunner: createStepRunnerDouble(({ step }) => {
-      if (step.stepId === "step1-overview" && !abortFired) {
+      if (step.stepId === "review-basis" && !abortFired) {
         abortFired = true;
         controller.abort();
       }
@@ -369,7 +369,7 @@ test("ReviewOrchestrator does not publish run-level artifacts after external abo
   const orchestrator = createBaseOrchestrator({
     outputSink: sink,
     stepRunner: createStepRunnerDouble(({ step }) => {
-      if (step.stepId === "step1-overview") {
+      if (step.stepId === "review-basis") {
         controller.abort();
       }
     })
@@ -429,7 +429,7 @@ test("ReviewOrchestrator maps recognized abort reasons onto interrupted run erro
     const controller = new AbortController();
     const orchestrator = createBaseOrchestrator({
       stepRunner: createStepRunnerDouble(({ step }) => {
-        if (step.stepId === "step1-overview") {
+        if (step.stepId === "review-basis") {
           testCase.abort(controller);
         }
       })

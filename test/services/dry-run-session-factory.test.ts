@@ -94,8 +94,11 @@ describe("Dry-run stub catalog completeness", () => {
       schemaVersion: number;
       overviewMarkdown: string;
       changedFiles: { path: string; status: string }[];
+      changeScope: { totalChangedPaths: number; deletedPaths: number };
     };
-    assert.equal(parsed.schemaVersion, 1);
+    assert.equal(parsed.schemaVersion, 2);
+    assert.equal(parsed.changeScope.totalChangedPaths, 4);
+    assert.equal(parsed.changeScope.deletedPaths, 1);
     assert.deepEqual(
       parsed.changedFiles.map(({ path, status }) => ({ path, status })),
       [

@@ -1,5 +1,12 @@
 import type { FileReviewContext, Finding } from "./file-review-context.ts";
 import { buildFindingAnchorValidationContext } from "./finding-anchor-context.ts";
+import type {
+  PriorValidatorFeedback,
+  ReviewBasisEvidenceRef,
+  ReviewBasisHypothesis,
+  ReviewBasisIdentifierRegistry,
+  ReviewBasisV1
+} from "./review-basis.ts";
 import {
   DEPENDENCIES_BOUNDARIES_SECTION_KEY,
   KNOWLEDGE_SOURCE_OF_TRUTH_SECTION_KEY,
@@ -9,7 +16,11 @@ import {
 
 export type FindingsBlockKind = "candidate-findings" | "verified-findings";
 
-export type ReviewStateBlock = "sections" | FindingsBlockKind;
+export type ReviewStateBlock =
+  | "sections"
+  | "review-basis"
+  | "validation-feedback"
+  | FindingsBlockKind;
 
 export interface ReviewStateSerializeInput {
   context: Pick<
@@ -18,6 +29,8 @@ export interface ReviewStateSerializeInput {
     | "diffContent"
     | "filePath"
     | "getFindings"
+    | "getPriorValidatorFeedback"
+    | "getReviewBasis"
     | "getSection"
     | "headRef"
   >;
@@ -49,7 +62,11 @@ export interface ReviewStateSnapshot {
   sections: ReviewStateSnapshotSections;
   candidateFindings: Finding[];
   verifiedFindings: Finding[];
-  evidenceRefs: [];
+  reviewBasis: ReviewBasisV1 | null;
+  evidenceRefs: ReviewBasisEvidenceRef[];
+  identifierRegistry: ReviewBasisIdentifierRegistry;
+  hypothesisLedger: ReviewBasisHypothesis[];
+  validationFeedback: PriorValidatorFeedback | null;
 }
 
 /**
@@ -74,6 +91,8 @@ export class ReviewStatePromptSerializer {
       input.context.diffContent
     );
     const findings = input.context.getFindings() ?? [];
+    const reviewBasis = input.context.getReviewBasis?.();
+    const includeReviewBasis = input.include.includes("review-basis");
 
     return {
       schemaVersion: 1,
@@ -97,7 +116,19 @@ export class ReviewStatePromptSerializer {
       verifiedFindings: input.include.includes("verified-findings")
         ? findings
         : [],
-      evidenceRefs: []
+      reviewBasis: includeReviewBasis ? reviewBasis ?? null : null,
+      evidenceRefs: includeReviewBasis && reviewBasis
+        ? [...reviewBasis.evidenceRefs]
+        : [],
+      identifierRegistry: includeReviewBasis && reviewBasis
+        ? reviewBasis.identifierRegistry
+        : emptyIdentifierRegistry(),
+      hypothesisLedger: includeReviewBasis && reviewBasis
+        ? [...reviewBasis.hypothesisLedger]
+        : [],
+      validationFeedback: input.include.includes("validation-feedback")
+        ? input.context.getPriorValidatorFeedback?.() ?? null
+        : null
     };
   }
 
@@ -113,6 +144,16 @@ export class ReviewStatePromptSerializer {
     };
   }
 
+}
+
+function emptyIdentifierRegistry(): ReviewBasisIdentifierRegistry {
+  return {
+    files: [],
+    symbols: [],
+    resourceKeys: [],
+    apiNames: [],
+    stateNames: []
+  };
 }
 
 function emptySections(): ReviewStateSnapshotSections {

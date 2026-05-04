@@ -114,7 +114,7 @@ test("ReviewOrchestrator aborts when a successful snapshot write is classified a
 
           if (
             noteFilePath === failedNotePath &&
-            /^# .*[\s\S]*^## Overview/mu.test(fileResult.content) &&
+            /^# .*[\s\S]*^## Findings/mu.test(fileResult.content) &&
             !/> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
             throw new Error("disk full");
@@ -213,7 +213,7 @@ test("ReviewOrchestrator waits for successful snapshot assessment before writing
 
           if (
             noteFilePath === failedNotePath &&
-            /^# .*[\s\S]*^## Overview/mu.test(fileResult.content)
+            /^# .*[\s\S]*^## Findings/mu.test(fileResult.content)
           ) {
             throw new Error("note write failed");
           }
@@ -314,7 +314,7 @@ test("ReviewOrchestrator reuses interrupted snapshot fatal handling when a singl
 
           if (
             noteFilePath === failedNotePath &&
-            /^# .*[\s\S]*^## Overview/mu.test(fileResult.content) &&
+            /^# .*[\s\S]*^## Findings/mu.test(fileResult.content) &&
             !/> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
             throw new Error("note write failed");
@@ -406,7 +406,7 @@ test("ReviewOrchestrator reuses skipped-record fatal handling when a single-file
 
           if (
             noteFilePath === failedNotePath &&
-            /^# .*[\s\S]*^## Overview/mu.test(fileResult.content) &&
+            /^# .*[\s\S]*^## Findings/mu.test(fileResult.content) &&
             !/> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
             throw new Error("note write failed");
@@ -499,7 +499,7 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
 
           if (
             noteFilePath === failedNotePath &&
-            /^# .*[\s\S]*^## Overview/mu.test(fileResult.content) &&
+            /^# .*[\s\S]*^## Findings/mu.test(fileResult.content) &&
             !/> \[!WARNING\] Review Interrupted/u.test(fileResult.content)
           ) {
             throw new Error("note write failed");
@@ -525,17 +525,14 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     assert.equal(result.skippedFileCount, 1);
     assert.match(writtenNotes.get(firstNotePath) ?? "", /^# [\s\S]*^## Summary/mu);
     assert.match(writtenNotes.get(failedNotePath) ?? "", /> \[!WARNING\] Review Interrupted/u);
-    assert.match(writtenNotes.get(failedNotePath) ?? "", /^# [\s\S]*^## Overview/mu);
+    assert.match(writtenNotes.get(failedNotePath) ?? "", /^# [\s\S]*^## Findings/mu);
     assert.match(writtenNotes.get(laterNotePath) ?? "", /^# [\s\S]*^## Summary/mu);
-    assert.deepEqual(stepEvents.slice(0, 8), [
-      ["step1-overview", reviewableFiles[0]],
-      ["step2-dependencies-boundaries", reviewableFiles[0]],
-      ["step3-knowledge-source-of-truth", reviewableFiles[0]],
-      ["step4-strategy-what-if-scenarios", reviewableFiles[0]],
+    assert.deepEqual(stepEvents.slice(0, 5), [
+      ["review-basis", reviewableFiles[0]],
       ["step5-validation-interrogation", reviewableFiles[0]],
       ["step6-cognitive-simulation", reviewableFiles[0]],
       ["step7-summary", reviewableFiles[0]],
-      ["step1-overview", failedFile]
+      ["review-basis", failedFile]
     ]);
     assert.ok(stepEvents.some(([, filePath]) => filePath === laterFile));
     assert.deepEqual(

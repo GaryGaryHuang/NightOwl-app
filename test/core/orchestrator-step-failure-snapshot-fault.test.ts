@@ -45,10 +45,7 @@ function createStepFailureRunner(input: {
   stepEvents: StepEvent[];
   failedFile: string;
   failedStepId:
-    | "step1-overview"
-    | "step2-dependencies-boundaries"
-    | "step3-knowledge-source-of-truth"
-    | "step4-strategy-what-if-scenarios"
+    | "review-basis"
     | "step5-validation-interrogation"
     | "step6-cognitive-simulation"
     | "step7-summary";
@@ -107,7 +104,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
         async run({ context, step }: RunStepInput): Promise<StepResult> {
           stepEvents.push([step.stepId, context.filePath]);
 
-          if (step.stepId !== "step1-overview") {
+          if (step.stepId !== "review-basis") {
             throw new Error(`should not reach ${step.stepId}`);
           }
 
@@ -130,7 +127,7 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
       /apply failed/u
     );
 
-    assert.deepEqual(stepEvents, [["step1-overview", reviewableFiles[0]]]);
+    assert.deepEqual(stepEvents, [["review-basis", reviewableFiles[0]]]);
     assert.equal(
       outputCalls.some(([callType]) => callType === "publishSkippedFile"),
       false
@@ -191,7 +188,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       stepRunner: createStepFailureRunner({
         stepEvents,
         failedFile,
-        failedStepId: "step5-validation-interrogation",
+        failedStepId: "step6-cognitive-simulation",
         failureCause: "deterministic validation failed"
       }),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
@@ -215,7 +212,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     );
     assert.match(
       writtenNotes.get(failedNotePath) ?? "",
-      /^# [\s\S]*^## Strategy & What-if Scenarios/mu
+      /^# [\s\S]*^## Findings/mu
     );
     assert.doesNotMatch(
       writtenNotes.get(failedNotePath) ?? "",

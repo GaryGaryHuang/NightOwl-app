@@ -2,8 +2,13 @@ import {
   CHANGE_MAP_BASES,
   CHANGE_MAP_CATEGORIES,
   CHANGE_MAP_EVIDENCE_SOURCE_KINDS,
+  CHANGE_MAP_READINESS_VALUES,
   CHANGE_MAP_RELATIONSHIPS,
   CHANGE_MAP_STATUSES,
+  EXPECTED_BEHAVIOR_CONFIDENCES,
+  EXPECTED_BEHAVIOR_SOURCE_TYPES,
+  MISSING_INFORMATION_BLOCKING_LEVELS,
+  USER_CONTEXT_CATEGORIES,
   type BehaviorChangeEntry,
   type ChangedFileEntry,
   type ChangeMap,
@@ -11,11 +16,17 @@ import {
   type ChangeMapCategory,
   type ChangeMapEvidenceSourceKind,
   type ChangeMapRelationship,
+  type ChangeMapReadiness,
+  type ChangeMapReadinessV2,
   type ChangeMapStatus,
   type CrossFileBoundaryEntry,
   type EvidenceRefEntry,
+  type ExpectedBehaviorConfidence,
+  type ExpectedBehaviorSourceType,
   type FileGroupEntry,
+  type MissingInformationBlockingLevel,
   type TestCoverageObservationEntry,
+  type UserContextCategory,
   type UnresolvedUnknownEntry
 } from "./change-map.ts";
 
@@ -38,6 +49,7 @@ export class Step0OutputValidationError extends Error {
 export interface Step0OutputValidatorInput {
   readonly responseText: string;
   readonly expectedChangedPaths: readonly string[];
+  readonly expectedUserContext?: readonly string[];
 }
 
 const ALLOWED_TOP_LEVEL_KEYS = new Set([
@@ -50,6 +62,18 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
   "behaviorChanges",
   "evidenceRefs",
   "unresolvedUnknowns"
+]);
+
+const ALLOWED_TOP_LEVEL_KEYS_V2 = new Set([
+  ...ALLOWED_TOP_LEVEL_KEYS,
+  "readiness",
+  "reviewObjective",
+  "userContextSSOT",
+  "changeScope",
+  "coveragePlan",
+  "expectedBehaviorLedger",
+  "missingInformation",
+  "proceedRationale"
 ]);
 
 const ALLOWED_CHANGED_FILE_KEYS = new Set([
@@ -108,6 +132,21 @@ const ALLOWED_RELATIONSHIPS: ReadonlySet<string> = new Set(CHANGE_MAP_RELATIONSH
 const ALLOWED_EVIDENCE_SOURCE_KINDS: ReadonlySet<string> = new Set(
   CHANGE_MAP_EVIDENCE_SOURCE_KINDS
 );
+const ALLOWED_READINESS_VALUES: ReadonlySet<string> = new Set(
+  CHANGE_MAP_READINESS_VALUES
+);
+const ALLOWED_USER_CONTEXT_CATEGORIES: ReadonlySet<string> = new Set(
+  USER_CONTEXT_CATEGORIES
+);
+const ALLOWED_EXPECTED_BEHAVIOR_SOURCE_TYPES: ReadonlySet<string> = new Set(
+  EXPECTED_BEHAVIOR_SOURCE_TYPES
+);
+const ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES: ReadonlySet<string> = new Set(
+  EXPECTED_BEHAVIOR_CONFIDENCES
+);
+const ALLOWED_MISSING_INFORMATION_BLOCKING_LEVELS: ReadonlySet<string> = new Set(
+  MISSING_INFORMATION_BLOCKING_LEVELS
+);
 
 const OVERVIEW_MARKDOWN_PREFIX = "## Changeset Overview";
 
@@ -130,71 +169,118 @@ const PLACEHOLDER_TOKEN_PATTERNS: readonly RegExp[] = [
  * uniformly to blank, parse, schema, coverage, and placeholder failures.
  */
 export class Step0OutputValidator {
-  validate(input: Step0OutputValidatorInput): ChangeMap {
+  validate(input: Step0OutputValidatorInput): ChangeMapReadiness {
     const parsed = parseJson(input.responseText);
     const obj = ensurePlainObject(parsed, "top-level payload");
 
-    rejectUnknownKeys(obj, ALLOWED_TOP_LEVEL_KEYS, "top-level");
-
     const schemaVersion = obj.schemaVersion;
-    if (schemaVersion !== 1) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `schemaVersion must be the literal number 1 (received ${describe(schemaVersion)})`
-      );
+    if (schemaVersion === 1) {
+      rejectUnknownKeys(obj, ALLOWED_TOP_LEVEL_KEYS, "top-level");
+      return validateLegacyChangeMap(obj, input.expectedChangedPaths);
+    }
+    if (schemaVersion === 2) {
+      rejectUnknownKeys(obj, ALLOWED_TOP_LEVEL_KEYS_V2, "top-level");
+      return validateChangeMapReadinessV2(obj, input);
     }
 
-    const overviewMarkdown = obj.overviewMarkdown;
-    if (typeof overviewMarkdown !== "string") {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        "overviewMarkdown must be a string"
-      );
-    }
-    if (!overviewMarkdown.startsWith(OVERVIEW_MARKDOWN_PREFIX)) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `overviewMarkdown must begin with the literal prefix "${OVERVIEW_MARKDOWN_PREFIX}"`
-      );
-    }
-
-    const changedFiles = validateChangedFiles(obj.changedFiles);
-    const knownPaths = new Set(changedFiles.map((entry) => entry.path));
-    const fileGroups = validateFileGroups(obj.fileGroups, changedFiles, knownPaths);
-    const evidenceRefs = validateEvidenceRefs(obj.evidenceRefs);
-    const knownEvidenceRefIds = new Set(evidenceRefs.map((entry) => entry.id));
-    const crossFileBoundaries = validateCrossFileBoundaries(
-      obj.crossFileBoundaries,
-      knownEvidenceRefIds
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      `schemaVersion must be the literal number 1 or 2 (received ${describe(schemaVersion)})`
     );
-    const testCoverageObservations = validateTestCoverageObservations(
-      obj.testCoverageObservations,
-      knownPaths,
-      knownEvidenceRefIds
-    );
-    const behaviorChanges = validateBehaviorChanges(
-      obj.behaviorChanges,
-      knownPaths,
-      knownEvidenceRefIds
-    );
-    const unresolvedUnknowns = validateUnresolvedUnknowns(obj.unresolvedUnknowns);
-
-    enforceCoverage(changedFiles, input.expectedChangedPaths);
-
-    const changeMap: ChangeMap = {
-      schemaVersion: 1,
-      overviewMarkdown,
-      changedFiles,
-      fileGroups,
-      crossFileBoundaries,
-      testCoverageObservations,
-      behaviorChanges,
-      evidenceRefs,
-      unresolvedUnknowns
-    };
-
-    return deepFreeze(changeMap);
   }
+}
+
+function validateLegacyChangeMap(
+  obj: Record<string, unknown>,
+  expectedChangedPaths: readonly string[]
+): ChangeMap {
+  const overviewMarkdown = obj.overviewMarkdown;
+  if (typeof overviewMarkdown !== "string") {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "overviewMarkdown must be a string"
+    );
+  }
+  if (!overviewMarkdown.startsWith(OVERVIEW_MARKDOWN_PREFIX)) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      `overviewMarkdown must begin with the literal prefix "${OVERVIEW_MARKDOWN_PREFIX}"`
+    );
+  }
+
+  const changedFiles = validateChangedFiles(obj.changedFiles);
+  const knownPaths = new Set(changedFiles.map((entry) => entry.path));
+  const fileGroups = validateFileGroups(obj.fileGroups, changedFiles, knownPaths);
+  const evidenceRefs = validateEvidenceRefs(obj.evidenceRefs);
+  const knownEvidenceRefIds = new Set(evidenceRefs.map((entry) => entry.id));
+  const crossFileBoundaries = validateCrossFileBoundaries(
+    obj.crossFileBoundaries,
+    knownEvidenceRefIds
+  );
+  const testCoverageObservations = validateTestCoverageObservations(
+    obj.testCoverageObservations,
+    knownPaths,
+    knownEvidenceRefIds
+  );
+  const behaviorChanges = validateBehaviorChanges(
+    obj.behaviorChanges,
+    knownPaths,
+    knownEvidenceRefIds
+  );
+  const unresolvedUnknowns = validateUnresolvedUnknowns(obj.unresolvedUnknowns);
+
+  enforceCoverage(changedFiles, expectedChangedPaths);
+
+  const changeMap: ChangeMap = {
+    schemaVersion: 1,
+    overviewMarkdown,
+    changedFiles,
+    fileGroups,
+    crossFileBoundaries,
+    testCoverageObservations,
+    behaviorChanges,
+    evidenceRefs,
+    unresolvedUnknowns
+  };
+
+  return deepFreeze(changeMap);
+}
+
+function validateChangeMapReadinessV2(
+  obj: Record<string, unknown>,
+  input: Step0OutputValidatorInput
+): ChangeMapReadinessV2 {
+  const legacy = validateLegacyChangeMap(
+    { ...obj, schemaVersion: 1 },
+    input.expectedChangedPaths
+  );
+  const proceedRationale = requireNonEmptyString(
+    obj.proceedRationale,
+    "proceedRationale"
+  );
+  rejectPlaceholderText(proceedRationale, "proceedRationale");
+
+  return deepFreeze({
+    ...legacy,
+    schemaVersion: 2,
+    readiness: requireEnum(
+      obj.readiness,
+      ALLOWED_READINESS_VALUES,
+      "readiness"
+    ) as ChangeMapReadinessV2["readiness"],
+    reviewObjective: validateReviewObjective(obj.reviewObjective),
+    userContextSSOT: validateUserContextSSOT(
+      obj.userContextSSOT,
+      input.expectedUserContext
+    ),
+    changeScope: validateChangeScope(obj.changeScope, input.expectedChangedPaths),
+    coveragePlan: validateCoveragePlan(obj.coveragePlan),
+    expectedBehaviorLedger: validateExpectedBehaviorLedger(
+      obj.expectedBehaviorLedger
+    ),
+    missingInformation: validateMissingInformation(obj.missingInformation),
+    proceedRationale
+  });
 }
 
 function parseJson(responseText: string): unknown {
@@ -643,6 +729,231 @@ function validateUnresolvedUnknowns(
   });
 }
 
+function validateReviewObjective(value: unknown): ChangeMapReadinessV2["reviewObjective"] {
+  const obj = ensurePlainObject(value, "reviewObjective");
+  const summary = requireNonEmptyString(obj.summary, "reviewObjective.summary");
+  rejectPlaceholderText(summary, "reviewObjective.summary");
+  return {
+    summary,
+    requestedFocus: validateStringArray(
+      obj.requestedFocus,
+      "reviewObjective.requestedFocus"
+    ),
+    expectedBehaviorSummary: validateStringArray(
+      obj.expectedBehaviorSummary,
+      "reviewObjective.expectedBehaviorSummary"
+    )
+  };
+}
+
+function validateUserContextSSOT(
+  value: unknown,
+  expectedUserContext: readonly string[] | undefined
+): ChangeMapReadinessV2["userContextSSOT"] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError("SCHEMA", "userContextSSOT must be an array");
+  }
+  if (expectedUserContext && value.length !== expectedUserContext.length) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      `userContextSSOT length must match expected user context length ${expectedUserContext.length}`
+    );
+  }
+
+  const seenIds = new Set<string>();
+  return value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `userContextSSOT[${index}]`);
+    const contextId = requireNonEmptyString(
+      entry.contextId,
+      `userContextSSOT[${index}].contextId`
+    );
+    if (seenIds.has(contextId)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `userContextSSOT[${index}].contextId duplicates "${contextId}"`
+      );
+    }
+    seenIds.add(contextId);
+
+    const rawText = requireNonEmptyString(
+      entry.rawText,
+      `userContextSSOT[${index}].rawText`
+    );
+    if (expectedUserContext && rawText !== expectedUserContext[index]) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `userContextSSOT[${index}].rawText must preserve user context order`
+      );
+    }
+
+    return {
+      contextId,
+      rawText,
+      categories: validateEnumArray(
+        entry.categories,
+        ALLOWED_USER_CONTEXT_CATEGORIES,
+        `userContextSSOT[${index}].categories`
+      ) as readonly UserContextCategory[],
+      extractedFacts: validateStringArray(
+        entry.extractedFacts,
+        `userContextSSOT[${index}].extractedFacts`
+      )
+    };
+  });
+}
+
+function validateChangeScope(
+  value: unknown,
+  expectedChangedPaths: readonly string[]
+): ChangeMapReadinessV2["changeScope"] {
+  const obj = ensurePlainObject(value, "changeScope");
+  const totalChangedPaths = requireNonNegativeInteger(
+    obj.totalChangedPaths,
+    "changeScope.totalChangedPaths"
+  );
+  const reviewableNonDeletedPaths = requireNonNegativeInteger(
+    obj.reviewableNonDeletedPaths,
+    "changeScope.reviewableNonDeletedPaths"
+  );
+  const deletedPaths = requireNonNegativeInteger(
+    obj.deletedPaths,
+    "changeScope.deletedPaths"
+  );
+  const binaryOrNonReviewablePaths = requireNonNegativeInteger(
+    obj.binaryOrNonReviewablePaths,
+    "changeScope.binaryOrNonReviewablePaths"
+  );
+  if (totalChangedPaths !== expectedChangedPaths.length) {
+    throw new Step0OutputValidationError(
+      "COVERAGE",
+      `changeScope.totalChangedPaths must equal expected changed path count ${expectedChangedPaths.length}`
+    );
+  }
+  if (
+    reviewableNonDeletedPaths + deletedPaths + binaryOrNonReviewablePaths >
+    totalChangedPaths
+  ) {
+    throw new Step0OutputValidationError(
+      "COVERAGE",
+      "changeScope buckets must not exceed totalChangedPaths"
+    );
+  }
+
+  return {
+    totalChangedPaths,
+    reviewableNonDeletedPaths,
+    deletedPaths,
+    binaryOrNonReviewablePaths,
+    changedTests: validateStringArray(obj.changedTests, "changeScope.changedTests"),
+    highRiskAreas: validateStringArray(obj.highRiskAreas, "changeScope.highRiskAreas")
+  };
+}
+
+function validateCoveragePlan(value: unknown): ChangeMapReadinessV2["coveragePlan"] {
+  const obj = ensurePlainObject(value, "coveragePlan");
+  if (typeof obj.mustDistinguishDeletedAndBinaryPaths !== "boolean") {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "coveragePlan.mustDistinguishDeletedAndBinaryPaths must be a boolean"
+    );
+  }
+  return {
+    mustDistinguishDeletedAndBinaryPaths: obj.mustDistinguishDeletedAndBinaryPaths,
+    notes: validateStringArray(obj.notes, "coveragePlan.notes")
+  };
+}
+
+function validateExpectedBehaviorLedger(
+  value: unknown
+): ChangeMapReadinessV2["expectedBehaviorLedger"] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "expectedBehaviorLedger must be an array"
+    );
+  }
+  const seenIds = new Set<string>();
+  return value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `expectedBehaviorLedger[${index}]`);
+    const expectationId = requireNonEmptyString(
+      entry.expectationId,
+      `expectedBehaviorLedger[${index}].expectationId`
+    );
+    if (seenIds.has(expectationId)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `expectedBehaviorLedger[${index}].expectationId duplicates "${expectationId}"`
+      );
+    }
+    seenIds.add(expectationId);
+    const statement = requireNonEmptyString(
+      entry.statement,
+      `expectedBehaviorLedger[${index}].statement`
+    );
+    rejectPlaceholderText(statement, `expectedBehaviorLedger[${index}].statement`);
+    return {
+      expectationId,
+      statement,
+      sourceType: requireEnum(
+        entry.sourceType,
+        ALLOWED_EXPECTED_BEHAVIOR_SOURCE_TYPES,
+        `expectedBehaviorLedger[${index}].sourceType`
+      ) as ExpectedBehaviorSourceType,
+      confidence: requireEnum(
+        entry.confidence,
+        ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES,
+        `expectedBehaviorLedger[${index}].confidence`
+      ) as ExpectedBehaviorConfidence
+    };
+  });
+}
+
+function validateMissingInformation(
+  value: unknown
+): ChangeMapReadinessV2["missingInformation"] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "missingInformation must be an array"
+    );
+  }
+  const seenIds = new Set<string>();
+  return value.map((rawEntry, index) => {
+    const entry = ensurePlainObject(rawEntry, `missingInformation[${index}]`);
+    const gapId = requireNonEmptyString(
+      entry.gapId,
+      `missingInformation[${index}].gapId`
+    );
+    if (seenIds.has(gapId)) {
+      throw new Step0OutputValidationError(
+        "SCHEMA",
+        `missingInformation[${index}].gapId duplicates "${gapId}"`
+      );
+    }
+    seenIds.add(gapId);
+    const description = requireNonEmptyString(
+      entry.description,
+      `missingInformation[${index}].description`
+    );
+    const whyItMatters = requireNonEmptyString(
+      entry.whyItMatters,
+      `missingInformation[${index}].whyItMatters`
+    );
+    rejectPlaceholderText(description, `missingInformation[${index}].description`);
+    rejectPlaceholderText(whyItMatters, `missingInformation[${index}].whyItMatters`);
+    return {
+      gapId,
+      description,
+      whyItMatters,
+      blockingLevel: requireEnum(
+        entry.blockingLevel,
+        ALLOWED_MISSING_INFORMATION_BLOCKING_LEVELS,
+        `missingInformation[${index}].blockingLevel`
+      ) as MissingInformationBlockingLevel
+    };
+  });
+}
+
 function enforceCoverage(
   changedFiles: readonly ChangedFileEntry[],
   expectedChangedPaths: readonly string[]
@@ -717,6 +1028,41 @@ function requireEnum(
     );
   }
   return value;
+}
+
+function validateStringArray(value: unknown, label: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new Step0OutputValidationError("SCHEMA", `${label} must be an array`);
+  }
+  return value.map((entry, index) => {
+    const text = requireNonEmptyString(entry, `${label}[${index}]`);
+    rejectPlaceholderText(text, `${label}[${index}]`);
+    return text;
+  });
+}
+
+function validateEnumArray(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+  label: string
+): readonly string[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      `${label} must be a non-empty array`
+    );
+  }
+  return value.map((entry, index) => requireEnum(entry, allowed, `${label}[${index}]`));
+}
+
+function requireNonNegativeInteger(value: unknown, label: string): number {
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      `${label} must be a non-negative integer`
+    );
+  }
+  return value as number;
 }
 
 function rejectPlaceholderText(value: string, label: string): void {

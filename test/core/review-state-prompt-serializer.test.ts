@@ -7,6 +7,7 @@ import {
   type ReviewStateBlock,
   type ReviewStateSnapshot
 } from "../../src/core/review-state-prompt-serializer.ts";
+import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
 
 function createContext(): FileReviewContext {
   return new FileReviewContext({
@@ -180,3 +181,109 @@ test("finding JSON preserves all v2 typed fields", () => {
   assert.equal(f.dependencyPathException?.reason, "transitive dependency");
   assert.equal(f.dependencyPathException?.dependencyAnchor.symbol, "helper");
 });
+
+test("review basis serializes structured evidence refs and registries", () => {
+  const ctx = createContext();
+  ctx.setReviewBasis(createReviewBasis());
+
+  const snapshot = serializeSnapshot(ctx, ["review-basis"]);
+
+  assert.equal(snapshot.reviewBasis?.filePath, "src/app.ts");
+  assert.deepEqual(snapshot.evidenceRefs, [
+    {
+      evidenceId: "E1",
+      sourceType: "diff",
+      location: "src/app.ts:1",
+      summary: "review basis state added"
+    }
+  ]);
+  assert.deepEqual(snapshot.identifierRegistry.symbols, ["ReviewBasisV1"]);
+  assert.deepEqual(snapshot.hypothesisLedger.map((h) => h.hypothesisId), ["H1"]);
+});
+
+test("prior validator feedback is serialized only when requested", () => {
+  const ctx = createContext();
+  ctx.setPriorValidatorFeedback({
+    failedGates: ["evidence_refs_exist"],
+    requiredCorrections: ["cite E1 before resubmitting"]
+  });
+
+  assert.equal(serializeSnapshot(ctx, []).validationFeedback, null);
+  assert.deepEqual(serializeSnapshot(ctx, ["validation-feedback"]).validationFeedback, {
+    failedGates: ["evidence_refs_exist"],
+    requiredCorrections: ["cite E1 before resubmitting"]
+  });
+});
+
+function createReviewBasis(): ReviewBasisV1 {
+  return {
+    schemaVersion: 1,
+    filePath: "src/app.ts",
+    roleInChangeset: "Owns review prompt harness state handoff.",
+    changedBehavior: [
+      {
+        changeId: "CB1",
+        before: "Step 5 consumed prose sections.",
+        after: "Step 5 consumes ReviewBasis evidence graph.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    facts: [
+      {
+        factId: "FCT1",
+        statement: "ReviewBasis is emitted before Step 5.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    inferences: [
+      {
+        inferenceId: "INF1",
+        statement: "Step 5 can validate source evidence IDs.",
+        basedOnEvidenceIds: ["E1"],
+        confidence: "high"
+      }
+    ],
+    dependencyMap: {
+      upstreamCallers: ["ReviewOrchestrator"],
+      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      externalContracts: [],
+      sharedStateOrSideEffects: ["FileReviewContext"]
+    },
+    flowMap: {
+      entryPoints: ["ReviewBasisStep.prepare"],
+      stateTransitions: ["setReviewBasis"],
+      asyncBoundaries: [],
+      errorPaths: ["validator rejects missing evidence"]
+    },
+    testCoverage: {
+      changedTests: ["test/core/review-state-prompt-serializer.test.ts"],
+      observedCoverageSignals: ["serializer tests"],
+      coverageGaps: []
+    },
+    identifierRegistry: {
+      files: ["src/app.ts"],
+      symbols: ["ReviewBasisV1"],
+      resourceKeys: [],
+      apiNames: [],
+      stateNames: ["reviewBasis"]
+    },
+    hypothesisLedger: [
+      {
+        hypothesisId: "H1",
+        statement: "Evidence refs may be missing.",
+        triggerCondition: "Step 5 cites absent evidence ID.",
+        whyRelevantHere: "Phase 1 adds evidence refs.",
+        closureCriteria: ["Every cited evidence ID exists."]
+      }
+    ],
+    missingInformation: [],
+    evidenceRefs: [
+      {
+        evidenceId: "E1",
+        sourceType: "diff",
+        location: "src/app.ts:1",
+        summary: "review basis state added"
+      }
+    ]
+  };
+}

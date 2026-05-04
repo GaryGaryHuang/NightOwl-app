@@ -12,7 +12,7 @@ import {
   buildSessionResponse,
   isChangesetOverviewSystemMessage,
   isJudgeSystemMessage,
-  isKnowledgeSourceOfTruthSystemMessage
+  isReviewBasisSystemMessage
 } from "../helpers/review-app-fixture.ts";
 
 test("createLocalReviewRunApp aborts Step 0 MCP startup failure after retry without initializing output", async () => {
@@ -113,7 +113,7 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
   try {
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
     fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for Step 3 Context7 startup failure");
+    fixture.commitAll("add third changed file for ReviewBasis Context7 startup failure");
 
     const sessionConfigs: SessionConfig[] = [];
     let context7Failures = 0;
@@ -134,7 +134,7 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
 
               if (
                 config.mcpServers?.context7 &&
-                isKnowledgeSourceOfTruthSystemMessage(config.systemMessage)
+                isReviewBasisSystemMessage(config.systemMessage)
               ) {
                 context7Failures += 1;
 
@@ -210,7 +210,7 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
           config.mcpServers.context7.type === "http" &&
           (config.mcpServers.context7 as { url?: string }).url ===
             "https://mcp.context7.com/mcp" &&
-          isKnowledgeSourceOfTruthSystemMessage(config.systemMessage)
+          isReviewBasisSystemMessage(config.systemMessage)
       )
     );
     assert.ok(

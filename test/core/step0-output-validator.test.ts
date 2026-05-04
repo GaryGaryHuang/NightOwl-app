@@ -53,6 +53,100 @@ function makeValid(overrides: Record<string, unknown> = {}): string {
   });
 }
 
+function makeValidV2(overrides: Record<string, unknown> = {}): string {
+  return JSON.stringify({
+    schemaVersion: 2,
+    readiness: "READY_WITH_LIMITATIONS",
+    reviewObjective: {
+      summary: "Review prompt harness redesign",
+      requestedFocus: ["evidence chain"],
+      expectedBehaviorSummary: ["Step 5 uses structured ReviewBasis"]
+    },
+    userContextSSOT: [
+      {
+        contextId: "UC1",
+        rawText: "Root Cause: context loss before Step 5",
+        categories: ["root_cause"],
+        extractedFacts: ["context loss before Step 5"]
+      }
+    ],
+    changeScope: {
+      totalChangedPaths: 2,
+      reviewableNonDeletedPaths: 1,
+      deletedPaths: 1,
+      binaryOrNonReviewablePaths: 0,
+      changedTests: ["test/core/review-basis-validator.test.ts"],
+      highRiskAreas: ["review pipeline"]
+    },
+    coveragePlan: {
+      mustDistinguishDeletedAndBinaryPaths: true,
+      notes: ["deleted paths are not skipped planned files"]
+    },
+    expectedBehaviorLedger: [
+      {
+        expectationId: "EB1",
+        statement: "Candidate findings must cite evidence refs",
+        sourceType: "user_context",
+        confidence: "explicit"
+      }
+    ],
+    missingInformation: [
+      {
+        gapId: "MI1",
+        description: "No live KKBOX SDK callback contract",
+        whyItMatters: "severity classification would be blocked",
+        blockingLevel: "severity_only"
+      }
+    ],
+    proceedRationale: "Local repo evidence is enough to build ReviewBasis.",
+    overviewMarkdown: "## Changeset Overview\n- Phase 1 readiness",
+    changedFiles: [
+      {
+        path: "src/app.ts",
+        status: "M",
+        category: "feature",
+        group: "review-flow",
+        basis: "diff-inspected"
+      },
+      {
+        path: "src/old.ts",
+        status: "D",
+        category: "refactor",
+        group: "review-flow",
+        basis: "name-status"
+      }
+    ],
+    fileGroups: [
+      {
+        id: "G1",
+        label: "review-flow",
+        files: ["src/app.ts", "src/old.ts"],
+        observedChange: "review flow changed"
+      }
+    ],
+    crossFileBoundaries: [],
+    testCoverageObservations: [],
+    behaviorChanges: [
+      {
+        description: "Step 0 records readiness and coverage buckets",
+        files: ["src/app.ts"],
+        evidenceRefs: ["R1"]
+      }
+    ],
+    evidenceRefs: [
+      {
+        id: "R1",
+        sourceKind: "diff",
+        pathOrUrl: "src/app.ts",
+        anchor: "@@ -1 +1 @@",
+        summary: "review flow changed"
+      }
+    ],
+    unresolvedUnknowns: [],
+    ...overrides
+  });
+}
+
 const expectedSinglePath: readonly string[] = ["src/app.ts"];
 
 function expectFailure(
@@ -88,6 +182,73 @@ test("Step0OutputValidator accepts a happy minimal-core ChangeMap", () => {
   assert.equal(changeMap.evidenceRefs.length, 1);
   assert.equal(changeMap.unresolvedUnknowns.length, 0);
   assert.ok(changeMap.overviewMarkdown.startsWith("## Changeset Overview"));
+});
+
+test("Step0OutputValidator accepts ChangeMapReadinessV2 readiness and coverage contract", () => {
+  const validator = new Step0OutputValidator();
+  const changeMap = validator.validate({
+    responseText: makeValidV2(),
+    expectedChangedPaths: ["src/app.ts", "src/old.ts"],
+    expectedUserContext: ["Root Cause: context loss before Step 5"]
+  });
+
+  assert.equal(changeMap.schemaVersion, 2);
+  assert.equal(changeMap.readiness, "READY_WITH_LIMITATIONS");
+  assert.equal(changeMap.userContextSSOT[0].contextId, "UC1");
+  assert.equal(changeMap.changeScope.deletedPaths, 1);
+  assert.equal(changeMap.coveragePlan.mustDistinguishDeletedAndBinaryPaths, true);
+  assert.equal(changeMap.expectedBehaviorLedger[0].expectationId, "EB1");
+  assert.equal(changeMap.missingInformation[0].blockingLevel, "severity_only");
+});
+
+test("Step0OutputValidator rejects inconsistent ChangeMapReadinessV2 coverage buckets", () => {
+  const validator = new Step0OutputValidator();
+  expectFailure(
+    () =>
+      validator.validate({
+        responseText: makeValidV2({
+          changeScope: {
+            totalChangedPaths: 1,
+            reviewableNonDeletedPaths: 1,
+            deletedPaths: 1,
+            binaryOrNonReviewablePaths: 0,
+            changedTests: [],
+            highRiskAreas: []
+          }
+        }),
+        expectedChangedPaths: ["src/app.ts", "src/old.ts"],
+        expectedUserContext: ["Root Cause: context loss before Step 5"]
+      }),
+    "COVERAGE"
+  );
+});
+
+test("Step0OutputValidator rejects duplicate ChangeMapReadinessV2 user context IDs", () => {
+  const validator = new Step0OutputValidator();
+  expectFailure(
+    () =>
+      validator.validate({
+        responseText: makeValidV2({
+          userContextSSOT: [
+            {
+              contextId: "UC1",
+              rawText: "first",
+              categories: ["reviewer_focus"],
+              extractedFacts: ["first"]
+            },
+            {
+              contextId: "UC1",
+              rawText: "second",
+              categories: ["reviewer_focus"],
+              extractedFacts: ["second"]
+            }
+          ]
+        }),
+        expectedChangedPaths: ["src/app.ts", "src/old.ts"],
+        expectedUserContext: ["first", "second"]
+      }),
+    "SCHEMA"
+  );
 });
 
 test("Step0OutputValidator returns a deeply frozen ChangeMap", () => {
@@ -143,12 +304,12 @@ test("Step0OutputValidator rejects non-object payload with SCHEMA", () => {
   );
 });
 
-test("Step0OutputValidator rejects schemaVersion other than literal 1", () => {
+test("Step0OutputValidator rejects schemaVersion other than literal 1 or 2", () => {
   const validator = new Step0OutputValidator();
   expectFailure(
     () =>
       validator.validate({
-        responseText: makeValid({ schemaVersion: 2 }),
+        responseText: makeValid({ schemaVersion: 3 }),
         expectedChangedPaths: expectedSinglePath
       }),
     "SCHEMA"

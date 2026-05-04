@@ -1,4 +1,10 @@
 import type { ReviewSectionKey } from "./review-section-contract.ts";
+import {
+  clonePriorValidatorFeedback,
+  cloneReviewBasis,
+  type PriorValidatorFeedback,
+  type ReviewBasisV1
+} from "./review-basis.ts";
 import type { VerifierReportArtifactEntry } from "./verifier-report.ts";
 
 export interface FileReviewContextInput {
@@ -104,6 +110,8 @@ export class FileReviewContext {
   #verifierReportEntries?: VerifierReportArtifactEntry[];
   #interruption?: ReviewInterruption;
   #findingsInsertionIndex?: number;
+  #reviewBasis?: ReviewBasisV1;
+  #priorValidatorFeedback?: PriorValidatorFeedback;
 
   constructor(input: FileReviewContextInput) {
     this.filePath = input.filePath;
@@ -133,6 +141,24 @@ export class FileReviewContext {
 
   getFindingsInsertionIndex(): number | undefined {
     return this.#findingsInsertionIndex;
+  }
+
+  setReviewBasis(reviewBasis: ReviewBasisV1): void {
+    this.#reviewBasis = cloneReviewBasis(reviewBasis);
+  }
+
+  getReviewBasis(): ReviewBasisV1 | undefined {
+    return this.#reviewBasis ? cloneReviewBasis(this.#reviewBasis) : undefined;
+  }
+
+  setPriorValidatorFeedback(feedback: PriorValidatorFeedback): void {
+    this.#priorValidatorFeedback = clonePriorValidatorFeedback(feedback);
+  }
+
+  getPriorValidatorFeedback(): PriorValidatorFeedback | undefined {
+    return this.#priorValidatorFeedback
+      ? clonePriorValidatorFeedback(this.#priorValidatorFeedback)
+      : undefined;
   }
 
   getFindings(): Finding[] | undefined {

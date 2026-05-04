@@ -7,6 +7,7 @@ import {
   type Finding,
   type FindingDisposition
 } from "../../src/core/file-review-context.ts";
+import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
 import type { VerifierReportArtifactEntry } from "../../src/core/verifier-report.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
@@ -92,6 +93,37 @@ test("FileReviewContext getFindingsInsertionIndex returns undefined when setFind
 
   context.setSection("overview", "o");
   assert.equal(context.getFindingsInsertionIndex(), undefined);
+});
+
+test("FileReviewContext stores ReviewBasisV1 separately from prose sections", () => {
+  const context = createContext();
+  const basis = createReviewBasis();
+
+  context.setReviewBasis(basis);
+
+  assert.equal(context.getReviewBasis()?.filePath, "src/app.ts");
+  assert.equal(context.getReviewBasis()?.evidenceRefs[0].evidenceId, "E1");
+  assert.equal(context.getSection("overview"), undefined);
+});
+
+test("FileReviewContext returns defensive ReviewBasisV1 snapshots", () => {
+  const context = createContext();
+  const basis = createReviewBasis();
+
+  context.setReviewBasis(basis);
+  (basis as unknown as { evidenceRefs: [] }).evidenceRefs = [];
+
+  const first = context.getReviewBasis()!;
+  (first.evidenceRefs[0] as { summary: string }).summary = "MUTATED";
+  (
+    first.hypothesisLedger[0].closureCriteria as unknown as string[]
+  ).push("MUTATED");
+
+  const second = context.getReviewBasis()!;
+  assert.equal(second.evidenceRefs[0].summary, "review basis state added");
+  assert.deepEqual(second.hypothesisLedger[0].closureCriteria, [
+    "Every cited evidence ID exists."
+  ]);
 });
 
 test("FileReviewContext stores interruption state separately and returns defensive copies", () => {
@@ -332,4 +364,77 @@ function createContext(
     ...DEFAULT_CONTEXT_INPUT,
     ...overrides
   });
+}
+
+function createReviewBasis(): ReviewBasisV1 {
+  return {
+    schemaVersion: 1,
+    filePath: "src/app.ts",
+    roleInChangeset: "Owns review prompt harness state handoff.",
+    changedBehavior: [
+      {
+        changeId: "CB1",
+        before: "Step 5 consumed prose sections.",
+        after: "Step 5 consumes ReviewBasis evidence graph.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    facts: [
+      {
+        factId: "FCT1",
+        statement: "ReviewBasis is emitted before Step 5.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    inferences: [
+      {
+        inferenceId: "INF1",
+        statement: "Step 5 can validate source evidence IDs.",
+        basedOnEvidenceIds: ["E1"],
+        confidence: "high"
+      }
+    ],
+    dependencyMap: {
+      upstreamCallers: ["ReviewOrchestrator"],
+      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      externalContracts: [],
+      sharedStateOrSideEffects: ["FileReviewContext"]
+    },
+    flowMap: {
+      entryPoints: ["ReviewBasisStep.prepare"],
+      stateTransitions: ["setReviewBasis"],
+      asyncBoundaries: [],
+      errorPaths: ["validator rejects missing evidence"]
+    },
+    testCoverage: {
+      changedTests: ["test/core/file-review-context.test.ts"],
+      observedCoverageSignals: ["context tests"],
+      coverageGaps: []
+    },
+    identifierRegistry: {
+      files: ["src/app.ts"],
+      symbols: ["ReviewBasisV1"],
+      resourceKeys: [],
+      apiNames: [],
+      stateNames: ["reviewBasis"]
+    },
+    hypothesisLedger: [
+      {
+        hypothesisId: "H1",
+        statement: "Evidence refs may be missing.",
+        triggerCondition: "Step 5 cites absent evidence ID.",
+        whyRelevantHere: "Phase 1 adds evidence refs.",
+        closureCriteria: ["Every cited evidence ID exists."]
+      }
+    ],
+    missingInformation: [],
+    evidenceRefs: [
+      {
+        evidenceId: "E1",
+        sourceType: "diff",
+        location: "src/app.ts:1",
+        summary: "review basis state added"
+      }
+    ]
+  };
 }

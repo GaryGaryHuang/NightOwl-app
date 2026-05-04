@@ -14,7 +14,7 @@ import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";
  * Drives ReviewOrchestrator end-to-end with injected doubles over a
  * deterministic two-file scenario:
  *  - src/app.ts          → all steps succeed
- *  - packages/app/index.ts → skipped at step2 due to a thrown step failure
+ *  - packages/app/index.ts → skipped at ReviewBasis due to a thrown step failure
  *
  * maxConcurrentFiles is set to 1 so files are processed sequentially,
  * giving the event sequence a deterministic total order.
@@ -71,11 +71,11 @@ describe("ReviewOrchestrator progress events", () => {
       }),
       stepRunner: {
         async run({ step, context }) {
-          // Deterministic skip: packages/app/index.ts fails at step2.
+          // Deterministic skip: packages/app/index.ts fails at ReviewBasis.
           // The orchestrator does not retry at this level; it catches and skips.
           if (
             context.filePath === "packages/app/index.ts" &&
-            step.stepId === "step2-dependencies-boundaries"
+            step.stepId === "review-basis"
           ) {
             throw new Error("deterministic validation failed");
           }
@@ -110,17 +110,13 @@ describe("ReviewOrchestrator progress events", () => {
       "initialized:2:/workspace/repo/.nightowl/review/feature-branch_03131430",
       "phase:reviewing",
       "claimed:1:src/app.ts",
-      "progress:src/app.ts:step1-overview",
-      "progress:src/app.ts:step2-dependencies-boundaries",
-      "progress:src/app.ts:step3-knowledge-source-of-truth",
-      "progress:src/app.ts:step4-strategy-what-if-scenarios",
+      "progress:src/app.ts:review-basis",
       "progress:src/app.ts:step5-validation-interrogation",
       "progress:src/app.ts:step6-cognitive-simulation",
       "progress:src/app.ts:step7-summary",
       "completed:src/app.ts",
       "claimed:2:packages/app/index.ts",
-      "progress:packages/app/index.ts:step1-overview",
-      "skipped:packages/app/index.ts:step2-dependencies-boundaries:deterministic validation failed",
+      "skipped:packages/app/index.ts:review-basis:deterministic validation failed",
       "finalizing:2:1:1"
     ]);
   });

@@ -1,0 +1,187 @@
+export const REVIEW_BASIS_EVIDENCE_SOURCE_TYPES = [
+  "diff",
+  "file",
+  "test",
+  "user_context",
+  "doc",
+  "tool_result",
+  "external_reference"
+] as const;
+
+export type ReviewBasisEvidenceSourceType =
+  (typeof REVIEW_BASIS_EVIDENCE_SOURCE_TYPES)[number];
+
+export const REVIEW_BASIS_INFERENCE_CONFIDENCES = [
+  "high",
+  "medium",
+  "low"
+] as const;
+
+export type ReviewBasisInferenceConfidence =
+  (typeof REVIEW_BASIS_INFERENCE_CONFIDENCES)[number];
+
+export interface ReviewBasisChangedBehavior {
+  readonly changeId: string;
+  readonly before: string;
+  readonly after: string;
+  readonly evidenceIds: readonly string[];
+}
+
+export interface ReviewBasisFact {
+  readonly factId: string;
+  readonly statement: string;
+  readonly evidenceIds: readonly string[];
+}
+
+export interface ReviewBasisInference {
+  readonly inferenceId: string;
+  readonly statement: string;
+  readonly basedOnEvidenceIds: readonly string[];
+  readonly confidence: ReviewBasisInferenceConfidence;
+}
+
+export interface ReviewBasisDependencyMap {
+  readonly upstreamCallers: readonly string[];
+  readonly downstreamConsumers: readonly string[];
+  readonly externalContracts: readonly string[];
+  readonly sharedStateOrSideEffects: readonly string[];
+}
+
+export interface ReviewBasisFlowMap {
+  readonly entryPoints: readonly string[];
+  readonly stateTransitions: readonly string[];
+  readonly asyncBoundaries: readonly string[];
+  readonly errorPaths: readonly string[];
+}
+
+export interface ReviewBasisTestCoverage {
+  readonly changedTests: readonly string[];
+  readonly observedCoverageSignals: readonly string[];
+  readonly coverageGaps: readonly string[];
+}
+
+export interface ReviewBasisIdentifierRegistry {
+  readonly files: readonly string[];
+  readonly symbols: readonly string[];
+  readonly resourceKeys: readonly string[];
+  readonly apiNames: readonly string[];
+  readonly stateNames: readonly string[];
+}
+
+export interface ReviewBasisHypothesis {
+  readonly hypothesisId: string;
+  readonly statement: string;
+  readonly triggerCondition: string;
+  readonly whyRelevantHere: string;
+  readonly closureCriteria: readonly string[];
+}
+
+export interface ReviewBasisMissingInformation {
+  readonly gapId: string;
+  readonly description: string;
+  readonly whyItMatters: string;
+}
+
+export interface ReviewBasisEvidenceRef {
+  readonly evidenceId: string;
+  readonly sourceType: ReviewBasisEvidenceSourceType;
+  readonly location: string;
+  readonly summary: string;
+}
+
+export interface ReviewBasisV1 {
+  readonly schemaVersion: 1;
+  readonly filePath: string;
+  readonly roleInChangeset: string;
+  readonly changedBehavior: readonly ReviewBasisChangedBehavior[];
+  readonly facts: readonly ReviewBasisFact[];
+  readonly inferences: readonly ReviewBasisInference[];
+  readonly dependencyMap: ReviewBasisDependencyMap;
+  readonly flowMap: ReviewBasisFlowMap;
+  readonly testCoverage: ReviewBasisTestCoverage;
+  readonly identifierRegistry: ReviewBasisIdentifierRegistry;
+  readonly hypothesisLedger: readonly ReviewBasisHypothesis[];
+  readonly missingInformation: readonly ReviewBasisMissingInformation[];
+  readonly evidenceRefs: readonly ReviewBasisEvidenceRef[];
+}
+
+export interface PriorValidatorFeedback {
+  readonly failedGates: readonly string[];
+  readonly requiredCorrections: readonly string[];
+}
+
+export function cloneReviewBasis(input: ReviewBasisV1): ReviewBasisV1 {
+  return {
+    schemaVersion: input.schemaVersion,
+    filePath: input.filePath,
+    roleInChangeset: input.roleInChangeset,
+    changedBehavior: input.changedBehavior.map((entry) => ({
+      changeId: entry.changeId,
+      before: entry.before,
+      after: entry.after,
+      evidenceIds: [...entry.evidenceIds]
+    })),
+    facts: input.facts.map((entry) => ({
+      factId: entry.factId,
+      statement: entry.statement,
+      evidenceIds: [...entry.evidenceIds]
+    })),
+    inferences: input.inferences.map((entry) => ({
+      inferenceId: entry.inferenceId,
+      statement: entry.statement,
+      basedOnEvidenceIds: [...entry.basedOnEvidenceIds],
+      confidence: entry.confidence
+    })),
+    dependencyMap: {
+      upstreamCallers: [...input.dependencyMap.upstreamCallers],
+      downstreamConsumers: [...input.dependencyMap.downstreamConsumers],
+      externalContracts: [...input.dependencyMap.externalContracts],
+      sharedStateOrSideEffects: [...input.dependencyMap.sharedStateOrSideEffects]
+    },
+    flowMap: {
+      entryPoints: [...input.flowMap.entryPoints],
+      stateTransitions: [...input.flowMap.stateTransitions],
+      asyncBoundaries: [...input.flowMap.asyncBoundaries],
+      errorPaths: [...input.flowMap.errorPaths]
+    },
+    testCoverage: {
+      changedTests: [...input.testCoverage.changedTests],
+      observedCoverageSignals: [...input.testCoverage.observedCoverageSignals],
+      coverageGaps: [...input.testCoverage.coverageGaps]
+    },
+    identifierRegistry: {
+      files: [...input.identifierRegistry.files],
+      symbols: [...input.identifierRegistry.symbols],
+      resourceKeys: [...input.identifierRegistry.resourceKeys],
+      apiNames: [...input.identifierRegistry.apiNames],
+      stateNames: [...input.identifierRegistry.stateNames]
+    },
+    hypothesisLedger: input.hypothesisLedger.map((entry) => ({
+      hypothesisId: entry.hypothesisId,
+      statement: entry.statement,
+      triggerCondition: entry.triggerCondition,
+      whyRelevantHere: entry.whyRelevantHere,
+      closureCriteria: [...entry.closureCriteria]
+    })),
+    missingInformation: input.missingInformation.map((entry) => ({
+      gapId: entry.gapId,
+      description: entry.description,
+      whyItMatters: entry.whyItMatters
+    })),
+    evidenceRefs: input.evidenceRefs.map((entry) => ({
+      evidenceId: entry.evidenceId,
+      sourceType: entry.sourceType,
+      location: entry.location,
+      summary: entry.summary
+    }))
+  };
+}
+
+export function clonePriorValidatorFeedback(
+  input: PriorValidatorFeedback
+): PriorValidatorFeedback {
+  return {
+    failedGates: [...input.failedGates],
+    requiredCorrections: [...input.requiredCorrections]
+  };
+}

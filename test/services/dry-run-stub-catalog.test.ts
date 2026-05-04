@@ -72,18 +72,44 @@ test("buildDryRunChangesetOverviewResponse skips lines without a tab separator a
   assert.deepEqual(parsed.changedFiles.map(({ path }) => path), ["src/kept.ts"]);
 });
 
-test("buildDryRunChangesetOverviewResponse emits a zero-file ChangeMap when the prompt has no changed_files block", () => {
+test("buildDryRunChangesetOverviewResponse emits a zero-file ChangeMapReadinessV2 when the prompt has no changed_files block", () => {
   const parsed = JSON.parse(
     buildDryRunChangesetOverviewResponse("(no block at all)")
   ) as {
     schemaVersion: number;
+    changeScope: { totalChangedPaths: number };
     changedFiles: unknown[];
     fileGroups: unknown[];
   };
 
-  assert.equal(parsed.schemaVersion, 1);
+  assert.equal(parsed.schemaVersion, 2);
+  assert.equal(parsed.changeScope.totalChangedPaths, 0);
   assert.deepEqual(parsed.changedFiles, []);
   assert.deepEqual(parsed.fileGroups, []);
+});
+
+test("buildDryRunChangesetOverviewResponse preserves user context order in userContextSSOT", () => {
+  const prompt = [
+    "<changed_files>",
+    "M\tsrc/app.ts",
+    "</changed_files>",
+    "",
+    '<user_context format="json">',
+    JSON.stringify({ entries: ["first", "second"] }, null, 2),
+    "</user_context>"
+  ].join("\n");
+
+  const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
+    userContextSSOT: { contextId: string; rawText: string }[];
+  };
+
+  assert.deepEqual(
+    parsed.userContextSSOT.map(({ contextId, rawText }) => ({ contextId, rawText })),
+    [
+    { contextId: "UC1", rawText: "first" },
+    { contextId: "UC2", rawText: "second" }
+    ]
+  );
 });
 
 test("buildDryRunChangesetOverviewResponse emits a single dry-run fileGroup listing every changed path when at least one file is present", () => {

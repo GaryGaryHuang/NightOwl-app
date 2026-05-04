@@ -152,7 +152,7 @@ test("ReviewOrchestrator does not publish run-level artifacts when applyTo fails
           outputSink,
           stepRunner: {
             async run({ step }) {
-              if (step.stepId !== "step1-overview") {
+              if (step.stepId !== "review-basis") {
                 throw new Error(`should not reach ${step.stepId}`);
               }
 
@@ -441,7 +441,7 @@ function createAllSkippedRunner(
 ): Pick<StepRunner, "run"> {
   return {
     async run({ context, step }: RunStepInput): Promise<StepResult> {
-      if (skippedFiles.has(context.filePath) && step.stepId === "step1-overview") {
+      if (skippedFiles.has(context.filePath) && step.stepId === "review-basis") {
         throw new StepExecutionError({
           stepId: step.stepId,
           filePath: context.filePath,

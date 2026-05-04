@@ -69,7 +69,8 @@ export class ChangesetOverviewRunner {
 
         const changeMap = this.#validator.validate({
           responseText: response,
-          expectedChangedPaths
+          expectedChangedPaths,
+          expectedUserContext: input.userContext
         });
 
         return createRunContext({

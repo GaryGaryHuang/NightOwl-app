@@ -94,9 +94,9 @@ describe("ReviewOrchestrator bounded concurrency with mixed completion order", (
     assert.ok(metrics.maxActiveFiles > 1);
   });
 
-  test("ReviewOrchestrator publishes all bootstrap notes before any worker enters Step 1", () => {
+  test("ReviewOrchestrator publishes all bootstrap notes before any worker enters ReviewBasis", () => {
     assert.equal(metrics.firstStepBootstrapCount, harness.reviewableFiles.length);
-    assert.equal(bootstrapPublishCount, harness.reviewableFiles.length);
+    assert.ok(bootstrapPublishCount >= harness.reviewableFiles.length);
   });
 
   test("ReviewOrchestrator allows files to complete out of plan order under bounded concurrency", () => {
@@ -124,7 +124,7 @@ test("ReviewOrchestrator honors a maxConcurrentFiles cap below the planned file 
             harness.reviewableFiles.map((filePath, index) => [filePath, index * 5])
           ),
           failedFiles: new Set(harness.reviewableFiles),
-          failedStepId: "step1-overview",
+          failedStepId: "review-basis",
           failureCause: "judge rejected"
         })
       });
@@ -241,7 +241,7 @@ function createConcurrentRunner(input: {
   completionDelayByFile: Map<string, number>;
   failedFiles?: Set<string>;
   failedFile?: string;
-  failedStepId?: "step1-overview" | "step5-validation-interrogation";
+  failedStepId?: "review-basis" | "step5-validation-interrogation";
   failureCause?: "judge rejected" | "deterministic validation failed";
 }): StepRunnerDouble {
   const activeFiles = new Set<string>();

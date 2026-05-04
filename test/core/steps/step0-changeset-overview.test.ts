@@ -86,7 +86,7 @@ test("buildStep0Prompt preserves rename similarity and previous path metadata", 
   assert.match(prompt, /R100\tsrc\/old\.ts\tsrc\/new\.ts/);
 });
 
-test("buildStep0Prompt projects copy entries as added files for ChangeMap v1", () => {
+test("buildStep0Prompt projects copy entries as added files for ChangeMapReadinessV2", () => {
   const prompt = buildStep0Prompt({
     changesetEntries: createChangesetEntries({
       status: "C",
@@ -101,9 +101,15 @@ test("buildStep0Prompt projects copy entries as added files for ChangeMap v1", (
   assert.doesNotMatch(prompt, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
 });
 
-test("STEP0_SYSTEM_MESSAGE communicates the ChangeMap v1 JSON contract", () => {
+test("STEP0_SYSTEM_MESSAGE communicates the ChangeMapReadinessV2 JSON contract", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /Changeset Overview/);
   assert.match(STEP0_SYSTEM_MESSAGE, /schemaVersion/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /ChangeMapReadinessV2/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /readiness/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /userContextSSOT/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /changeScope/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /expectedBehaviorLedger/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /missingInformation/);
   assert.match(STEP0_SYSTEM_MESSAGE, /JSON-only/);
   assert.match(STEP0_SYSTEM_MESSAGE, /changedFiles/);
   assert.match(STEP0_SYSTEM_MESSAGE, /fileGroups/);
@@ -128,7 +134,7 @@ test("buildStep0Prompt instruction body includes the literal `## Changeset Overv
     "Step 0 instruction must show the exact `## Changeset Overview` header so the model can emit the required overviewMarkdown prefix"
   );
   assert.ok(
-    prompt.includes("\"schemaVersion\": 1"),
-    "Step 0 instruction must include a minimal JSON example illustrating the ChangeMap shape"
+    prompt.includes("\"schemaVersion\": 2"),
+    "Step 0 instruction must include a minimal JSON example illustrating the ChangeMapReadinessV2 shape"
   );
 });

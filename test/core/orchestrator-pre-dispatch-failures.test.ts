@@ -68,7 +68,7 @@ test("ReviewOrchestrator aborts when Step 0 fails before initializing local outp
       }),
       stepRunner: {
         async run() {
-          throw new Error("should not reach step 1");
+          throw new Error("should not reach per-file steps");
         }
       },
       changesetOverviewRunner: {
@@ -281,7 +281,7 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
   }
 });
 
-test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves earlier bootstrap notes, and stops the bootstrap loop before Step 1", async () => {
+test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves earlier bootstrap notes, and stops the bootstrap loop before ReviewBasis", async () => {
   const fixture = createReviewRepoFixture();
 
   try {

@@ -32,13 +32,10 @@ import {
   type PlannedNoteFile
 } from "./review-path-resolver.ts";
 import { ReviewStatePromptSerializer } from "./review-state-prompt-serializer.ts";
+import { ReviewBasisStep } from "./steps/review-basis-step.ts";
 import { Step5ValidationInterrogationStep } from "./steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "./steps/step6-cognitive-simulation.ts";
 import { Step7SummaryStep } from "./steps/step7-summary.ts";
-import { Step4StrategyWhatIfScenariosStep } from "./steps/step4-strategy-what-if-scenarios.ts";
-import { Step3KnowledgeSourceOfTruthStep } from "./steps/step3-knowledge-source-of-truth.ts";
-import { Step2DependenciesBoundariesStep } from "./steps/step2-dependencies-boundaries.ts";
-import { Step1OverviewStep } from "./steps/step1-overview.ts";
 import {
   type ReviewOutputPlan,
   type ReviewOutputTarget,
@@ -821,21 +818,11 @@ export class ReviewOrchestrator {
   }
 }
 
-function buildDefaultPerFileSteps(
+export function buildDefaultPerFileSteps(
   input: ReviewPerFileStepsFactoryInput
 ): StepDefinition[] {
   return [
-    new Step1OverviewStep({ runContext: input.runContext }),
-    new Step2DependenciesBoundariesStep({
-      promptSerializer: input.promptSerializer
-    }),
-    new Step3KnowledgeSourceOfTruthStep({
-      promptSerializer: input.promptSerializer
-    }),
-    new Step4StrategyWhatIfScenariosStep({
-      promptSerializer: input.promptSerializer,
-      changeMap: input.runContext.changesetOverview
-    }),
+    new ReviewBasisStep({ runContext: input.runContext }),
     new Step5ValidationInterrogationStep({
       promptSerializer: input.promptSerializer
     }),

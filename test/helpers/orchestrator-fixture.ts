@@ -2,6 +2,7 @@ import type {
   FileReviewContext,
   Finding
 } from "../../src/core/file-review-context.ts";
+import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
 import type { StepResult } from "../../src/core/step-runner.ts";
 
 export function escapeRegExp(value: string): string {
@@ -44,6 +45,79 @@ export function buildKnowledgeResponse(filePath: string): string {
   ].join("\n");
 }
 
+export function buildReviewBasis(filePath: string): ReviewBasisV1 {
+  return {
+    schemaVersion: 1,
+    filePath,
+    roleInChangeset: `${filePath} participates in the reviewed change.`,
+    changedBehavior: [
+      {
+        changeId: "CB1",
+        before: "old behavior",
+        after: "new behavior",
+        evidenceIds: ["E1"]
+      }
+    ],
+    facts: [
+      {
+        factId: "FCT1",
+        statement: `${filePath} has a changed diff hunk.`,
+        evidenceIds: ["E1"]
+      }
+    ],
+    inferences: [
+      {
+        inferenceId: "INF1",
+        statement: "The changed branch may affect fallback behavior.",
+        basedOnEvidenceIds: ["E1"],
+        confidence: "medium"
+      }
+    ],
+    dependencyMap: {
+      upstreamCallers: [],
+      downstreamConsumers: [],
+      externalContracts: [],
+      sharedStateOrSideEffects: []
+    },
+    flowMap: {
+      entryPoints: [],
+      stateTransitions: [],
+      asyncBoundaries: [],
+      errorPaths: []
+    },
+    testCoverage: {
+      changedTests: [],
+      observedCoverageSignals: [],
+      coverageGaps: []
+    },
+    identifierRegistry: {
+      files: [filePath],
+      symbols: [],
+      resourceKeys: [],
+      apiNames: [],
+      stateNames: []
+    },
+    hypothesisLedger: [
+      {
+        hypothesisId: "H1",
+        statement: "Fallback behavior could be skipped.",
+        triggerCondition: "empty input reaches the changed branch",
+        whyRelevantHere: "The diff changes the control flow for this file.",
+        closureCriteria: ["Trace the changed branch against fallback behavior."]
+      }
+    ],
+    missingInformation: [],
+    evidenceRefs: [
+      {
+        evidenceId: "E1",
+        sourceType: "diff",
+        location: filePath,
+        summary: "Reviewed file diff."
+      }
+    ]
+  };
+}
+
 export function lineRangeTraceability(lineStart: number, lineEnd: number) {
   return {
     kind: "line-range" as const,
@@ -57,6 +131,7 @@ export function lineRangeTraceability(lineStart: number, lineEnd: number) {
 export function detectStepId(
   systemMessage: string
 ):
+  | "review-basis"
   | "step1-overview"
   | "step2-dependencies-boundaries"
   | "step3-knowledge-source-of-truth"
@@ -66,6 +141,10 @@ export function detectStepId(
   | "step7-summary" {
   if (/## Current Step: Overview/u.test(systemMessage)) {
     return "step1-overview";
+  }
+
+  if (/## Current Step: ReviewBasis/u.test(systemMessage)) {
+    return "review-basis";
   }
 
   if (/## Current Step: Dependencies & Boundaries/u.test(systemMessage)) {
@@ -323,6 +402,15 @@ export function buildSuccessfulStepResult(
       stepId,
       applyTo(targetContext: FileReviewContext) {
         targetContext.setSection("overview", buildOverviewResponse(filePath));
+      }
+    };
+  }
+
+  if (stepId === "review-basis") {
+    return {
+      stepId,
+      applyTo(targetContext: FileReviewContext) {
+        targetContext.setReviewBasis(buildReviewBasis(filePath));
       }
     };
   }

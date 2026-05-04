@@ -23,6 +23,7 @@ interface DryRunChangedFileEntry {
  */
 export function buildDryRunChangesetOverviewResponse(prompt: string): string {
   const changedFileEntries = extractChangedFilesBlockEntries(prompt);
+  const userContextEntries = extractUserContextEntries(prompt);
   const changedFiles = changedFileEntries.map((entry) => ({
     path: entry.path,
     status: entry.status,
@@ -30,9 +31,37 @@ export function buildDryRunChangesetOverviewResponse(prompt: string): string {
     group: "dry-run" as const,
     basis: "name-status" as const
   }));
+  const deletedPathCount = changedFiles.filter((entry) => entry.status === "D").length;
 
   return JSON.stringify({
-    schemaVersion: 1,
+    schemaVersion: 2,
+    readiness: "READY_WITH_LIMITATIONS",
+    reviewObjective: {
+      summary: "Dry-run review context.",
+      requestedFocus: [],
+      expectedBehaviorSummary: []
+    },
+    userContextSSOT: userContextEntries.map((entry, index) => ({
+      contextId: `UC${index + 1}`,
+      rawText: entry,
+      categories: ["other"],
+      extractedFacts: []
+    })),
+    changeScope: {
+      totalChangedPaths: changedFiles.length,
+      reviewableNonDeletedPaths: changedFiles.length - deletedPathCount,
+      deletedPaths: deletedPathCount,
+      binaryOrNonReviewablePaths: 0,
+      changedTests: [],
+      highRiskAreas: []
+    },
+    coveragePlan: {
+      mustDistinguishDeletedAndBinaryPaths: true,
+      notes: ["Dry-run review treats every non-deleted changed path as reviewable."]
+    },
+    expectedBehaviorLedger: [],
+    missingInformation: [],
+    proceedRationale: "Dry-run response is deterministic and suitable for exercising the review pipeline.",
     overviewMarkdown: STUB_CHANGESET_OVERVIEW_MARKDOWN,
     changedFiles,
     fileGroups: changedFiles.length === 0
@@ -50,6 +79,80 @@ export function buildDryRunChangesetOverviewResponse(prompt: string): string {
     behaviorChanges: [],
     evidenceRefs: [],
     unresolvedUnknowns: []
+  });
+}
+
+export function buildDryRunReviewBasisResponse(prompt: string): string {
+  const filePath = extractDiffPath(prompt) ?? "dry-run.ts";
+  return JSON.stringify({
+    schemaVersion: 1,
+    filePath,
+    roleInChangeset: "Dry-run file basis.",
+    changedBehavior: [
+      {
+        changeId: "CB1",
+        before: "Before dry-run review.",
+        after: "After dry-run review.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    facts: [
+      {
+        factId: "FCT1",
+        statement: "Dry-run ReviewBasis was generated for this file.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    inferences: [
+      {
+        inferenceId: "INF1",
+        statement: "Dry-run can continue to validation with a structured basis.",
+        basedOnEvidenceIds: ["E1"],
+        confidence: "medium"
+      }
+    ],
+    dependencyMap: {
+      upstreamCallers: [],
+      downstreamConsumers: [],
+      externalContracts: [],
+      sharedStateOrSideEffects: []
+    },
+    flowMap: {
+      entryPoints: [],
+      stateTransitions: [],
+      asyncBoundaries: [],
+      errorPaths: []
+    },
+    testCoverage: {
+      changedTests: [],
+      observedCoverageSignals: [],
+      coverageGaps: []
+    },
+    identifierRegistry: {
+      files: [filePath],
+      symbols: [],
+      resourceKeys: [],
+      apiNames: [],
+      stateNames: []
+    },
+    hypothesisLedger: [
+      {
+        hypothesisId: "H1",
+        statement: "Dry-run hypothesis for exercising Step 5.",
+        triggerCondition: "Dry-run pipeline reaches validation.",
+        whyRelevantHere: "Phase 1 requires a structured ReviewBasis before Step 5.",
+        closureCriteria: ["Step 5 can consume this hypothesis without Step 4 prose."]
+      }
+    ],
+    missingInformation: [],
+    evidenceRefs: [
+      {
+        evidenceId: "E1",
+        sourceType: "diff",
+        location: filePath,
+        summary: "Dry-run diff evidence."
+      }
+    ]
   });
 }
 
@@ -73,6 +176,28 @@ function extractChangedFilesBlockEntries(prompt: string): DryRunChangedFileEntry
     }
   }
   return entries;
+}
+
+function extractUserContextEntries(prompt: string): string[] {
+  const match = prompt.match(
+    /<user_context format="json">\n([\s\S]*?)\n<\/user_context>/u
+  );
+  if (!match) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(match[1]) as { entries?: unknown };
+    return Array.isArray(parsed.entries)
+      ? parsed.entries.filter((entry): entry is string => typeof entry === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function extractDiffPath(prompt: string): string | undefined {
+  const match = prompt.match(/<diff path="([^"]+)"/u);
+  return match?.[1];
 }
 
 function normalizeDryRunStatus(statusField: string): DryRunChangeMapStatus {
@@ -102,6 +227,10 @@ const STUB_KNOWLEDGE_SOURCE_OF_TRUTH = "## Knowledge & Source of Truth";
 
 const STUB_STRATEGY_WHAT_IF = "## Strategy & What-if Scenarios";
 
+const STUB_REVIEW_BASIS = buildDryRunReviewBasisResponse(
+  '<diff path="dry-run.ts" base="main" head="HEAD">\n</diff>'
+);
+
 const STUB_VALIDATION_INTERROGATION = '{"schemaVersion": 2, "findings": []}';
 
 const STUB_COGNITIVE_SIMULATION = '{"schemaVersion": 2, "findingUpdates": [], "dispositions": []}';
@@ -118,6 +247,7 @@ const DRY_RUN_STUB_RESPONSES = {
   "step2-dependencies-boundaries": STUB_DEPENDENCIES_BOUNDARIES,
   "step3-knowledge-source-of-truth": STUB_KNOWLEDGE_SOURCE_OF_TRUTH,
   "step4-strategy-what-if-scenarios": STUB_STRATEGY_WHAT_IF,
+  "review-basis": STUB_REVIEW_BASIS,
   "step5-validation-interrogation": STUB_VALIDATION_INTERROGATION,
   "step6-cognitive-simulation": STUB_COGNITIVE_SIMULATION,
   "step7-summary": STUB_SUMMARY
@@ -140,6 +270,9 @@ export function getDryRunResponseProvider(
 ): DryRunResponseProvider {
   if (stepId === "changeset-overview") {
     return buildDryRunChangesetOverviewResponse;
+  }
+  if (stepId === "review-basis") {
+    return buildDryRunReviewBasisResponse;
   }
 
   const response =

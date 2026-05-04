@@ -37,7 +37,7 @@ import { buildSessionResponse } from "../helpers/review-app-fixture.ts";
 
 function createSignalTestApp(options: {
   stopCalls: string[];
-  onStep1?: () => void;
+  onReviewBasis?: () => void;
 }) {
   const TEST_FILES = ["src/app.ts", "packages/app/index.ts"];
 
@@ -95,8 +95,8 @@ function createSignalTestApp(options: {
     },
     stepRunner: {
       async run({ step }: { step: { stepId: string } }) {
-        if (step.stepId === "step1-overview") {
-          options.onStep1?.();
+        if (step.stepId === "review-basis") {
+          options.onReviewBasis?.();
         }
         return {
           stepId: step.stepId,
@@ -121,7 +121,7 @@ test("createLocalReviewRunApp surfaces a process signal during a run as ReviewRu
 
   const app = createSignalTestApp({
     stopCalls,
-    onStep1() {
+    onReviewBasis() {
       if (!sigintFired) {
         sigintFired = true;
         process.emit("SIGINT", "SIGINT");

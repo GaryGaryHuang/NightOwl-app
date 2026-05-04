@@ -20,6 +20,7 @@
     "test/core/nightowl-namespace.test.ts",
     "test/core/orchestrator-abort.test.ts",
     "test/core/review-access-guard.test.ts",
+    "test/core/review-basis-validator.test.ts",
     "test/core/review-path-resolver.test.ts",
     "test/core/review-state-prompt-serializer.test.ts",
     "test/core/risk-level.test.ts",

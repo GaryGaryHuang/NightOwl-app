@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { ChangeMap } from "../../../src/core/change-map.ts";
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
+import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
 import {
   ReviewStatePromptSerializer,
   type ReviewStateSnapshot
@@ -15,6 +16,8 @@ import { Step4StrategyWhatIfScenariosStep } from "../../../src/core/steps/step4-
 import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
 import { Step7SummaryStep } from "../../../src/core/steps/step7-summary.ts";
+import { ReviewBasisStep } from "../../../src/core/steps/review-basis-step.ts";
+import { buildDefaultPerFileSteps } from "../../../src/core/orchestrator.ts";
 
 const serializer = new ReviewStatePromptSerializer();
 
@@ -40,6 +43,7 @@ function createContext(): FileReviewContext {
     "strategy-what-if-scenarios",
     "## Strategy & What-if Scenarios\n- What-if 假設情境：\n  - W1: value changes"
   );
+  context.setReviewBasis(createReviewBasis());
 
   return context;
 }
@@ -90,6 +94,79 @@ function createChangeMap(
   };
 }
 
+function createReviewBasis(): ReviewBasisV1 {
+  return {
+    schemaVersion: 1,
+    filePath: "src/app.ts",
+    roleInChangeset: "Owns review prompt harness state handoff.",
+    changedBehavior: [
+      {
+        changeId: "CB1",
+        before: "Step 5 consumed prose sections.",
+        after: "Step 5 consumes ReviewBasis evidence graph.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    facts: [
+      {
+        factId: "FCT1",
+        statement: "ReviewBasis is emitted before Step 5.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    inferences: [
+      {
+        inferenceId: "INF1",
+        statement: "Step 5 can validate source evidence IDs.",
+        basedOnEvidenceIds: ["E1"],
+        confidence: "high"
+      }
+    ],
+    dependencyMap: {
+      upstreamCallers: ["ReviewOrchestrator"],
+      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      externalContracts: [],
+      sharedStateOrSideEffects: ["FileReviewContext"]
+    },
+    flowMap: {
+      entryPoints: ["ReviewBasisStep.prepare"],
+      stateTransitions: ["setReviewBasis"],
+      asyncBoundaries: [],
+      errorPaths: ["validator rejects missing evidence"]
+    },
+    testCoverage: {
+      changedTests: ["test/core/steps/review-state-snapshot-prompt-contracts.test.ts"],
+      observedCoverageSignals: ["prompt snapshot tests"],
+      coverageGaps: []
+    },
+    identifierRegistry: {
+      files: ["src/app.ts"],
+      symbols: ["ReviewBasisV1"],
+      resourceKeys: [],
+      apiNames: [],
+      stateNames: ["reviewBasis"]
+    },
+    hypothesisLedger: [
+      {
+        hypothesisId: "H1",
+        statement: "Evidence refs may be missing.",
+        triggerCondition: "Step 5 cites absent evidence ID.",
+        whyRelevantHere: "Phase 1 adds evidence refs.",
+        closureCriteria: ["Every cited evidence ID exists."]
+      }
+    ],
+    missingInformation: [],
+    evidenceRefs: [
+      {
+        evidenceId: "E1",
+        sourceType: "diff",
+        location: "src/app.ts:1",
+        summary: "review basis state added"
+      }
+    ]
+  };
+}
+
 function parseReviewStateFromPrompt(prompt: string): ReviewStateSnapshot {
   const match = prompt.match(
     /<review_state format="json">\n([\s\S]*?)\n<\/review_state>/u
@@ -98,7 +175,13 @@ function parseReviewStateFromPrompt(prompt: string): ReviewStateSnapshot {
   return JSON.parse(match[1]);
 }
 
-function assertBaseSnapshot(snapshot: ReviewStateSnapshot): void {
+function assertBaseSnapshot(
+  snapshot: ReviewStateSnapshot,
+  options: { expectSections?: boolean; expectEvidenceRefs?: boolean } = {
+    expectSections: true,
+    expectEvidenceRefs: false
+  }
+): void {
   assert.equal(snapshot.schemaVersion, 1);
   assert.equal(snapshot.filePath, "src/app.ts");
   assert.equal(snapshot.baseRef, "main");
@@ -111,8 +194,21 @@ function assertBaseSnapshot(snapshot: ReviewStateSnapshot): void {
       changedHeadLines: [1]
     }
   ]);
-  assert.match(snapshot.sections.overview ?? "", /^## Overview/u);
-  assert.deepEqual(snapshot.evidenceRefs, []);
+  if (options.expectSections !== false) {
+    assert.match(snapshot.sections.overview ?? "", /^## Overview/u);
+  } else {
+    assert.deepEqual(snapshot.sections, {
+      overview: null,
+      boundaryMap: null,
+      sourcePack: null,
+      hypothesisPack: null
+    });
+  }
+  if (options.expectEvidenceRefs) {
+    assert.equal(snapshot.evidenceRefs[0]?.evidenceId, "E1");
+  } else {
+    assert.deepEqual(snapshot.evidenceRefs, []);
+  }
 }
 
 function assertDiffBlock(prompt: string): void {
@@ -144,6 +240,51 @@ test("Step1OverviewStep prompt carries changeset context, file diff, and profile
   assert.match(plan.prompt.userMessage, /Auth flow spans src\/app\.ts/u);
   assertDiffBlock(plan.prompt.userMessage);
   assert.match(plan.prompt.userMessage, /測試覆蓋觀察/u);
+});
+
+test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structured output contract", () => {
+  const context = createContext();
+  const runContext = createRunContext({
+    changesetOverview: createChangeMap(
+      "## Changeset Overview\n- Auth flow spans src/app.ts and package entrypoints."
+    ),
+    userContext: ["Root Cause: Step 5 context loss"]
+  });
+
+  const plan = new ReviewBasisStep({ runContext }).prepare(context);
+
+  assert.equal(plan.stepId, "review-basis");
+  assert.equal(plan.reviewProfile.knowledgeMode, "built-in-context7");
+  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
+  assert.match(plan.prompt.systemMessage, /ReviewBasisV1/u);
+  assert.match(plan.prompt.userMessage, /<change_map format="json">/u);
+  assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts"/u);
+  assert.match(plan.prompt.userMessage, /identifierRegistry/u);
+  assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
+  assert.match(plan.prompt.userMessage, /Do not produce findings/u);
+});
+
+test("default per-file pipeline starts with ReviewBasis and omits legacy Step 1-4", () => {
+  const steps = buildDefaultPerFileSteps({
+    runContext: createRunContext({
+      changesetOverview: createChangeMap(),
+      userContext: []
+    }),
+    renderReviewNote() {
+      return "";
+    },
+    promptSerializer: serializer
+  });
+
+  assert.deepEqual(
+    steps.map((step) => step.stepId),
+    [
+      "review-basis",
+      "step5-validation-interrogation",
+      "step6-cognitive-simulation",
+      "step7-summary"
+    ]
+  );
 });
 
 test("Step2DependenciesBoundariesStep prompt carries Step 1 overview and boundary contract instructions", () => {
@@ -231,9 +372,12 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
     ]
   );
 
-  for (const snapshot of snapshots) {
-    assertBaseSnapshot(snapshot);
-  }
+  snapshots.forEach((snapshot, index) => {
+    assertBaseSnapshot(snapshot, {
+      expectSections: index !== 3,
+      expectEvidenceRefs: index === 3
+    });
+  });
 
   assert.equal(snapshots[4].candidateFindings[0].findingId, "F1");
   assert.deepEqual(snapshots[4].verifiedFindings, []);
