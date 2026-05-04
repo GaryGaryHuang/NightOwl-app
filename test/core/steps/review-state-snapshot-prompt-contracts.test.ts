@@ -14,13 +14,6 @@ import type {
   CandidateFindingsV3,
   ValidationReportV1
 } from "../../../src/core/semantic-review.ts";
-import { Step1OverviewStep } from "../../../src/core/steps/step1-overview.ts";
-import { Step2DependenciesBoundariesStep } from "../../../src/core/steps/step2-dependencies-boundaries.ts";
-import { Step3KnowledgeSourceOfTruthStep } from "../../../src/core/steps/step3-knowledge-source-of-truth.ts";
-import {
-  Step4StrategyWhatIfScenariosStep,
-  type Step4FileCategoryMap
-} from "../../../src/core/steps/step4-strategy-what-if-scenarios.ts";
 import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
 import { Step7SummaryStep } from "../../../src/core/steps/step7-summary.ts";
@@ -38,19 +31,6 @@ function createContext(): FileReviewContext {
     headRef: "feature"
   });
 
-  context.setSection("overview", "## Overview\nchanged old to new");
-  context.setSection(
-    "dependencies-boundaries",
-    "## Dependencies & Boundaries\n- 相依清單：無外部相依\n- 隱含相依：無"
-  );
-  context.setSection(
-    "knowledge-source-of-truth",
-    "## Knowledge & Source of Truth\n- 版本／文件參考：無\n- 採用依據與必要假設：plain string value\n- 排除範圍：outside files"
-  );
-  context.setSection(
-    "strategy-what-if-scenarios",
-    "## Strategy & What-if Scenarios\n- What-if 假設情境：\n  - W1: value changes"
-  );
   context.setReviewBasis(createReviewBasis());
 
   return context;
@@ -156,17 +136,6 @@ function createChangeMap(
   };
 }
 
-function createStep4FileCategoryMap(): Step4FileCategoryMap {
-  return {
-    changedFiles: [
-      {
-        path: "src/app.ts",
-        category: "feature"
-      }
-    ]
-  };
-}
-
 function createReviewBasis(): ReviewBasisV1 {
   return {
     schemaVersion: 1,
@@ -250,8 +219,8 @@ function parseReviewStateFromPrompt(prompt: string): ReviewStateSnapshot {
 
 function assertBaseSnapshot(
   snapshot: ReviewStateSnapshot,
-  options: { expectSections?: boolean; expectEvidenceRefs?: boolean } = {
-    expectSections: true,
+  options: { expectedSections?: Record<string, string>; expectEvidenceRefs?: boolean } = {
+    expectedSections: {},
     expectEvidenceRefs: false
   }
 ): void {
@@ -267,16 +236,7 @@ function assertBaseSnapshot(
       changedHeadLines: [1]
     }
   ]);
-  if (options.expectSections !== false) {
-    assert.match(snapshot.sections.overview ?? "", /^## Overview/u);
-  } else {
-    assert.deepEqual(snapshot.sections, {
-      overview: null,
-      boundaryMap: null,
-      sourcePack: null,
-      hypothesisPack: null
-    });
-  }
+  assert.deepEqual(snapshot.sections, options.expectedSections ?? {});
   if (options.expectEvidenceRefs) {
     assert.equal(snapshot.evidenceRefs[0]?.evidenceId, "E1");
   } else {
@@ -292,28 +252,6 @@ function assertDiffBlock(prompt: string): void {
   assert.match(prompt, /@@ -1 \+1 @@\n-old\n\+new/u);
   assert.match(prompt, /<\/diff>/u);
 }
-
-test("Step1OverviewStep prompt carries changeset context, file diff, and profile metadata", () => {
-  const context = createContext();
-  const runContext = createRunContext({
-    changesetOverview: createChangeMap(
-      "## Changeset Overview\n- Auth flow spans src/app.ts and package entrypoints."
-    ),
-    userContext: ["PR describes a dry-run review workflow"]
-  });
-
-  const plan = new Step1OverviewStep({ runContext }).prepare(context);
-
-  assert.equal(plan.stepId, "step1-overview");
-  assert.equal(plan.reviewProfile.knowledgeMode, "disabled");
-  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
-  assert.match(plan.prompt.systemMessage, /## Current Step: Overview/u);
-  assert.match(plan.prompt.userMessage, /<changeset_context>/u);
-  assert.match(plan.prompt.userMessage, /Auth flow spans src\/app\.ts/u);
-  assertDiffBlock(plan.prompt.userMessage);
-  assert.match(plan.prompt.userMessage, /測試覆蓋觀察/u);
-});
 
 test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structured output contract", () => {
   const context = createContext();
@@ -363,59 +301,7 @@ test("default per-file pipeline starts with ReviewBasis and omits legacy Step 1-
   );
 });
 
-test("Step2DependenciesBoundariesStep prompt carries Step 1 overview and boundary contract instructions", () => {
-  const context = createContext();
-
-  const plan = new Step2DependenciesBoundariesStep({
-    promptSerializer: serializer
-  }).prepare(context);
-  const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage);
-
-  assert.equal(plan.stepId, "step2-dependencies-boundaries");
-  assert.equal(plan.reviewProfile.knowledgeMode, "disabled");
-  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
-  assert.match(
-    plan.prompt.systemMessage,
-    /## Current Step: Dependencies & Boundaries/u
-  );
-  assert.equal(snapshot.sections.overview, "## Overview\nchanged old to new");
-  assertDiffBlock(plan.prompt.userMessage);
-  assert.match(plan.prompt.userMessage, /Contract/u);
-  assert.match(plan.prompt.userMessage, /隱含相依/u);
-  assert.match(plan.prompt.userMessage, /white-box/u);
-  assert.match(plan.prompt.userMessage, /before marking uncertainty/u);
-});
-
-test("Step3KnowledgeSourceOfTruthStep prompt carries prior review state and knowledge-source instructions", () => {
-  const context = createContext();
-
-  const plan = new Step3KnowledgeSourceOfTruthStep({
-    promptSerializer: serializer
-  }).prepare(context);
-  const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage);
-
-  assert.equal(plan.stepId, "step3-knowledge-source-of-truth");
-  assert.equal(plan.reviewProfile.knowledgeMode, "built-in-context7");
-  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
-  assert.match(
-    plan.prompt.systemMessage,
-    /## Current Step: Knowledge & Source of Truth/u
-  );
-  assert.equal(snapshot.sections.overview, "## Overview\nchanged old to new");
-  assert.match(
-    snapshot.sections.boundaryMap ?? "",
-    /## Dependencies & Boundaries/u
-  );
-  assertDiffBlock(plan.prompt.userMessage);
-  assert.match(plan.prompt.userMessage, /版本／文件參考/u);
-  assert.match(plan.prompt.userMessage, /採用依據與必要假設/u);
-  assert.match(plan.prompt.userMessage, /必要假設：無/u);
-  assert.match(plan.prompt.userMessage, /排除範圍/u);
-});
-
-test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
+test("Steps 5-7 receive parseable ReviewStateSnapshot JSON", () => {
   const context = createContext();
   const finding = createFinding("F1");
   context.setFindings([finding]);
@@ -424,12 +310,6 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
   context.setMissingInformationItems([]);
 
   const stepPlans = [
-    new Step2DependenciesBoundariesStep({ promptSerializer: serializer }).prepare(context),
-    new Step3KnowledgeSourceOfTruthStep({ promptSerializer: serializer }).prepare(context),
-    new Step4StrategyWhatIfScenariosStep({
-      promptSerializer: serializer,
-      fileCategoryMap: createStep4FileCategoryMap()
-    }).prepare(context),
     new Step5ValidationInterrogationStep({ promptSerializer: serializer }).prepare(context),
     new Step6CognitiveSimulationStep({ promptSerializer: serializer }).prepare(context),
     new Step7SummaryStep({ promptSerializer: serializer }).prepare(context)
@@ -441,60 +321,41 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
 
   assert.deepEqual(
     stepPlans.map((plan) => plan.reviewProfile.knowledgeMode),
-    [
-      "disabled",
-      "built-in-context7",
-      "disabled",
-      "disabled",
-      "disabled",
-      "disabled"
-    ]
+    ["disabled", "disabled", "disabled"]
   );
   assert.deepEqual(
     stepPlans.map((plan) => plan.reviewProfile.timeoutMs),
-    [
-      REVIEW_TURN_TIMEOUT_MS,
-      REVIEW_TURN_TIMEOUT_MS,
-      REVIEW_TURN_TIMEOUT_MS,
-      REVIEW_TURN_TIMEOUT_MS,
-      REVIEW_TURN_TIMEOUT_MS,
-      REVIEW_TURN_TIMEOUT_MS
-    ]
+    [REVIEW_TURN_TIMEOUT_MS, REVIEW_TURN_TIMEOUT_MS, REVIEW_TURN_TIMEOUT_MS]
   );
 
   snapshots.forEach((snapshot, index) => {
     assertBaseSnapshot(snapshot, {
-      expectSections: index <= 2,
-      expectEvidenceRefs: index >= 3
+      expectedSections: {},
+      expectEvidenceRefs: index >= 0
     });
   });
 
-  assert.equal(snapshots[4].candidateFindings?.result, "FINDINGS_READY");
-  assert.equal(snapshots[4].candidateFindings?.findings[0]?.findingId, "F1");
+  assert.equal(snapshots[1].candidateFindings?.result, "FINDINGS_READY");
+  assert.equal(snapshots[1].candidateFindings?.findings[0]?.findingId, "F1");
   assert.equal(
-    snapshots[4].candidateFindings?.hypothesisClosure[0]?.hypothesisId,
+    snapshots[1].candidateFindings?.hypothesisClosure[0]?.hypothesisId,
     "H1"
   );
   assert.deepEqual(
-    snapshots[4].candidateFindings?.criticalMissingInformation,
+    snapshots[1].candidateFindings?.criticalMissingInformation,
     []
   );
-  assert.deepEqual(snapshots[4].verifiedFindings, []);
+  assert.deepEqual(snapshots[1].verifiedFindings, []);
   assert.equal(
-    snapshots[5].reviewBasis?.roleInChangeset,
+    snapshots[2].reviewBasis?.roleInChangeset,
     "Owns review prompt harness state handoff."
   );
-  assert.deepEqual(snapshots[5].sections, {
-    overview: null,
-    boundaryMap: null,
-    sourcePack: null,
-    hypothesisPack: null
-  });
-  assert.equal(snapshots[5].verifiedFindings[0].findingId, "F1");
-  assert.equal(snapshots[5].candidateFindings, null);
+  assert.deepEqual(snapshots[2].sections, {});
+  assert.equal(snapshots[2].verifiedFindings[0].findingId, "F1");
+  assert.equal(snapshots[2].candidateFindings, null);
   assert.match(
-    stepPlans[5].prompt.userMessage,
+    stepPlans[2].prompt.userMessage,
     /ReviewBasisV1\.roleInChangeset/u
   );
-  assert.equal(stepPlans[4].prompt.userMessage.includes("<candidate_findings"), false);
+  assert.equal(stepPlans[1].prompt.userMessage.includes("<candidate_findings"), false);
 });

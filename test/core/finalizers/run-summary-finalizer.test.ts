@@ -104,7 +104,7 @@ test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate outpu
   const rendered = renderSummary({
     plannedNotes: createPlannedNotesFromPaths(["src/a.ts", "src/b.ts"]),
     skippedFiles: [
-      createSkippedFile("src/a.ts", "step1-overview", "judge rejected"),
+      createSkippedFile("src/a.ts", "review-basis", "deterministic validation failed"),
       createSkippedFile(
         "src/b.ts",
         "step5-validation-interrogation",
@@ -120,7 +120,7 @@ test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate outpu
   assert.match(rendered, /- Low: 0/u);
   assert.match(rendered, /- None: 0/u);
   assert.match(rendered, /## Successful Files\n- 無/u);
-  assert.match(rendered, /- `src\/a\.ts` — step1-overview — judge rejected/u);
+  assert.match(rendered, /- `src\/a\.ts` — review-basis — deterministic validation failed/u);
   assert.match(
     rendered,
     /- `src\/b\.ts` — step5-validation-interrogation — deterministic validation failed/u

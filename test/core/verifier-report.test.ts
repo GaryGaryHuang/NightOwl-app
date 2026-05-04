@@ -2,7 +2,6 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  dispositionReasonToTaxonomy,
   VerifierReportBuilder,
   TAXONOMY_CODES,
   type VerifierReportEntry,
@@ -149,28 +148,5 @@ describe("VerifierReportBuilder", () => {
 
     const stored = builder.getEntries();
     assert.equal(stored[0].findingId, "F1", "builder state should be unaffected by input mutation");
-  });
-
-  it("maps disposition reasons to verifier taxonomy codes", () => {
-    assert.deepEqual(
-      [
-        dispositionReasonToTaxonomy("SUPPORTED"),
-        dispositionReasonToTaxonomy("ANCHOR"),
-        dispositionReasonToTaxonomy("EVIDENCE"),
-        dispositionReasonToTaxonomy("REACHABILITY"),
-        dispositionReasonToTaxonomy("OUT_OF_SCOPE"),
-        dispositionReasonToTaxonomy("DUPLICATE"),
-        dispositionReasonToTaxonomy("CONTRADICTION")
-      ],
-      [
-        "OK",
-        "ANCHOR",
-        "EVIDENCE",
-        "REACHABILITY",
-        "OUT_OF_SCOPE",
-        "DUPLICATE",
-        "CONTRADICTION"
-      ]
-    );
   });
 });

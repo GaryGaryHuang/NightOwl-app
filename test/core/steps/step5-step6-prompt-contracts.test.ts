@@ -28,7 +28,6 @@ function createContext(findings: Finding[] = []): FileReviewContext {
     headRef: "feature"
   });
 
-  context.setSection("strategy-what-if-scenarios", "## Strategy & What-if Scenarios\nW1: hypothesis");
   context.setReviewBasis(createReviewBasis());
   if (findings.length > 0) {
     context.setFindings(findings);

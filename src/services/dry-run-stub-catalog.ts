@@ -108,7 +108,7 @@ export function buildDryRunReviewBasisResponse(prompt: string): string {
         statement: "Dry-run hypothesis for exercising Step 5.",
         triggerCondition: "Dry-run pipeline reaches validation.",
         whyRelevantHere: "Phase 1 requires a structured ReviewBasis before Step 5.",
-        closureCriteria: ["Step 5 can consume this hypothesis without Step 4 prose."]
+        closureCriteria: ["Step 5 can consume this structured hypothesis."]
       }
     ],
     missingInformation: [],
@@ -226,14 +226,6 @@ function normalizeDryRunStatus(statusField: string): DryRunChangeMapStatus {
   }
 }
 
-const STUB_OVERVIEW = "## Overview";
-
-const STUB_DEPENDENCIES_BOUNDARIES = "## Dependencies & Boundaries";
-
-const STUB_KNOWLEDGE_SOURCE_OF_TRUTH = "## Knowledge & Source of Truth";
-
-const STUB_STRATEGY_WHAT_IF = "## Strategy & What-if Scenarios";
-
 const STUB_REVIEW_BASIS = buildDryRunReviewBasisResponse(
   '<diff path="dry-run.ts" base="main" head="HEAD">\n</diff>'
 );
@@ -250,10 +242,6 @@ const STUB_SUMMARY = [
 export type DryRunResponseProvider = (prompt: string) => string;
 
 const DRY_RUN_STUB_RESPONSES = {
-  "step1-overview": STUB_OVERVIEW,
-  "step2-dependencies-boundaries": STUB_DEPENDENCIES_BOUNDARIES,
-  "step3-knowledge-source-of-truth": STUB_KNOWLEDGE_SOURCE_OF_TRUTH,
-  "step4-strategy-what-if-scenarios": STUB_STRATEGY_WHAT_IF,
   "review-basis": STUB_REVIEW_BASIS,
   "step5-validation-interrogation": STUB_VALIDATION_INTERROGATION,
   "step6-cognitive-simulation": STUB_COGNITIVE_SIMULATION,
@@ -267,9 +255,11 @@ export const BUILT_IN_DRY_RUN_STEP_IDS = Object.keys(
 ) as BuiltInDryRunStepId[];
 
 export function getDryRunStubResponse(
-  stepId: BuiltInDryRunStepId
+  stepId: string
 ): string | undefined {
-  return DRY_RUN_STUB_RESPONSES[stepId];
+  return stepId in DRY_RUN_STUB_RESPONSES
+    ? DRY_RUN_STUB_RESPONSES[stepId as BuiltInDryRunStepId]
+    : undefined;
 }
 
 export function getDryRunResponseProvider(

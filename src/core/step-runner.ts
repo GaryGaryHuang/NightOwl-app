@@ -7,7 +7,6 @@ import {
   StructuredOutputValidator,
   StructuredValidationReportError
 } from "./structured-output-validator.ts";
-import type { FindingsPayload, FindingDisposition, VerifiedFindingsPayload } from "./file-review-context.ts";
 import type { ReviewBasisV1 } from "./review-basis.ts";
 import type {
   CandidateFindingsV3,
@@ -19,44 +18,13 @@ import type {
 } from "./verifier-report.ts";
 
 export interface StructuredOutputValidatorLike {
-  validate(input: {
-    responseText: string;
-    diffContent?: string;
-    filePath?: string;
-  }): FindingsPayload;
-  validateWithReport(input: {
-    responseText: string;
-    diffContent?: string;
-    filePath?: string;
-  }): { payload: FindingsPayload; report: VerifierReportEntry[] };
-  filterByAcceptance(payload: FindingsPayload): FindingsPayload;
-  filterByAcceptanceWithReport(payload: FindingsPayload): {
-    payload: FindingsPayload;
-    report: VerifierReportEntry[];
-  };
-  validateWithDispositions(input: {
-    responseText: string;
-    diffContent?: string;
-    filePath?: string;
-  }): VerifiedFindingsPayload;
-  validateWithDispositionsAndReport?(input: {
-    responseText: string;
-    diffContent?: string;
-    filePath?: string;
-  }): { payload: VerifiedFindingsPayload; report: VerifierReportEntry[] };
-  validateDispositionCompleteness(input: {
-    dispositions: FindingDisposition[];
-    candidateFindingIds: readonly string[];
-    acceptedFindingIds: readonly string[];
-    findingUpdateIds: readonly string[];
-  }): void;
-  validateCandidateFindingsV3WithReport?(input: {
+  validateCandidateFindingsV3WithReport(input: {
     responseText: string;
     reviewBasis: ReviewBasisV1;
     diffContent?: string;
     filePath?: string;
   }): { payload: CandidateFindingsV3; report: VerifierReportEntry[] };
-  validateValidationReportV1WithReport?(input: {
+  validateValidationReportV1WithReport(input: {
     responseText: string;
     candidateFindings: CandidateFindingsV3 | Record<string, unknown>;
     reviewBasis?: ReviewBasisV1;

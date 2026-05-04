@@ -1,12 +1,7 @@
 import type {
   DependencyPathException,
-  DispositionReason,
-  DispositionStatus,
   Finding,
-  FindingDisposition,
-  FindingsPayload,
-  FindingTraceability,
-  VerifiedFindingsPayload
+  FindingTraceability
 } from "./file-review-context.ts";
 import type { ReviewBasisV1 } from "./review-basis.ts";
 import type {
@@ -53,10 +48,7 @@ import {
   verifyFindingAnchor,
   type AnchorVerificationFailure
 } from "./finding-anchor-verifier.ts";
-import {
-  DISPOSITION_REASONS,
-  type VerifierReportEntry
-} from "./verifier-report.ts";
+import type { VerifierReportEntry } from "./verifier-report.ts";
 
 export class StructuredValidationReportError extends Error {
   readonly report: readonly VerifierReportEntry[];
@@ -78,178 +70,7 @@ interface TraceabilityValidationResult {
   readonly anchorFailure?: AnchorVerificationFailure;
 }
 
-/**
- * Deterministically validate structured findings JSON before it is written into review state.
- */
 export class StructuredOutputValidator {
-  validate(input: {
-    responseText: string;
-    diffContent?: string;
-    filePath?: string;
-  }): FindingsPayload {
-    const record = parseTopLevelObject(
-      input.responseText,
-      "top-level payload must be an object with a 'findings' array"
-    );
-
-    if (!("findings" in record) || !Array.isArray(record.findings)) {
-      throw new Error(
-        "deterministic validation failed: top-level payload must be an object with a 'findings' array"
-      );
-    }
-
-    rejectUnknownFields(record, ALLOWED_TOP_LEVEL_KEYS, "top-level payload");
-    const schemaVersion = validateSchemaVersion(record.schemaVersion);
-
-    const anchorContext = buildAnchorContext(input);
-    const validatedFindings = record.findings.map(
-      (finding) =>
-        validateFindingWithDiagnostics(finding, anchorContext).finding
-    );
-
-    assertUniqueFindingIds(validatedFindings, "findings");
-
-    return {
-      schemaVersion,
-      findings: validatedFindings
-    };
-  }
-
-  filterByAcceptance(payload: FindingsPayload): FindingsPayload {
-    return {
-      schemaVersion: payload.schemaVersion,
-      findings: payload.findings.filter((finding) =>
-        this.#classifyAcceptance(finding).accepted
-      )
-    };
-  }
-
-  validateWithReport(input: {
-    responseText: string;
-    diffContent?: string;
-    filePath?: string;
-  }): { payload: FindingsPayload; report: VerifierReportEntry[] } {
-    const record = parseTopLevelObject(
-      input.responseText,
-      "top-level payload must be an object with a 'findings' array"
-    );
-
-    if (!("findings" in record) || !Array.isArray(record.findings)) {
-      throw new Error(
-        "deterministic validation failed: top-level payload must be an object with a 'findings' array"
-      );
-    }
-
-    rejectUnknownFields(record, ALLOWED_TOP_LEVEL_KEYS, "top-level payload");
-    const schemaVersion = validateSchemaVersion(record.schemaVersion);
-
-    const anchorContext = buildAnchorContext(input);
-    const validatedFindings: Finding[] = [];
-    const report: VerifierReportEntry[] = [];
-    const seenFindingIds = new Set<string>();
-
-    for (const rawFinding of record.findings) {
-      const reportableFindingId = extractReportableFindingId(rawFinding);
-
-      if (reportableFindingId === undefined) {
-        validatedFindings.push(validateFinding(rawFinding, anchorContext));
-        continue;
-      }
-
-      if (seenFindingIds.has(reportableFindingId)) {
-        report.push({
-          findingId: reportableFindingId,
-          taxonomy: "DUPLICATE",
-          outcome: "rejected",
-          gate: "schema",
-          reason: `duplicate findingId '${reportableFindingId}'`
-        });
-        continue;
-      }
-      seenFindingIds.add(reportableFindingId);
-
-      try {
-        const validated = validateFindingWithDiagnostics(rawFinding, anchorContext);
-        validatedFindings.push(validated.finding);
-        report.push({
-          findingId: validated.finding.findingId,
-          taxonomy: "OK",
-          outcome: "accepted",
-          gate: "schema",
-          reason: "passed schema validation"
-        });
-        if (validated.anchorFailure) {
-          report.push(createAnchorWarningReportEntry(
-            validated.finding.findingId,
-            validated.anchorFailure
-          ));
-        }
-      } catch (error) {
-        report.push(createRejectedValidationReportEntry(reportableFindingId, error));
-      }
-    }
-
-    const hasValidationRejection = report.some(
-      (entry) =>
-        entry.outcome === "rejected" &&
-        entry.gate === "schema"
-    );
-    if (hasValidationRejection) {
-      throw new StructuredValidationReportError(
-        "deterministic validation failed: one or more findings failed schema validation",
-        report
-      );
-    }
-
-    assertUniqueFindingIds(validatedFindings, "findings");
-
-    return {
-      payload: {
-        schemaVersion,
-        findings: validatedFindings
-      },
-      report
-    };
-  }
-
-  filterByAcceptanceWithReport(payload: FindingsPayload): {
-    payload: FindingsPayload;
-    report: VerifierReportEntry[];
-  } {
-    const accepted: Finding[] = [];
-    const report: VerifierReportEntry[] = [];
-
-    for (const finding of payload.findings) {
-      const classification = this.#classifyAcceptance(finding);
-
-      report.push({
-        findingId: finding.findingId,
-        taxonomy: classification.taxonomy,
-        outcome: classification.accepted ? "accepted" : "rejected",
-        gate: "acceptance",
-        reason: classification.reason
-      });
-
-      if (classification.accepted) {
-        accepted.push(finding);
-      }
-    }
-
-    return { payload: { schemaVersion: payload.schemaVersion, findings: accepted }, report };
-  }
-
-  #classifyAcceptance(finding: Finding): {
-    accepted: boolean;
-    taxonomy: VerifierReportEntry["taxonomy"];
-    reason: string;
-  } {
-    return {
-      accepted: true,
-      taxonomy: "OK",
-      reason: "passed all acceptance gates"
-    };
-  }
-
   validateCandidateFindingsV3WithReport(input: {
     responseText: string;
     reviewBasis: ReviewBasisV1;
@@ -390,167 +211,6 @@ export class StructuredOutputValidator {
     }
   }
 
-  validateWithDispositions(input: {
-    responseText: string;
-    diffContent?: string;
-    filePath?: string;
-  }): VerifiedFindingsPayload {
-    return this.validateWithDispositionsAndReport(input).payload;
-  }
-
-  validateWithDispositionsAndReport(input: {
-    responseText: string;
-    diffContent?: string;
-    filePath?: string;
-  }): { payload: VerifiedFindingsPayload; report: VerifierReportEntry[] } {
-    const record = parseTopLevelObject(
-      input.responseText,
-      "top-level payload must be an object with 'findingUpdates' and 'dispositions' arrays"
-    );
-
-    if (!("findingUpdates" in record) || !Array.isArray(record.findingUpdates)) {
-      throw new Error(
-        "deterministic validation failed: top-level payload must be an object with 'findingUpdates' and 'dispositions' arrays"
-      );
-    }
-
-    if (!("dispositions" in record) || !Array.isArray(record.dispositions)) {
-      throw new Error(
-        "deterministic validation failed: top-level payload must contain a 'dispositions' array"
-      );
-    }
-
-    rejectUnknownFields(
-      record,
-      ALLOWED_VERIFIED_TOP_LEVEL_KEYS,
-      "top-level payload"
-    );
-    const schemaVersion = validateSchemaVersion(record.schemaVersion);
-
-    const anchorContext = buildAnchorContext(input);
-    const report: VerifierReportEntry[] = [];
-    const validatedFindingUpdates = record.findingUpdates.map((finding) => {
-      const validated = validateFindingWithDiagnostics(finding, anchorContext);
-      report.push({
-        findingId: validated.finding.findingId,
-        taxonomy: "OK",
-        outcome: "accepted",
-        gate: "schema",
-        reason: "passed schema validation"
-      });
-      if (validated.anchorFailure) {
-        report.push(createAnchorWarningReportEntry(
-          validated.finding.findingId,
-          validated.anchorFailure
-        ));
-      }
-      return validated.finding;
-    });
-
-    assertUniqueFindingIds(validatedFindingUpdates, "findings");
-
-    const validatedDispositions = record.dispositions.map((d, index) =>
-      validateDisposition(d, index)
-    );
-
-    assertUniqueFindingIds(validatedDispositions, "dispositions");
-
-    return {
-      payload: {
-        schemaVersion,
-        findingUpdates: validatedFindingUpdates,
-        dispositions: validatedDispositions
-      },
-      report
-    };
-  }
-
-  validateDispositionCompleteness(input: {
-    dispositions: FindingDisposition[];
-    candidateFindingIds: readonly string[];
-    acceptedFindingIds: readonly string[];
-    findingUpdateIds: readonly string[];
-  }): void {
-    const dispositionMap = new Map(
-      input.dispositions.map((d) => [d.findingId, d])
-    );
-    const candidateIdSet = new Set(input.candidateFindingIds);
-    const findingUpdateIdSet = new Set(input.findingUpdateIds);
-
-    // Every candidate must have a disposition
-    for (const candidateId of input.candidateFindingIds) {
-      if (!dispositionMap.has(candidateId)) {
-        throw new Error(
-          `deterministic validation failed: missing disposition for candidate findingId '${candidateId}'`
-        );
-      }
-    }
-
-    // Step 6 dispositions account only for candidate findings from the previous step.
-    for (const d of input.dispositions) {
-      if (!candidateIdSet.has(d.findingId)) {
-        throw new Error(
-          `deterministic validation failed: disposition references unknown candidate findingId '${d.findingId}'`
-        );
-      }
-    }
-
-    // Retained/modified must appear in findings; retired must not
-    const acceptedIdSet = new Set(input.acceptedFindingIds);
-    for (const d of input.dispositions) {
-      validateCandidateDispositionReason(d);
-
-      if (
-        (d.status === "retained" || d.status === "retired") &&
-        findingUpdateIdSet.has(d.findingId)
-      ) {
-        throw new Error(
-          `deterministic validation failed: ${d.status} candidate '${d.findingId}' must not appear in findingUpdates`
-        );
-      }
-
-      if (d.status === "modified" && !findingUpdateIdSet.has(d.findingId)) {
-        throw new Error(
-          `deterministic validation failed: modified candidate '${d.findingId}' must appear in findingUpdates`
-        );
-      }
-
-      if (
-        (d.status === "retained" || d.status === "modified") &&
-        !acceptedIdSet.has(d.findingId)
-      ) {
-        throw new Error(
-          `deterministic validation failed: ${d.status} candidate '${d.findingId}' must appear in findings`
-        );
-      }
-
-      if (d.status === "retired" && acceptedIdSet.has(d.findingId)) {
-        throw new Error(
-          `deterministic validation failed: retired candidate '${d.findingId}' must not appear in findings`
-        );
-      }
-    }
-  }
-}
-
-function validateCandidateDispositionReason(disposition: FindingDisposition): void {
-  if (
-    (disposition.status === "retained" || disposition.status === "modified") &&
-    disposition.reason !== "SUPPORTED"
-  ) {
-    throw new Error(
-      `deterministic validation failed: ${disposition.status} candidate '${disposition.findingId}' must use disposition reason 'SUPPORTED'`
-    );
-  }
-
-  if (
-    disposition.status === "retired" &&
-    disposition.reason === "SUPPORTED"
-  ) {
-    throw new Error(
-      `deterministic validation failed: retired candidate '${disposition.findingId}' must not use disposition reason 'SUPPORTED'`
-    );
-  }
 }
 
 function buildValidationReportSemanticFields(
@@ -1380,44 +1040,6 @@ function extractReportableFindingIdFromText(responseText: string): string | unde
   return undefined;
 }
 
-function createRejectedValidationReportEntry(
-  findingId: string,
-  error: unknown
-): VerifierReportEntry {
-  const reason = error instanceof Error ? error.message : String(error);
-
-  if (reason.includes("[ANCHOR]")) {
-    return {
-      findingId,
-      taxonomy: "ANCHOR",
-      outcome: "rejected",
-      gate: "anchor",
-      reason
-    };
-  }
-
-  return {
-    findingId,
-    taxonomy: "SCHEMA",
-    outcome: "rejected",
-    gate: "schema",
-    reason
-  };
-}
-
-function createAnchorWarningReportEntry(
-  findingId: string,
-  failure: AnchorVerificationFailure
-): VerifierReportEntry {
-  return {
-    findingId,
-    taxonomy: "ANCHOR",
-    outcome: "accepted",
-    gate: "anchor",
-    reason: `warning: ${formatAnchorFailure("traceability", failure)}`
-  };
-}
-
 function validateFinding(
   input: unknown,
   anchorContext: FindingAnchorValidationContext | undefined
@@ -1758,16 +1380,6 @@ function validateSemanticGateArray(
   );
 }
 
-function validateSchemaVersion(value: unknown): 2 {
-  if (value !== 2) {
-    throw new Error(
-      "deterministic validation failed: 'schemaVersion' must be 2"
-    );
-  }
-
-  return 2;
-}
-
 /**
  * Parse responseText as JSON and assert it is a non-null, non-array object.
  * `topLevelShapeMessage` is the human-readable description of the expected shape
@@ -1840,8 +1452,6 @@ function assertUniqueFindingIds(
 
 // --- Allowed-key constants ---
 
-const ALLOWED_TOP_LEVEL_KEYS = ["schemaVersion", "findings"] as const;
-
 const ALLOWED_FINDING_KEYS = [
   "type",
   "title",
@@ -1870,12 +1480,6 @@ const ALLOWED_DEPENDENCY_PATH_EXCEPTION_KEYS = [
 ] as const;
 
 const ALLOWED_DEPENDENCY_ANCHOR_KEYS = ["filePath", "symbol"] as const;
-
-const ALLOWED_VERIFIED_TOP_LEVEL_KEYS = [
-  "schemaVersion",
-  "findingUpdates",
-  "dispositions"
-] as const;
 
 const ALLOWED_CANDIDATE_TOP_LEVEL_KEYS = [
   "schemaVersion",
@@ -1957,21 +1561,6 @@ const ALLOWED_MISSING_INFORMATION_ITEM_KEYS = [
 
 const ALLOWED_LOOP_CONTROL_KEYS = ["action", "reason"] as const;
 
-const ALLOWED_DISPOSITION_KEYS = [
-  "findingId",
-  "status",
-  "reason",
-  "explanation"
-] as const;
-
-const VALID_DISPOSITION_STATUSES: readonly string[] = [
-  "retained",
-  "modified",
-  "retired"
-];
-
-const VALID_DISPOSITION_REASONS: readonly string[] = DISPOSITION_REASONS;
-
 const VALID_CANDIDATE_RESULTS: readonly CandidateFindingsResult[] =
   RUNTIME_CANDIDATE_FINDINGS_RESULTS;
 
@@ -2023,55 +1612,3 @@ function rejectUnknownFields(
   }
 }
 
-function validateDisposition(
-  input: unknown,
-  index: number
-): FindingDisposition {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error(
-      `deterministic validation failed: dispositions[${index}] must be a non-null object`
-    );
-  }
-
-  const record = input as Record<string, unknown>;
-
-  rejectUnknownFields(record, ALLOWED_DISPOSITION_KEYS, `dispositions[${index}]`);
-
-  const findingId = validateStringField(record.findingId, `dispositions[${index}].findingId`);
-  const status = record.status;
-
-  if (typeof status !== "string" || !VALID_DISPOSITION_STATUSES.includes(status)) {
-    throw new Error(
-      `deterministic validation failed: 'dispositions[${index}].status' must be one of 'retained', 'modified', 'retired'`
-    );
-  }
-
-  const reason = validateDispositionReason(
-    record.reason,
-    `dispositions[${index}].reason`
-  );
-  const explanation = validateStringField(record.explanation, `dispositions[${index}].explanation`);
-
-  return {
-    findingId,
-    status: status as DispositionStatus,
-    reason,
-    explanation
-  };
-}
-
-function validateDispositionReason(
-  value: unknown,
-  fieldName: string
-): DispositionReason {
-  if (
-    typeof value !== "string" ||
-    !VALID_DISPOSITION_REASONS.includes(value)
-  ) {
-    throw new Error(
-      `deterministic validation failed: '${fieldName}' must be one of 'SUPPORTED', 'ANCHOR', 'EVIDENCE', 'REACHABILITY', 'OUT_OF_SCOPE', 'DUPLICATE', 'CONTRADICTION'`
-    );
-  }
-
-  return value as DispositionReason;
-}

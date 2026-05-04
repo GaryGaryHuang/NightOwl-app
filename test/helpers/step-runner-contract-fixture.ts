@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 
 import {
   type FileReviewContextInput,
-  type FindingsPayload,
   FileReviewContext
 } from "../../src/core/file-review-context.ts";
 import type { VerifierReportEntry } from "../../src/core/verifier-report.ts";
@@ -53,22 +52,31 @@ export function makePassingJudgeServices(): StepResolveServices {
       }
     },
     validator: {
-      validate(_input) {
-        return { schemaVersion: 2, findings: [] };
+      validateCandidateFindingsV3WithReport(_input) {
+        return {
+          payload: {
+            schemaVersion: 3,
+            result: "NO_FINDINGS",
+            findings: [],
+            hypothesisClosure: [],
+            criticalMissingInformation: []
+          },
+          report: emptyReport
+        };
       },
-      validateWithReport(_input) {
-        return { payload: { schemaVersion: 2, findings: [] }, report: emptyReport };
-      },
-      filterByAcceptance(payload: FindingsPayload) {
-        return payload;
-      },
-      filterByAcceptanceWithReport(payload: FindingsPayload) {
-        return { payload, report: emptyReport };
-      },
-      validateWithDispositions(_input) {
-        return { schemaVersion: 2, findingUpdates: [], dispositions: [] };
-      },
-      validateDispositionCompleteness(_input) {}
+      validateValidationReportV1WithReport(_input) {
+        return {
+          payload: {
+            schemaVersion: 1,
+            overallStatus: "PASS",
+            perFindingResults: [],
+            approvedFindings: [],
+            missingInformationItems: [],
+            loopControl: { action: "accept", reason: "no findings" }
+          },
+          report: emptyReport
+        };
+      }
     }
   };
 }
@@ -92,8 +100,8 @@ export function createSectionTestStep(input: {
   reviewProfile?: StepExecutionPlan["reviewProfile"];
   resolve?: StepExecutionPlan["resolve"];
 }) {
-  const stepId = input.stepId ?? "step1-overview";
-  const sectionKey = input.sectionKey ?? "overview";
+  const stepId = input.stepId ?? "step7-summary";
+  const sectionKey = input.sectionKey ?? "summary";
 
   return {
     stepId,
@@ -170,14 +178,15 @@ export function createStructuredTestStep(input: {
           model: "gpt-5-mini",
           timeoutMs: REVIEW_TURN_TIMEOUT_MS
         },
-        resolve: input.resolve ?? (async (response: string, services: StepResolveServices) => {
-          const validated = services.validator.validate({
-            responseText: response
-          });
-          const payload = services.validator.filterByAcceptance(validated);
-
+        resolve: input.resolve ?? (async (_response: string, _services: StepResolveServices) => {
           return (context: FileReviewContext) => {
-            context.setFindings(payload.findings);
+            context.setCandidateFindingsV3({
+              schemaVersion: 3,
+              result: "NO_FINDINGS",
+              findings: [],
+              hypothesisClosure: [],
+              criticalMissingInformation: []
+            });
           };
         })
       };
@@ -188,39 +197,13 @@ export function createStructuredTestStep(input: {
 // Canonical section content reused by prompt-rebuild tests.
 // Each step sees all prior sections; the step response is the current section.
 export const SECTION_SEEDS: Record<string, string> = {
-  overview: [
-    "## Overview",
-    "- 整體理解：測試用概覽",
-    "- 行為變更：無行為變更",
-    "- 檔案職責：維護 app value",
-    "- 改動目的：調整常數",
-    "- 影響範圍：src/app.ts",
-    "- 測試覆蓋觀察：未見對應測試異動"
+  "custom-analysis": [
+    "## Custom Analysis",
+    "- 測試用自訂 section"
   ].join("\n"),
-  "dependencies-boundaries": [
-    "## Dependencies & Boundaries",
-    "- 相依清單：",
-    "  - 無外部相依",
-    "- 隱含相依：",
-    "  - 無"
-  ].join("\n"),
-  "knowledge-source-of-truth": [
-    "## Knowledge & Source of Truth",
-    "- 版本／文件參考：",
-    "  - 無",
-    "- 採用依據與必要假設：",
-    "  - 依 repo 內設定檔推論版本約束",
-    "- 排除範圍：",
-    "  - 外部官方文件查證不在本次 foundation 範圍內"
-  ].join("\n"),
-  "strategy-what-if-scenarios": [
-    "## Strategy & What-if Scenarios",
-    "- 高風險區域：",
-    "  - state transition：本次改動調整 value 更新流程",
-    "- What-if 假設情境：",
-    "  - W1: 觸發條件：value 為空；預期正確行為：應維持 fallback；待驗證風險/不確定性：新分支是否略過 fallback；與本次改動的關聯：diff 調整路徑",
-    "  - W2: 觸發條件：依賴回傳異常；預期正確行為：應保留錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示邊界",
-    "  - W3: 觸發條件：多次呼叫；預期正確行為：結果應穩定；待驗證風險/不確定性：狀態是否偏移；與本次改動的關聯：Step 3 已收斂假設"
+  "custom-risk-notes": [
+    "## Custom Risk Notes",
+    "- 自訂 section 可以保留 generic note rendering 行為"
   ].join("\n")
 };
 
@@ -258,7 +241,7 @@ export const NICE_FINAL_FINDING = {
 } as const;
 
 export const DEFAULT_JUDGE_RESOLVE = makeSectionResolveWithJudge(
-  "step1-overview", "src/app.ts", "overview", "must contain overview fields"
+  "step7-summary", "src/app.ts", "summary", "must contain summary fields"
 );
 
 export const SUMMARY_RESPONSE = [
@@ -286,7 +269,7 @@ export function runDefaultSectionStep(
   });
 }
 
-export function runDefaultJudgeOverviewStep(
+export function runDefaultJudgeSectionStep(
   runner: StepRunner,
   context: ReturnType<typeof createStepRunnerContext>
 ) {
@@ -367,59 +350,6 @@ export async function assertPromptRebuildOnRetry(input: {
     input.resultPattern
   );
   input.extraAssertions?.(context);
-}
-
-// Step 4 (Strategy & What-if Scenarios) reads the accumulated prior sections
-// from FileReviewContext when building its prompt. This helper pre-populates
-// the context so StepRunner tests for Step 4 receive a realistic prompt
-// without having to run Steps 1–3 first.
-export function seedStep4Context(context: FileReviewContext): void {
-  context.setSection(
-    "overview",
-    [
-      "## Overview",
-      "- 整體理解：測試用概覽",
-      "- 行為變更：無行為變更",
-      "- 檔案職責：維護 app value",
-      "- 改動目的：調整常數",
-      "- 影響範圍：src/app.ts",
-      "- 測試覆蓋觀察：未見對應測試異動"
-    ].join("\n")
-  );
-  context.setSection(
-    "dependencies-boundaries",
-    [
-      "## Dependencies & Boundaries",
-      "- 相依清單：",
-      "  - 無外部相依",
-      "- 隱含相依：",
-      "  - 無"
-    ].join("\n")
-  );
-  context.setSection(
-    "knowledge-source-of-truth",
-    [
-      "## Knowledge & Source of Truth",
-      "- 版本／文件參考：",
-      "  - 無",
-      "- 採用依據與必要假設：",
-      "  - 依 repo 內設定檔推論版本約束",
-      "- 排除範圍：",
-      "  - 外部官方文件查證不在本次 foundation 範圍內"
-    ].join("\n")
-  );
-  context.setSection(
-    "strategy-what-if-scenarios",
-    [
-      "## Strategy & What-if Scenarios",
-      "- 高風險區域：",
-      "  - state transition：本次改動調整 value 更新流程",
-      "- What-if 假設情境：",
-      "  - W1: 觸發條件：value 為空；預期正確行為：應維持 fallback；待驗證風險/不確定性：新分支是否略過 fallback；與本次改動的關聯：diff 調整路徑",
-      "  - W2: 觸發條件：依賴回傳異常；預期正確行為：應保留錯誤處理；待驗證風險/不確定性：boundary 是否仍一致；與本次改動的關聯：Step 2 已標示邊界",
-      "  - W3: 觸發條件：多次呼叫；預期正確行為：結果應穩定；待驗證風險/不確定性：狀態是否偏移；與本次改動的關聯：Step 3 已收斂假設"
-    ].join("\n")
-  );
 }
 
 /**

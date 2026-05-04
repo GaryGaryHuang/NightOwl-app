@@ -74,7 +74,7 @@ test("reduceProgressEvent warns when file progress arrives before claim", () => 
   const outOfOrderProgress = reduceProgressEvent(createProgressState(), {
     type: "file-progressed",
     filePath: "src/app.ts",
-    stepId: "step1-overview"
+    stepId: "review-basis"
   });
 
   assert.equal(outOfOrderProgress.state.activeFiles.size, 0);

@@ -1,267 +1,317 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
+import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
 import {
-  DEFAULT_DIFF,
-  DEFAULT_HUNK_HEADER,
-  assertValidationFails,
-  diffHunkTraceability,
-  finding,
-  lineRangeTraceability,
-  payload,
-  validate
-} from "../helpers/structured-output-validator-fixture.ts";
+  StructuredOutputValidator,
+  StructuredValidationReportError
+} from "../../src/core/structured-output-validator.ts";
 
-test("StructuredOutputValidator rejects invalid traceability payloads", () => {
+const DEFAULT_HUNK_HEADER = "@@ -20,2 +20,4 @@";
+const DEFAULT_DIFF = [
+  DEFAULT_HUNK_HEADER,
+  " context-before",
+  "+added-21",
+  "+added-22",
+  " context-after"
+].join("\n");
+
+test("StructuredOutputValidator rejects invalid CandidateFindingsV3 traceability payloads", () => {
   const cases: Array<{
     label: string;
-    invalidFinding: Record<string, unknown>;
-    diffContent?: string;
+    traceability?: Record<string, unknown>;
   }> = [
-    {
-      label: "missing traceability",
-      invalidFinding: finding({ traceability: undefined })
-    },
+    { label: "missing traceability", traceability: undefined },
     {
       label: "unsupported traceability kind",
-      invalidFinding: finding({
-        traceability: { kind: "file-offset", offsetStart: 1, offsetEnd: 2 }
-      })
+      traceability: { kind: "file-offset", offsetStart: 1, offsetEnd: 2 }
     },
     {
       label: "line-range inverted bounds",
-      invalidFinding: finding({ traceability: lineRangeTraceability(20, 19) })
+      traceability: { kind: "line-range", lineStart: 20, lineEnd: 19 }
     },
     {
       label: "lineStart is zero",
-      invalidFinding: finding({ traceability: lineRangeTraceability(0, 5) })
+      traceability: { kind: "line-range", lineStart: 0, lineEnd: 5 }
     },
     {
       label: "lineEnd is negative",
-      invalidFinding: finding({ traceability: lineRangeTraceability(1, -1) })
+      traceability: { kind: "line-range", lineStart: 1, lineEnd: -1 }
     },
     {
       label: "diff-hunk missing hunkHeader",
-      invalidFinding: finding({ traceability: { kind: "diff-hunk" } }),
-      diffContent: "@@ -1 +1 @@\n-old\n+new\n"
+      traceability: { kind: "diff-hunk" }
     }
   ];
 
   for (const testCase of cases) {
-    assertValidationFails({
-      label: testCase.label,
-      responseText: payload([testCase.invalidFinding]),
-      ...(testCase.diffContent === undefined ? {} : { diffContent: testCase.diffContent })
-    });
+    assertCandidateValidationFails(
+      createCandidatePayload({ traceability: testCase.traceability }),
+      testCase.label
+    );
   }
 });
 
-test("StructuredOutputValidator accepts line-range outside changed head lines", () => {
-  const offsetFinding = finding({
-    traceability: lineRangeTraceability(14, 18)
-  });
+test("StructuredOutputValidator rejects CandidateFindingsV3 line-range outside changed head lines", () => {
+  const error = assertCandidateValidationFails(
+    createCandidatePayload({
+      traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 }
+    }),
+    "line-range outside changed lines"
+  );
 
-  const result = new StructuredOutputValidator().validate({
-    responseText: payload([offsetFinding]),
-    diffContent: DEFAULT_DIFF,
-    filePath: "src/foo.ts"
-  });
+  assert.equal(error.report.at(-1)?.taxonomy, "ANCHOR");
+});
 
-  assert.equal(result.findings.length, 1);
-  assert.deepEqual(result.findings[0].traceability, {
+test("StructuredOutputValidator accepts CandidateFindingsV3 line-range on changed head lines", () => {
+  const result = validateCandidatePayload(
+    createCandidatePayload({
+      traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 }
+    })
+  );
+
+  assert.deepEqual(result.payload.findings[0]?.traceability, {
+    kind: "line-range",
+    lineStart: 21,
+    lineEnd: 22
+  });
+});
+
+test("StructuredOutputValidator accepts CandidateFindingsV3 diff-hunk with trimmed header", () => {
+  const result = validateCandidatePayload(
+    createCandidatePayload({
+      traceability: { kind: "diff-hunk", hunkHeader: `  ${DEFAULT_HUNK_HEADER}  ` }
+    })
+  );
+
+  assert.deepEqual(result.payload.findings[0]?.traceability, {
+    kind: "diff-hunk",
+    hunkHeader: DEFAULT_HUNK_HEADER
+  });
+});
+
+test("StructuredOutputValidator accepts CandidateFindingsV3 line-range outside changed lines when dependencyPathException is supplied", () => {
+  const result = validateCandidatePayload(
+    createCandidatePayload({
+      traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
+      dependencyPathException: {
+        reason: "called from changed initializer",
+        dependencyAnchor: {
+          filePath: "src/dep.ts",
+          symbol: "bootstrap"
+        }
+      }
+    })
+  );
+
+  assert.deepEqual(result.payload.findings[0]?.traceability, {
     kind: "line-range",
     lineStart: 14,
     lineEnd: 18
   });
 });
 
-test("StructuredOutputValidator accepts line-range inside hunk span when it misses all changed lines", () => {
-  const unchangedSpanFinding = finding({
-    traceability: lineRangeTraceability(23, 23)
-  });
-
-  const result = new StructuredOutputValidator().validate({
-    responseText: payload([unchangedSpanFinding]),
-    diffContent: DEFAULT_DIFF,
-    filePath: "src/foo.ts"
-  });
-
-  assert.equal(result.findings.length, 1);
-  assert.deepEqual(result.findings[0].traceability, {
-    kind: "line-range",
-    lineStart: 23,
-    lineEnd: 23
-  });
-});
-
-test("StructuredOutputValidator accepts diff-hunk with trimmed header through anchor verifier", () => {
-  const trimmedHeaderFinding = finding({
-    traceability: diffHunkTraceability(`  ${DEFAULT_HUNK_HEADER}  `)
-  });
-
-  const result = new StructuredOutputValidator().validate({
-    responseText: payload([trimmedHeaderFinding]),
-    diffContent: DEFAULT_DIFF,
-    filePath: "src/foo.ts"
-  });
-
-  assert.deepEqual(result.findings[0].traceability, {
-    kind: "diff-hunk",
-    hunkHeader: DEFAULT_HUNK_HEADER
-  });
-});
-
-test("StructuredOutputValidator accepts unknown diff-hunk header when diffContent is supplied", () => {
-  const unknownHunkFinding = finding({
-    traceability: diffHunkTraceability("@@ -40,2 +40,3 @@")
-  });
-
-  const result = new StructuredOutputValidator().validate({
-    responseText: payload([unknownHunkFinding]),
-    diffContent: DEFAULT_DIFF,
-    filePath: "src/foo.ts"
-  });
-
-  assert.equal(result.findings.length, 1);
-  assert.deepEqual(result.findings[0].traceability, {
-    kind: "diff-hunk",
-    hunkHeader: "@@ -40,2 +40,3 @@"
-  });
-});
-
-test("StructuredOutputValidator accepts diff-hunk when diff has no hunk headers", () => {
-  const unknownHunkFinding = finding({
-    traceability: diffHunkTraceability("@@ -1 +1 @@")
-  });
-
-  const result = new StructuredOutputValidator().validate({
-    responseText: payload([unknownHunkFinding]),
-    diffContent: "diff --git a/src/app.ts b/src/app.ts\nindex 123..456 100644\n",
-    filePath: "src/foo.ts"
-  });
-
-  assert.equal(result.findings.length, 1);
-});
-
-test("StructuredOutputValidator accepts line-range outside changed lines when dependencyPathException is supplied", () => {
-  const exceptionFinding = finding({
-    traceability: lineRangeTraceability(14, 18),
-    dependencyPathException: {
-      reason: "called from changed initializer",
-      dependencyAnchor: {
-        filePath: "src/dep.ts",
-        symbol: "bootstrap"
+test("StructuredOutputValidator rejects invalid CandidateFindingsV3 dependencyPathException fields", () => {
+  const cases: Array<{
+    label: string;
+    dependencyPathException: Record<string, unknown>;
+  }> = [
+    {
+      label: "empty reason",
+      dependencyPathException: {
+        reason: "",
+        dependencyAnchor: { filePath: "src/dep.ts" }
+      }
+    },
+    {
+      label: "empty dependencyAnchor.filePath",
+      dependencyPathException: {
+        reason: "ok",
+        dependencyAnchor: { filePath: "" }
+      }
+    },
+    {
+      label: "empty dependencyAnchor.symbol",
+      dependencyPathException: {
+        reason: "ok",
+        dependencyAnchor: { filePath: "src/dep.ts", symbol: "" }
+      }
+    },
+    {
+      label: "unknown dependencyPathException field",
+      dependencyPathException: {
+        reason: "called from changed initializer",
+        dependencyAnchor: { filePath: "src/dep.ts" },
+        extra: true
+      }
+    },
+    {
+      label: "unknown dependencyAnchor field",
+      dependencyPathException: {
+        reason: "called from changed initializer",
+        dependencyAnchor: { filePath: "src/dep.ts", extra: true }
       }
     }
-  });
+  ];
 
-  const result = new StructuredOutputValidator().validate({
-    responseText: payload([exceptionFinding]),
-    diffContent: DEFAULT_DIFF,
-    filePath: "src/foo.ts"
-  });
-
-  assert.equal(result.findings.length, 1);
-  assert.deepEqual(result.findings[0].dependencyPathException, {
-    reason: "called from changed initializer",
-    dependencyAnchor: {
-      filePath: "src/dep.ts",
-      symbol: "bootstrap"
-    }
-  });
-});
-
-test("StructuredOutputValidator rejects dependencyPathException with empty reason", () => {
-  const bad = finding({
-    traceability: lineRangeTraceability(14, 18),
-    dependencyPathException: {
-      reason: "",
-      dependencyAnchor: { filePath: "src/dep.ts" }
-    }
-  });
-
-  assertValidationFails({
-    responseText: payload([bad]),
-    diffContent: DEFAULT_DIFF
-  });
-});
-
-test("StructuredOutputValidator rejects dependencyPathException with empty dependencyAnchor.filePath", () => {
-  const bad = finding({
-    traceability: lineRangeTraceability(14, 18),
-    dependencyPathException: {
-      reason: "ok",
-      dependencyAnchor: { filePath: "" }
-    }
-  });
-
-  assertValidationFails({
-    responseText: payload([bad]),
-    diffContent: DEFAULT_DIFF
-  });
-});
-
-test("StructuredOutputValidator rejects dependencyPathException with empty dependencyAnchor.symbol", () => {
-  const bad = finding({
-    traceability: lineRangeTraceability(14, 18),
-    dependencyPathException: {
-      reason: "ok",
-      dependencyAnchor: {
-        filePath: "src/dep.ts",
-        symbol: ""
-      }
-    }
-  });
-
-  assert.throws(
-    () =>
-      new StructuredOutputValidator().validate({
-        responseText: payload([bad]),
-        diffContent: DEFAULT_DIFF
+  for (const testCase of cases) {
+    assertCandidateValidationFails(
+      createCandidatePayload({
+        traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
+        dependencyPathException: testCase.dependencyPathException
       }),
-    /deterministic validation failed: 'dependencyPathException\.dependencyAnchor\.symbol' must be a non-empty string/u
+      testCase.label
+    );
+  }
+});
+
+function validateCandidatePayload(payload: Record<string, unknown>) {
+  return new StructuredOutputValidator().validateCandidateFindingsV3WithReport({
+    responseText: JSON.stringify(payload),
+    reviewBasis: createReviewBasis(),
+    diffContent: DEFAULT_DIFF,
+    filePath: "src/app.ts"
+  });
+}
+
+function assertCandidateValidationFails(
+  payload: Record<string, unknown>,
+  label: string
+): StructuredValidationReportError {
+  assert.throws(
+    () => validateCandidatePayload(payload),
+    (error: unknown) => {
+      assert.equal(error instanceof StructuredValidationReportError, true, label);
+      return true;
+    },
+    label
   );
-});
 
-test("StructuredOutputValidator rejects unknown fields in dependencyPathException", () => {
-  assertValidationFails({
-    responseText: payload([
-      finding({
-        traceability: lineRangeTraceability(14, 18),
-        dependencyPathException: {
-          reason: "called from changed initializer",
-          dependencyAnchor: { filePath: "src/dep.ts" },
-          extra: true
-        }
-      })
-    ]),
-    diffContent: DEFAULT_DIFF
-  });
-});
+  try {
+    validateCandidatePayload(payload);
+  } catch (error) {
+    return error as StructuredValidationReportError;
+  }
 
-test("StructuredOutputValidator rejects unknown fields in dependencyAnchor", () => {
-  assertValidationFails({
-    responseText: payload([
-      finding({
-        traceability: lineRangeTraceability(14, 18),
-        dependencyPathException: {
-          reason: "called from changed initializer",
-          dependencyAnchor: { filePath: "src/dep.ts", extra: true }
-        }
-      })
-    ]),
-    diffContent: DEFAULT_DIFF
-  });
-});
+  throw new Error(`expected validation failure for ${label}`);
+}
 
-test("StructuredOutputValidator falls back to legacy line-range check when diffContent is omitted", () => {
-  const noDiffFinding = finding({
-    traceability: lineRangeTraceability(14, 18)
-  });
+function createCandidatePayload(
+  findingOverrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings: [
+      {
+        findingId: "F1",
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority: "must",
+        severity: "high",
+        confidence: "high",
+        evidenceStrength: "direct",
+        title: "guard moved after dereference",
+        traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 },
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: "src/app.ts:21",
+            summary: "changed branch reads value before fallback"
+          }
+        ],
+        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        triggerCondition: "nullable input reaches the changed branch",
+        failureMechanism: "guard runs after dereference",
+        impact: "request fails before fallback can run",
+        counterEvidenceChecked: ["fallback no longer precedes dereference"],
+        reproducibility: "deterministic with nullable input",
+        fixDirection: "restore guard before dereference",
+        testRecommendation: "add nullable input regression coverage",
+        ...findingOverrides
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: "F1 validates the hypothesis."
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}
 
-  assert.deepEqual(validate({ responseText: payload([noDiffFinding]) }), {
-    schemaVersion: 2,
-    findings: [noDiffFinding]
-  });
-});
+function createReviewBasis(): ReviewBasisV1 {
+  return {
+    schemaVersion: 1,
+    filePath: "src/app.ts",
+    roleInChangeset: "Owns review prompt harness state handoff.",
+    changedBehavior: [
+      {
+        changeId: "CB1",
+        before: "Step 5 consumed prose sections.",
+        after: "Step 5 consumes ReviewBasis evidence graph.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    facts: [
+      {
+        factId: "FCT1",
+        statement: "ReviewBasis is emitted before Step 5.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    inferences: [
+      {
+        inferenceId: "INF1",
+        statement: "Step 5 can validate source evidence IDs.",
+        basedOnEvidenceIds: ["E1"],
+        confidence: "high"
+      }
+    ],
+    dependencyMap: {
+      upstreamCallers: ["ReviewOrchestrator"],
+      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      externalContracts: [],
+      sharedStateOrSideEffects: ["FileReviewContext"]
+    },
+    flowMap: {
+      entryPoints: ["ReviewBasisStep.prepare"],
+      stateTransitions: ["setReviewBasis"],
+      asyncBoundaries: [],
+      errorPaths: ["validator rejects missing evidence"]
+    },
+    testCoverage: {
+      changedTests: ["test/core/structured-output-validator-anchor.test.ts"],
+      observedCoverageSignals: ["anchor validator tests"],
+      coverageGaps: []
+    },
+    identifierRegistry: {
+      files: ["src/app.ts"],
+      symbols: ["ReviewBasisV1"],
+      resourceKeys: [],
+      apiNames: [],
+      stateNames: ["reviewBasis"]
+    },
+    hypothesisLedger: [
+      {
+        hypothesisId: "H1",
+        statement: "Evidence refs may be missing.",
+        triggerCondition: "Step 5 cites absent evidence ID.",
+        whyRelevantHere: "Phase 2 validates evidence refs.",
+        closureCriteria: ["Every cited evidence ID exists."]
+      }
+    ],
+    missingInformation: [],
+    evidenceRefs: [
+      {
+        evidenceId: "E1",
+        sourceType: "diff",
+        location: "src/app.ts:21",
+        summary: "review basis state added"
+      }
+    ]
+  };
+}

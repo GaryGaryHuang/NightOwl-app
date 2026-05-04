@@ -1,8 +1,4 @@
-import type {
-  FileReviewContext,
-  Finding,
-  FindingDisposition
-} from "../file-review-context.ts";
+import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewBasisV1 } from "../review-basis.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { RiskLevel } from "../risk-level.ts";
@@ -15,14 +11,10 @@ import type {
   VerifierReportArtifactEntry,
   VerifierReportEntry
 } from "../verifier-report.ts";
-import {
-  dispositionReasonToTaxonomy,
-  pickDispositionFields,
-  pickSemanticFields
-} from "../verifier-report.ts";
+import { pickDispositionFields, pickSemanticFields } from "../verifier-report.ts";
 
 /**
- * Factory for the resolve() closure shared by all section steps (Step 1–4, 7).
+ * Factory for the resolve() closure shared by section-producing steps.
  *
  * Calls judgeService.evaluate() with the given criteria; on pass, returns a
  * deferred mutation that writes the response to the designated section key.
@@ -55,39 +47,6 @@ export function createSectionResolve(input: {
   };
 }
 
-/**
- * Factory for the resolve() closure shared by all structured steps (Step 5, 6).
- *
- * Runs deterministic validation + acceptance filtering, then returns a
- * deferred mutation that writes the validated findings to the context.
- */
-export function createStructuredResolve(input: {
-  stepId?: string;
-  filePath: string;
-  diffContent?: string;
-}): StepExecutionPlan["resolve"] {
-  return async (response, services) => {
-    const validated = services.validator.validateWithReport({
-      responseText: response,
-      filePath: input.filePath,
-      ...(input.diffContent === undefined
-        ? {}
-        : { diffContent: input.diffContent })
-    });
-    const accepted = services.validator.filterByAcceptanceWithReport(validated.payload);
-    const reportEntries = toVerifierArtifactEntries({
-      filePath: input.filePath,
-      stepId: input.stepId ?? "step5-validation-interrogation",
-      report: [...validated.report, ...accepted.report]
-    });
-
-    return (targetContext: FileReviewContext) => {
-      targetContext.setFindings(accepted.payload.findings);
-      targetContext.appendVerifierReportEntries(reportEntries);
-    };
-  };
-}
-
 export function createCandidateFindingsV3Resolve(input: {
   stepId?: string;
   filePath: string;
@@ -95,9 +54,6 @@ export function createCandidateFindingsV3Resolve(input: {
   reviewBasis: ReviewBasisV1;
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
-    if (!services.validator.validateCandidateFindingsV3WithReport) {
-      throw new Error("CandidateFindingsV3 validator is not configured");
-    }
     const validated = services.validator.validateCandidateFindingsV3WithReport({
       responseText: response,
       reviewBasis: input.reviewBasis,
@@ -127,9 +83,6 @@ export function createValidationReportV1Resolve(input: {
   candidatePayload: CandidateFindingsV3 | Record<string, unknown>;
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
-    if (!services.validator.validateValidationReportV1WithReport) {
-      throw new Error("ValidationReportV1 validator is not configured");
-    }
     const validated = services.validator.validateValidationReportV1WithReport({
       responseText: response,
       candidateFindings: input.candidatePayload,
@@ -152,126 +105,6 @@ export function createValidationReportV1Resolve(input: {
       targetContext.appendVerifierReportEntries(reportEntries);
     };
   };
-}
-
-/**
- * Factory for the resolve() closure used by Step 6 when disposition semantics are active.
- *
- * Validates findings + dispositions, checks disposition completeness against
- * candidate finding IDs, filters by acceptance, then defers writing both
- * findings and dispositions to the context.
- */
-export function createStep6DispositionResolve(input: {
-  stepId?: string;
-  filePath: string;
-  diffContent?: string;
-  candidateFindings: readonly Finding[];
-}): StepExecutionPlan["resolve"] {
-  return async (response, services) => {
-    const candidateFindingIds = input.candidateFindings.map((f) => f.findingId);
-    const validationInput = {
-      responseText: response,
-      filePath: input.filePath,
-      ...(input.diffContent === undefined
-        ? {}
-        : { diffContent: input.diffContent })
-    };
-    const verifiedWithReport =
-      services.validator.validateWithDispositionsAndReport?.(validationInput);
-    const verified =
-      verifiedWithReport?.payload ??
-      services.validator.validateWithDispositions(validationInput);
-
-    const accepted = services.validator.filterByAcceptanceWithReport({
-      schemaVersion: verified.schemaVersion,
-      findings: verified.findingUpdates
-    });
-    const finalFindings = mergeStep6Findings({
-      candidateFindings: input.candidateFindings,
-      findingUpdates: accepted.payload.findings,
-      dispositions: verified.dispositions
-    });
-    const acceptedFindingIds = finalFindings.map((f) => f.findingId);
-    const schemaReport =
-      verifiedWithReport?.report ??
-      verified.findingUpdates.map<VerifierReportEntry>((finding) => ({
-        findingId: finding.findingId,
-        taxonomy: "OK",
-        outcome: "accepted",
-        gate: "schema",
-        reason: "passed schema validation"
-      }));
-
-    services.validator.validateDispositionCompleteness({
-      dispositions: verified.dispositions,
-      candidateFindingIds,
-      acceptedFindingIds,
-      findingUpdateIds: verified.findingUpdates.map((f) => f.findingId)
-    });
-
-    const candidateIdSet = new Set(candidateFindingIds);
-    const dispositionReport = verified.dispositions
-      .filter((d) => candidateIdSet.has(d.findingId))
-      .map<VerifierReportEntry>((d) => ({
-        findingId: d.findingId,
-        taxonomy: dispositionReasonToTaxonomy(d.reason),
-        outcome: d.status === "retired" ? "rejected" : "accepted",
-        gate: "disposition",
-        reason: `candidate ${d.status}: ${d.reason} - ${d.explanation}`,
-        dispositionStatus: d.status,
-        dispositionReason: d.reason,
-        dispositionExplanation: d.explanation
-      }));
-
-    const reportEntries = toVerifierArtifactEntries({
-      filePath: input.filePath,
-      stepId: input.stepId ?? "step6-cognitive-simulation",
-      report: [...schemaReport, ...accepted.report, ...dispositionReport]
-    });
-
-    return (targetContext: FileReviewContext) => {
-      targetContext.setFindings(finalFindings);
-      targetContext.setDispositions(verified.dispositions);
-      targetContext.appendVerifierReportEntries(reportEntries);
-    };
-  };
-}
-
-function mergeStep6Findings(input: {
-  candidateFindings: readonly Finding[];
-  findingUpdates: readonly Finding[];
-  dispositions: readonly Pick<FindingDisposition, "findingId" | "status">[];
-}): Finding[] {
-  const candidateById = new Map(input.candidateFindings.map((f) => [f.findingId, f]));
-  const updateById = new Map(input.findingUpdates.map((f) => [f.findingId, f]));
-  const finalFindings: Finding[] = [];
-  const emittedIds = new Set<string>();
-
-  for (const disposition of input.dispositions) {
-    const candidate = candidateById.get(disposition.findingId);
-    if (!candidate || disposition.status === "retired") {
-      continue;
-    }
-
-    const finding =
-      disposition.status === "modified"
-        ? updateById.get(disposition.findingId)
-        : updateById.get(disposition.findingId) ?? candidate;
-
-    if (finding) {
-      finalFindings.push(finding);
-      emittedIds.add(finding.findingId);
-    }
-  }
-
-  for (const update of input.findingUpdates) {
-    if (!candidateById.has(update.findingId) && !emittedIds.has(update.findingId)) {
-      finalFindings.push(update);
-      emittedIds.add(update.findingId);
-    }
-  }
-
-  return finalFindings;
 }
 
 function toVerifierArtifactEntries(input: {

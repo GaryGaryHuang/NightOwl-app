@@ -122,7 +122,7 @@ function emitReviewingProgress(progressReporter: CliProgressReporter): void {
   progressReporter.handleEvent({
     type: "file-progressed",
     filePath: "src/app.ts",
-    stepId: "step1-overview"
+    stepId: "review-basis"
   });
 }
 

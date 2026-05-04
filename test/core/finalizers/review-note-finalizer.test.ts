@@ -118,14 +118,12 @@ test("Finalizer renders custom section after findings when written after setFind
   ]);
 });
 
-// 5.4: default SOP topology produces the same note layout as before
-test("Finalizer default SOP topology: overview → deps → knowledge → strategy → Findings → summary", () => {
+// 5.4: generic sections retain insertion order around findings and summary
+test("Finalizer renders generic sections before Findings and Summary", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nOverview content");
-  context.setSection("dependencies-boundaries", "## Dependencies & Boundaries\nDeps content");
-  context.setSection("knowledge-source-of-truth", "## Knowledge\nKnowledge content");
-  context.setSection("strategy-what-if-scenarios", "## Strategy\nStrategy content");
+  context.setSection("custom-analysis", "## Custom Analysis\nAnalysis content");
+  context.setSection("custom-risk-notes", "## Custom Risk Notes\nRisk content");
   context.setFindings([makeMustFinding("issue-1")]);
   context.setFindings([makeMustFinding("issue-1")]); // second call, index unchanged
   context.setSection("summary", "## Summary\nSummary content");
@@ -133,10 +131,8 @@ test("Finalizer default SOP topology: overview → deps → knowledge → strate
   const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
-    "## Overview",
-    "## Dependencies & Boundaries",
-    "## Knowledge",
-    "## Strategy",
+    "## Custom Analysis",
+    "## Custom Risk Notes",
     "## Findings",
     "## Summary"
   ]);
@@ -192,14 +188,14 @@ test("Finalizer renders bootstrap snapshot when empty", () => {
 test("Finalizer renders bootstrap with interruption warning", () => {
   const context = createContext();
 
-  context.markInterrupted("step-1-overview", "model-timeout");
+  context.markInterrupted("step7-summary", "model-timeout");
 
   const result = finalizer(context);
 
   assertBootstrapShape(result, FILE_PATH);
   assert.match(result, /Review not yet generated/u);
-  assertWarningBlock(result, { stepId: "step-1-overview", reason: "model-timeout" });
-  assertWarningBlockAtEnd(result, { stepId: "step-1-overview", reason: "model-timeout" });
+  assertWarningBlock(result, { stepId: "step7-summary", reason: "model-timeout" });
+  assertWarningBlockAtEnd(result, { stepId: "step7-summary", reason: "model-timeout" });
 });
 
 // 5.9: partial state (only some sections written)

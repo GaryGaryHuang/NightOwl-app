@@ -11,10 +11,10 @@ type JudgeObservedEvent =
   | ["disconnect"];
 
 const DEFAULT_EVALUATION_INPUT = {
-  stepId: "step1-overview",
+  stepId: "step7-summary",
   filePath: "src/app.ts",
-  criteria: "段落 `## Overview` 必須存在",
-  sectionContent: "## Overview\n- 整體理解：測試"
+  criteria: "段落 `## Summary` 必須存在",
+  sectionContent: "## Summary\n- 整體理解：測試"
 };
 
 test("JudgeService passes section content and criteria into a minimal judge session", async () => {
@@ -44,12 +44,12 @@ test("JudgeService passes section content and criteria into a minimal judge sess
         "Return `N` otherwise.",
         "",
         "<section>",
-        "## Overview",
+        "## Summary",
         "- 整體理解：測試",
         "</section>",
         "",
         "<criteria>",
-        "段落 `## Overview` 必須存在",
+        "段落 `## Summary` 必須存在",
         "</criteria>"
       ].join("\n")
     },

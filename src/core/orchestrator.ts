@@ -262,7 +262,7 @@ export class ReviewOrchestrator {
     });
     abortGuard.throwIfAborted();
 
-    // Steps 2–7 each receive the progressively built review state via <review_state> so each step builds on prior output.
+    // Per-file steps receive progressively built review state via <review_state> so each step builds on prior output.
     const steps = this.#perFileStepsFactory({
       runContext,
       renderReviewNote: this.#renderReviewNote,

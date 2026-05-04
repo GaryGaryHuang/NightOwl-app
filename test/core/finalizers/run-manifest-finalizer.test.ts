@@ -251,7 +251,7 @@ test("RunManifestFinalizer preserves planned file order and reuses collision-res
       ])
     ],
     skippedFiles: [
-      createSkippedFile("tests/api/index.ts", "step1-overview", "judge rejected")
+      createSkippedFile("tests/api/index.ts", "review-basis", "deterministic validation failed")
     ]
   });
 

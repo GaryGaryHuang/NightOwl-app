@@ -91,12 +91,6 @@ export interface FindingDisposition {
   explanation: string;
 }
 
-export interface VerifiedFindingsPayload {
-  schemaVersion: 2;
-  findingUpdates: Finding[];
-  dispositions: FindingDisposition[];
-}
-
 export interface ReviewInterruption {
   stepId: string;
   reason: string;

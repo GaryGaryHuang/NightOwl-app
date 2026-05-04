@@ -5,7 +5,6 @@
  * Pure data types + builder. No I/O, no mutation of inputs.
  */
 
-import type { DispositionReason } from "./file-review-context.ts";
 import type {
   CandidateClassification,
   CandidatePriority,
@@ -28,26 +27,6 @@ export const TAXONOMY_CODES = [
 ] as const;
 
 export type VerifierTaxonomyCode = (typeof TAXONOMY_CODES)[number];
-
-export const DISPOSITION_REASON_TO_TAXONOMY = {
-  SUPPORTED: "OK",
-  ANCHOR: "ANCHOR",
-  EVIDENCE: "EVIDENCE",
-  REACHABILITY: "REACHABILITY",
-  OUT_OF_SCOPE: "OUT_OF_SCOPE",
-  DUPLICATE: "DUPLICATE",
-  CONTRADICTION: "CONTRADICTION"
-} as const satisfies Readonly<Record<DispositionReason, VerifierTaxonomyCode>>;
-
-export const DISPOSITION_REASONS = Object.keys(
-  DISPOSITION_REASON_TO_TAXONOMY
-) as readonly DispositionReason[];
-
-export function dispositionReasonToTaxonomy(
-  reason: DispositionReason
-): VerifierTaxonomyCode {
-  return DISPOSITION_REASON_TO_TAXONOMY[reason];
-}
 
 export interface VerifierReportEntry {
   readonly findingId: string;

@@ -163,10 +163,22 @@ test("getDryRunResponseProvider routes changeset-overview to the prompt-driven b
 });
 
 test("getDryRunResponseProvider returns a constant stub for known per-file step IDs and ignores prompt content", () => {
-  const provider = getDryRunResponseProvider("step1-overview");
+  const provider = getDryRunResponseProvider("step7-summary");
 
-  assert.equal(provider("anything"), getDryRunStubResponse("step1-overview"));
-  assert.equal(provider("anything else"), getDryRunStubResponse("step1-overview"));
+  assert.equal(provider("anything"), getDryRunStubResponse("step7-summary"));
+  assert.equal(provider("anything else"), getDryRunStubResponse("step7-summary"));
+});
+
+test("getDryRunResponseProvider treats removed legacy Step 1-4 IDs as unknown", () => {
+  for (const removedStepId of [
+    "step1-overview",
+    "step2-dependencies-boundaries",
+    "step3-knowledge-source-of-truth",
+    "step4-strategy-what-if-scenarios"
+  ]) {
+    assert.equal(getDryRunStubResponse(removedStepId), undefined);
+    assert.equal(getDryRunResponseProvider(removedStepId)("p"), GENERIC_DRY_RUN_STUB);
+  }
 });
 
 test("getDryRunResponseProvider falls back to GENERIC_DRY_RUN_STUB for unknown or missing step IDs", () => {

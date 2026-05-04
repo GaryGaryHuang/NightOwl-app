@@ -23,7 +23,7 @@ test("StepRunner returns an apply-able result without mutating state or writing 
       },
       onSendAndWait({ prompt, timeoutMs }) {
         lifecycle.push(["sendAndWait", { prompt }, timeoutMs]);
-        return "## Overview\n- 整體理解：測試用概覽";
+        return "## Summary\n- 整體理解：測試用摘要";
       },
       onDisconnect() {
         lifecycle.push(["disconnect"]);
@@ -40,16 +40,16 @@ test("StepRunner returns an apply-able result without mutating state or writing 
   });
 
   assert.equal(typeof result.applyTo, "function");
-  assert.equal(context.getSection("overview"), undefined);
+  assert.equal(context.getSection("summary"), undefined);
 
   result.applyTo(context);
 
-  assert.equal(context.getSection("overview"), "## Overview\n- 整體理解：測試用概覽");
+  assert.equal(context.getSection("summary"), "## Summary\n- 整體理解：測試用摘要");
   assert.deepEqual(lifecycle, [
     [
       "createSession",
       {
-        stepId: "step1-overview",
+        stepId: "step7-summary",
         knowledgeMode: "disabled",
         model: "gpt-5-mini",
         outputBaseDir: "/workspace/output",
@@ -72,7 +72,7 @@ test("StepRunner passes the step-provided knowledgeMode into review sessions", a
         lifecycle.push(["createSession", profile]);
       },
       onSendAndWait() {
-        return "## Knowledge & Source of Truth\n- 版本／文件參考：\n  - 無";
+        return "## Custom Knowledge\n- 版本／文件參考：\n  - 無";
       },
       onDisconnect() {
         lifecycle.push(["disconnect"]);
@@ -82,8 +82,8 @@ test("StepRunner passes the step-provided knowledgeMode into review sessions", a
 
   const result = await runner.run({
     step: createSectionTestStep({
-      stepId: "step3-knowledge-source-of-truth",
-      sectionKey: "knowledge-source-of-truth",
+      stepId: "custom-knowledge-step",
+      sectionKey: "custom-knowledge",
       reviewProfile: {
         knowledgeMode: "built-in-context7",
         model: "gpt-5-mini",
@@ -102,7 +102,7 @@ test("StepRunner passes the step-provided knowledgeMode into review sessions", a
     [
       "createSession",
       {
-        stepId: "step3-knowledge-source-of-truth",
+        stepId: "custom-knowledge-step",
         knowledgeMode: "built-in-context7",
         model: "gpt-5-mini",
         outputBaseDir: "/workspace/output",
@@ -114,8 +114,8 @@ test("StepRunner passes the step-provided knowledgeMode into review sessions", a
     ["disconnect"]
   ]);
   assert.equal(
-    context.getSection("knowledge-source-of-truth"),
-    "## Knowledge & Source of Truth\n- 版本／文件參考：\n  - 無"
+    context.getSection("custom-knowledge"),
+    "## Custom Knowledge\n- 版本／文件參考：\n  - 無"
   );
 });
 
@@ -137,9 +137,9 @@ test("StepRunner fails on blank responses and does not apply any state", async (
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /step1-overview/u
+    /step7-summary/u
   );
-  assert.equal(context.getSection("overview"), undefined);
+  assert.equal(context.getSection("summary"), undefined);
 });
 
 test("StepRunner wraps prepare failures with step and file context", async () => {
@@ -156,7 +156,7 @@ test("StepRunner wraps prepare failures with step and file context", async () =>
     () =>
       runner.run({
         step: {
-          stepId: "step1-overview",
+          stepId: "step7-summary",
           prepare() {
             throw new Error("prepare exploded");
           }
@@ -165,7 +165,7 @@ test("StepRunner wraps prepare failures with step and file context", async () =>
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /Step step1-overview failed for src\/app\.ts: prepare exploded/u
+    /Step step7-summary failed for src\/app\.ts: prepare exploded/u
   );
 });
 
@@ -174,7 +174,7 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
-        return "## Overview\n- 整體理解：attempt 1";
+        return "## Summary\n- 整體理解：attempt 1";
       }
     }),
     judgeService: {
@@ -194,6 +194,6 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /^StepExecutionError: Step step1-overview failed for src\/app\.ts: judge timeout$/u
+    /^StepExecutionError: Step step7-summary failed for src\/app\.ts: judge timeout$/u
   );
 });

@@ -3,20 +3,16 @@ import test from "node:test";
 
 import { StepRunner } from "../../src/core/step-runner.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
-import { createStructuredResolve } from "../../src/core/steps/step-resolve-helpers.ts";
+import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import { createCandidateFindingsV3Resolve } from "../../src/core/steps/step-resolve-helpers.ts";
 import {
   createReviewSessionFactory,
   createSectionTestStep,
   createStepRunnerContext,
   DEFAULT_JUDGE_RESOLVE,
-  runDefaultJudgeOverviewStep,
+  runDefaultJudgeSectionStep,
   runDefaultSectionStep
 } from "../helpers/step-runner-contract-fixture.ts";
-import {
-  finding as structuredFinding,
-  lineRangeTraceability as structuredLineRangeTraceability,
-  payload as structuredPayload
-} from "../helpers/structured-output-validator-fixture.ts";
 
 test("StepRunner retries the whole section-step when judge rejects the first attempt and applies only the successful retry", async () => {
   const lifecycle: unknown[] = [];
@@ -33,7 +29,7 @@ test("StepRunner retries the whole section-step when judge rejects the first att
         reviewAttempts += 1;
         prompts.push(prompt);
         lifecycle.push(["review.sendAndWait", prompt, timeoutMs, reviewAttempts]);
-        return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
+        return `## Summary\n- 整體理解：attempt ${reviewAttempts}`;
       },
       onDisconnect() {
         lifecycle.push(["review.disconnect", reviewAttempts]);
@@ -63,9 +59,9 @@ test("StepRunner retries the whole section-step when judge rejects the first att
     workingDirectory: "/workspace/repo"
   });
 
-  assert.equal(context.getSection("overview"), undefined);
+  assert.equal(context.getSection("summary"), undefined);
   result.applyTo(context);
-  assert.equal(context.getSection("overview"), "## Overview\n- 整體理解：attempt 2");
+  assert.equal(context.getSection("summary"), "## Summary\n- 整體理解：attempt 2");
   assert.equal(reviewAttempts, 2);
   assert.equal(judgeAttempts, 2);
   assert.doesNotMatch(prompts[0] ?? "", /retry_repair_context/u);
@@ -87,7 +83,7 @@ test("StepRunner adds empty-response repair feedback to the retry prompt", async
           return "";
         }
 
-        return "## Overview\n- 整體理解：retry after empty response";
+        return "## Summary\n- 整體理解：retry after empty response";
       }
     })
   });
@@ -107,8 +103,8 @@ test("StepRunner adds empty-response repair feedback to the retry prompt", async
   assert.match(prompts[1] ?? "", /<retry_repair_context>/u);
   assert.match(prompts[1] ?? "", /Previous attempt returned an empty response/u);
   assert.equal(
-    context.getSection("overview"),
-    "## Overview\n- 整體理解：retry after empty response"
+    context.getSection("summary"),
+    "## Summary\n- 整體理解：retry after empty response"
   );
 });
 
@@ -119,7 +115,7 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
         reviewAttempts += 1;
-        return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
+        return `## Summary\n- 整體理解：attempt ${reviewAttempts}`;
       }
     }),
     judgeService: {
@@ -139,42 +135,30 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /Step step1-overview failed for src\/app\.ts: judge rejected/u
+    /Step step7-summary failed for src\/app\.ts: judge rejected/u
   );
 
   assert.equal(reviewAttempts, 2);
-  assert.equal(context.getSection("overview"), undefined);
+  assert.equal(context.getSection("summary"), undefined);
 });
 
-test("StepRunner records structured validation reports without committing partial findings", async () => {
+test("StepRunner records structured validation reports without committing partial candidate state", async () => {
   const context = createStepRunnerContext();
   const prompts: string[] = [];
   let reviewAttempts = 0;
+  const reviewBasis = createReviewBasis();
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait({ prompt }) {
         prompts.push(prompt);
         reviewAttempts += 1;
         if (reviewAttempts === 1) {
-          return structuredPayload([
-            structuredFinding({
-              findingId: "F1",
-              traceability: structuredLineRangeTraceability(1, 1)
-            }),
-            structuredFinding({
-              findingId: "F2",
-              traceability: structuredLineRangeTraceability(1, 1),
-              type: "maybe"
-            })
-          ]);
+          return JSON.stringify(createCandidatePayload("F2", {
+            classification: "unsupported_claim"
+          }));
         }
 
-        return structuredPayload([
-          structuredFinding({
-            findingId: "F3",
-            traceability: structuredLineRangeTraceability(1, 1)
-          })
-        ]);
+        return JSON.stringify(createCandidatePayload("F3"));
       }
     })
   });
@@ -191,10 +175,11 @@ test("StepRunner records structured validation reports without committing partia
             model: "gpt-5.4-mini",
             timeoutMs: REVIEW_TURN_TIMEOUT_MS
           },
-          resolve: createStructuredResolve({
+          resolve: createCandidateFindingsV3Resolve({
             stepId: "step5-validation-interrogation",
             filePath: stepContext.filePath,
-            diffContent: stepContext.diffContent
+            diffContent: stepContext.diffContent,
+            reviewBasis
           })
         };
       }
@@ -208,8 +193,8 @@ test("StepRunner records structured validation reports without committing partia
   assert.doesNotMatch(prompts[0] ?? "", /retry_repair_context/u);
   assert.match(prompts[1] ?? "", /Structured validation report:/u);
   assert.match(prompts[1] ?? "", /findingId=F2/u);
-  assert.match(prompts[1] ?? "", /taxonomy=SCHEMA/u);
-  assert.match(prompts[1] ?? "", /'type' must be 'must' or 'nice'/u);
+  assert.match(prompts[1] ?? "", /taxonomy=SEMANTIC/u);
+  assert.match(prompts[1] ?? "", /classification/u);
   assert.equal(context.getFindings(), undefined);
   assert.deepEqual(
     context.getVerifierReportEntries()?.map((entry) => ({
@@ -220,16 +205,10 @@ test("StepRunner records structured validation reports without committing partia
     })),
     [
       {
-        findingId: "F1",
-        taxonomy: "OK",
-        outcome: "accepted",
-        gate: "schema"
-      },
-      {
         findingId: "F2",
-        taxonomy: "SCHEMA",
+        taxonomy: "SEMANTIC",
         outcome: "rejected",
-        gate: "schema"
+        gate: "semantic"
       }
     ]
   );
@@ -237,9 +216,10 @@ test("StepRunner records structured validation reports without committing partia
   result.applyTo(context);
 
   assert.deepEqual(
-    context.getFindings()?.map((finding) => finding.findingId),
+    context.getCandidateFindingsV3()?.findings.map((finding) => finding.findingId),
     ["F3"]
   );
+  assert.equal(context.getFindings(), undefined);
 });
 
 test("StepRunner retries the whole step on judge timeout with fresh review and judge attempts", async () => {
@@ -250,7 +230,7 @@ test("StepRunner retries the whole step on judge timeout with fresh review and j
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
         reviewAttempts += 1;
-        return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
+        return `## Summary\n- 整體理解：attempt ${reviewAttempts}`;
       }
     }),
     judgeService: {
@@ -278,7 +258,7 @@ test("StepRunner retries the whole step on judge timeout with fresh review and j
   result.applyTo(context);
   assert.equal(reviewAttempts, 2);
   assert.equal(judgeAttempts, 2);
-  assert.equal(context.getSection("overview"), "## Overview\n- 整體理解：attempt 2");
+  assert.equal(context.getSection("summary"), "## Summary\n- 整體理解：attempt 2");
 });
 
 test("StepRunner retries the whole step when review session startup fails and eventually succeeds", async () => {
@@ -295,7 +275,7 @@ test("StepRunner retries the whole step when review session startup fails and ev
 
         return createReviewSessionFactory({
           onSendAndWait() {
-            return "## Overview\n- 整體理解：attempt 2";
+            return "## Summary\n- 整體理解：attempt 2";
           }
         }).createSession({
           knowledgeMode: "built-in-context7",
@@ -324,7 +304,7 @@ test("StepRunner retries the whole step when review session startup fails and ev
 
   result.applyTo(context);
   assert.equal(createAttempts, 2);
-  assert.equal(context.getSection("overview"), "## Overview\n- 整體理解：attempt 2");
+  assert.equal(context.getSection("summary"), "## Summary\n- 整體理解：attempt 2");
 });
 
 test("StepRunner reports standardized review startup failure after retry exhaustion", async () => {
@@ -354,7 +334,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /Step step1-overview failed for src\/app\.ts: review startup failed/u
+    /Step step7-summary failed for src\/app\.ts: review startup failed/u
   );
 
   assert.equal(createAttempts, 2);
@@ -366,7 +346,7 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
-        return "## Overview\n- 整體理解：attempt 1";
+        return "## Summary\n- 整體理解：attempt 1";
       }
     }),
     judgeService: {
@@ -383,13 +363,13 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
     }
   });
 
-  const result = await runDefaultJudgeOverviewStep(runner, context);
+  const result = await runDefaultJudgeSectionStep(runner, context);
 
   result.applyTo(context);
 
   assert.equal(retryInfos.length, 1);
   assert.deepEqual(retryInfos[0], {
-    stepId: "step1-overview",
+    stepId: "step7-summary",
     filePath: "src/app.ts",
     attempt: 0,
     cause: "judge rejected"
@@ -402,7 +382,7 @@ test("StepRunner does not invoke onStepRetry when the step succeeds on the first
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
-        return "## Overview\n- 整體理解：成功一次完成";
+        return "## Summary\n- 整體理解：成功一次完成";
       }
     }),
     onStepRetry() {
@@ -424,7 +404,7 @@ test("StepRunner swallows exceptions thrown by onStepRetry and does not propagat
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
         reviewAttempts += 1;
-        return `## Overview\n- 整體理解：attempt ${reviewAttempts}`;
+        return `## Summary\n- 整體理解：attempt ${reviewAttempts}`;
       }
     }),
     judgeService: {
@@ -442,12 +422,12 @@ test("StepRunner swallows exceptions thrown by onStepRetry and does not propagat
   });
 
   // Should not throw despite onStepRetry throwing
-  const result = await runDefaultJudgeOverviewStep(runner, context);
+  const result = await runDefaultJudgeSectionStep(runner, context);
 
   result.applyTo(context);
 
   assert.equal(reviewAttempts, 2);
-  assert.match(context.getSection("overview") ?? "", /attempt 2/u);
+  assert.match(context.getSection("summary") ?? "", /attempt 2/u);
 });
 
 test("StepRunner invokes onStepRetry when prepare itself throws on the first attempt", async () => {
@@ -458,7 +438,7 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
-        return "## Overview\n- 整體理解：retry after prepare failure";
+        return "## Summary\n- 整體理解：retry after prepare failure";
       }
     }),
     onStepRetry(info) {
@@ -468,7 +448,7 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
 
   const result = await runner.run({
     step: {
-      stepId: "step1-overview",
+      stepId: "step7-summary",
       prepare() {
         prepareAttempts += 1;
 
@@ -477,7 +457,7 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
         }
 
         return {
-          stepId: "step1-overview",
+          stepId: "step7-summary",
           prompt: { systemMessage: "system prompt", userMessage: "user prompt" },
           reviewProfile: {
             knowledgeMode: "disabled",
@@ -486,7 +466,7 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
           },
           async resolve(response: string) {
             return (targetContext: import("../../src/core/file-review-context.ts").FileReviewContext) => {
-              targetContext.setSection("overview", response);
+              targetContext.setSection("summary", response);
             };
           }
         };
@@ -502,12 +482,12 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
   assert.equal(prepareAttempts, 2);
   assert.equal(retryInfos.length, 1);
   assert.deepEqual(retryInfos[0], {
-    stepId: "step1-overview",
+    stepId: "step7-summary",
     filePath: "src/app.ts",
     attempt: 0,
     cause: "prepare exploded"
   });
-  assert.match(context.getSection("overview") ?? "", /retry after prepare failure/u);
+  assert.match(context.getSection("summary") ?? "", /retry after prepare failure/u);
 });
 
 test("StepRunner does not invoke onStepRetry on the final attempt failure", async () => {
@@ -517,7 +497,7 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
-        return "## Overview\n- 整體理解：always fails judge";
+        return "## Summary\n- 整體理解：always fails judge";
       }
     }),
     judgeService: {
@@ -532,11 +512,132 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
 
   await assert.rejects(
     () =>
-      runDefaultJudgeOverviewStep(runner, context),
-    /Step step1-overview failed for src\/app\.ts: judge rejected/u
+      runDefaultJudgeSectionStep(runner, context),
+    /Step step7-summary failed for src\/app\.ts: judge rejected/u
   );
 
   // Called exactly once for attempt 0; NOT called for the final failure (attempt 1).
   assert.equal(retryInfos.length, 1);
   assert.equal((retryInfos[0] as { attempt: number }).attempt, 0);
 });
+
+function createReviewBasis(): ReviewBasisV1 {
+  return {
+    schemaVersion: 1,
+    filePath: "src/app.ts",
+    roleInChangeset: "Owns review prompt harness state handoff.",
+    changedBehavior: [
+      {
+        changeId: "CB1",
+        before: "Step 5 consumed prose sections.",
+        after: "Step 5 consumes ReviewBasis evidence graph.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    facts: [
+      {
+        factId: "FCT1",
+        statement: "ReviewBasis is emitted before Step 5.",
+        evidenceIds: ["E1"]
+      }
+    ],
+    inferences: [
+      {
+        inferenceId: "INF1",
+        statement: "Step 5 can validate source evidence IDs.",
+        basedOnEvidenceIds: ["E1"],
+        confidence: "high"
+      }
+    ],
+    dependencyMap: {
+      upstreamCallers: ["ReviewOrchestrator"],
+      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      externalContracts: [],
+      sharedStateOrSideEffects: ["FileReviewContext"]
+    },
+    flowMap: {
+      entryPoints: ["ReviewBasisStep.prepare"],
+      stateTransitions: ["setReviewBasis"],
+      asyncBoundaries: [],
+      errorPaths: ["validator rejects missing evidence"]
+    },
+    testCoverage: {
+      changedTests: ["test/core/step-runner-retry.test.ts"],
+      observedCoverageSignals: ["retry test"],
+      coverageGaps: []
+    },
+    identifierRegistry: {
+      files: ["src/app.ts"],
+      symbols: ["ReviewBasisV1"],
+      resourceKeys: [],
+      apiNames: [],
+      stateNames: ["reviewBasis"]
+    },
+    hypothesisLedger: [
+      {
+        hypothesisId: "H1",
+        statement: "Evidence refs may be missing.",
+        triggerCondition: "Step 5 cites absent evidence ID.",
+        whyRelevantHere: "Phase 2 validates evidence refs.",
+        closureCriteria: ["Every cited evidence ID exists."]
+      }
+    ],
+    missingInformation: [],
+    evidenceRefs: [
+      {
+        evidenceId: "E1",
+        sourceType: "diff",
+        location: "src/app.ts:1",
+        summary: "review basis state added"
+      }
+    ]
+  };
+}
+
+function createCandidatePayload(
+  findingId: string,
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    schemaVersion: 3,
+    result: "FINDINGS_READY",
+    findings: [
+      {
+        findingId,
+        sourceHypothesisIds: ["H1"],
+        classification: "confirmed_problem",
+        priority: "must",
+        severity: "high",
+        confidence: "high",
+        evidenceStrength: "direct",
+        title: "guard moved after dereference",
+        traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
+        codeEvidence: [
+          {
+            evidenceId: "E1",
+            location: "src/app.ts:1",
+            summary: "changed branch reads value before fallback"
+          }
+        ],
+        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        triggerCondition: "nullable input reaches the changed branch",
+        failureMechanism: "guard runs after dereference",
+        impact: "request fails before fallback can run",
+        counterEvidenceChecked: ["fallback no longer precedes dereference"],
+        reproducibility: "deterministic with nullable input",
+        fixDirection: "restore guard before dereference",
+        testRecommendation: "add nullable input regression coverage",
+        ...overrides
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        evidenceIds: ["E1"],
+        rationale: `${findingId} validates the hypothesis.`
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}

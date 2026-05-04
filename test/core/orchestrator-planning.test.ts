@@ -13,7 +13,6 @@ import { SessionExecutor } from "../../src/services/session-executor.ts";
 import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
-import { buildOverviewResponse } from "../helpers/orchestrator-fixture.ts";
 
 test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRun() and before per-file workers begin", async () => {
   const fixture = createReviewRepoFixture();
@@ -209,7 +208,7 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
               async sendAndWait() {
                 return {
                   data: {
-                    content: buildOverviewResponse("unexpected.ts")
+                    content: "unexpected response"
                   }
                 };
               },

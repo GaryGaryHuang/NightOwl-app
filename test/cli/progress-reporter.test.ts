@@ -8,7 +8,8 @@ const CLEAR_TTY_LIVE_LINE = "\u001b[2K\r";
 const REPO_ROOT = "/workspace/repo";
 const REVIEW_BASE_PATH =
   "/workspace/repo/.nightowl/review/feature-branch_03131430";
-const STEP1 = "step1-overview";
+const REVIEW_BASIS_STEP = "review-basis";
+const STEP6 = "step6-cognitive-simulation";
 
 type FakeStdout = ReturnType<typeof createFakeStdout>;
 
@@ -27,7 +28,7 @@ test("CliProgressReporter renders an initialized metadata block and rewrites a s
   reporter.handleEvent({
     type: "file-progressed",
     filePath: "src/app.ts",
-    stepId: STEP1
+    stepId: REVIEW_BASIS_STEP
   });
 
   assert.deepEqual(stdout.logs, [`Output: ${REVIEW_BASE_PATH}`]);
@@ -71,7 +72,7 @@ test("CliProgressReporter keeps only three most-recent active files and counts s
   reporter.handleEvent({
     type: "file-skipped",
     filePath: "src/b.ts",
-    stepId: "step2-dependencies-boundaries",
+    stepId: STEP6,
     reason: "deterministic validation failed"
   });
 
@@ -131,13 +132,13 @@ test("CliProgressReporter pins skipped-file events above the TTY live line and k
   reporter.handleEvent({
     type: "file-skipped",
     filePath: "src/app.ts",
-    stepId: "step2-dependencies-boundaries",
+    stepId: STEP6,
     reason: "judge rejected"
   });
 
   assert.match(
     stdout.logs.at(-1) ?? "",
-    /Skipped: src\/app\.ts \| step2-dependencies-boundaries \| judge rejected/u
+    /Skipped: src\/app\.ts \| step6-cognitive-simulation \| judge rejected/u
   );
   assert.match(stdout.writes.at(-1) ?? "", /1\/2/u);
   assert.match(stdout.writes.at(-1) ?? "", /src\/lib\.ts/u);
@@ -191,7 +192,7 @@ test("CliProgressReporter falls back to append-only snapshots when stdout is not
   reporter.handleEvent({
     type: "file-progressed",
     filePath: "src/app.ts",
-    stepId: STEP1
+    stepId: REVIEW_BASIS_STEP
   });
   assert.equal(
     stdout.logs.length,
@@ -202,14 +203,14 @@ test("CliProgressReporter falls back to append-only snapshots when stdout is not
   reporter.handleEvent({
     type: "file-skipped",
     filePath: "src/app.ts",
-    stepId: "step2-dependencies-boundaries",
+    stepId: STEP6,
     reason: "judge rejected"
   });
 
   assert.deepEqual(stdout.writes, []);
   assert.equal(
     stdout.logs.at(-2),
-    "Skipped: src/app.ts | step2-dependencies-boundaries | judge rejected"
+    "Skipped: src/app.ts | step6-cognitive-simulation | judge rejected"
   );
   assert.ok(stdout.logs.every((entry) => !entry.includes("\r")));
   assert.equal(stdout.logs.at(-1), "Progress 1/2 | active 0");
@@ -364,7 +365,7 @@ function progressFiles(
   filePaths: string[]
 ): void {
   for (const filePath of filePaths) {
-    reporter.handleEvent({ type: "file-progressed", filePath, stepId: STEP1 });
+    reporter.handleEvent({ type: "file-progressed", filePath, stepId: REVIEW_BASIS_STEP });
   }
 }
 

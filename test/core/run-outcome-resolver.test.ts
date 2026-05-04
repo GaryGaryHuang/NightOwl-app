@@ -30,7 +30,7 @@ test("resolveFileOutcomes maps each planned file to its skipped outcome", () => 
   const resolved = resolveFileOutcomes(
     createPlannedNotesFromPaths(["src/a.ts"]),
     [],
-    [createSkippedFile("src/a.ts", "step1-overview", "judge rejected")]
+    [createSkippedFile("src/a.ts", "review-basis", "deterministic validation failed")]
   );
 
   assert.equal(resolved.length, 1);
@@ -42,7 +42,7 @@ test("resolveFileOutcomes gives successfulFiles precedence over skippedFiles for
   const resolved = resolveFileOutcomes(
     createPlannedNotesFromPaths(["src/both.ts"]),
     [createSuccessfulFile("src/both.ts", [])],
-    [createSkippedFile("src/both.ts", "step1-overview", "judge rejected")]
+    [createSkippedFile("src/both.ts", "review-basis", "deterministic validation failed")]
   );
 
   assert.equal(resolved[0].status, "successful");
@@ -94,7 +94,7 @@ test("resolveFileOutcomes handles mixed successful and skipped outcomes", () => 
   const resolved = resolveFileOutcomes(
     createPlannedNotesFromPaths(["src/ok.ts", "src/skip.ts"]),
     [createSuccessfulFile("src/ok.ts", [createFinding("nice", 85)])],
-    [createSkippedFile("src/skip.ts", "step3-knowledge-source-of-truth", "timeout")]
+    [createSkippedFile("src/skip.ts", "step6-cognitive-simulation", "timeout")]
   );
 
   assert.equal(resolved[0].status, "successful");

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { StepRunner } from "../../src/core/step-runner.ts";
-import type { FindingsPayload } from "../../src/core/file-review-context.ts";
 import {
   SessionExecutor,
   SessionTurnAbortedError
@@ -104,24 +103,33 @@ test("StepRunner does not consume retry budget or run deterministic validation w
       }
     },
     structuredOutputValidator: {
-      validate() {
+      validateCandidateFindingsV3WithReport() {
         validateCalls += 1;
-        return { schemaVersion: 2, findings: [] };
+        return {
+          payload: {
+            schemaVersion: 3,
+            result: "NO_FINDINGS",
+            findings: [],
+            hypothesisClosure: [],
+            criticalMissingInformation: []
+          },
+          report: []
+        };
       },
-      validateWithReport() {
+      validateValidationReportV1WithReport() {
         validateCalls += 1;
-        return { payload: { schemaVersion: 2, findings: [] }, report: [] };
-      },
-      filterByAcceptance(payload: FindingsPayload) {
-        return payload;
-      },
-      filterByAcceptanceWithReport(payload: FindingsPayload) {
-        return { payload, report: [] };
-      },
-      validateWithDispositions() {
-        return { schemaVersion: 2, findingUpdates: [], dispositions: [] };
-      },
-      validateDispositionCompleteness() {}
+        return {
+          payload: {
+            schemaVersion: 1,
+            overallStatus: "PASS",
+            perFindingResults: [],
+            approvedFindings: [],
+            missingInformationItems: [],
+            loopControl: { action: "accept", reason: "no findings" }
+          },
+          report: []
+        };
+      }
     }
   });
 

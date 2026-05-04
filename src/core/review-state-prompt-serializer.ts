@@ -11,12 +11,6 @@ import type {
   CandidateFindingsV3,
   MissingInformationItem
 } from "./semantic-review.ts";
-import {
-  DEPENDENCIES_BOUNDARIES_SECTION_KEY,
-  KNOWLEDGE_SOURCE_OF_TRUTH_SECTION_KEY,
-  OVERVIEW_SECTION_KEY,
-  STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY
-} from "./review-section-contract.ts";
 
 export type FindingsBlockKind =
   | "candidate-findings"
@@ -41,7 +35,7 @@ export interface ReviewStateSerializeInput {
     | "getMissingInformationItems"
     | "getPriorValidatorFeedback"
     | "getReviewBasis"
-    | "getSection"
+    | "getSectionEntries"
     | "getValidationReportV1"
     | "headRef"
   >;
@@ -55,12 +49,7 @@ export interface ReviewStateSnapshotHunk {
   changedHeadLines: number[];
 }
 
-export interface ReviewStateSnapshotSections {
-  overview: string | null;
-  boundaryMap: string | null;
-  sourcePack: string | null;
-  hypothesisPack: string | null;
-}
+export type ReviewStateSnapshotSections = Record<string, string>;
 
 export interface ReviewStateSnapshot {
   schemaVersion: 1;
@@ -161,15 +150,9 @@ export class ReviewStatePromptSerializer {
   }
 
   private buildSections(
-    context: Pick<FileReviewContext, "getSection">
+    context: Pick<FileReviewContext, "getSectionEntries">
   ): ReviewStateSnapshotSections {
-    return {
-      overview: context.getSection(OVERVIEW_SECTION_KEY) ?? null,
-      boundaryMap: context.getSection(DEPENDENCIES_BOUNDARIES_SECTION_KEY) ?? null,
-      sourcePack: context.getSection(KNOWLEDGE_SOURCE_OF_TRUTH_SECTION_KEY) ?? null,
-      hypothesisPack:
-        context.getSection(STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY) ?? null
-    };
+    return Object.fromEntries(context.getSectionEntries());
   }
 
 }
@@ -185,12 +168,7 @@ function emptyIdentifierRegistry(): ReviewBasisIdentifierRegistry {
 }
 
 function emptySections(): ReviewStateSnapshotSections {
-  return {
-    overview: null,
-    boundaryMap: null,
-    sourcePack: null,
-    hypothesisPack: null
-  };
+  return {};
 }
 
 function stringifyForXmlishBlock(value: unknown): string {

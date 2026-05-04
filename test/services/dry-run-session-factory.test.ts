@@ -22,11 +22,26 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
       outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
       systemMessage: "step system",
+      stepId: "step7-summary"
+    });
+
+    const response = await session.sendAndWait("please review");
+    assert.equal(response, getDryRunStubResponse("step7-summary"));
+  });
+
+  test("falls back to generic stub for removed legacy Step 1-4 step IDs", async () => {
+    const factory = new DryRunReviewSessionFactory();
+    const session = await factory.createSession({
+      knowledgeMode: "disabled",
+      model: "gpt-5.4-mini",
+      outputBaseDir: "/workspace/output",
+      repoRoot: "/workspace/repo",
+      systemMessage: "step system",
       stepId: "step1-overview"
     });
 
     const response = await session.sendAndWait("please review");
-    assert.equal(response, getDryRunStubResponse("step1-overview"));
+    assert.equal(response, "[dry-run] No built-in stub template for this step.");
   });
 });
 
