@@ -1,5 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import { SUMMARY_SECTION_KEY } from "../review-section-contract.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import { buildRiskSnapshot, type RiskSnapshot } from "../risk-level.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
@@ -58,7 +59,7 @@ export class Step7SummaryStep implements StepDefinition {
       reviewProfile: {
         knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createStep7HybridResolve({
         stepId,

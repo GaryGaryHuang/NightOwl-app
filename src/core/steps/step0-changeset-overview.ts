@@ -1,11 +1,12 @@
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import type { ReviewKnowledgeMode } from "../review-knowledge-mode.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import {
   formatReviewChangesetEntry,
   type ReviewChangesetEntry
 } from "../../providers/review-source-provider.ts";
 
-export const STEP0_TIMEOUT_MS = 300_000;
+export const STEP0_TIMEOUT_MS = REVIEW_TURN_TIMEOUT_MS;
 
 export const STEP0_REVIEW_PROFILE = {
   knowledgeMode: "built-in-context7",

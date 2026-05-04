@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
 import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import { ReviewStatePromptSerializer } from "../../../src/core/review-state-prompt-serializer.ts";
 import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
@@ -39,7 +40,7 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   const step = new Step5ValidationInterrogationStep({ promptSerializer: serializer });
   const plan = step.prepare(createContext());
 
-  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
+  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1\.hypothesisLedger/u);
   assert.match(plan.prompt.systemMessage, /CandidateFindingsV3/u);
   assert.match(plan.prompt.systemMessage, /final approved findings/u);
@@ -156,7 +157,7 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   context.setCandidateFindingsV3(candidatePayload);
   const plan = step.prepare(context);
 
-  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
+  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
     candidateFindings: ReturnType<typeof createCandidateFindingsV3>["findings"];
     verifiedFindings: Finding[];

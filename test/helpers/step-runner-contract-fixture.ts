@@ -7,6 +7,7 @@ import {
 } from "../../src/core/file-review-context.ts";
 import type { VerifierReportEntry } from "../../src/core/verifier-report.ts";
 import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
 import {
   type StepDefinition,
   type StepExecutionPlan,
@@ -106,7 +107,7 @@ export function createSectionTestStep(input: {
         reviewProfile: input.reviewProfile ?? {
           knowledgeMode: "disabled",
           model: "gpt-5-mini",
-          timeoutMs: 300_000
+          timeoutMs: REVIEW_TURN_TIMEOUT_MS
         },
         resolve: input.resolve ?? (async (response: string) => {
           return (context: FileReviewContext) => {
@@ -167,7 +168,7 @@ export function createStructuredTestStep(input: {
         reviewProfile: input.reviewProfile ?? {
           knowledgeMode: "disabled",
           model: "gpt-5-mini",
-          timeoutMs: 300_000
+          timeoutMs: REVIEW_TURN_TIMEOUT_MS
         },
         resolve: input.resolve ?? (async (response: string, services: StepResolveServices) => {
           const validated = services.validator.validate({

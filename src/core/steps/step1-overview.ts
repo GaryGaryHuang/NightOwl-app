@@ -1,5 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import { OVERVIEW_SECTION_KEY } from "../review-section-contract.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { RunContext } from "../run-context.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
@@ -89,7 +90,7 @@ export class Step1OverviewStep implements StepDefinition {
       reviewProfile: {
         knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createSectionResolve({
         stepId,

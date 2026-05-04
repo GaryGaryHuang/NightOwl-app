@@ -1,6 +1,7 @@
 import type { ChangeMap, ChangeMapCategory } from "../change-map.ts";
 import type { FileReviewContext } from "../file-review-context.ts";
 import { STRATEGY_WHAT_IF_SCENARIOS_SECTION_KEY } from "../review-section-contract.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
@@ -203,7 +204,7 @@ export class Step4StrategyWhatIfScenariosStep implements StepDefinition {
       reviewProfile: {
         knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createSectionResolve({
         stepId,

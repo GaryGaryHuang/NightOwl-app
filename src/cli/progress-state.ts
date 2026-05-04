@@ -115,6 +115,14 @@ export function reduceProgressEvent(
         }
       };
 
+    case "review-session-log":
+      return {
+        state: current,
+        instruction: {
+          appendMessage: `Review session: ${event.stepId} | ${event.message}`
+        }
+      };
+
     default: {
       const unsupportedEvent: never = event;
       return {

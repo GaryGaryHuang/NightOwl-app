@@ -377,6 +377,8 @@ function renderProgressEvent(event: RunProgressEvent): string {
       return `finalizer-failed:${event.artifact}:${event.message}`;
     case "tool-audit-write-failed":
       return `tool-audit-write-failed:${event.message}`;
+    case "review-session-log":
+      return `review-session-log:${event.stepId}:${event.message}`;
   }
 }
 

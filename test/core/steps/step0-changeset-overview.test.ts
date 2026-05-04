@@ -7,6 +7,7 @@ import {
   buildStep0Prompt
 } from "../../../src/core/steps/step0-changeset-overview.ts";
 import { USER_CONTEXT_CATEGORIES } from "../../../src/core/change-map.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import type { ReviewChangesetEntry } from "../../../src/providers/review-source-provider.ts";
 
 function createChangesetEntries(
@@ -138,8 +139,8 @@ test("STEP0_SYSTEM_MESSAGE enumerates user context category values", () => {
   }
 });
 
-test("STEP0_REVIEW_PROFILE keeps the documented five minute timeout", () => {
-  assert.equal(STEP0_REVIEW_PROFILE.timeoutMs, 300_000);
+test("STEP0_REVIEW_PROFILE keeps the documented ten minute timeout", () => {
+  assert.equal(STEP0_REVIEW_PROFILE.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
 });
 
 test("buildStep0Prompt instruction body includes the literal `## Changeset Overview` template header", () => {

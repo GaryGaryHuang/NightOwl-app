@@ -270,6 +270,31 @@ test("CliProgressReporter appends tool-audit warnings in non-TTY mode without af
   assert.equal(stdout.logs.at(-2), "Progress 0/2 | active 0");
 });
 
+test("CliProgressReporter appends review session logs while preserving progress state", () => {
+  const { stdout, reporter } = createInitializedReporter({
+    isTTY: false,
+    plannedFileCount: 2
+  });
+
+  reporter.handleEvent({
+    type: "file-claimed",
+    filePath: "src/app.ts",
+    claimOrder: 1
+  });
+  reporter.handleEvent({
+    type: "review-session-log",
+    stepId: "changeset-overview",
+    message: "streaming response received (128 B)"
+  });
+
+  assert.deepEqual(stdout.writes, []);
+  assert.equal(
+    stdout.logs.at(-1),
+    "Review session: changeset-overview | streaming response received (128 B)"
+  );
+  assert.equal(stdout.logs.at(-2), "Progress 0/2 | active 0");
+});
+
 test("CliProgressReporter clears the TTY live line during finalize so the final summary does not leave a stale progress row", () => {
   const { stdout, reporter } = createInitializedReporter({
     isTTY: true,

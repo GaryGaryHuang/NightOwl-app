@@ -1,6 +1,7 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import { KNOWLEDGE_SOURCE_OF_TRUTH_SECTION_KEY } from "../review-section-contract.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createSectionResolve } from "./step-resolve-helpers.ts";
@@ -96,7 +97,7 @@ export class Step3KnowledgeSourceOfTruthStep implements StepDefinition {
       reviewProfile: {
         knowledgeMode: "built-in-context7",
         model: "gpt-5.4-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createSectionResolve({
         stepId,

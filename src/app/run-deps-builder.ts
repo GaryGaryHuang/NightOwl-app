@@ -120,7 +120,14 @@ export class ProductionRunDepsBuilder implements RunDepsBuilder {
       clientManager: options.clientManager,
       knowledgeSvc,
       toolPolicyGuard,
-      auditWriterProvider: toolAuditLifecycle.auditWriterProvider
+      auditWriterProvider: toolAuditLifecycle.auditWriterProvider,
+      onSessionLogEvent(event) {
+        options.onProgressEvent?.({
+          type: "review-session-log",
+          stepId: event.stepId,
+          message: event.message
+        });
+      }
     });
 
     const orchestrator = buildOrchestrator({

@@ -4,6 +4,7 @@ import test from "node:test";
 import type { ChangeMap } from "../../../src/core/change-map.ts";
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
 import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import {
   ReviewStatePromptSerializer,
   type ReviewStateSnapshot
@@ -299,7 +300,7 @@ test("Step1OverviewStep prompt carries changeset context, file diff, and profile
   assert.equal(plan.stepId, "step1-overview");
   assert.equal(plan.reviewProfile.knowledgeMode, "disabled");
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
+  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(plan.prompt.systemMessage, /## Current Step: Overview/u);
   assert.match(plan.prompt.userMessage, /<changeset_context>/u);
   assert.match(plan.prompt.userMessage, /Auth flow spans src\/app\.ts/u);
@@ -321,6 +322,7 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.equal(plan.stepId, "review-basis");
   assert.equal(plan.reviewProfile.knowledgeMode, "built-in-context7");
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
+  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1/u);
   assert.match(plan.prompt.userMessage, /<change_map format="json">/u);
   assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts"/u);
@@ -363,7 +365,7 @@ test("Step2DependenciesBoundariesStep prompt carries Step 1 overview and boundar
   assert.equal(plan.stepId, "step2-dependencies-boundaries");
   assert.equal(plan.reviewProfile.knowledgeMode, "disabled");
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
+  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(
     plan.prompt.systemMessage,
     /## Current Step: Dependencies & Boundaries/u
@@ -387,7 +389,7 @@ test("Step3KnowledgeSourceOfTruthStep prompt carries prior review state and know
   assert.equal(plan.stepId, "step3-knowledge-source-of-truth");
   assert.equal(plan.reviewProfile.knowledgeMode, "built-in-context7");
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
+  assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(
     plan.prompt.systemMessage,
     /## Current Step: Knowledge & Source of Truth/u
@@ -437,6 +439,17 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
       "disabled",
       "disabled",
       "disabled"
+    ]
+  );
+  assert.deepEqual(
+    stepPlans.map((plan) => plan.reviewProfile.timeoutMs),
+    [
+      REVIEW_TURN_TIMEOUT_MS,
+      REVIEW_TURN_TIMEOUT_MS,
+      REVIEW_TURN_TIMEOUT_MS,
+      REVIEW_TURN_TIMEOUT_MS,
+      REVIEW_TURN_TIMEOUT_MS,
+      REVIEW_TURN_TIMEOUT_MS
     ]
   );
 

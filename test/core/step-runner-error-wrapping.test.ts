@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { StepRunner } from "../../src/core/step-runner.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
 import {
   createReviewSessionFactory,
   createSectionTestStep,
@@ -57,7 +58,7 @@ test("StepRunner returns an apply-able result without mutating state or writing 
         workingDirectory: "/workspace/repo"
       }
     ],
-    ["sendAndWait", { prompt: "user prompt" }, 300_000],
+    ["sendAndWait", { prompt: "user prompt" }, REVIEW_TURN_TIMEOUT_MS],
     ["disconnect"]
   ]);
 });
@@ -86,7 +87,7 @@ test("StepRunner passes the step-provided knowledgeMode into review sessions", a
       reviewProfile: {
         knowledgeMode: "built-in-context7",
         model: "gpt-5-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       }
     }),
     context,

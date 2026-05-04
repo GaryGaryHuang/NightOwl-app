@@ -1,5 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewBasisV1 } from "../review-basis.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
@@ -113,7 +114,7 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
       reviewProfile: {
         knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createCandidateFindingsV3Resolve({
         stepId: this.stepId,

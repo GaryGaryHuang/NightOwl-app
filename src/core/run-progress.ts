@@ -47,6 +47,11 @@ export type RunProgressEvent =
   | {
       type: "tool-audit-write-failed";
       message: string;
+    }
+  | {
+      type: "review-session-log";
+      stepId: string;
+      message: string;
     };
 
 export type RunProgressEventHandler = (event: RunProgressEvent) => void;

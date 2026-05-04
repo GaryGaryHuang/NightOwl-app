@@ -1,6 +1,7 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import { DEPENDENCIES_BOUNDARIES_SECTION_KEY } from "../review-section-contract.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createSectionResolve } from "./step-resolve-helpers.ts";
@@ -94,7 +95,7 @@ export class Step2DependenciesBoundariesStep implements StepDefinition {
       reviewProfile: {
         knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createSectionResolve({
         stepId,

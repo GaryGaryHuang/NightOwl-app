@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { StepRunner } from "../../src/core/step-runner.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
 import { createStructuredResolve } from "../../src/core/steps/step-resolve-helpers.ts";
 import {
   createReviewSessionFactory,
@@ -188,7 +189,7 @@ test("StepRunner records structured validation reports without committing partia
           reviewProfile: {
             knowledgeMode: "disabled",
             model: "gpt-5.4-mini",
-            timeoutMs: 300_000
+            timeoutMs: REVIEW_TURN_TIMEOUT_MS
           },
           resolve: createStructuredResolve({
             stepId: "step5-validation-interrogation",
@@ -481,7 +482,7 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
           reviewProfile: {
             knowledgeMode: "disabled",
             model: "gpt-5-mini",
-            timeoutMs: 300_000
+            timeoutMs: REVIEW_TURN_TIMEOUT_MS
           },
           async resolve(response: string) {
             return (targetContext: import("../../src/core/file-review-context.ts").FileReviewContext) => {

@@ -1,5 +1,6 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import { ReviewBasisValidator } from "../review-basis-validator.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { RunContext } from "../run-context.ts";
 import type { StepDefinition, StepExecutionPlan } from "../step-runner.ts";
 import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
@@ -90,7 +91,7 @@ export class ReviewBasisStep implements StepDefinition {
       reviewProfile: {
         knowledgeMode: "built-in-context7",
         model: "gpt-5.4-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: async (response) => {
         const reviewBasis = this.#validator.validate(response);

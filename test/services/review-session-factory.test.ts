@@ -4,6 +4,7 @@ import type { MCPServerConfig, SessionConfig } from "@github/copilot-sdk";
 
 import {
   ReviewSessionFactory,
+  type ReviewSessionLogEvent,
   type ReviewSessionFactoryOptions
 } from "../../src/services/review-session-factory.ts";
 import {
@@ -65,7 +66,7 @@ function createReviewSessionFactoryHarness(
   options: Partial<
     Pick<
       ReviewSessionFactoryOptions,
-      "knowledgeSvc" | "toolPolicyGuard" | "auditWriterProvider"
+      "knowledgeSvc" | "toolPolicyGuard" | "auditWriterProvider" | "onSessionLogEvent"
     >
   > = {}
 ) {
@@ -94,7 +95,10 @@ function createReviewSessionFactoryHarness(
       },
     ...(options.auditWriterProvider === undefined
       ? {}
-      : { auditWriterProvider: options.auditWriterProvider })
+      : { auditWriterProvider: options.auditWriterProvider }),
+    ...(options.onSessionLogEvent === undefined
+      ? {}
+      : { onSessionLogEvent: options.onSessionLogEvent })
   });
 
   return {
@@ -191,8 +195,189 @@ test("ReviewSessionFactory builds the base review session config from the profil
   const config = getRecordedConfig(receivedConfigs);
   assert.equal(config.model, "gpt-5.4-mini");
   assert.equal(config.reasoningEffort, "high");
-  assert.equal(config.streaming, false);
+  assert.equal(config.streaming, true);
   assert.equal(config.workingDirectory, "/workspace/repo");
+});
+
+test("ReviewSessionFactory exposes review session event logs without streaming assistant content", async () => {
+  const logEvents: ReviewSessionLogEvent[] = [];
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    toolPolicyGuard: new SpyToolPolicyGuard(),
+    onSessionLogEvent(event) {
+      logEvents.push(event);
+    }
+  });
+
+  await factory.createSession({
+    ...BASE_REVIEW_PROFILE,
+    stepId: "changeset-overview"
+  });
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(typeof config.onEvent, "function");
+
+  config.onEvent?.({
+    id: "event-1",
+    timestamp: "2026-05-04T00:00:00.000Z",
+    parentId: null,
+    type: "session.start",
+    data: {
+      sessionId: "session-1",
+      version: 1,
+      producer: "copilot-agent",
+      copilotVersion: "1.0.0",
+      startTime: "2026-05-04T00:00:00.000Z",
+      selectedModel: "gpt-5.4-mini"
+    }
+  });
+  config.onEvent?.({
+    id: "event-2",
+    timestamp: "2026-05-04T00:00:01.000Z",
+    parentId: "event-1",
+    ephemeral: true,
+    type: "assistant.message_delta",
+    data: {
+      messageId: "message-1",
+      deltaContent: "private model output"
+    }
+  });
+  config.onEvent?.({
+    id: "event-3",
+    timestamp: "2026-05-04T00:00:02.000Z",
+    parentId: "event-2",
+    ephemeral: true,
+    type: "assistant.streaming_delta",
+    data: {
+      totalResponseSizeBytes: 128
+    }
+  });
+  config.onEvent?.({
+    id: "event-4",
+    timestamp: "2026-05-04T00:00:03.000Z",
+    parentId: "event-3",
+    type: "tool.execution_start",
+    data: {
+      toolCallId: "tool-1",
+      toolName: "view"
+    }
+  });
+  config.onEvent?.({
+    id: "event-5",
+    timestamp: "2026-05-04T00:00:04.000Z",
+    parentId: "event-4",
+    ephemeral: true,
+    type: "tool.execution_progress",
+    data: {
+      toolCallId: "tool-1",
+      progressMessage: "reading file"
+    }
+  });
+  config.onEvent?.({
+    id: "event-6",
+    timestamp: "2026-05-04T00:00:05.000Z",
+    parentId: "event-5",
+    type: "tool.execution_complete",
+    data: {
+      toolCallId: "tool-1",
+      success: true
+    }
+  });
+  config.onEvent?.({
+    id: "event-7",
+    timestamp: "2026-05-04T00:00:06.000Z",
+    parentId: "event-6",
+    ephemeral: true,
+    type: "assistant.message_delta",
+    data: {
+      messageId: "message-1",
+      deltaContent: "second private model output"
+    }
+  });
+  config.onEvent?.({
+    id: "event-8",
+    timestamp: "2026-05-04T00:00:07.000Z",
+    parentId: "event-7",
+    ephemeral: true,
+    type: "assistant.streaming_delta",
+    data: {
+      totalResponseSizeBytes: 4096
+    }
+  });
+  config.onEvent?.({
+    id: "event-9",
+    timestamp: "2026-05-04T00:00:08.000Z",
+    parentId: "event-8",
+    ephemeral: true,
+    type: "assistant.streaming_delta",
+    data: {
+      totalResponseSizeBytes: 8193
+    }
+  });
+  config.onEvent?.({
+    id: "event-10",
+    timestamp: "2026-05-04T00:00:09.000Z",
+    parentId: "event-9",
+    type: "session.error",
+    data: {
+      errorType: "query",
+      message: "rate limited"
+    }
+  });
+  config.onEvent?.({
+    id: "event-11",
+    timestamp: "2026-05-04T00:00:10.000Z",
+    parentId: "event-10",
+    ephemeral: true,
+    type: "session.idle",
+    data: {}
+  });
+
+  assert.deepEqual(logEvents, [
+    {
+      stepId: "changeset-overview",
+      message: "session started (model gpt-5.4-mini, timeout 600s, streaming on)"
+    },
+    {
+      stepId: "changeset-overview",
+      message: "assistant response stream started"
+    },
+    {
+      stepId: "changeset-overview",
+      message: "streaming response received (128 B)"
+    },
+    {
+      stepId: "changeset-overview",
+      message: "tool started: view"
+    },
+    {
+      stepId: "changeset-overview",
+      message: "tool progress: reading file"
+    },
+    {
+      stepId: "changeset-overview",
+      message: "tool completed: view (success)"
+    },
+    {
+      stepId: "changeset-overview",
+      message: "streaming response received (8.0 KiB)"
+    },
+    {
+      stepId: "changeset-overview",
+      message: "session error: rate limited"
+    },
+    {
+      stepId: "changeset-overview",
+      message: "session idle"
+    }
+  ]);
+  assert.ok(
+    logEvents.every((event) => !event.message.includes("private model output")),
+    "streaming logs must not echo assistant content into CLI progress output"
+  );
+  assert.ok(
+    logEvents.every((event) => !event.message.includes("second private model output")),
+    "repeated assistant deltas must remain suppressed"
+  );
 });
 
 test("ReviewSessionFactory injects MCP servers only when KnowledgeSvc returns them for the resolved knowledge mode", async () => {

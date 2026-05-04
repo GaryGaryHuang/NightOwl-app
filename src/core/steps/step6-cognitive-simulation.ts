@@ -1,4 +1,5 @@
 import type { FileReviewContext } from "../file-review-context.ts";
+import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { CandidateFindingsV3 } from "../semantic-review.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
@@ -107,7 +108,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
       reviewProfile: {
         knowledgeMode: "disabled",
         model: "gpt-5.4-mini",
-        timeoutMs: 300_000
+        timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createValidationReportV1Resolve({
         stepId: this.stepId,
