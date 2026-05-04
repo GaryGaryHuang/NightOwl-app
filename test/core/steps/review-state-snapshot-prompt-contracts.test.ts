@@ -455,14 +455,28 @@ test("Steps 2-7 receive parseable ReviewStateSnapshot JSON", () => {
 
   snapshots.forEach((snapshot, index) => {
     assertBaseSnapshot(snapshot, {
-      expectSections: index <= 2 || index === 5,
-      expectEvidenceRefs: index === 3 || index === 4
+      expectSections: index <= 2,
+      expectEvidenceRefs: index >= 3
     });
   });
 
   assert.equal(snapshots[4].candidateFindings[0].findingId, "F1");
   assert.deepEqual(snapshots[4].verifiedFindings, []);
+  assert.equal(
+    snapshots[5].reviewBasis?.roleInChangeset,
+    "Owns review prompt harness state handoff."
+  );
+  assert.deepEqual(snapshots[5].sections, {
+    overview: null,
+    boundaryMap: null,
+    sourcePack: null,
+    hypothesisPack: null
+  });
   assert.equal(snapshots[5].verifiedFindings[0].findingId, "F1");
   assert.deepEqual(snapshots[5].candidateFindings, []);
+  assert.match(
+    stepPlans[5].prompt.userMessage,
+    /ReviewBasisV1\.roleInChangeset/u
+  );
   assert.equal(stepPlans[4].prompt.userMessage.includes("<candidate_findings"), false);
 });

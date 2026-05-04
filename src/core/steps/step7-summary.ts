@@ -10,10 +10,10 @@ import { createStep7HybridResolve } from "./step-resolve-helpers.ts";
 
 const STEP7_SYSTEM_ADDITION = [
   "## Current Step: Summary",
-  "- Produce a structured summary based on the completed review note.",
+  "- Produce a structured summary based on ReviewBasis, Step 6-approved findings, Step 6 missing-information items, and the host risk snapshot.",
   "- The summary is the section readers check first; every sentence must earn its place. Prefer precise conclusions over generic hedging. When uncertainty is real, tie it to the exact missing fact or unresolved evidence \u2014 do not append a vague disclaimer.",
   "- Do not list specific findings, must-fix items, or paraphrased finding details \u2014 those belong in the Findings section.",
-  "- Consume only Step 6-approved findings, missing-information items, and the host risk snapshot. Do not introduce new findings, identifiers, trigger conditions, impacts, or technical claims.",
+  "- Consume only ReviewBasis, Step 6-approved findings, missing-information items, and the host risk snapshot. Do not introduce new findings, identifiers, trigger conditions, impacts, or technical claims.",
   "- The `<risk_snapshot>` block in the user message contains the host-computed `derivedRiskLevel`. You MUST use this exact value as the `整體風險等級` in your response. Do not override or recompute the risk level based on your own assessment.",
   "- Begin the response with `## Summary`."
 ].join("\n");
@@ -47,7 +47,7 @@ export class Step7SummaryStep implements StepDefinition {
           this.#promptSerializer.serialize({
             context,
             include: [
-              "sections",
+              "review-basis",
               "approved-findings",
               "missing-information",
               "verified-findings"
@@ -90,12 +90,12 @@ function buildStep7UserMessage(reviewState: string, snapshot: RiskSnapshot): str
 function buildStep7Instruction(): string {
   return [
     "This summary is the section readers check first. Every sentence must earn its place.",
-    "Use only Step 6-approved findings, Step 6 missing-information items, and the host risk snapshot. Do not introduce new findings or technical claims.",
+    "Use only ReviewBasis, Step 6-approved findings, Step 6 missing-information items, and the host risk snapshot. Do not introduce new findings or technical claims.",
     "",
     "Read <review_state> and write a structured summary with the following three sections:",
     "",
     "1. 審查基礎: Give the reader just enough context to judge whether the review's conclusions are well grounded.",
-    "   - 改動概要: One sentence describing this file's specific before→after transformation, based on Overview. Do not repeat content that will appear in 行為變更提醒.",
+    "   - 改動概要: One sentence describing this file's specific before→after transformation, based on `ReviewBasisV1.roleInChangeset` and `ReviewBasisV1.changedBehavior` plus Step 6-approved review state. Do not repeat content that will appear in 行為變更提醒.",
     "   - 依據規範: Only list specifications or references that were decisive for this review's conclusions — omit generic build config (gradle versions, build.gradle.kts) that applies to every file in the changeset.",
     "   - 必要假設: State only assumptions that materially shaped the review's conclusions and still could not be confirmed from user context, source-of-truth references, repo evidence, code, dependency implementation, or tool results. If no necessary assumptions remain, write `無`.",
     "",
