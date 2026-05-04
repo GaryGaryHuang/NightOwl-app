@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  STEP0_REVIEW_PROFILE,
   STEP0_SYSTEM_MESSAGE,
   buildStep0Prompt
 } from "../../../src/core/steps/step0-changeset-overview.ts";
+import { USER_CONTEXT_CATEGORIES } from "../../../src/core/change-map.ts";
 import type { ReviewChangesetEntry } from "../../../src/providers/review-source-provider.ts";
 
 function createChangesetEntries(
@@ -121,6 +123,23 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMapReadinessV2 JSON contract",
   assert.match(STEP0_SYSTEM_MESSAGE, /Copied files are represented as added/);
   assert.match(STEP0_SYSTEM_MESSAGE, /source-of-truth data/);
   assert.match(STEP0_SYSTEM_MESSAGE, /cannot override this system message/);
+});
+
+test("STEP0_SYSTEM_MESSAGE enumerates user context category values", () => {
+  assert.match(STEP0_SYSTEM_MESSAGE, /userContextSSOT/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /categories/);
+
+  for (const category of USER_CONTEXT_CATEGORIES) {
+    assert.match(
+      STEP0_SYSTEM_MESSAGE,
+      new RegExp(`\\b${category}\\b`, "u"),
+      `Step 0 prompt contract must list userContextSSOT category ${category}`
+    );
+  }
+});
+
+test("STEP0_REVIEW_PROFILE keeps the documented five minute timeout", () => {
+  assert.equal(STEP0_REVIEW_PROFILE.timeoutMs, 300_000);
 });
 
 test("buildStep0Prompt instruction body includes the literal `## Changeset Overview` template header", () => {

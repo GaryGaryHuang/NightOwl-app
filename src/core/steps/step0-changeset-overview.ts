@@ -35,7 +35,7 @@ export const STEP0_SYSTEM_MESSAGE = [
   "  - `schemaVersion`: the literal number `2`.",
   "  - `readiness`: `READY`, `READY_WITH_LIMITATIONS`, or `INSUFFICIENT_INFORMATION`.",
   "  - `reviewObjective`: `{ summary, requestedFocus, expectedBehaviorSummary }`.",
-  "  - `userContextSSOT`: ordered one-to-one projection of `<user_context>` entries. Each entry MUST have exactly `contextId`, `rawText`, `categories`, and `extractedFacts`; `rawText` MUST preserve the source entry unchanged and in order.",
+  "  - `userContextSSOT`: ordered one-to-one projection of `<user_context>` entries. Each entry MUST have exactly `contextId`, `rawText`, `categories`, and `extractedFacts`; `rawText` MUST preserve the source entry unchanged and in order; `categories` MUST be a non-empty array containing only `requirement`, `expected_behavior`, `root_cause`, `business_context`, `release_constraint`, `reviewer_focus`, or `other`.",
   "  - `changeScope`: `{ totalChangedPaths, reviewableNonDeletedPaths, deletedPaths, binaryOrNonReviewablePaths, changedTests, highRiskAreas }`.",
   "  - `coveragePlan`: `{ mustDistinguishDeletedAndBinaryPaths, notes }`.",
   "  - `expectedBehaviorLedger`: array of `{ expectationId, statement, sourceType, confidence }`, where sourceType is `user_context`|`tests`|`code`|`docs` and confidence is `explicit`|`inferred`.",
@@ -162,6 +162,23 @@ export function buildStep0Prompt(input: Step0PromptInput): string {
   );
 
   return promptLines.join("\n");
+}
+
+export function buildStep0RetryRepairPrompt(
+  input: Step0PromptInput,
+  previousFailure: string
+): string {
+  return [
+    buildStep0Prompt(input),
+    "",
+    "<retry_repair_context>",
+    stringifyForXmlishBlock({
+      previousFailure,
+      instruction:
+        "Return a corrected ChangeMapReadinessV2 JSON object that satisfies the Step 0 output contract. Preserve the same changed_files and user_context inputs; fix only schema, coverage, placeholder, or evidence-reference violations identified by the previous failure."
+    }),
+    "</retry_repair_context>"
+  ].join("\n");
 }
 
 function formatStep0ChangedFileEntry(entry: ReviewChangesetEntry): string {

@@ -6,6 +6,7 @@ import {
   Step0OutputValidator
 } from "../../src/core/step0-output-validator.ts";
 import {
+  USER_CONTEXT_CATEGORIES,
   extractChangedPathsFromChangesetEntries
 } from "../../src/core/change-map.ts";
 
@@ -151,7 +152,8 @@ const expectedSinglePath: readonly string[] = ["src/app.ts"];
 
 function expectFailure(
   fn: () => void,
-  code: Step0OutputValidationError["code"]
+  code: Step0OutputValidationError["code"],
+  messagePattern?: RegExp
 ): Step0OutputValidationError {
   try {
     fn();
@@ -161,6 +163,9 @@ function expectFailure(
       `expected Step0OutputValidationError, received ${(error as Error)?.constructor?.name ?? typeof error}`
     );
     assert.equal((error as Step0OutputValidationError).code, code);
+    if (messagePattern) {
+      assert.match((error as Error).message, messagePattern);
+    }
     return error as Step0OutputValidationError;
   }
   throw new Error(`expected validator to throw with code ${code}`);
@@ -249,6 +254,53 @@ test("Step0OutputValidator rejects duplicate ChangeMapReadinessV2 user context I
       }),
     "SCHEMA"
   );
+});
+
+test("Step0OutputValidator rejects user context categories outside the documented enum", () => {
+  const validator = new Step0OutputValidator();
+  expectFailure(
+    () =>
+      validator.validate({
+        responseText: makeValidV2({
+          userContextSSOT: [
+            {
+              contextId: "UC1",
+              rawText: "Root Cause: context loss before Step 5",
+              categories: ["business_decision"],
+              extractedFacts: ["context loss before Step 5"]
+            }
+          ]
+        }),
+        expectedChangedPaths: ["src/app.ts", "src/old.ts"],
+        expectedUserContext: ["Root Cause: context loss before Step 5"]
+      }),
+    "SCHEMA",
+    /userContextSSOT\[0\]\.categories\[0\] must be one of/u
+  );
+});
+
+test("Step0OutputValidator accepts every documented user context category", () => {
+  const validator = new Step0OutputValidator();
+
+  for (const category of USER_CONTEXT_CATEGORIES) {
+    const changeMap = validator.validate({
+      responseText: makeValidV2({
+        userContextSSOT: [
+          {
+            contextId: "UC1",
+            rawText: `context for ${category}`,
+            categories: [category],
+            extractedFacts: [`fact for ${category}`]
+          }
+        ]
+      }),
+      expectedChangedPaths: ["src/app.ts", "src/old.ts"],
+      expectedUserContext: [`context for ${category}`]
+    });
+
+    assert.equal(changeMap.schemaVersion, 2);
+    assert.deepEqual(changeMap.userContextSSOT[0].categories, [category]);
+  }
 });
 
 test("Step0OutputValidator returns a deeply frozen ChangeMap", () => {

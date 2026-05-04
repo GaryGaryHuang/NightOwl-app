@@ -39,6 +39,7 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   const step = new Step5ValidationInterrogationStep({ promptSerializer: serializer });
   const plan = step.prepare(createContext());
 
+  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1\.hypothesisLedger/u);
   assert.match(plan.prompt.systemMessage, /CandidateFindingsV3/u);
   assert.match(plan.prompt.systemMessage, /final approved findings/u);
@@ -155,6 +156,7 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   context.setCandidateFindingsV3(candidatePayload);
   const plan = step.prepare(context);
 
+  assert.equal(plan.reviewProfile.timeoutMs, 300_000);
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
     candidateFindings: ReturnType<typeof createCandidateFindingsV3>["findings"];
     verifiedFindings: Finding[];

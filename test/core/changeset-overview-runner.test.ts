@@ -139,13 +139,15 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
 
 test("ChangesetOverviewRunner retries once when the first response fails ChangeMap validation", async () => {
   let createCalls = 0;
+  const prompts: string[] = [];
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
       async createSession() {
         createCalls += 1;
 
         return {
-          async sendAndWait() {
+          async sendAndWait(prompt) {
+            prompts.push(prompt);
             return createCalls === 1
               ? "## Changeset Overview\n- not JSON" // legacy Markdown
               : buildChangeMapJson();
@@ -164,6 +166,11 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
 
   assert.equal(createCalls, 2);
   assert.equal(runContext.changesetOverview.schemaVersion, 1);
+  assert.equal(prompts.length, 2);
+  assert.doesNotMatch(prompts[0], /<retry_repair_context>/u);
+  assert.match(prompts[1], /<retry_repair_context>/u);
+  assert.match(prompts[1], /Step 0 ChangeMap validation failed \[PARSE\]/u);
+  assert.match(prompts[1], /Return a corrected ChangeMapReadinessV2 JSON object/u);
 });
 
 test("ChangesetOverviewRunner aborts after two consecutive validation failures", async () => {
