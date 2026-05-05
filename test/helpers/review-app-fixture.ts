@@ -163,7 +163,7 @@ export function buildSessionResponse(
   throw new Error(`Unexpected session prompt: ${prompt}`);
 }
 
-export function extractSystemMessageContent(systemMessage: unknown): string {
+function extractSystemMessageContent(systemMessage: unknown): string {
   if (
     systemMessage &&
     typeof systemMessage === "object" &&
@@ -192,12 +192,6 @@ export function isReviewBasisSystemMessage(systemMessage: unknown): boolean {
 
 export function isChangesetOverviewSystemMessage(systemMessage: unknown): boolean {
   return /## Current Step: Changeset Overview/u.test(
-    extractSystemMessageContent(systemMessage)
-  );
-}
-
-export function isValidationInterrogationSystemMessage(systemMessage: unknown): boolean {
-  return /## Current Step: Validation & Interrogation/u.test(
     extractSystemMessageContent(systemMessage)
   );
 }

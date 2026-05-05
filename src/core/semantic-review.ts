@@ -135,12 +135,6 @@ export interface ValidationReportV1 {
   stopReason?: StopReason;
 }
 
-export interface SemanticLoopState {
-  rerunCount: number;
-  candidateFingerprints: string[];
-  stopReason?: StopReason;
-}
-
 export function cloneCandidateFindingsV3(
   payload: CandidateFindingsV3
 ): CandidateFindingsV3 {

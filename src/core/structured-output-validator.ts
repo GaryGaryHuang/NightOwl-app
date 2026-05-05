@@ -810,13 +810,6 @@ function extractReportableFindingIdFromText(responseText: string): string | unde
   return undefined;
 }
 
-function validateFinding(
-  input: unknown,
-  anchorContext: FindingAnchorValidationContext | undefined
-): Finding {
-  return validateFindingWithDiagnostics(input, anchorContext).finding;
-}
-
 function validateFindingWithDiagnostics(
   input: unknown,
   anchorContext: FindingAnchorValidationContext | undefined

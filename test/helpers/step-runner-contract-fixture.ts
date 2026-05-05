@@ -1,21 +1,16 @@
-import assert from "node:assert/strict";
-
 import {
   type FileReviewContextInput,
   FileReviewContext
 } from "../../src/core/file-review-context.ts";
-import type { VerifierReportEntry } from "../../src/core/verifier-report.ts";
 import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
 import {
-  type StepDefinition,
   type StepExecutionPlan,
   type StepResolveServices,
   StepRunner
 } from "../../src/core/step-runner.ts";
 import type { ReviewSessionFactoryLike } from "../../src/core/session-factory-contracts.ts";
 import { SessionExecutor } from "../../src/services/session-executor.ts";
-import { lineRangeTraceability } from "./orchestrator-fixture.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
   filePath: "src/app.ts",
@@ -32,61 +27,6 @@ export function createStepRunnerContext(
     ...DEFAULT_CONTEXT_INPUT,
     ...overrides
   });
-}
-
-export function makeSectionResolve(sectionKey: ReviewSectionKey): StepExecutionPlan["resolve"] {
-  return async (response, _services) => {
-    return (targetContext) => {
-      targetContext.setSection(sectionKey, response);
-    };
-  };
-}
-
-export function makePassingJudgeServices(): StepResolveServices {
-  const emptyReport: VerifierReportEntry[] = [];
-
-  return {
-    judgeService: {
-      async evaluate(_input) {
-        return { passed: true };
-      }
-    },
-    validator: {
-      validateCandidateFindingsV3WithReport(_input) {
-        return {
-          payload: {
-            result: "NO_FINDINGS",
-            findings: [],
-            hypothesisClosure: [],
-            criticalMissingInformation: []
-          },
-          report: emptyReport
-        };
-      },
-      validateValidationReportV1WithReport(_input) {
-        return {
-          payload: {
-            schemaVersion: 1,
-            overallStatus: "PASS",
-            perFindingResults: [],
-            approvedFindings: [],
-            missingInformationItems: [],
-            loopControl: { action: "accept", reason: "no findings" }
-          },
-          report: emptyReport
-        };
-      }
-    }
-  };
-}
-
-export { lineRangeTraceability };
-
-export function diffHunkTraceability(hunkHeader: string) {
-  return {
-    kind: "diff-hunk" as const,
-    hunkHeader
-  };
 }
 
 // Minimal step-definition factory used by tests that focus on StepRunner
@@ -192,68 +132,9 @@ export function createStructuredTestStep(input: {
   };
 }
 
-// Canonical section content reused by prompt-rebuild tests.
-// Each step sees all prior sections; the step response is the current section.
-export const SECTION_SEEDS: Record<string, string> = {
-  "custom-analysis": [
-    "## Custom Analysis",
-    "- 測試用自訂 section"
-  ].join("\n"),
-  "custom-risk-notes": [
-    "## Custom Risk Notes",
-    "- 自訂 section 可以保留 generic note rendering 行為"
-  ].join("\n")
-};
-
-export const INITIAL_FINDING = {
-  type: "must",
-  title: "初版 findings",
-  traceability: lineRangeTraceability(30, 32),
-  expectedBehavior: "初版預期行為",
-  actualBehavior: "初版實際行為",
-  deviation: "初版落差",
-  impact: "初版 impact",
-  suggestion: "初版建議",
-} as const;
-
-export const FINAL_FINDING = {
-  type: "must",
-  title: "最終 findings",
-  traceability: diffHunkTraceability("@@ -1 +1 @@"),
-  expectedBehavior: "最終預期行為",
-  actualBehavior: "最終實際行為",
-  deviation: "最終落差",
-  impact: "最終 impact",
-  suggestion: "最終建議",
-} as const;
-
-export const NICE_FINAL_FINDING = {
-  type: "nice",
-  title: "從空 findings 補出的最終問題",
-  traceability: lineRangeTraceability(40, 40),
-  expectedBehavior: "最終預期行為",
-  actualBehavior: "最終實際行為",
-  deviation: "最終落差",
-  impact: "最終 impact",
-  suggestion: "最終建議",
-} as const;
-
 export const DEFAULT_JUDGE_RESOLVE = makeSectionResolveWithJudge(
   "step7-summary", "src/app.ts", "summary", "must contain summary fields"
 );
-
-export const SUMMARY_RESPONSE = [
-  "## Summary",
-  "### 審查基礎",
-  "- 改動概要：調整主要執行流程。",
-  "- 依據規範：依 repo source-of-truth 與版本假設審查。",
-  "- 必要假設：無。",
-  "### 行為變更提醒",
-  "- 無",
-  "### 風險評估",
-  "- 整體風險等級：High",
-  "- 風險理由：final findings 仍需留意。"
-].join("\n");
 
 export function runDefaultSectionStep(
   runner: StepRunner,
@@ -279,75 +160,6 @@ export function runDefaultJudgeSectionStep(
     outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
   });
-}
-
-// Shared helper for prompt-rebuild tests.
-// Each step rebuilds its prompt from committed context state on retry;
-// provisional content from the first attempt must not leak.
-export async function assertPromptRebuildOnRetry(input: {
-  seedSections: string[];
-  step: StepDefinition;
-  response: string;
-  expectedPromptLandmark: RegExp;
-  provisionalLabel: string;
-  resultSectionKey: ReviewSectionKey;
-  resultPattern: RegExp;
-  extraAssertions?: (context: ReturnType<typeof createStepRunnerContext>) => void;
-}): Promise<void> {
-  const prompts: string[] = [];
-  const context = createStepRunnerContext();
-
-  for (const key of input.seedSections) {
-    context.setSection(key, SECTION_SEEDS[key]);
-  }
-
-  const runner = new StepRunner({
-    reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait({ prompt }) {
-        prompts.push(prompt);
-        return input.response;
-      }
-    }),
-    judgeService: {
-      async evaluate(evalInput) {
-        if (prompts.length === 1) {
-          assert.doesNotMatch(
-            evalInput.sectionContent,
-            new RegExp(input.provisionalLabel, "u")
-          );
-          return { passed: false, cause: "judge rejected" };
-        }
-
-        return { passed: true };
-      }
-    }
-  });
-
-  const result = await runner.run({
-    step: input.step,
-    context,
-    outputBaseDir: "/workspace/output",
-    repoRoot: "/workspace/repo"
-  });
-
-  assert.equal(prompts.length, 2);
-  assert.equal(prompts[0], prompts[1]);
-  assert.match(prompts[0] ?? "", /<review_state\b/u);
-  assert.match(prompts[0] ?? "", input.expectedPromptLandmark);
-  assert.doesNotMatch(prompts[0] ?? "", /Review not yet generated/u);
-  assert.doesNotMatch(
-    prompts[0] ?? "",
-    new RegExp(input.provisionalLabel, "u")
-  );
-  assert.equal(context.getSection(input.resultSectionKey), undefined);
-
-  result.applyTo(context);
-
-  assert.match(
-    context.getSection(input.resultSectionKey) ?? "",
-    input.resultPattern
-  );
-  input.extraAssertions?.(context);
 }
 
 /**

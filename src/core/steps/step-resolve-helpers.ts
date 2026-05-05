@@ -13,40 +13,6 @@ import type {
 } from "../verifier-report.ts";
 import { pickDispositionFields, pickSemanticFields } from "../verifier-report.ts";
 
-/**
- * Factory for the resolve() closure shared by section-producing steps.
- *
- * Calls judgeService.evaluate() with the given criteria; on pass, returns a
- * deferred mutation that writes the response to the designated section key.
- */
-export function createSectionResolve(input: {
-  stepId: string;
-  filePath: string;
-  sectionKey: ReviewSectionKey;
-  criteria: string;
-}): StepExecutionPlan["resolve"] {
-  return async (response, services) => {
-    if (!services.judgeService) {
-      throw new Error("judge service is not configured");
-    }
-
-    const judgeResult = await services.judgeService.evaluate({
-      stepId: input.stepId,
-      filePath: input.filePath,
-      criteria: input.criteria,
-      sectionContent: response
-    });
-
-    if (!judgeResult.passed) {
-      throw new Error(judgeResult.cause ?? "judge rejected");
-    }
-
-    return (targetContext: FileReviewContext) => {
-      targetContext.setSection(input.sectionKey, response);
-    };
-  };
-}
-
 export function createCandidateFindingsV3Resolve(input: {
   stepId?: string;
   filePath: string;

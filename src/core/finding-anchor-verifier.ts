@@ -21,7 +21,7 @@ export type AnchorFailureReason =
   | "unknown-hunk-header"
   | "line-range-outside-changed-lines";
 
-export interface AnchorVerificationOk {
+interface AnchorVerificationOk {
   readonly ok: true;
 }
 
@@ -32,11 +32,11 @@ export interface AnchorVerificationFailure {
   readonly detail: string;
 }
 
-export type AnchorVerificationResult =
+type AnchorVerificationResult =
   | AnchorVerificationOk
   | AnchorVerificationFailure;
 
-export interface VerifyFindingAnchorInput {
+interface VerifyFindingAnchorInput {
   readonly traceability: FindingTraceability;
   readonly anchorContext: FindingAnchorValidationContext;
   readonly dependencyPathException?: DependencyPathException | undefined;

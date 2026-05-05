@@ -1,6 +1,5 @@
-export const DEFAULT_HUNK_HEADER = "@@ -20,2 +20,4 @@";
 export const DEFAULT_DIFF = [
-  DEFAULT_HUNK_HEADER,
+  "@@ -20,2 +20,4 @@",
   " context-before",
   "+added-21",
   "+added-22",
@@ -12,12 +11,5 @@ export function lineRangeTraceability(lineStart: unknown, lineEnd: unknown) {
     kind: "line-range",
     lineStart,
     lineEnd
-  };
-}
-
-export function diffHunkTraceability(hunkHeader: unknown) {
-  return {
-    kind: "diff-hunk",
-    hunkHeader
   };
 }

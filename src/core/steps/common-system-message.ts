@@ -60,7 +60,7 @@ export const JSON_STEP_SYSTEM_MESSAGE = [
   "- Do not encode uncertainty with reader-facing inline markers inside JSON strings."
 ].join("\n");
 
-export const MARKDOWN_STEP_SYSTEM_MESSAGE = [
+const MARKDOWN_STEP_SYSTEM_MESSAGE = [
   ...COMMON_SYSTEM_MESSAGE_BASE,
   "- Separate facts from assumptions: annotate inferences with `[假設]`; mark any claim lacking sufficient evidence with `[待確認]`.",
   "- If a tool call fails, returns no relevant result, or the available context is insufficient, mark the affected claim as `[待確認]` rather than fabricating content.",
