@@ -190,7 +190,7 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   assert.match(plan.prompt.userMessage, /loopControl/u);
   assert.match(plan.prompt.userMessage, /rerun/u);
   assert.match(plan.prompt.userMessage, /complete candidateFindings CandidateFindingsV3 object/u);
-  assert.match(plan.prompt.userMessage, /candidateFindings\.result/u);
+  assert.match(plan.prompt.userMessage, /candidateFindings\.findings/u);
   assert.match(plan.prompt.userMessage, /candidateFindings\.hypothesisClosure/u);
   assert.match(plan.prompt.userMessage, /candidateFindings\.criticalMissingInformation/u);
   for (const value of VALIDATION_DECISIONS) {

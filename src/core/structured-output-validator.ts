@@ -264,6 +264,12 @@ function validateCandidateFindingV3(input: {
     "severity"
   );
 
+  if (classification === "reasonable_risk" && severity !== "low") {
+    throw new Error(
+      "deterministic validation failed: 'reasonable_risk' classification requires severity 'low'"
+    );
+  }
+
   const traceabilityResult = validateTraceability(
     record.traceability,
     undefined,
@@ -346,6 +352,12 @@ function validateLoopControlAlignment(input: {
     if (hasApproval) {
       throw new Error(
         "deterministic validation failed: rerun ValidationReportV1 must not approve findings before semantic validation accepts them"
+      );
+    }
+    const hasRewrite = input.perFindingResults.some((r) => r.decision === "rewrite_required");
+    if (!hasRewrite) {
+      throw new Error(
+        "deterministic validation failed: rerun requires at least one rewrite_required decision"
       );
     }
   }

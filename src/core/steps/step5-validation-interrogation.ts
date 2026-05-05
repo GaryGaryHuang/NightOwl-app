@@ -31,6 +31,8 @@ const STEP5_SYSTEM_ADDITION = [
 const STEP5_INSTRUCTION = [
   "Based on `ReviewBasisV1.hypothesisLedger` in <review_basis>, validate each hypothesis in sequence and produce candidate findings for this file.",
   "",
+  "0. If `validationFeedback` is present and non-empty in <review_state>, this is a rerun. Address the `requiredCorrections` from the prior validation for the relevant candidates before re-emitting them.",
+  "",
   "1. Use `hypothesisLedger` as the investigation plan for this step.",
   "   - Treat each hypothesis as testable review work, not as an assumed defect.",
   "   - Validate the hypotheses one by one to ensure coverage, but do not force a candidate for every hypothesis.",
@@ -67,7 +69,7 @@ const STEP5_INSTRUCTION = [
   "   - `evidence`: prose describing the concrete code evidence supporting the finding",
   "   - `triggerCondition`: the condition that triggers the problem",
   "   - `impact`: the user-visible or system-visible consequence",
-  "   - `counterEvidence`: array of strings describing evidence that was checked against the finding",
+  "   - `counterEvidence`: array of strings; must be non-empty for `confirmed_problem` (describe what you checked against the finding)",
   "",
   "8. Apply a final skepticism pass before output:",
   "   - Remove or convert any candidate that is weakly supported, not credibly reachable, redundant with another candidate, or too speculative to defend in review.",
