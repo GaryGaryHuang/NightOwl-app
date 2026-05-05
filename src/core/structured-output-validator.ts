@@ -18,9 +18,7 @@ import type {
   MissingInformationItem,
   PerFindingValidationResult,
   SemanticGateId,
-  StopReason,
   ValidationDecision,
-  ValidationOverallStatus,
   ValidationReportV1
 } from "./semantic-review.ts";
 import {
@@ -29,9 +27,7 @@ import {
   HYPOTHESIS_CLOSURE_STATUSES as RUNTIME_HYPOTHESIS_CLOSURE_STATUSES,
   LOOP_ACTIONS as RUNTIME_LOOP_ACTIONS,
   SEMANTIC_GATE_IDS as RUNTIME_SEMANTIC_GATE_IDS,
-  STOP_REASONS as RUNTIME_STOP_REASONS,
-  VALIDATION_DECISIONS as RUNTIME_VALIDATION_DECISIONS,
-  VALIDATION_OVERALL_STATUSES as RUNTIME_VALIDATION_OVERALL_STATUSES
+  VALIDATION_DECISIONS as RUNTIME_VALIDATION_DECISIONS
 } from "./semantic-review.ts";
 import {
   buildFindingAnchorValidationContext,
@@ -177,7 +173,7 @@ export class StructuredOutputValidator {
             taxonomy: result.decision === "approve" ? "OK" : "SEMANTIC",
             outcome: result.decision === "approve" ? "accepted" : "rejected",
             gate: "semantic",
-            reason: result.reason ?? `candidate ${result.decision}`,
+            reason: result.reason,
             ...buildValidationReportSemanticFields(result, payload)
           });
         }
@@ -189,9 +185,9 @@ export class StructuredOutputValidator {
       if (report.length === 0 || report.every((entry) => entry.outcome !== "rejected")) {
         report.push({
           findingId: extractReportableFindingIdFromText(input.responseText) ?? "<payload>",
-          taxonomy: reason.includes("schemaVersion") ? "SCHEMA" : "SEMANTIC",
+          taxonomy: "SEMANTIC",
           outcome: "rejected",
-          gate: reason.includes("schemaVersion") ? "schema" : "semantic",
+          gate: "semantic",
           reason
         });
       }
@@ -208,13 +204,6 @@ function buildValidationReportSemanticFields(
   result: PerFindingValidationResult | undefined,
   payload: ValidationReportV1
 ): Partial<VerifierReportEntry> {
-  const missingInformationItem =
-    result === undefined
-      ? undefined
-      : payload.missingInformationItems.find(
-          (item) => item.findingId === result.findingId
-        );
-
   return {
     ...(result?.decision === undefined
       ? {}
@@ -225,21 +214,7 @@ function buildValidationReportSemanticFields(
     ...(result?.requiredCorrections === undefined ||
     result.requiredCorrections.length === 0
       ? {}
-      : { requiredCorrections: [...result.requiredCorrections] }),
-    ...(result?.recommendedClassification === undefined
-      ? {}
-      : { recommendedClassification: result.recommendedClassification }),
-    ...(result?.recommendedSeverity === undefined
-      ? {}
-      : { recommendedSeverity: result.recommendedSeverity }),
-    ...(missingInformationItem?.itemId === undefined
-      ? {}
-      : { missingInformationItemId: missingInformationItem.itemId }),
-    ...(payload.stopReason === "repeated_unsupported_claim" &&
-    result?.findingId !== undefined
-      ? { repeatedUnsupportedClaimId: result.findingId }
-      : {}),
-    ...(payload.stopReason === undefined ? {} : { stopReason: payload.stopReason })
+      : { requiredCorrections: [...result.requiredCorrections] })
   };
 }
 
@@ -362,17 +337,6 @@ function validateValidationReportV1Record(input: {
     "ValidationReportV1"
   );
 
-  if (input.record.schemaVersion !== 1) {
-    throw new Error(
-      "deterministic validation failed: ValidationReportV1 schemaVersion must be 1"
-    );
-  }
-
-  const overallStatus = validateEnum<ValidationOverallStatus>(
-    input.record.overallStatus,
-    VALID_VALIDATION_OVERALL_STATUSES,
-    "overallStatus"
-  );
   const candidateIds = input.candidatePayload.findings.map((f) => f.findingId);
   const candidateIdSet = new Set(candidateIds);
   const perFindingResults = validateArray(
@@ -404,7 +368,11 @@ function validateValidationReportV1Record(input: {
   const missingInformationItems = validateArray(
     input.record.missingInformationItems,
     "missingInformationItems"
-  ).map((item, index) => validateMissingInformationItem(item, index, candidateIdSet));
+  ).map((item, index) => validateMissingInformationItem(item, index));
+  // Auto-assign itemId
+  for (let i = 0; i < missingInformationItems.length; i++) {
+    missingInformationItems[i] = { ...missingInformationItems[i], itemId: `MI${i + 1}` };
+  }
   assertValidationReportMatchesCandidatePayload({
     candidatePayload: input.candidatePayload,
     perFindingResults,
@@ -413,86 +381,29 @@ function validateValidationReportV1Record(input: {
   });
 
   const loopControl = validateLoopControl(input.record.loopControl);
-  const stopReason =
-    input.record.stopReason === undefined
-      ? undefined
-      : validateEnum<StopReason>(
-          input.record.stopReason,
-          VALID_STOP_REASONS,
-          "stopReason"
-        );
-  validateLoopControlStatusAlignment({
-    overallStatus,
+  validateLoopControlAlignment({
     approvedFindings,
-    loopControl,
-    stopReason
+    loopControl
   });
 
   return {
-    schemaVersion: 1,
-    overallStatus,
     perFindingResults,
     approvedFindings,
     missingInformationItems,
-    loopControl,
-    ...(stopReason === undefined ? {} : { stopReason })
+    loopControl
   };
 }
 
-function validateLoopControlStatusAlignment(input: {
-  overallStatus: ValidationOverallStatus;
+function validateLoopControlAlignment(input: {
   approvedFindings: readonly Finding[];
   loopControl: LoopControl;
-  stopReason: StopReason | undefined;
 }): void {
-  if (input.overallStatus === "PASS" && input.loopControl.action !== "accept") {
-    throw new Error(
-      "deterministic validation failed: overallStatus PASS requires loopControl.action accept"
-    );
-  }
-
-  if (
-    input.overallStatus === "RERUN_STEP5" &&
-    input.loopControl.action !== "rerun_step5"
-  ) {
-    throw new Error(
-      "deterministic validation failed: overallStatus RERUN_STEP5 requires loopControl.action rerun_step5"
-    );
-  }
-
-  if (
-    (input.overallStatus === "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW" ||
-      input.overallStatus === "STOPPED") &&
-    input.loopControl.action !== "stop"
-  ) {
-    throw new Error(
-      "deterministic validation failed: stopped or insufficient-information ValidationReportV1 requires loopControl.action stop"
-    );
-  }
-
-  if (input.loopControl.action === "accept" && input.stopReason !== undefined) {
-    throw new Error(
-      "deterministic validation failed: accepted ValidationReportV1 must not include stopReason"
-    );
-  }
-
   if (input.loopControl.action === "rerun_step5") {
-    if (input.stopReason !== undefined) {
-      throw new Error(
-        "deterministic validation failed: rerun_step5 ValidationReportV1 must not include stopReason"
-      );
-    }
     if (input.approvedFindings.length > 0) {
       throw new Error(
         "deterministic validation failed: rerun_step5 ValidationReportV1 must not approve findings before semantic validation accepts them"
       );
     }
-  }
-
-  if (input.loopControl.action === "stop" && input.stopReason === undefined) {
-    throw new Error(
-      "deterministic validation failed: stopped ValidationReportV1 requires stopReason"
-    );
   }
 }
 
@@ -599,29 +510,12 @@ function validatePerFindingValidationResult(
     requiredCorrections: validateStringArray(
       record.requiredCorrections,
       `perFindingResults[${index}].requiredCorrections`
-    )
-  };
-
-  if (record.recommendedClassification !== undefined) {
-    result.recommendedClassification = validateEnum<CandidateClassification>(
-      record.recommendedClassification,
-      VALID_CANDIDATE_CLASSIFICATIONS,
-      `perFindingResults[${index}].recommendedClassification`
-    );
-  }
-  if (record.recommendedSeverity !== undefined) {
-    result.recommendedSeverity = validateEnum<CandidateSeverity>(
-      record.recommendedSeverity,
-      VALID_CANDIDATE_SEVERITIES,
-      `perFindingResults[${index}].recommendedSeverity`
-    );
-  }
-  if (record.reason !== undefined) {
-    result.reason = validateStringField(
+    ),
+    reason: validateStringField(
       record.reason,
       `perFindingResults[${index}].reason`
-    );
-  }
+    )
+  };
 
   return result;
 }
@@ -688,8 +582,7 @@ function assertValidationReportMatchesCandidatePayload(input: {
 
 function validateMissingInformationItem(
   input: unknown,
-  index: number,
-  candidateIdSet: ReadonlySet<string>
+  index: number
 ): MissingInformationItem {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(
@@ -702,24 +595,11 @@ function validateMissingInformationItem(
     ALLOWED_MISSING_INFORMATION_ITEM_KEYS,
     `missingInformationItems[${index}]`
   );
-  const result: MissingInformationItem = {
-    itemId: validateStringField(record.itemId, `missingInformationItems[${index}].itemId`),
+  return {
+    itemId: "", // placeholder; overwritten by caller
     description: validateStringField(record.description, `missingInformationItems[${index}].description`),
     whyItMatters: validateStringField(record.whyItMatters, `missingInformationItems[${index}].whyItMatters`)
   };
-  if (record.findingId !== undefined) {
-    const findingId = validateStringField(
-      record.findingId,
-      `missingInformationItems[${index}].findingId`
-    );
-    if (!candidateIdSet.has(findingId)) {
-      throw new Error(
-        `deterministic validation failed: missingInformationItems entry ${findingId} references unknown candidate`
-      );
-    }
-    result.findingId = findingId;
-  }
-  return result;
 }
 
 function validateLoopControl(input: unknown): { action: LoopAction; reason: string } {
@@ -1238,13 +1118,10 @@ const ALLOWED_DEPENDENCY_PATH_EXCEPTION_KEYS = [
 const ALLOWED_DEPENDENCY_ANCHOR_KEYS = ["filePath", "symbol"] as const;
 
 const ALLOWED_VALIDATION_REPORT_TOP_LEVEL_KEYS = [
-  "schemaVersion",
-  "overallStatus",
   "perFindingResults",
   "approvedFindings",
   "missingInformationItems",
-  "loopControl",
-  "stopReason"
+  "loopControl"
 ] as const;
 
 const ALLOWED_PER_FINDING_RESULT_KEYS = [
@@ -1252,14 +1129,10 @@ const ALLOWED_PER_FINDING_RESULT_KEYS = [
   "decision",
   "failedGates",
   "requiredCorrections",
-  "recommendedClassification",
-  "recommendedSeverity",
   "reason"
 ] as const;
 
 const ALLOWED_MISSING_INFORMATION_ITEM_KEYS = [
-  "itemId",
-  "findingId",
   "description",
   "whyItMatters"
 ] as const;
@@ -1275,9 +1148,6 @@ const VALID_CANDIDATE_SEVERITIES: readonly CandidateSeverity[] =
 const VALID_HYPOTHESIS_CLOSURE_STATUSES: readonly HypothesisClosureStatus[] =
   RUNTIME_HYPOTHESIS_CLOSURE_STATUSES;
 
-const VALID_VALIDATION_OVERALL_STATUSES: readonly ValidationOverallStatus[] =
-  RUNTIME_VALIDATION_OVERALL_STATUSES;
-
 const VALID_VALIDATION_DECISIONS: readonly ValidationDecision[] =
   RUNTIME_VALIDATION_DECISIONS;
 
@@ -1285,8 +1155,6 @@ const VALID_SEMANTIC_GATES: readonly SemanticGateId[] =
   RUNTIME_SEMANTIC_GATE_IDS;
 
 const VALID_LOOP_ACTIONS: readonly LoopAction[] = RUNTIME_LOOP_ACTIONS;
-
-const VALID_STOP_REASONS: readonly StopReason[] = RUNTIME_STOP_REASONS;
 
 // --- Helper functions ---
 

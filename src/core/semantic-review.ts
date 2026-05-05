@@ -56,30 +56,18 @@ export interface CandidateFindingsV3 {
 }
 
 export const SEMANTIC_GATE_IDS = [
-  "schema_complete",
-  "anchor_valid",
-  "evidence_refs_exist",
-  "identifiers_valid",
-  "execution_path_concrete",
-  "trigger_concrete",
-  "mechanism_concrete",
-  "impact_proportionate",
-  "counter_evidence_checked",
-  "severity_confidence_aligned",
-  "duplicate_low_value",
-  "hypothesis_closed",
-  "missing_information_honest",
-  "no_new_bug",
-  "repeated_unsupported_claim"
+  "evidence",
+  "impact",
+  "traceability",
+  "completeness",
+  "scope"
 ] as const;
 export type SemanticGateId = (typeof SEMANTIC_GATE_IDS)[number];
 
 export const VALIDATION_DECISIONS = [
   "approve",
   "rewrite_required",
-  "downgrade",
-  "drop",
-  "convert_to_missing_information"
+  "drop"
 ] as const;
 export type ValidationDecision = (typeof VALIDATION_DECISIONS)[number];
 
@@ -88,19 +76,16 @@ export interface PerFindingValidationResult {
   decision: ValidationDecision;
   failedGates: SemanticGateId[];
   requiredCorrections: string[];
-  recommendedClassification?: CandidateClassification;
-  recommendedSeverity?: CandidateSeverity;
-  reason?: string;
+  reason: string;
 }
 
 export interface MissingInformationItem {
   itemId: string;
-  findingId?: string;
   description: string;
   whyItMatters: string;
 }
 
-export const LOOP_ACTIONS = ["accept", "rerun_step5", "stop"] as const;
+export const LOOP_ACTIONS = ["accept", "rerun_step5"] as const;
 export type LoopAction = (typeof LOOP_ACTIONS)[number];
 
 export interface LoopControl {
@@ -108,31 +93,11 @@ export interface LoopControl {
   reason: string;
 }
 
-export const STOP_REASONS = [
-  "missing_critical_contract",
-  "repeated_unsupported_claim",
-  "unresolved_identifier_hallucination",
-  "max_semantic_reruns"
-] as const;
-export type StopReason = (typeof STOP_REASONS)[number];
-
-export const VALIDATION_OVERALL_STATUSES = [
-  "PASS",
-  "RERUN_STEP5",
-  "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-  "STOPPED"
-] as const;
-export type ValidationOverallStatus =
-  (typeof VALIDATION_OVERALL_STATUSES)[number];
-
 export interface ValidationReportV1 {
-  schemaVersion: 1;
-  overallStatus: ValidationOverallStatus;
   perFindingResults: PerFindingValidationResult[];
   approvedFindings: Finding[];
   missingInformationItems: MissingInformationItem[];
   loopControl: LoopControl;
-  stopReason?: StopReason;
 }
 
 export function cloneCandidateFindingsV3(

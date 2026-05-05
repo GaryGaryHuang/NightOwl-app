@@ -93,7 +93,6 @@ test("createValidationReportV1Resolve writes approved findings and missing-infor
   assert.deepEqual(context.getMissingInformationItems(), [
     {
       itemId: "MI1",
-      findingId: "F1",
       description: "Need the external null-input contract.",
       whyItMatters: "Without it the validator cannot prove expected behavior."
     }
@@ -238,16 +237,12 @@ function createCandidateFindingsV3() {
 
 function createValidationReportV1() {
   return {
-    schemaVersion: 1,
-    overallStatus: "PASS",
     perFindingResults: [
       {
         findingId: "F1",
         decision: "approve",
         failedGates: [],
         requiredCorrections: [],
-        recommendedClassification: "confirmed_problem",
-        recommendedSeverity: "high",
         reason: "all gates passed"
       }
     ],
@@ -267,8 +262,6 @@ function createValidationReportV1() {
     ],
     missingInformationItems: [
       {
-        itemId: "MI1",
-        findingId: "F1",
         description: "Need the external null-input contract.",
         whyItMatters: "Without it the validator cannot prove expected behavior."
       }

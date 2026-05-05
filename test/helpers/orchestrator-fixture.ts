@@ -226,8 +226,6 @@ function buildCandidateFindingsForFile(filePath: string): CandidateFindingsV3 {
 
 function buildValidationReportForFindings(findings: readonly Finding[]): ValidationReportV1 {
   return {
-    schemaVersion: 1,
-    overallStatus: "PASS",
     perFindingResults: findings.map((finding) => ({
       findingId: finding.findingId,
       decision: "approve",

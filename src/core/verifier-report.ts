@@ -6,10 +6,7 @@
  */
 
 import type {
-  CandidateClassification,
-  CandidateSeverity,
   SemanticGateId,
-  StopReason,
   ValidationDecision
 } from "./semantic-review.ts";
 
@@ -40,11 +37,6 @@ export interface VerifierReportEntry {
   readonly semanticGate?: SemanticGateId;
   readonly validationDecision?: ValidationDecision;
   readonly requiredCorrections?: readonly string[];
-  readonly recommendedClassification?: CandidateClassification;
-  readonly recommendedSeverity?: CandidateSeverity;
-  readonly missingInformationItemId?: string;
-  readonly repeatedUnsupportedClaimId?: string;
-  readonly stopReason?: StopReason;
 }
 
 export interface VerifierReportArtifactEntry extends VerifierReportEntry {
@@ -97,20 +89,7 @@ export function pickSemanticFields(
       : { validationDecision: entry.validationDecision }),
     ...(entry.requiredCorrections === undefined
       ? {}
-      : { requiredCorrections: [...entry.requiredCorrections] }),
-    ...(entry.recommendedClassification === undefined
-      ? {}
-      : { recommendedClassification: entry.recommendedClassification }),
-    ...(entry.recommendedSeverity === undefined
-      ? {}
-      : { recommendedSeverity: entry.recommendedSeverity }),
-    ...(entry.missingInformationItemId === undefined
-      ? {}
-      : { missingInformationItemId: entry.missingInformationItemId }),
-    ...(entry.repeatedUnsupportedClaimId === undefined
-      ? {}
-      : { repeatedUnsupportedClaimId: entry.repeatedUnsupportedClaimId }),
-    ...(entry.stopReason === undefined ? {} : { stopReason: entry.stopReason })
+      : { requiredCorrections: [...entry.requiredCorrections] })
   };
 }
 

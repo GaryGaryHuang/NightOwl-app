@@ -75,9 +75,6 @@ export function createSemanticReviewStats(
   const status = overrides.status ?? "not_run";
   return {
     status,
-    ...(overrides.overallStatus === undefined
-      ? {}
-      : { overallStatus: overrides.overallStatus }),
     ...(overrides.loopAction === undefined
       ? {}
       : { loopAction: overrides.loopAction }),
@@ -86,15 +83,8 @@ export function createSemanticReviewStats(
     candidateFindingCount: overrides.candidateFindingCount ?? 0,
     approvedFindingCount: overrides.approvedFindingCount ?? 0,
     missingInformationCount: overrides.missingInformationCount ?? 0,
-    missingInformationConversionCount:
-      overrides.missingInformationConversionCount ?? 0,
     failedGateCounts: overrides.failedGateCounts ?? {},
-    decisionCounts: overrides.decisionCounts ?? {},
-    repeatedUnsupportedClaimStopCount:
-      overrides.repeatedUnsupportedClaimStopCount ?? 0,
-    ...(overrides.stopReason === undefined
-      ? {}
-      : { stopReason: overrides.stopReason })
+    decisionCounts: overrides.decisionCounts ?? {}
   };
 }
 
@@ -112,8 +102,8 @@ function createRiskSnapshot(
     acceptedFindingIds: findings.map((finding) => finding.findingId),
     retiredFindingCount: 0,
     riskBasis:
-      semanticReview?.status === "stopped"
-        ? "No approved findings; semantic validation stopped with limitations."
+      semanticReview?.missingInformationCount
+        ? "No approved findings; semantic validation completed with limitations."
         : "Derived from approved findings."
   };
 }

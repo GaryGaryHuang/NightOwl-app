@@ -30,7 +30,6 @@ interface SemanticCorpusCase {
     approvedFindingIds?: string[];
     candidateRejected?: boolean;
     decision?: string;
-    stopReason?: string;
     taxonomy?: string;
     mustNotApproveHighSeverityConfirmedProblem?: boolean;
     coverage?: Record<string, number>;
@@ -164,9 +163,6 @@ function runSemanticCase(
     ...(corpusCase.expected.decision === undefined || firstDecision === undefined
       ? {}
       : { decision: firstDecision }),
-    ...(validationResult.payload.stopReason === undefined
-      ? {}
-      : { stopReason: validationResult.payload.stopReason }),
     ...(corpusCase.expected.mustNotApproveHighSeverityConfirmedProblem
       ? { mustNotApproveHighSeverityConfirmedProblem: !highSeverityApproved }
       : {})
@@ -307,21 +303,19 @@ function createCandidatePayload(scenario: SemanticScenario) {
 
 function createValidationReportPayload(scenario: SemanticScenario) {
   if (scenario === "repeated-stop") {
-    return stopReport("repeated_unsupported_claim");
+    return dropReport();
   }
 
   if (scenario === "overclaim") {
-    return stopReport("missing_critical_contract");
+    return dropReport();
   }
 
   return {
-    schemaVersion: 1,
-    overallStatus: "PASS",
     perFindingResults: [
       {
         findingId: "F1",
         decision: "drop",
-        failedGates: ["counter_evidence_checked"],
+        failedGates: ["evidence"],
         requiredCorrections: ["Counter-evidence contradicts the claimed defect."],
         reason: "retired false-positive contradiction"
       }
@@ -332,15 +326,13 @@ function createValidationReportPayload(scenario: SemanticScenario) {
   };
 }
 
-function stopReport(stopReason: string) {
+function dropReport() {
   return {
-    schemaVersion: 1,
-    overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
     perFindingResults: [
       {
         findingId: "F1",
-        decision: "convert_to_missing_information",
-        failedGates: ["missing_information_honest"],
+        decision: "drop",
+        failedGates: ["completeness"],
         requiredCorrections: ["Prove callback threading, trigger, impact, and counter-evidence before approval."],
         reason: "approval is blocked by insufficient proof"
       }
@@ -348,13 +340,10 @@ function stopReport(stopReason: string) {
     approvedFindings: [],
     missingInformationItems: [
       {
-        itemId: "MI1",
-        findingId: "F1",
         description: "Need callback threading and stale-result guard proof.",
         whyItMatters: "Without it the concurrency claim is under-proven."
       }
     ],
-    loopControl: { action: "stop", reason: stopReason },
-    stopReason
+    loopControl: { action: "accept", reason: "dropped with missing information" }
   };
 }

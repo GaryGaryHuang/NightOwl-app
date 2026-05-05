@@ -182,18 +182,14 @@ test("RunSummaryFinalizer reports coverage and semantic limitations without infl
         decisionCounts: {}
       }),
       createSuccessfulFile("src/blocked.ts", [], [], {
-        status: "stopped",
-        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-        loopAction: "stop",
-        stopReason: "repeated_unsupported_claim",
+        status: "passed_with_limitations",
+        loopAction: "accept",
         semanticIterationCount: 2,
         candidateFindingCount: 1,
         approvedFindingCount: 0,
         missingInformationCount: 1,
-        missingInformationConversionCount: 1,
-        failedGateCounts: { repeated_unsupported_claim: 1 },
-        decisionCounts: { convert_to_missing_information: 1 },
-        repeatedUnsupportedClaimStopCount: 1
+        failedGateCounts: { evidence: 1 },
+        decisionCounts: { drop: 1 }
       })
     ]
   });
@@ -206,13 +202,11 @@ test("RunSummaryFinalizer reports coverage and semantic limitations without infl
   assert.match(rendered, /- Changed tests: `test\/app\.test\.ts`/u);
   assert.match(rendered, /^## Semantic Validation$/mu);
   assert.match(rendered, /- Passed cleanly: 1/u);
-  assert.match(rendered, /- Stopped or insufficient information: 1/u);
   assert.match(rendered, /- Missing-information items: 1/u);
-  assert.match(rendered, /- Dropped\/converted candidates: 1/u);
-  assert.match(rendered, /- Repeated unsupported claim stops: 1/u);
+  assert.match(rendered, /- Dropped candidates: 1/u);
   assert.match(
     rendered,
-    /`src\/blocked\.ts` — stopped: repeated_unsupported_claim; approved=0; missing-information=1/u
+    /`src\/blocked\.ts` — passed_with_limitations; approved=0; missing-information=1/u
   );
   assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
   assert.match(rendered, /- None: 2/u);

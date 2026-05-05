@@ -106,10 +106,8 @@ export function renderRunSummary(input: RunSummaryRenderInput): string {
       "## Semantic Validation",
       `- Passed cleanly: ${semanticSummary.passedCleanly}`,
       `- Passed with limitations: ${semanticSummary.passedWithLimitations}`,
-      `- Stopped or insufficient information: ${semanticSummary.stoppedOrInsufficient}`,
       `- Missing-information items: ${semanticSummary.missingInformationItems}`,
-      `- Dropped/converted candidates: ${semanticSummary.droppedOrConvertedCandidates}`,
-      `- Repeated unsupported claim stops: ${semanticSummary.repeatedUnsupportedClaimStops}`,
+      `- Dropped candidates: ${semanticSummary.droppedCandidates}`,
       `- Max semantic iterations used: ${semanticSummary.maxIterationsUsed}`,
       ...semanticSummary.lines,
       "",
@@ -126,19 +124,15 @@ export type RunSummaryRenderer = typeof renderRunSummary;
 function buildSemanticSummary(outcomes: ResolvedFileOutcome[]): {
   passedCleanly: number;
   passedWithLimitations: number;
-  stoppedOrInsufficient: number;
   missingInformationItems: number;
-  droppedOrConvertedCandidates: number;
-  repeatedUnsupportedClaimStops: number;
+  droppedCandidates: number;
   maxIterationsUsed: number;
   lines: string[];
 } {
   let passedCleanly = 0;
   let passedWithLimitations = 0;
-  let stoppedOrInsufficient = 0;
   let missingInformationItems = 0;
-  let droppedOrConvertedCandidates = 0;
-  let repeatedUnsupportedClaimStops = 0;
+  let droppedCandidates = 0;
   let maxIterationsUsed = 0;
   const lines: string[] = [];
 
@@ -146,26 +140,19 @@ function buildSemanticSummary(outcomes: ResolvedFileOutcome[]): {
     const semantic = outcome.outcome.semanticReview ?? createEmptySemanticReviewStats();
     maxIterationsUsed = Math.max(maxIterationsUsed, semantic.semanticIterationCount);
     missingInformationItems += semantic.missingInformationCount;
-    droppedOrConvertedCandidates +=
-      (semantic.decisionCounts.drop ?? 0) +
-      (semantic.decisionCounts.convert_to_missing_information ?? 0);
-    repeatedUnsupportedClaimStops += semantic.repeatedUnsupportedClaimStopCount;
+    droppedCandidates += (semantic.decisionCounts.drop ?? 0);
 
     if (semantic.status === "passed") {
       passedCleanly += 1;
     } else if (semantic.status === "passed_with_limitations") {
       passedWithLimitations += 1;
-    } else if (semantic.status === "stopped") {
-      stoppedOrInsufficient += 1;
     }
 
     if (
-      semantic.status === "stopped" ||
-      semantic.missingInformationCount > 0 ||
-      semantic.repeatedUnsupportedClaimStopCount > 0
+      semantic.missingInformationCount > 0
     ) {
       lines.push(
-        `- \`${outcome.outcome.filePath}\` — ${semantic.status}: ${semantic.stopReason ?? semantic.overallStatus ?? "unknown"}; approved=${semantic.approvedFindingCount}; missing-information=${semantic.missingInformationCount}`
+        `- \`${outcome.outcome.filePath}\` — ${semantic.status}; approved=${semantic.approvedFindingCount}; missing-information=${semantic.missingInformationCount}`
       );
     }
   }
@@ -173,10 +160,8 @@ function buildSemanticSummary(outcomes: ResolvedFileOutcome[]): {
   return {
     passedCleanly,
     passedWithLimitations,
-    stoppedOrInsufficient,
     missingInformationItems,
-    droppedOrConvertedCandidates,
-    repeatedUnsupportedClaimStops,
+    droppedCandidates,
     maxIterationsUsed,
     lines: lines.length === 0 ? ["- 無"] : lines
   };
@@ -195,9 +180,7 @@ function createEmptySemanticReviewStats(): SemanticReviewStats {
     candidateFindingCount: 0,
     approvedFindingCount: 0,
     missingInformationCount: 0,
-    missingInformationConversionCount: 0,
     failedGateCounts: {},
-    decisionCounts: {},
-    repeatedUnsupportedClaimStopCount: 0
+    decisionCounts: {}
   };
 }

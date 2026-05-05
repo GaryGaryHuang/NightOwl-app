@@ -33,12 +33,9 @@ interface CandidateValidationResult {
 
 interface ValidationReportResult {
   readonly payload: {
-    readonly schemaVersion: number;
-    readonly overallStatus: string;
     readonly perFindingResults: readonly { readonly findingId: string }[];
     readonly approvedFindings: readonly { readonly findingId: string }[];
     readonly loopControl: { readonly action: string };
-    readonly stopReason?: string;
   };
   readonly report: readonly SemanticReportEntry[];
 }
@@ -195,8 +192,6 @@ function perFindingResult(
     decision: "approve",
     failedGates: [],
     requiredCorrections: [],
-    recommendedClassification: "confirmed_problem",
-    recommendedSeverity: "high",
     reason: "all semantic gates passed",
     ...overrides
   };
@@ -206,8 +201,6 @@ function validationReportV1(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
-    schemaVersion: 1,
-    overallStatus: "PASS",
     perFindingResults: [perFindingResult()],
     approvedFindings: [approvedFinding()],
     missingInformationItems: [],
@@ -220,8 +213,6 @@ function missingInformationItem(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
-    itemId: "MI1",
-    findingId: "F1",
     description: "Need the service contract for null input handling.",
     whyItMatters: "Without the contract the validator cannot prove expected behavior.",
     ...overrides
@@ -359,8 +350,6 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
 test("validateValidationReportV1WithReport accepts reports that approve only Step 5 candidates", () => {
   const result = validateValidationReport();
 
-  assert.equal(result.payload.schemaVersion, 1);
-  assert.equal(result.payload.overallStatus, "PASS");
   assert.deepEqual(
     result.payload.perFindingResults.map((entry) => entry.findingId),
     ["F1"]
@@ -434,24 +423,6 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
         approvedFindings: [approvedFinding()]
       }),
       reason: /drop.*approvedFindings/u
-    },
-    {
-      label: "converted candidates cannot be approved",
-      payload: validationReportV1({
-        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-        perFindingResults: [
-          perFindingResult({
-            decision: "convert_to_missing_information",
-            failedGates: ["missing_information_honest"],
-            reason: "required external contract is unavailable"
-          })
-        ],
-        approvedFindings: [approvedFinding()],
-        missingInformationItems: [missingInformationItem()],
-        loopControl: { action: "stop", reason: "missing critical contract" },
-        stopReason: "missing_critical_contract"
-      }),
-      reason: /convert_to_missing_information.*approvedFindings/u
     }
   ];
 
@@ -467,7 +438,7 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
   }
 });
 
-test("validateValidationReportV1WithReport validates loopControl actions and stop reasons", () => {
+test("validateValidationReportV1WithReport validates loopControl actions", () => {
   const acceptedActions: readonly {
     readonly action: string;
     readonly payload: Record<string, unknown>;
@@ -476,11 +447,10 @@ test("validateValidationReportV1WithReport validates loopControl actions and sto
     {
       action: "rerun_step5",
       payload: validationReportV1({
-        overallStatus: "RERUN_STEP5",
         perFindingResults: [
           perFindingResult({
             decision: "rewrite_required",
-            failedGates: ["impact_proportionate"],
+            failedGates: ["impact"],
             requiredCorrections: [
               "Prove concrete user impact or convert to missing information."
             ],
@@ -493,54 +463,12 @@ test("validateValidationReportV1WithReport validates loopControl actions and sto
           reason: "Step 5 must repair machine-actionable evidence gaps"
         }
       })
-    },
-    {
-      action: "stop",
-      payload: validationReportV1({
-        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-        perFindingResults: [
-          perFindingResult({
-            decision: "convert_to_missing_information",
-            failedGates: ["missing_information_honest"],
-            reason: "required external contract is unavailable"
-          })
-        ],
-        approvedFindings: [],
-        missingInformationItems: [missingInformationItem()],
-        loopControl: { action: "stop", reason: "missing critical contract" },
-        stopReason: "missing_critical_contract"
-      })
     }
   ];
 
   for (const testCase of acceptedActions) {
     const result = validateValidationReport(testCase.payload);
     assert.equal(result.payload.loopControl.action, testCase.action);
-  }
-
-  for (const stopReason of [
-    "missing_critical_contract",
-    "repeated_unsupported_claim",
-    "unresolved_identifier_hallucination",
-    "max_semantic_reruns"
-  ]) {
-    const result = validateValidationReport(
-      validationReportV1({
-        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-        perFindingResults: [
-          perFindingResult({
-            decision: "convert_to_missing_information",
-            failedGates: ["missing_information_honest"],
-            reason: "approval is blocked by a stop condition"
-          })
-        ],
-        approvedFindings: [],
-        missingInformationItems: [missingInformationItem()],
-        loopControl: { action: "stop", reason: stopReason },
-        stopReason
-      })
-    );
-    assert.equal(result.payload.stopReason, stopReason);
   }
 
   const invalidCases: readonly {
@@ -553,70 +481,17 @@ test("validateValidationReportV1WithReport validates loopControl actions and sto
       payload: validationReportV1({
         loopControl: { action: "retry_step_runner", reason: "wrong retry budget" }
       }),
-      reason: /loopControl\.action.*accept.*rerun_step5.*stop/u
-    },
-    {
-      label: "PASS requires accept",
-      payload: validationReportV1({
-        loopControl: {
-          action: "rerun_step5",
-          reason: "status/action mismatch"
-        }
-      }),
-      reason: /PASS.*accept/u
+      reason: /loopControl\.action.*accept.*rerun_step5/u
     },
     {
       label: "rerun cannot approve findings",
       payload: validationReportV1({
-        overallStatus: "RERUN_STEP5",
         loopControl: {
           action: "rerun_step5",
           reason: "Step 5 must repair evidence gaps"
         }
       }),
       reason: /rerun_step5.*approve findings/u
-    },
-    {
-      label: "stop requires stopReason",
-      payload: validationReportV1({
-        overallStatus: "STOPPED",
-        perFindingResults: [
-          perFindingResult({
-            decision: "convert_to_missing_information",
-            failedGates: ["missing_information_honest"],
-            reason: "approval is blocked by a stop condition"
-          })
-        ],
-        approvedFindings: [],
-        missingInformationItems: [missingInformationItem()],
-        loopControl: { action: "stop", reason: "missing critical contract" }
-      }),
-      reason: /stop.*requires stopReason/u
-    },
-    {
-      label: "accept cannot carry stopReason",
-      payload: validationReportV1({
-        stopReason: "max_semantic_reruns"
-      }),
-      reason: /accepted.*must not include stopReason/u
-    },
-    {
-      label: "invalid stopReason",
-      payload: validationReportV1({
-        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-        perFindingResults: [
-          perFindingResult({
-            decision: "convert_to_missing_information",
-            failedGates: ["missing_information_honest"],
-            reason: "approval is blocked by a stop condition"
-          })
-        ],
-        approvedFindings: [],
-        missingInformationItems: [missingInformationItem()],
-        loopControl: { action: "stop", reason: "format retry exhausted" },
-        stopReason: "format_retry_exhausted"
-      }),
-      reason: /stopReason.*missing_critical_contract.*repeated_unsupported_claim.*unresolved_identifier_hallucination.*max_semantic_reruns/u
     }
   ];
 

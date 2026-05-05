@@ -166,9 +166,7 @@ function createEmptySemanticReviewStats(): SemanticReviewStats {
     candidateFindingCount: 0,
     approvedFindingCount: 0,
     missingInformationCount: 0,
-    missingInformationConversionCount: 0,
     failedGateCounts: {},
-    decisionCounts: {},
-    repeatedUnsupportedClaimStopCount: 0
+    decisionCounts: {}
   };
 }

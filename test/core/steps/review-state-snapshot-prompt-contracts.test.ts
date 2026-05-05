@@ -80,8 +80,6 @@ function createCandidateFindings(): CandidateFindingsV3 {
 
 function createValidationReport(findings: Finding[]): ValidationReportV1 {
   return {
-    schemaVersion: 1,
-    overallStatus: "PASS",
     perFindingResults: findings.map((finding) => ({
       findingId: finding.findingId,
       decision: "approve",
@@ -200,7 +198,6 @@ function assertBaseSnapshot(
     expectEvidenceRefs: false
   }
 ): void {
-  assert.equal(snapshot.schemaVersion, 1);
   assert.equal(snapshot.filePath, "src/app.ts");
   assert.equal(snapshot.baseRef, "main");
   assert.equal(snapshot.headRef, "feature");

@@ -131,7 +131,6 @@ test("ReviewOrchestrator caps semantic Step 5/6 reruns at two before continuing 
   const events: string[] = [];
   const stepEvents: string[] = [];
   let step5Attempt = 0;
-  let step7StopReason: string | undefined;
   let step7LoopAction: string | undefined;
   let step7MissingInformationIds: string[] = [];
   const orchestrator = new ReviewOrchestrator({
@@ -167,7 +166,6 @@ test("ReviewOrchestrator caps semantic Step 5/6 reruns at two before continuing 
           step5Attempt += 1;
         }
         if (step.stepId === "step7-summary") {
-          step7StopReason = context.getValidationReportV1()?.stopReason;
           step7LoopAction = context.getValidationReportV1()?.loopControl.action;
           step7MissingInformationIds =
             context.getValidationReportV1()?.missingInformationItems.map((item) => item.itemId) ?? [];
@@ -214,14 +212,12 @@ test("ReviewOrchestrator caps semantic Step 5/6 reruns at two before continuing 
       "progress:src/app.ts:step7-summary"
     ]
   );
-  assert.equal(step7LoopAction, "stop");
-  assert.equal(step7StopReason, "max_semantic_reruns");
+  assert.equal(step7LoopAction, "accept");
   assert.deepEqual(step7MissingInformationIds, ["MI-semantic-3"]);
 });
 
 test("ReviewOrchestrator stops repeated unsupported semantic claims without spending all reruns", async () => {
   const stepEvents: string[] = [];
-  let step7StopReason: string | undefined;
   let step7LoopAction: string | undefined;
   let step7MissingInformationIds: string[] = [];
   const orchestrator = new ReviewOrchestrator({
@@ -254,7 +250,6 @@ test("ReviewOrchestrator stops repeated unsupported semantic claims without spen
       async run({ step, context }) {
         stepEvents.push(step.stepId);
         if (step.stepId === "step7-summary") {
-          step7StopReason = context.getValidationReportV1()?.stopReason;
           step7LoopAction = context.getValidationReportV1()?.loopControl.action;
           step7MissingInformationIds =
             context.getValidationReportV1()?.missingInformationItems.map((item) => item.itemId) ?? [];
@@ -283,14 +278,12 @@ test("ReviewOrchestrator stops repeated unsupported semantic claims without spen
     "step6-cognitive-simulation",
     "step7-summary"
   ]);
-  assert.equal(step7LoopAction, "stop");
-  assert.equal(step7StopReason, "repeated_unsupported_claim");
+  assert.equal(step7LoopAction, "accept");
   assert.deepEqual(step7MissingInformationIds, ["MI-semantic-repeated-2"]);
 });
 
 test("ReviewOrchestrator honors Step 6 missing-critical-contract stop without semantic rerun", async () => {
   const stepEvents: string[] = [];
-  let step7StopReason: string | undefined;
   let step7MissingInformationIds: string[] = [];
   const orchestrator = new ReviewOrchestrator({
     workingDirectory: "/workspace/repo",
@@ -322,7 +315,6 @@ test("ReviewOrchestrator honors Step 6 missing-critical-contract stop without se
       async run({ step, context }) {
         stepEvents.push(step.stepId);
         if (step.stepId === "step7-summary") {
-          step7StopReason = context.getValidationReportV1()?.stopReason;
           step7MissingInformationIds =
             context.getValidationReportV1()?.missingInformationItems.map((item) => item.itemId) ?? [];
         }
@@ -348,7 +340,6 @@ test("ReviewOrchestrator honors Step 6 missing-critical-contract stop without se
     "step6-cognitive-simulation",
     "step7-summary"
   ]);
-  assert.equal(step7StopReason, "missing_critical_contract");
   assert.deepEqual(step7MissingInformationIds, ["MI1"]);
 });
 
@@ -511,13 +502,11 @@ function createCandidateFindingsV3(variant: number) {
 
 function createRerunValidationReportV1() {
   return {
-    schemaVersion: 1,
-    overallStatus: "RERUN_STEP5",
     perFindingResults: [
       {
         findingId: "F1",
         decision: "rewrite_required",
-        failedGates: ["impact_proportionate"],
+        failedGates: ["impact"],
         requiredCorrections: ["Prove impact or convert to missing information."],
         reason: "impact is unsupported"
       }
@@ -533,13 +522,11 @@ function createRerunValidationReportV1() {
 
 function createStopValidationReportV1() {
   return {
-    schemaVersion: 1,
-    overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
     perFindingResults: [
       {
         findingId: "F1",
-        decision: "convert_to_missing_information",
-        failedGates: ["missing_information_honest"],
+        decision: "drop",
+        failedGates: ["completeness"],
         requiredCorrections: ["Attach the external null-input contract before approving a finding."],
         reason: "approval is blocked by a missing critical contract"
       }
@@ -548,15 +535,13 @@ function createStopValidationReportV1() {
     missingInformationItems: [
       {
         itemId: "MI1",
-        findingId: "F1",
         description: "Need the external null-input contract before approving the candidate.",
         whyItMatters: "Without the contract, Step 6 cannot distinguish a real defect from unsupported speculation."
       }
     ],
     loopControl: {
-      action: "stop",
+      action: "accept",
       reason: "missing critical contract"
-    },
-    stopReason: "missing_critical_contract"
+    }
   };
 }

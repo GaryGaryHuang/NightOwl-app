@@ -132,10 +132,8 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
         candidateFindingCount: 0,
         approvedFindingCount: 0,
         missingInformationCount: 0,
-        missingInformationConversionCount: 0,
         failedGateCounts: {},
-        decisionCounts: {},
-        repeatedUnsupportedClaimStopCount: 0
+        decisionCounts: {}
       }
     },
     {
@@ -150,10 +148,8 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
         candidateFindingCount: 0,
         approvedFindingCount: 0,
         missingInformationCount: 0,
-        missingInformationConversionCount: 0,
         failedGateCounts: {},
-        decisionCounts: {},
-        repeatedUnsupportedClaimStopCount: 0
+        decisionCounts: {}
       }
     }
   ]);
@@ -177,24 +173,19 @@ test("RunManifestFinalizer renders Phase 3 coverage buckets and semantic loop st
     }),
     successfulFiles: [
       createSuccessfulFile("src/a.ts", [], [], {
-        status: "stopped",
-        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-        loopAction: "stop",
-        stopReason: "repeated_unsupported_claim",
+        status: "passed_with_limitations",
+        loopAction: "accept",
         semanticIterationCount: 2,
         candidateFindingCount: 1,
         approvedFindingCount: 0,
         missingInformationCount: 1,
-        missingInformationConversionCount: 1,
-        failedGateCounts: { repeated_unsupported_claim: 1 },
-        decisionCounts: { convert_to_missing_information: 1 },
-        repeatedUnsupportedClaimStopCount: 1
+        failedGateCounts: { evidence: 1 },
+        decisionCounts: { drop: 1 }
       })
     ],
     skippedFiles: [
       createSkippedFile("src/b.ts", "review-basis", "judge rejected", [], {
         status: "not_run",
-        overallStatus: undefined,
         loopAction: undefined,
         semanticIterationCount: 0,
         candidateFindingCount: 0,
@@ -222,18 +213,14 @@ test("RunManifestFinalizer renders Phase 3 coverage buckets and semantic loop st
   assert.equal(parsed.semanticLoopStats.maxIterationsUsed, 2);
   assert.deepEqual(parsed.semanticLoopStats.files[0], {
     filePath: "src/a.ts",
-    status: "stopped",
-    overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-    loopAction: "stop",
-    stopReason: "repeated_unsupported_claim",
+    status: "passed_with_limitations",
+    loopAction: "accept",
     semanticIterationCount: 2,
     candidateFindingCount: 1,
     approvedFindingCount: 0,
     missingInformationCount: 1,
-    missingInformationConversionCount: 1,
-    failedGateCounts: { repeated_unsupported_claim: 1 },
-    decisionCounts: { convert_to_missing_information: 1 },
-    repeatedUnsupportedClaimStopCount: 1
+    failedGateCounts: { evidence: 1 },
+    decisionCounts: { drop: 1 }
   });
 });
 

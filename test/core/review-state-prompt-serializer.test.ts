@@ -74,7 +74,6 @@ test("serializes one stable review_state JSON block", () => {
 test("snapshot includes stable file refs and diff summary hunks derived from the diff", () => {
   const snapshot = serializeSnapshot(createContext(), ["sections"]);
 
-  assert.equal(snapshot.schemaVersion, 1);
   assert.equal(snapshot.filePath, "src/app.ts");
   assert.equal(snapshot.baseRef, "main");
   assert.equal(snapshot.headRef, "feature");

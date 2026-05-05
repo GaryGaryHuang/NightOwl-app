@@ -89,7 +89,6 @@ export type ReviewIndexRenderer = typeof renderReviewIndex;
 
 function formatSemanticBadge(input: {
   status: string;
-  stopReason?: string;
   missingInformationCount: number;
 } | undefined): string {
   if (!input) {
@@ -101,8 +100,6 @@ function formatSemanticBadge(input: {
     badges.push("[Passed]");
   } else if (input.status === "passed_with_limitations") {
     badges.push("[Limited]");
-  } else if (input.status === "stopped") {
-    badges.push(`[Stopped:${input.stopReason ?? "unknown"}]`);
   }
 
   if (input.missingInformationCount > 0) {

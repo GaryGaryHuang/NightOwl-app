@@ -149,14 +149,9 @@ test("VerifierReportFinalizer preserves optional semantic loop metadata", () => 
           gate: "semantic",
           reason: "impact is unsupported",
           semanticIteration: 2,
-          semanticGate: "impact_proportionate",
-          validationDecision: "convert_to_missing_information",
-          requiredCorrections: ["Prove concrete impact or convert to missing information."],
-          recommendedClassification: "confirmed_problem",
-          recommendedSeverity: "low",
-          missingInformationItemId: "MI1",
-          repeatedUnsupportedClaimId: "F1",
-          stopReason: "repeated_unsupported_claim"
+          semanticGate: "impact",
+          validationDecision: "drop",
+          requiredCorrections: ["Prove concrete impact or convert to missing information."]
         } as Partial<ReturnType<typeof createVerifierReportArtifactEntry>>)
       ])
     ],
@@ -172,14 +167,9 @@ test("VerifierReportFinalizer preserves optional semantic loop metadata", () => 
     gate: "semantic",
     reason: "impact is unsupported",
     semanticIteration: 2,
-    semanticGate: "impact_proportionate",
-    validationDecision: "convert_to_missing_information",
-    requiredCorrections: ["Prove concrete impact or convert to missing information."],
-    recommendedClassification: "confirmed_problem",
-    recommendedSeverity: "low",
-    missingInformationItemId: "MI1",
-    repeatedUnsupportedClaimId: "F1",
-    stopReason: "repeated_unsupported_claim"
+    semanticGate: "impact",
+    validationDecision: "drop",
+    requiredCorrections: ["Prove concrete impact or convert to missing information."]
   });
 });
 

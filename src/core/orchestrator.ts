@@ -37,7 +37,6 @@ import {
 import { ReviewStatePromptSerializer } from "./review-state-prompt-serializer.ts";
 import {
   semanticCandidateFingerprint,
-  type StopReason,
   type ValidationReportV1
 } from "./semantic-review.ts";
 import { ReviewBasisStep } from "./steps/review-basis-step.ts";
@@ -771,7 +770,6 @@ export class ReviewOrchestrator {
           ];
           fileContext.setMissingInformationItems(missingInformationItems);
           markSemanticLoopStopped(fileContext, {
-            stopReason: "repeated_unsupported_claim",
             reason: "Step 5 repeated an unsupported candidate without new evidence.",
             missingInformationItems
           });
@@ -801,7 +799,6 @@ export class ReviewOrchestrator {
         ];
         fileContext.setMissingInformationItems(missingInformationItems);
         markSemanticLoopStopped(fileContext, {
-          stopReason: "max_semantic_reruns",
           reason: "Step 6 requested another Step 5 rerun after the semantic rerun budget was exhausted.",
           missingInformationItems
         });
@@ -976,23 +973,19 @@ function shouldRerunStep5(context: FileReviewContext): boolean {
 function markSemanticLoopStopped(
   context: FileReviewContext,
   input: {
-    stopReason: StopReason;
     reason: string;
     missingInformationItems: ValidationReportV1["missingInformationItems"];
   }
 ): void {
   const currentReport = context.getValidationReportV1();
   const stoppedReport: ValidationReportV1 = {
-    schemaVersion: 1,
-    overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
     perFindingResults: currentReport?.perFindingResults ?? [],
     approvedFindings: [],
     missingInformationItems: input.missingInformationItems,
     loopControl: {
-      action: "stop",
+      action: "accept",
       reason: input.reason
-    },
-    stopReason: input.stopReason
+    }
   };
 
   context.setValidationReportV1(stoppedReport);
@@ -1002,11 +995,6 @@ function markSemanticLoopStopped(
   const firstCandidate = context.getCandidateFindingsV3()?.findings[0];
   const findingId =
     firstResult?.findingId ?? firstCandidate?.findingId ?? "<semantic-loop>";
-  const lastMissingInformationItem =
-    input.missingInformationItems[input.missingInformationItems.length - 1];
-  const matchingMissingInformationItem = input.missingInformationItems.find(
-    (item) => item.findingId === findingId
-  );
 
   context.appendVerifierReportEntries([
     {
@@ -1017,26 +1005,10 @@ function markSemanticLoopStopped(
       outcome: "rejected",
       gate: "semantic",
       reason: input.reason,
-      validationDecision:
-        firstResult?.decision ?? "convert_to_missing_information",
+      validationDecision: firstResult?.decision ?? "drop",
       ...(firstResult?.requiredCorrections === undefined
         ? {}
-        : { requiredCorrections: firstResult.requiredCorrections }),
-      ...(matchingMissingInformationItem?.itemId ??
-      lastMissingInformationItem?.itemId
-        ? {
-            missingInformationItemId:
-              matchingMissingInformationItem?.itemId ??
-              lastMissingInformationItem?.itemId
-          }
-        : {}),
-      ...(input.stopReason === "repeated_unsupported_claim"
-        ? {
-            semanticGate: "repeated_unsupported_claim",
-            repeatedUnsupportedClaimId: findingId
-          }
-        : {}),
-      stopReason: input.stopReason
+        : { requiredCorrections: firstResult.requiredCorrections })
     }
   ]);
 }
@@ -1089,15 +1061,9 @@ function buildSemanticReviewStats(
       validationReport,
       missingInformationItems.length
     ),
-    ...(validationReport?.overallStatus === undefined
-      ? {}
-      : { overallStatus: validationReport.overallStatus }),
     ...(validationReport?.loopControl.action === undefined
       ? {}
       : { loopAction: validationReport.loopControl.action }),
-    ...(validationReport?.stopReason === undefined
-      ? {}
-      : { stopReason: validationReport.stopReason }),
     semanticIterationCount: semanticValidationCount,
     candidateFindingCount: candidatePayload?.findings.length ?? 0,
     approvedFindingCount:
@@ -1105,12 +1071,8 @@ function buildSemanticReviewStats(
       context.getFindings()?.length ??
       0,
     missingInformationCount: missingInformationItems.length,
-    missingInformationConversionCount:
-      decisionCounts.convert_to_missing_information ?? 0,
     failedGateCounts,
-    decisionCounts,
-    repeatedUnsupportedClaimStopCount:
-      validationReport?.stopReason === "repeated_unsupported_claim" ? 1 : 0
+    decisionCounts
   };
 }
 
@@ -1120,16 +1082,6 @@ function deriveSemanticReviewStatus(
 ): SemanticReviewStats["status"] {
   if (!validationReport) {
     return "not_run";
-  }
-
-  if (
-    validationReport.loopControl.action === "stop" ||
-    validationReport.stopReason !== undefined ||
-    validationReport.overallStatus === "STOPPED" ||
-    validationReport.overallStatus ===
-      "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW"
-  ) {
-    return "stopped";
   }
 
   if (validationReport.loopControl.action === "rerun_step5") {

@@ -234,16 +234,13 @@ test("ReviewIndexFinalizer distinguishes missing-information semantic stops from
         decisionCounts: {}
       }),
       createSuccessfulFile("src/blocked.ts", [], [], {
-        status: "stopped",
-        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-        loopAction: "stop",
-        stopReason: "missing_critical_contract",
+        status: "passed_with_limitations",
+        loopAction: "accept",
         semanticIterationCount: 1,
         candidateFindingCount: 1,
         approvedFindingCount: 0,
         missingInformationCount: 1,
-        missingInformationConversionCount: 1,
-        decisionCounts: { convert_to_missing_information: 1 }
+        decisionCounts: { drop: 1 }
       })
     ],
     skippedFiles: []
@@ -255,7 +252,7 @@ test("ReviewIndexFinalizer distinguishes missing-information semantic stops from
   );
   assert.match(
     rendered,
-    /- \[None\]\[Stopped:missing_critical_contract\]\[MissingInfo\] \[`src\/blocked\.ts`\]\(\.\/files\/src\/blocked\.ts\.md\)/u
+    /- \[None\]\[Limited\]\[MissingInfo\] \[`src\/blocked\.ts`\]\(\.\/files\/src\/blocked\.ts\.md\)/u
   );
 });
 

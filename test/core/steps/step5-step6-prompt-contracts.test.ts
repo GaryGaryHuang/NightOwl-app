@@ -10,8 +10,7 @@ import {
   CANDIDATE_SEVERITIES,
   HYPOTHESIS_CLOSURE_STATUSES,
   LOOP_ACTIONS,
-  VALIDATION_DECISIONS,
-  VALIDATION_OVERALL_STATUSES
+  VALIDATION_DECISIONS
 } from "../../../src/core/semantic-review.ts";
 import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
 import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
@@ -194,9 +193,6 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   assert.match(plan.prompt.userMessage, /candidateFindings\.result/u);
   assert.match(plan.prompt.userMessage, /candidateFindings\.hypothesisClosure/u);
   assert.match(plan.prompt.userMessage, /candidateFindings\.criticalMissingInformation/u);
-  for (const value of VALIDATION_OVERALL_STATUSES) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
   for (const value of VALIDATION_DECISIONS) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }

@@ -52,7 +52,6 @@ export interface ReviewStateSnapshotHunk {
 export type ReviewStateSnapshotSections = Record<string, string>;
 
 export interface ReviewStateSnapshot {
-  schemaVersion: 1;
   filePath: string;
   baseRef: string;
   headRef: string;
@@ -106,7 +105,6 @@ export class ReviewStatePromptSerializer {
     const includeReviewBasis = input.include.includes("review-basis");
 
     return {
-      schemaVersion: 1,
       filePath: input.context.filePath,
       baseRef: input.context.baseRef,
       headRef: input.context.headRef,
