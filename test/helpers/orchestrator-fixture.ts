@@ -104,17 +104,19 @@ export function buildSummaryResponse(
 }
 
 export function createFinding(type: "must" | "nice", title: string): Finding {
+  const classification = type === "must" ? "confirmed_problem" : "reasonable_risk";
+  const severity = type === "must" ? "high" : "low";
   return {
-    type,
+    findingId: "F1",
+    classification,
+    severity,
     title,
     traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-    expectedBehavior: "應維持既有 fallback",
-    actualBehavior: "新分支略過 fallback",
-    deviation: "預期與實際有落差",
+    evidence: "concrete code evidence",
+    triggerCondition: "trigger condition",
     impact: "會造成 correctness 問題",
-    suggestion: "補上 guard",
-    findingId: "F1"
-  };
+    counterEvidence: ["checked alternative"]
+  } as Finding;
 }
 
 export function buildFindingsForFile(filePath: string): Finding[] {
@@ -233,7 +235,6 @@ function buildValidationReportForFindings(findings: readonly Finding[]): Validat
       requiredCorrections: [],
       reason: "all semantic gates passed"
     })),
-    approvedFindings: findings.map((finding) => ({ ...finding })),
     missingInformationItems: [],
     loopControl: { action: "accept", reason: "all gates passed" }
   };

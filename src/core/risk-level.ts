@@ -10,17 +10,18 @@ export const RISK_ORDER: Record<RiskLevel, number> = {
 };
 
 export function countMustFindings(findings: Finding[] | undefined): number {
-  return findings?.filter((f) => f.type === "must").length ?? 0;
+  return findings?.filter((f) => f.classification === "confirmed_problem" && f.severity === "high").length ?? 0;
 }
 
 export function countNiceFindings(findings: Finding[] | undefined): number {
-  return findings?.filter((f) => f.type === "nice").length ?? 0;
+  return findings?.filter((f) => !(f.classification === "confirmed_problem" && f.severity === "high")).length ?? 0;
 }
 
 /**
  * Collapse finalized findings into the run-level risk label shown in summaries, indexes, and manifests.
  *
- * Any accepted must-fix finding escalates the file to High; nice-only findings map to Low;
+ * Any accepted confirmed_problem/high finding escalates the file to High;
+ * remaining findings (confirmed_problem/low or reasonable_risk) map to Low;
  * and no accepted findings maps to None.
  */
 export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel {
@@ -28,15 +29,11 @@ export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel 
     return "None";
   }
 
-  if (findings.some((finding) => finding.type === "must")) {
+  if (findings.some((f) => f.classification === "confirmed_problem" && f.severity === "high")) {
     return "High";
   }
 
-  if (findings.some((finding) => finding.type === "nice")) {
-    return "Low";
-  }
-
-  return "None";
+  return "Low";
 }
 
 export interface RiskSnapshot {

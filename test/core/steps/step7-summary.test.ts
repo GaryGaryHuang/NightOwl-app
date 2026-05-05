@@ -31,17 +31,19 @@ function createFinding(
   type: "must" | "nice",
   findingId: string
 ): Finding {
+  const classification = type === "must" ? "confirmed_problem" : "reasonable_risk";
+  const severity = type === "must" ? "high" : "low";
   return {
-    type,
+    findingId,
+    classification,
+    severity,
     title: `${type} finding`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    expectedBehavior: "expected",
-    actualBehavior: "actual",
-    deviation: "dev",
+    evidence: "concrete evidence",
+    triggerCondition: "trigger",
     impact: "impact",
-    suggestion: "suggestion",
-    findingId
-  };
+    counterEvidence: ["checked"]
+  } as Finding;
 }
 
 const FAKE_SERIALIZER = new ReviewStatePromptSerializer();

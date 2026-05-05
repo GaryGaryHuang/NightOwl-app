@@ -34,29 +34,29 @@ function createContext(): FileReviewContext {
 
 function makeMustFinding(title: string): Finding {
   return {
-    type: "must",
+    findingId: "F1",
+    classification: "confirmed_problem",
+    severity: "high",
     title,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    expectedBehavior: "test-expected",
-    actualBehavior: "test-actual",
-    deviation: "test-deviation",
+    evidence: "test-evidence",
+    triggerCondition: "test-trigger",
     impact: "test-impact",
-    suggestion: "test-suggestion",
-    findingId: "F1"
+    counterEvidence: ["test-counter"]
   };
 }
 
 function makeNiceFinding(title: string): Finding {
   return {
-    type: "nice",
+    findingId: "F2",
+    classification: "reasonable_risk",
+    severity: "low",
     title,
     traceability: { kind: "diff-hunk", hunkHeader: "@@ -1,3 +1,3 @@" },
-    expectedBehavior: "test-expected",
-    actualBehavior: "test-actual",
-    deviation: "test-deviation",
+    evidence: "test-evidence",
+    triggerCondition: "test-trigger",
     impact: "test-impact",
-    suggestion: "test-suggestion",
-    findingId: "F2"
+    counterEvidence: ["test-counter"]
   };
 }
 
@@ -300,25 +300,28 @@ test("Finalizer renders traceability formats correctly", () => {
 
   const findings: Finding[] = [
     {
-      type: "must",
+      findingId: "F1",
+      classification: "confirmed_problem",
+      severity: "high",
       title: "line-range-single",
       traceability: { kind: "line-range", lineStart: 42, lineEnd: 42 },
-      expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s",
-      findingId: "F1"
+      evidence: "e", triggerCondition: "t", impact: "i", counterEvidence: []
     },
     {
-      type: "must",
+      findingId: "F2",
+      classification: "confirmed_problem",
+      severity: "high",
       title: "line-range-multi",
       traceability: { kind: "line-range", lineStart: 10, lineEnd: 20 },
-      expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s",
-      findingId: "F2"
+      evidence: "e", triggerCondition: "t", impact: "i", counterEvidence: []
     },
     {
-      type: "must",
+      findingId: "F3",
+      classification: "confirmed_problem",
+      severity: "high",
       title: "diff-hunk",
       traceability: { kind: "diff-hunk", hunkHeader: "@@ -5,7 +5,7 @@" },
-      expectedBehavior: "e", actualBehavior: "a", deviation: "d", impact: "i", suggestion: "s",
-      findingId: "F3"
+      evidence: "e", triggerCondition: "t", impact: "i", counterEvidence: []
     }
   ];
 

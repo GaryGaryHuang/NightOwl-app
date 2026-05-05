@@ -514,7 +514,7 @@ function createRerunValidationReportV1() {
     approvedFindings: [] as Finding[],
     missingInformationItems: [],
     loopControl: {
-      action: "rerun_step5",
+      action: "rerun",
       reason: "Step 5 must repair machine-actionable evidence gaps"
     }
   };

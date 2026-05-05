@@ -92,7 +92,6 @@ export class ReviewStatePromptSerializer {
       input.context.diffContent
     );
     const approvedFindings =
-      input.context.getValidationReportV1?.()?.approvedFindings ??
       input.context.getFindings() ??
       [];
     const candidateFindings =

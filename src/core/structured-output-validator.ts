@@ -1,6 +1,5 @@
 import type {
   DependencyPathException,
-  Finding,
   FindingTraceability
 } from "./file-review-context.ts";
 import type { ReviewBasisV1 } from "./review-basis.ts";
@@ -47,11 +46,6 @@ export class StructuredValidationReportError extends Error {
     this.name = "StructuredValidationReportError";
     this.report = report.map((entry) => ({ ...entry }));
   }
-}
-
-interface FindingValidationResult {
-  readonly finding: Finding;
-  readonly anchorFailure?: AnchorVerificationFailure;
 }
 
 interface TraceabilityValidationResult {
@@ -137,7 +131,6 @@ export class StructuredOutputValidator {
       const payload = validateValidationReportV1Record({
         record,
         candidatePayload,
-        anchorContext: buildAnchorContext(input),
         report
       });
 
@@ -145,38 +138,15 @@ export class StructuredOutputValidator {
         payload.perFindingResults.map((result) => [result.findingId, result])
       );
 
-      for (const finding of payload.approvedFindings) {
-        const validationResult = validationResultByFindingId.get(
-          finding.findingId
-        );
+      for (const result of payload.perFindingResults) {
         report.push({
-          findingId: finding.findingId,
-          taxonomy: "OK",
-          outcome: "accepted",
-          gate: "schema",
-          reason: "passed ValidationReportV1 schema validation"
-        });
-        report.push({
-          findingId: finding.findingId,
-          taxonomy: "OK",
-          outcome: "accepted",
+          findingId: result.findingId,
+          taxonomy: result.decision === "approve" ? "OK" : "SEMANTIC",
+          outcome: result.decision === "approve" ? "accepted" : "rejected",
           gate: "semantic",
-          reason: "passed ValidationReportV1 semantic gates",
-          ...buildValidationReportSemanticFields(validationResult, payload)
+          reason: result.reason,
+          ...buildValidationReportSemanticFields(result, payload)
         });
-      }
-
-      if (payload.approvedFindings.length === 0) {
-        for (const result of payload.perFindingResults) {
-          report.push({
-            findingId: result.findingId,
-            taxonomy: result.decision === "approve" ? "OK" : "SEMANTIC",
-            outcome: result.decision === "approve" ? "accepted" : "rejected",
-            gate: "semantic",
-            reason: result.reason,
-            ...buildValidationReportSemanticFields(result, payload)
-          });
-        }
       }
 
       return { payload, report };
@@ -328,15 +298,8 @@ function validateCandidateFindingV3(input: {
 function validateValidationReportV1Record(input: {
   record: Record<string, unknown>;
   candidatePayload: CandidateFindingsV3;
-  anchorContext: FindingAnchorValidationContext | undefined;
   report: VerifierReportEntry[];
 }): ValidationReportV1 {
-  rejectUnknownFields(
-    input.record,
-    ALLOWED_VALIDATION_REPORT_TOP_LEVEL_KEYS,
-    "ValidationReportV1"
-  );
-
   const candidateIds = input.candidatePayload.findings.map((f) => f.findingId);
   const candidateIdSet = new Set(candidateIds);
   const perFindingResults = validateArray(
@@ -346,24 +309,6 @@ function validateValidationReportV1Record(input: {
     validatePerFindingValidationResult(item, index, candidateIdSet)
   );
   assertPerFindingResultsCoverCandidates(perFindingResults, candidateIds);
-
-  const approvedFindings = validateArray(
-    input.record.approvedFindings,
-    "approvedFindings"
-  ).map((finding, index) => {
-    const validated = validateFindingWithDiagnostics(
-      finding,
-      input.anchorContext
-    ).finding;
-    if (!candidateIdSet.has(validated.findingId)) {
-      throw new Error(
-        `deterministic validation failed: ${validated.findingId} in approvedFindings must reference a Step 5 candidate`
-      );
-    }
-    return validated;
-  });
-  assertUniqueFindingIds(approvedFindings, "findings");
-  assertApprovedFindingsMatchDecisions(perFindingResults, approvedFindings);
 
   const missingInformationItems = validateArray(
     input.record.missingInformationItems,
@@ -376,32 +321,31 @@ function validateValidationReportV1Record(input: {
   assertValidationReportMatchesCandidatePayload({
     candidatePayload: input.candidatePayload,
     perFindingResults,
-    approvedFindings,
     missingInformationItems
   });
 
   const loopControl = validateLoopControl(input.record.loopControl);
   validateLoopControlAlignment({
-    approvedFindings,
+    perFindingResults,
     loopControl
   });
 
   return {
     perFindingResults,
-    approvedFindings,
     missingInformationItems,
     loopControl
   };
 }
 
 function validateLoopControlAlignment(input: {
-  approvedFindings: readonly Finding[];
+  perFindingResults: readonly PerFindingValidationResult[];
   loopControl: LoopControl;
 }): void {
-  if (input.loopControl.action === "rerun_step5") {
-    if (input.approvedFindings.length > 0) {
+  if (input.loopControl.action === "rerun") {
+    const hasApproval = input.perFindingResults.some((r) => r.decision === "approve");
+    if (hasApproval) {
       throw new Error(
-        "deterministic validation failed: rerun_step5 ValidationReportV1 must not approve findings before semantic validation accepts them"
+        "deterministic validation failed: rerun ValidationReportV1 must not approve findings before semantic validation accepts them"
       );
     }
   }
@@ -482,11 +426,6 @@ function validatePerFindingValidationResult(
     );
   }
   const record = input as Record<string, unknown>;
-  rejectUnknownFields(
-    record,
-    ALLOWED_PER_FINDING_RESULT_KEYS,
-    `perFindingResults[${index}]`
-  );
   const findingId = validateStringField(
     record.findingId,
     `perFindingResults[${index}].findingId`
@@ -534,33 +473,12 @@ function assertPerFindingResultsCoverCandidates(
   }
 }
 
-function assertApprovedFindingsMatchDecisions(
-  results: readonly PerFindingValidationResult[],
-  approvedFindings: readonly Finding[]
-): void {
-  const approvedIds = new Set(approvedFindings.map((finding) => finding.findingId));
-  for (const result of results) {
-    if (result.decision === "approve" && !approvedIds.has(result.findingId)) {
-      throw new Error(
-        `deterministic validation failed: approve candidate ${result.findingId} must appear in approvedFindings`
-      );
-    }
-    if (result.decision !== "approve" && approvedIds.has(result.findingId)) {
-      throw new Error(
-        `deterministic validation failed: ${result.decision} candidate ${result.findingId} must not appear in approvedFindings`
-      );
-    }
-  }
-}
-
 function assertValidationReportMatchesCandidatePayload(input: {
   candidatePayload: CandidateFindingsV3;
   perFindingResults: readonly PerFindingValidationResult[];
-  approvedFindings: readonly Finding[];
   missingInformationItems: readonly MissingInformationItem[];
 }): void {
   const hasApproval =
-    input.approvedFindings.length > 0 ||
     input.perFindingResults.some((result) => result.decision === "approve");
 
   if (input.candidatePayload.result !== "FINDINGS_READY" && hasApproval) {
@@ -590,11 +508,6 @@ function validateMissingInformationItem(
     );
   }
   const record = input as Record<string, unknown>;
-  rejectUnknownFields(
-    record,
-    ALLOWED_MISSING_INFORMATION_ITEM_KEYS,
-    `missingInformationItems[${index}]`
-  );
   return {
     itemId: "", // placeholder; overwritten by caller
     description: validateStringField(record.description, `missingInformationItems[${index}].description`),
@@ -609,7 +522,6 @@ function validateLoopControl(input: unknown): { action: LoopAction; reason: stri
     );
   }
   const record = input as Record<string, unknown>;
-  rejectUnknownFields(record, ALLOWED_LOOP_CONTROL_KEYS, "loopControl");
   return {
     action: validateEnum<LoopAction>(
       record.action,
@@ -672,9 +584,7 @@ function extractReportableFindingIdFromText(responseText: string): string | unde
     const record = parsed as Record<string, unknown>;
     const findings = Array.isArray(record.findings)
       ? record.findings
-      : Array.isArray(record.approvedFindings)
-        ? record.approvedFindings
-        : undefined;
+      : undefined;
     if (!findings) {
       return undefined;
     }
@@ -688,80 +598,6 @@ function extractReportableFindingIdFromText(responseText: string): string | unde
     return undefined;
   }
   return undefined;
-}
-
-function validateFindingWithDiagnostics(
-  input: unknown,
-  anchorContext: FindingAnchorValidationContext | undefined
-): FindingValidationResult {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error(
-      "deterministic validation failed: each finding must be a non-null object"
-    );
-  }
-
-  const finding = input as Record<string, unknown>;
-
-  rejectUnknownFields(finding, ALLOWED_FINDING_KEYS, "finding");
-
-  const type = validateStringField(finding.type, "type");
-  const title = validateStringField(finding.title, "title");
-  const dependencyPathException = validateDependencyPathException(
-    finding.dependencyPathException
-  );
-  const traceabilityResult = validateTraceability(
-    finding.traceability,
-    anchorContext,
-    dependencyPathException
-  );
-  const { traceability } = traceabilityResult;
-  const expectedBehavior = validateStringField(
-    finding.expectedBehavior,
-    "expectedBehavior"
-  );
-  const actualBehavior = validateStringField(
-    finding.actualBehavior,
-    "actualBehavior"
-  );
-  const deviation = validateStringField(finding.deviation, "deviation");
-  const impact = validateStringField(finding.impact, "impact");
-  const suggestion = validateStringField(finding.suggestion, "suggestion");
-  const findingId = validateStringField(finding.findingId, "findingId");
-  if (type !== "must" && type !== "nice") {
-    throw new Error(
-      "deterministic validation failed: 'type' must be 'must' or 'nice'"
-    );
-  }
-
-  const result: Finding = {
-    type,
-    title,
-    traceability,
-    expectedBehavior,
-    actualBehavior,
-    deviation,
-    impact,
-    suggestion,
-    findingId
-  };
-
-  if (dependencyPathException) {
-    result.dependencyPathException = dependencyPathException;
-  }
-
-  if (finding.sourceHypothesisId !== undefined) {
-    result.sourceHypothesisId = validateStringField(
-      finding.sourceHypothesisId,
-      "sourceHypothesisId"
-    );
-  }
-
-  return {
-    finding: result,
-    ...(traceabilityResult.anchorFailure === undefined
-      ? {}
-      : { anchorFailure: traceabilityResult.anchorFailure })
-  };
 }
 
 function validateTraceability(
@@ -865,72 +701,6 @@ function validateTraceability(
   throw new Error(
     "deterministic validation failed: unsupported traceability kind"
   );
-}
-
-function validateDependencyPathException(
-  input: unknown
-): DependencyPathException | undefined {
-  if (input === undefined) {
-    return undefined;
-  }
-
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error(
-      "deterministic validation failed: 'dependencyPathException' must be a non-null object"
-    );
-  }
-
-  const exception = input as Record<string, unknown>;
-
-  rejectUnknownFields(
-    exception,
-    ALLOWED_DEPENDENCY_PATH_EXCEPTION_KEYS,
-    "dependencyPathException"
-  );
-
-  const reason = validateStringField(
-    exception.reason,
-    "dependencyPathException.reason"
-  );
-
-  const dependencyAnchor = exception.dependencyAnchor;
-  if (
-    !dependencyAnchor ||
-    typeof dependencyAnchor !== "object" ||
-    Array.isArray(dependencyAnchor)
-  ) {
-    throw new Error(
-      "deterministic validation failed: 'dependencyPathException.dependencyAnchor' must be a non-null object"
-    );
-  }
-
-  const anchor = dependencyAnchor as Record<string, unknown>;
-
-  rejectUnknownFields(
-    anchor,
-    ALLOWED_DEPENDENCY_ANCHOR_KEYS,
-    "dependencyPathException.dependencyAnchor"
-  );
-
-  const filePath = validateStringField(
-    anchor.filePath,
-    "dependencyPathException.dependencyAnchor.filePath"
-  );
-
-  const result: DependencyPathException = {
-    reason,
-    dependencyAnchor: { filePath }
-  };
-
-  if (anchor.symbol !== undefined) {
-    const symbol = validateStringField(
-      anchor.symbol,
-      "dependencyPathException.dependencyAnchor.symbol"
-    );
-    result.dependencyAnchor.symbol = symbol;
-  }
-
-  return result;
 }
 
 function validatePositiveInteger(value: unknown, fieldName: string): number {
@@ -1047,24 +817,6 @@ function parseTopLevelObject(
 }
 
 /**
- * Build a finding-anchor validation context from a step-resolve input, returning
- * undefined when the caller did not supply diff content (e.g. test fixtures).
- */
-function buildAnchorContext(input: {
-  diffContent?: string;
-  filePath?: string;
-}): FindingAnchorValidationContext | undefined {
-  if (input.diffContent === undefined) {
-    return undefined;
-  }
-
-  return buildFindingAnchorValidationContext(
-    input.filePath ?? "<unknown>",
-    input.diffContent
-  );
-}
-
-/**
  * Throw on the first duplicate findingId encountered. `scope` is either
  * "findings" (legacy message preserved for finding arrays and Step 6 updates)
  * or "dispositions" (suffixed message preserved for the
@@ -1088,20 +840,6 @@ function assertUniqueFindingIds(
 
 // --- Allowed-key constants ---
 
-const ALLOWED_FINDING_KEYS = [
-  "type",
-  "title",
-  "traceability",
-  "expectedBehavior",
-  "actualBehavior",
-  "deviation",
-  "impact",
-  "suggestion",
-  "dependencyPathException",
-  "findingId",
-  "sourceHypothesisId"
-] as const;
-
 const ALLOWED_TRACEABILITY_LINE_RANGE_KEYS = [
   "kind",
   "lineStart",
@@ -1109,35 +847,6 @@ const ALLOWED_TRACEABILITY_LINE_RANGE_KEYS = [
 ] as const;
 
 const ALLOWED_TRACEABILITY_DIFF_HUNK_KEYS = ["kind", "hunkHeader"] as const;
-
-const ALLOWED_DEPENDENCY_PATH_EXCEPTION_KEYS = [
-  "reason",
-  "dependencyAnchor"
-] as const;
-
-const ALLOWED_DEPENDENCY_ANCHOR_KEYS = ["filePath", "symbol"] as const;
-
-const ALLOWED_VALIDATION_REPORT_TOP_LEVEL_KEYS = [
-  "perFindingResults",
-  "approvedFindings",
-  "missingInformationItems",
-  "loopControl"
-] as const;
-
-const ALLOWED_PER_FINDING_RESULT_KEYS = [
-  "findingId",
-  "decision",
-  "failedGates",
-  "requiredCorrections",
-  "reason"
-] as const;
-
-const ALLOWED_MISSING_INFORMATION_ITEM_KEYS = [
-  "description",
-  "whyItMatters"
-] as const;
-
-const ALLOWED_LOOP_CONTROL_KEYS = ["action", "reason"] as const;
 
 const VALID_CANDIDATE_CLASSIFICATIONS: readonly CandidateClassification[] =
   RUNTIME_CANDIDATE_CLASSIFICATIONS;

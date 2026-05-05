@@ -20,19 +20,21 @@ const DEFAULT_BASE_PATH = "/workspace/.nightowl/review/feature-branch_03131430";
 export function createFinding(
   type: "must" | "nice",
   idSuffix: number,
-  input: { title?: string; suggestion?: string } = {}
+  input: { title?: string } = {}
 ): Finding {
+  const classification = type === "must" ? "confirmed_problem" : "reasonable_risk";
+  const severity = type === "must" ? "high" : "low";
   return {
-    type,
+    findingId: `${type}-${idSuffix}`,
+    classification,
+    severity,
     title: input.title ?? `${type} finding`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    expectedBehavior: "expected behavior",
-    actualBehavior: "actual behavior",
-    deviation: "dev",
+    evidence: "concrete code evidence",
+    triggerCondition: "trigger condition",
     impact: "impact",
-    suggestion: input.suggestion ?? "suggestion",
-    findingId: `${type}-${idSuffix}`
-  };
+    counterEvidence: ["checked alternative"]
+  } as Finding;
 }
 
 export function createSuccessfulFile(
@@ -92,8 +94,8 @@ function createRiskSnapshot(
   findings: readonly Finding[],
   semanticReview?: Partial<SemanticReviewStats>
 ): RiskSnapshot {
-  const mustCount = findings.filter((finding) => finding.type === "must").length;
-  const niceCount = findings.filter((finding) => finding.type === "nice").length;
+  const mustCount = findings.filter((f) => f.classification === "confirmed_problem" && f.severity === "high").length;
+  const niceCount = findings.filter((f) => !(f.classification === "confirmed_problem" && f.severity === "high")).length;
   return {
     schemaVersion: 1,
     derivedRiskLevel: mustCount > 0 ? "High" : niceCount > 0 ? "Low" : "None",

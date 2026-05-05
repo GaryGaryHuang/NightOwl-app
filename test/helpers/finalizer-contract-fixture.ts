@@ -81,7 +81,10 @@ export function assertFindingsTitlesInOrder(
 ): void {
   assertTextContainsInOrder(
     text,
-    findings.map((finding) => `- [${finding.type}] ${finding.title}`)
+    findings.map((finding) => {
+      const severity = finding.type === "must" ? "high" : "low";
+      return `- [${severity}] ${finding.title}`;
+    })
   );
 }
 

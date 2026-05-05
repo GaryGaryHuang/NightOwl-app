@@ -150,12 +150,15 @@ function runSemanticCase(
     filePath: reviewBasis.filePath
   });
 
-  const approvedFindingIds = validationResult.payload.approvedFindings.map(
-    (finding) => finding.findingId
-  );
+  const approvedFindingIds = validationResult.payload.perFindingResults
+    .filter((r: { decision: string }) => r.decision === "approve")
+    .map((r: { findingId: string }) => r.findingId);
   const firstDecision = validationResult.payload.perFindingResults[0]?.decision;
-  const highSeverityApproved = validationResult.payload.approvedFindings.some(
-    (finding) => finding.type === "must" && /high/i.test(finding.impact)
+  const candidateFindings = (candidateResult.payload as { findings?: Array<{ findingId: string; classification: string; severity: string }> }).findings ?? [];
+  const highSeverityApproved = approvedFindingIds.some(
+    (id: string) => candidateFindings.some(
+      (f) => f.findingId === id && f.classification === "confirmed_problem" && f.severity === "high"
+    )
   );
 
   return {

@@ -38,15 +38,15 @@ function createContext(): FileReviewContext {
 
 function createFinding(findingId: string): Finding {
   return {
-    type: "must",
+    findingId,
+    classification: "confirmed_problem",
+    severity: "high",
     title: `finding ${findingId}`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    expectedBehavior: "expected",
-    actualBehavior: "actual",
-    deviation: "dev",
+    evidence: "concrete evidence",
+    triggerCondition: "trigger",
     impact: "impact",
-    suggestion: "suggestion",
-    findingId,
+    counterEvidence: ["checked"],
     sourceHypothesisId: "W1"
   };
 }
@@ -87,7 +87,6 @@ function createValidationReport(findings: Finding[]): ValidationReportV1 {
       requiredCorrections: [],
       reason: "semantic gates passed"
     })),
-    approvedFindings: findings.map((finding) => ({ ...finding })),
     missingInformationItems: [],
     loopControl: { action: "accept", reason: "semantic gates passed" }
   };

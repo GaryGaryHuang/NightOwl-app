@@ -34,7 +34,6 @@ interface CandidateValidationResult {
 interface ValidationReportResult {
   readonly payload: {
     readonly perFindingResults: readonly { readonly findingId: string }[];
-    readonly approvedFindings: readonly { readonly findingId: string }[];
     readonly loopControl: { readonly action: string };
   };
   readonly report: readonly SemanticReportEntry[];
@@ -166,24 +165,6 @@ function candidateFindingsV3(
   };
 }
 
-function approvedFinding(
-  overrides: Record<string, unknown> = {}
-): Record<string, unknown> {
-  return {
-    findingId: "F1",
-    sourceHypothesisId: "H1",
-    type: "must",
-    title: "nullable input dereferences before fallback",
-    traceability: lineRangeTraceability(21, 22),
-    expectedBehavior: "nullable input returns the existing fallback before dereference",
-    actualBehavior: "the changed code dereferences input.value before checking for null",
-    deviation: "null input now throws instead of returning fallback",
-    impact: "requests with null input fail with a runtime TypeError",
-    suggestion: "restore the null guard before reading input.value",
-    ...overrides
-  };
-}
-
 function perFindingResult(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
@@ -202,7 +183,6 @@ function validationReportV1(
 ): Record<string, unknown> {
   return {
     perFindingResults: [perFindingResult()],
-    approvedFindings: [approvedFinding()],
     missingInformationItems: [],
     loopControl: { action: "accept", reason: "all gates passed" },
     ...overrides
@@ -354,10 +334,6 @@ test("validateValidationReportV1WithReport accepts reports that approve only Ste
     result.payload.perFindingResults.map((entry) => entry.findingId),
     ["F1"]
   );
-  assert.deepEqual(
-    result.payload.approvedFindings.map((entry) => entry.findingId),
-    ["F1"]
-  );
   assert.equal(result.payload.loopControl.action, "accept");
   assert.equal(
     result.report.find((entry) => entry.findingId === "F1")?.outcome,
@@ -397,32 +373,10 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
       reason: /F404.*candidate/u
     },
     {
-      label: "approvedFindings cannot add new findings",
-      payload: validationReportV1({
-        approvedFindings: [approvedFinding({ findingId: "F404" })]
-      }),
-      reason: /F404.*approvedFindings.*candidate/u
-    },
-    {
       label: "candidateFindings must be a valid payload",
       payload: validationReportV1(),
       candidates: { findings: "not-an-array" },
       reason: /findings.*array/u
-    },
-    {
-      label: "approved decisions must be reflected in approvedFindings",
-      payload: validationReportV1({
-        approvedFindings: []
-      }),
-      reason: /approve.*approvedFindings/u
-    },
-    {
-      label: "dropped candidates cannot be approved",
-      payload: validationReportV1({
-        perFindingResults: [perFindingResult({ decision: "drop" })],
-        approvedFindings: [approvedFinding()]
-      }),
-      reason: /drop.*approvedFindings/u
     }
   ];
 
@@ -445,7 +399,7 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
   }[] = [
     { action: "accept", payload: validationReportV1() },
     {
-      action: "rerun_step5",
+      action: "rerun",
       payload: validationReportV1({
         perFindingResults: [
           perFindingResult({
@@ -457,9 +411,8 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
             reason: "impact is asserted but not proven"
           })
         ],
-        approvedFindings: [],
         loopControl: {
-          action: "rerun_step5",
+          action: "rerun",
           reason: "Step 5 must repair machine-actionable evidence gaps"
         }
       })
@@ -481,17 +434,17 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
       payload: validationReportV1({
         loopControl: { action: "retry_step_runner", reason: "wrong retry budget" }
       }),
-      reason: /loopControl\.action.*accept.*rerun_step5/u
+      reason: /loopControl\.action.*accept.*rerun/u
     },
     {
       label: "rerun cannot approve findings",
       payload: validationReportV1({
         loopControl: {
-          action: "rerun_step5",
+          action: "rerun",
           reason: "Step 5 must repair evidence gaps"
         }
       }),
-      reason: /rerun_step5.*approve findings/u
+      reason: /rerun.*approve findings/u
     }
   ];
 

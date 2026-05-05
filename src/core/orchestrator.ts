@@ -967,7 +967,7 @@ type PlannedOutcomeSlot =
 const MAX_SEMANTIC_STEP5_RERUNS = 2;
 
 function shouldRerunStep5(context: FileReviewContext): boolean {
-  return context.getValidationReportV1()?.loopControl.action === "rerun_step5";
+  return context.getValidationReportV1()?.loopControl.action === "rerun";
 }
 
 function markSemanticLoopStopped(
@@ -980,7 +980,6 @@ function markSemanticLoopStopped(
   const currentReport = context.getValidationReportV1();
   const stoppedReport: ValidationReportV1 = {
     perFindingResults: currentReport?.perFindingResults ?? [],
-    approvedFindings: [],
     missingInformationItems: input.missingInformationItems,
     loopControl: {
       action: "accept",
@@ -1067,7 +1066,6 @@ function buildSemanticReviewStats(
     semanticIterationCount: semanticValidationCount,
     candidateFindingCount: candidatePayload?.findings.length ?? 0,
     approvedFindingCount:
-      validationReport?.approvedFindings.length ??
       context.getFindings()?.length ??
       0,
     missingInformationCount: missingInformationItems.length,
@@ -1084,7 +1082,7 @@ function deriveSemanticReviewStatus(
     return "not_run";
   }
 
-  if (validationReport.loopControl.action === "rerun_step5") {
+  if (validationReport.loopControl.action === "rerun") {
     return "rerun_requested";
   }
 

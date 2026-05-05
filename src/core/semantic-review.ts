@@ -1,4 +1,4 @@
-import type { Finding, FindingTraceability } from "./file-review-context.ts";
+import type { Finding } from "./file-review-context.ts";
 
 export const CANDIDATE_CLASSIFICATIONS = [
   "confirmed_problem",
@@ -9,17 +9,11 @@ export type CandidateClassification = (typeof CANDIDATE_CLASSIFICATIONS)[number]
 export const CANDIDATE_SEVERITIES = ["high", "low"] as const;
 export type CandidateSeverity = (typeof CANDIDATE_SEVERITIES)[number];
 
-export interface CandidateFindingV3 {
-  findingId: string;
-  classification: CandidateClassification;
-  severity: CandidateSeverity;
-  title: string;
-  traceability: FindingTraceability;
-  evidence: string;
-  triggerCondition: string;
-  impact: string;
-  counterEvidence: string[];
-}
+/**
+ * A Step 5 candidate finding. Structurally identical to `Finding` (minus optional fields).
+ * When approved by Step 6, a candidate becomes the final `Finding` directly.
+ */
+export type CandidateFindingV3 = Finding;
 
 export const CANDIDATE_FINDINGS_RESULTS = [
   "FINDINGS_READY",
@@ -85,7 +79,7 @@ export interface MissingInformationItem {
   whyItMatters: string;
 }
 
-export const LOOP_ACTIONS = ["accept", "rerun_step5"] as const;
+export const LOOP_ACTIONS = ["accept", "rerun"] as const;
 export type LoopAction = (typeof LOOP_ACTIONS)[number];
 
 export interface LoopControl {
@@ -95,7 +89,6 @@ export interface LoopControl {
 
 export interface ValidationReportV1 {
   perFindingResults: PerFindingValidationResult[];
-  approvedFindings: Finding[];
   missingInformationItems: MissingInformationItem[];
   loopControl: LoopControl;
 }

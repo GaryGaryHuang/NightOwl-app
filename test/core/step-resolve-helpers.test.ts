@@ -111,13 +111,6 @@ test("createValidationReportV1Resolve writes approved findings and missing-infor
         findingId: "F1",
         taxonomy: "OK",
         outcome: "accepted",
-        gate: "schema"
-      },
-      {
-        stepId: "step6-cognitive-simulation",
-        findingId: "F1",
-        taxonomy: "OK",
-        outcome: "accepted",
         gate: "semantic"
       }
     ]
@@ -214,6 +207,7 @@ function createCandidateFindingsV3() {
   return {
     findings: [
       {
+        findingId: "F1",
         classification: "confirmed_problem",
         severity: "high",
         title: "guard moved after dereference",
@@ -244,20 +238,6 @@ function createValidationReportV1() {
         failedGates: [],
         requiredCorrections: [],
         reason: "all gates passed"
-      }
-    ],
-    approvedFindings: [
-      {
-        type: "must" as const,
-        title: "guard moved after dereference",
-        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        expectedBehavior: "nullable input returns fallback",
-        actualBehavior: "changed branch reads value first",
-        deviation: "fallback no longer runs before dereference",
-        impact: "request fails before fallback can run",
-        suggestion: "restore guard before dereference",
-        findingId: "F1",
-        sourceHypothesisId: "H1"
       }
     ],
     missingInformationItems: [

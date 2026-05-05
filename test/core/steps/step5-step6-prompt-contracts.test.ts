@@ -188,7 +188,7 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   assert.match(plan.prompt.userMessage, /approvedFindings/u);
   assert.match(plan.prompt.userMessage, /missingInformationItems/u);
   assert.match(plan.prompt.userMessage, /loopControl/u);
-  assert.match(plan.prompt.userMessage, /rerun_step5/u);
+  assert.match(plan.prompt.userMessage, /rerun/u);
   assert.match(plan.prompt.userMessage, /complete candidateFindings CandidateFindingsV3 object/u);
   assert.match(plan.prompt.userMessage, /candidateFindings\.result/u);
   assert.match(plan.prompt.userMessage, /candidateFindings\.hypothesisClosure/u);

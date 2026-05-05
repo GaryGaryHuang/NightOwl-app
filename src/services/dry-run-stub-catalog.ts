@@ -205,7 +205,7 @@ const STUB_REVIEW_BASIS = buildDryRunReviewBasisResponse(
 
 const STUB_VALIDATION_INTERROGATION = '{"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "dry-run stub has no findings"}], "criticalMissingInformation": []}';
 
-const STUB_COGNITIVE_SIMULATION = '{"perFindingResults": [], "approvedFindings": [], "missingInformationItems": [], "loopControl": {"action": "accept", "reason": "dry-run stub has no candidates"}}';
+const STUB_COGNITIVE_SIMULATION = '{"perFindingResults": [], "missingInformationItems": [], "loopControl": {"action": "accept", "reason": "dry-run stub has no candidates"}}';
 
 const STUB_SUMMARY = [
   "## Summary",

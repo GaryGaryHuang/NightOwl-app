@@ -97,22 +97,21 @@ function renderFindingsSection(
     return ["## Findings", "- 無"].join("\n");
   }
 
-  const mustFindings = findings.filter((f) => f.type === "must");
-  const niceFindings = findings.filter((f) => f.type === "nice");
-  const statsLine = `${mustFindings.length} must-fix issue(s), ${niceFindings.length} nice-to-have suggestion(s).`;
+  const highFindings = findings.filter((f) => f.classification === "confirmed_problem" && f.severity === "high");
+  const otherFindings = findings.filter((f) => !(f.classification === "confirmed_problem" && f.severity === "high"));
+  const statsLine = `${highFindings.length} must-fix issue(s), ${otherFindings.length} nice-to-have suggestion(s).`;
 
-  // Keep must findings ahead of nice findings so the rendered note is stable and severity-ordered.
+  // Keep high-severity findings ahead so the rendered note is stable and severity-ordered.
   return [
     "## Findings",
     statsLine,
-    ...[...mustFindings, ...niceFindings].flatMap((finding) => [
-      `- [${finding.type}] ${finding.title}`,
+    ...[...highFindings, ...otherFindings].flatMap((finding) => [
+      `- [${finding.severity}] ${finding.title}`,
       `  - Traceability: ${formatTraceability(finding.traceability)}`,
-      `  - Expected Behavior：${finding.expectedBehavior}`,
-      `  - Actual Behavior：${finding.actualBehavior}`,
-      `  - Deviation：${finding.deviation}`,
+      `  - Evidence：${finding.evidence}`,
+      `  - Trigger Condition：${finding.triggerCondition}`,
       `  - Impact：${finding.impact}`,
-      `  - Suggestion：${finding.suggestion}`
+      `  - Counter-Evidence：${finding.counterEvidence.join("; ") || "none"}`
     ])
   ].join("\n");
 }

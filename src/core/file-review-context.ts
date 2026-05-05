@@ -55,16 +55,16 @@ export interface DependencyPathException {
 }
 
 export interface Finding {
-  type: "must" | "nice";
+  findingId: string;
+  classification: "confirmed_problem" | "reasonable_risk";
+  severity: "high" | "low";
   title: string;
   traceability: FindingTraceability;
-  expectedBehavior: string;
-  actualBehavior: string;
-  deviation: string;
+  evidence: string;
+  triggerCondition: string;
   impact: string;
-  suggestion: string;
+  counterEvidence: string[];
   dependencyPathException?: DependencyPathException;
-  findingId: string;
   sourceHypothesisId?: string;
 }
 

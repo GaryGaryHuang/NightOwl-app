@@ -156,15 +156,15 @@ test("FileReviewContext stores ValidationReportV1 and missing-information state 
 
   context.setValidationReportV1(report);
   context.setMissingInformationItems(report.missingInformationItems);
-  report.approvedFindings[0]!.findingId = "MUTATED";
+  report.perFindingResults[0]!.findingId = "MUTATED";
   report.missingInformationItems[0]!.description = "MUTATED";
 
   const storedReport = context.getValidationReportV1()!;
   const storedMissingInfo = context.getMissingInformationItems()!;
-  storedReport.approvedFindings[0]!.findingId = "MUTATED_AGAIN";
+  storedReport.perFindingResults[0]!.findingId = "MUTATED_AGAIN";
   storedMissingInfo[0]!.description = "MUTATED_AGAIN";
 
-  assert.equal(context.getValidationReportV1()?.approvedFindings[0]?.findingId, "F1");
+  assert.equal(context.getValidationReportV1()?.perFindingResults[0]?.findingId, "F1");
   assert.equal(
     context.getMissingInformationItems()?.[0]?.description,
     "Need the external null-input contract."
@@ -203,15 +203,15 @@ test("FileReviewContext setFindings deep-clones nested finding fields so mutatio
   const context = createContext();
 
   const original: Finding = {
-    type: "must",
+    findingId: "F1",
+    classification: "confirmed_problem",
+    severity: "high",
     title: "leak test",
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 2 },
-    expectedBehavior: "expected",
-    actualBehavior: "actual",
-    deviation: "dev",
+    evidence: "concrete evidence",
+    triggerCondition: "trigger",
     impact: "imp",
-    suggestion: "sug",
-    findingId: "F1",
+    counterEvidence: ["checked"],
     dependencyPathException: {
       reason: "dependency path",
       dependencyAnchor: { filePath: "src/dep.ts", symbol: "helper" }
@@ -241,15 +241,15 @@ test("FileReviewContext getFindings returns defensively cloned copies", () => {
 
   context.setFindings([
     {
-      type: "must",
+      findingId: "F1",
+      classification: "confirmed_problem",
+      severity: "high",
       title: "defensive clone",
       traceability: { kind: "line-range", lineStart: 1, lineEnd: 2 },
-      expectedBehavior: "expected",
-      actualBehavior: "actual",
-      deviation: "dev",
+      evidence: "concrete evidence",
+      triggerCondition: "trigger",
       impact: "impact",
-      suggestion: "suggestion",
-      findingId: "F1",
+      counterEvidence: ["checked"],
       dependencyPathException: {
         reason: "dependency path",
         dependencyAnchor: { filePath: "src/dep.ts", symbol: "helper" }
@@ -449,41 +449,23 @@ function createCandidateFindingsV3() {
 
 function createValidationReportV1() {
   return {
-    schemaVersion: 1,
-    overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
     perFindingResults: [
       {
         findingId: "F1",
-        decision: "convert_to_missing_information",
-        failedGates: ["missing_information_honest"],
+        decision: "rewrite_required",
+        failedGates: ["completeness"],
         requiredCorrections: [],
         reason: "external contract is unavailable"
-      }
-    ],
-    approvedFindings: [
-      {
-        type: "must" as const,
-        title: "guard moved after dereference",
-        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        expectedBehavior: "nullable input returns fallback",
-        actualBehavior: "changed branch reads value first",
-        deviation: "fallback no longer runs before dereference",
-        impact: "request fails before fallback can run",
-        suggestion: "restore guard before dereference",
-        findingId: "F1",
-        sourceHypothesisId: "H1"
       }
     ],
     missingInformationItems: [
       {
         itemId: "MI1",
-        findingId: "F1",
         description: "Need the external null-input contract.",
         whyItMatters: "Without it the validator cannot prove expected behavior."
       }
     ],
-    loopControl: { action: "stop", reason: "missing critical contract" },
-    stopReason: "missing_critical_contract"
+    loopControl: { action: "accept", reason: "missing critical contract" }
   };
 }
 

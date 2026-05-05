@@ -20,17 +20,19 @@ function createContext(): FileReviewContext {
 }
 
 function createFinding(findingId: string, type: "must" | "nice" = "must"): Finding {
+  const classification = type === "must" ? "confirmed_problem" : "reasonable_risk";
+  const severity = type === "must" ? "high" : "low";
   return {
-    type,
+    findingId,
+    classification,
+    severity,
     title: `${type} finding ${findingId}`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-    expectedBehavior: "expected",
-    actualBehavior: "actual",
-    deviation: "dev",
+    evidence: "concrete evidence",
+    triggerCondition: "trigger",
     impact: "impact",
-    suggestion: "suggestion",
-    findingId
-  };
+    counterEvidence: ["checked"]
+  } as Finding;
 }
 
 function parseReviewState(serialized: string): ReviewStateSnapshot {
