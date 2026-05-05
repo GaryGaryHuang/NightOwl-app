@@ -10,27 +10,16 @@ import {
   extractChangedPathsFromChangesetEntries
 } from "../../src/core/change-map.ts";
 
-const expectedSinglePath: readonly string[] = ["src/app.ts"];
 const expectedUserContext = ["Root Cause: context loss before Step 5"];
-
-function makeRejectedV1Payload(overrides: Record<string, unknown> = {}): string {
-  return JSON.stringify({
-    schemaVersion: 1,
-    overviewMarkdown: "## Changeset Overview\n- 調整範圍：feature",
-    ...overrides
-  });
-}
 
 function makeValidV2(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
-    schemaVersion: 2,
     reviewObjective: {
       summary: "Review prompt harness redesign",
       requestedFocus: ["evidence chain"],
       expectedBehaviorSummary: ["Step 5 uses structured ReviewBasis"]
     },
-    userContextSSOT: expectedUserContext,
-    expectedBehaviorLedger: [
+    userBehavior: [
       {
         statement: "Candidate findings must cite evidence refs",
         confidence: "explicit"
@@ -56,16 +45,12 @@ function makeValidV2(overrides: Record<string, unknown> = {}): string {
 
 function validateV2(
   responseText: string,
-  expectedChangedPaths: readonly string[] = expectedSinglePath,
-  expectedContext: readonly string[] = expectedUserContext
+  userContext: readonly string[] = expectedUserContext
 ): ChangeMapReadinessV2 {
-  const changeMap = new Step0OutputValidator().validate({
+  return new Step0OutputValidator().validate({
     responseText,
-    expectedChangedPaths,
-    expectedUserContext: expectedContext
+    userContext
   });
-  assert.equal(changeMap.schemaVersion, 2);
-  return changeMap;
 }
 
 function expectFailure(
@@ -89,120 +74,51 @@ function expectFailure(
   throw new Error(`expected validator to throw with code ${code}`);
 }
 
-test("Step0OutputValidator rejects legacy schemaVersion 1 payloads", () => {
-  const error = expectFailure(
-    () =>
-      new Step0OutputValidator().validate({
-        responseText: makeRejectedV1Payload(),
-        expectedChangedPaths: expectedSinglePath
-      }),
-    "SCHEMA",
-    /schemaVersion must be the literal number 2/u
-  );
-
-  assert.equal(error.diagnostic.offendingPath, "schemaVersion");
-  assert.deepEqual(error.diagnostic.allowedValues, ["2"]);
-  assert.equal(error.diagnostic.actualSummary, "number");
-  assert.match(error.diagnostic.repairHint ?? "", /schemaVersion: 2/u);
-});
-
-test("Step0OutputValidator accepts minimal ChangeMapReadinessV2 contract", () => {
+test("Step0OutputValidator accepts valid output and injects userContext from host", () => {
   const changeMap = validateV2(makeValidV2());
 
-  assert.deepEqual(changeMap.userContextSSOT, expectedUserContext);
-  assert.equal(changeMap.expectedBehaviorLedger[0]?.statement, "Candidate findings must cite evidence refs");
-  assert.equal(changeMap.expectedBehaviorLedger[0]?.confidence, "explicit");
+  assert.deepEqual(changeMap.userContext, expectedUserContext);
+  assert.equal(changeMap.userBehavior[0]?.statement, "Candidate findings must cite evidence refs");
+  assert.equal(changeMap.userBehavior[0]?.confidence, "explicit");
   assert.equal(changeMap.missingInformation[0]?.whyItMatters, "severity classification would be blocked");
   assert.equal(changeMap.behaviorChanges[0]?.files[0], "src/app.ts");
 });
 
-test("Step0OutputValidator rejects removed v1 fields", () => {
-  expectFailure(
-    () => validateV2(makeValidV2({ changedFiles: [] })),
-    "SCHEMA",
-    /top-level contains unsupported field "changedFiles"/u
-  );
-
-  expectFailure(
-    () =>
-      validateV2(
-        makeValidV2({
-          unresolvedUnknowns: [
-            {
-              question: "API 版本？",
-              blocksFinding: true,
-              resolutionPath: "查 package.json"
-            }
-          ]
-        })
-      ),
-    "SCHEMA",
-    /unresolvedUnknowns\[0\] contains unsupported field "blocksFinding"/u
-  );
+test("Step0OutputValidator ignores unknown top-level fields", () => {
+  const changeMap = validateV2(makeValidV2({ changedFiles: [], schemaVersion: 2 }));
+  assert.ok(changeMap.reviewObjective);
 });
 
-test("Step0OutputValidator rejects behaviorChanges files outside changed_files_json paths", () => {
-  expectFailure(
-    () =>
-      validateV2(
-        makeValidV2({
-          behaviorChanges: [
-            {
-              description: "references a missing file",
-              files: ["src/not-in-changeset.ts"]
-            }
-          ]
-        })
-      ),
-    "SCHEMA",
-    /behaviorChanges\[0\]\.files\[0\].*<changed_files_json>\.entries\[\]\.path/u
+test("Step0OutputValidator accepts behaviorChanges with extra fields and any file paths", () => {
+  const changeMap = validateV2(
+    makeValidV2({
+      behaviorChanges: [
+        {
+          description: "references a file not in changeset",
+          files: ["src/not-in-changeset.ts"],
+          extraField: true
+        }
+      ]
+    })
   );
+
+  assert.equal(changeMap.behaviorChanges[0]?.files[0], "src/not-in-changeset.ts");
 });
 
-test("Step0OutputValidator fails with COVERAGE when expectedChangedPaths contains duplicates", () => {
-  expectFailure(
-    () =>
-      new Step0OutputValidator().validate({
-        responseText: makeValidV2(),
-        expectedChangedPaths: ["src/app.ts", "src/app.ts"],
-        expectedUserContext
-      }),
-    "COVERAGE",
-    /expectedChangedPaths contains duplicate path/u
-  );
-});
-
-test("Step0OutputValidator validates ordered userContextSSOT", () => {
-  expectFailure(
-    () =>
-      validateV2(
-        makeValidV2({ userContextSSOT: [{ rawText: "first" }] }),
-        ["src/app.ts"],
-        ["first"]
-      ),
-    "SCHEMA",
-    /userContextSSOT\[0\] must be a string \(received object\)/u
+test("Step0OutputValidator accepts unresolvedUnknowns with extra fields", () => {
+  const changeMap = validateV2(
+    makeValidV2({
+      unresolvedUnknowns: [
+        {
+          question: "API 版本？",
+          blocksFinding: true,
+          resolutionPath: "查 package.json"
+        }
+      ]
+    })
   );
 
-  expectFailure(
-    () =>
-      validateV2(
-        makeValidV2({ userContextSSOT: ["second", "first"] }),
-        ["src/app.ts"],
-        ["first", "second"]
-      ),
-    "SCHEMA",
-    /userContextSSOT\[0\] must preserve user context order/u
-  );
-
-  assert.deepEqual(
-    validateV2(
-      makeValidV2({ userContextSSOT: ["first", "second"] }),
-      ["src/app.ts"],
-      ["first", "second"]
-    ).userContextSSOT,
-    ["first", "second"]
-  );
+  assert.equal(changeMap.unresolvedUnknowns[0]?.question, "API 版本？");
 });
 
 test("Step0OutputValidator returns a deeply frozen ChangeMapReadinessV2", () => {
@@ -211,17 +127,14 @@ test("Step0OutputValidator returns a deeply frozen ChangeMapReadinessV2", () => 
   assert.ok(Object.isFrozen(changeMap));
   assert.ok(Object.isFrozen(changeMap.reviewObjective));
   assert.ok(Object.isFrozen(changeMap.reviewObjective.requestedFocus));
-  assert.ok(Object.isFrozen(changeMap.userContextSSOT));
-  assert.ok(Object.isFrozen(changeMap.expectedBehaviorLedger));
-  assert.ok(Object.isFrozen(changeMap.expectedBehaviorLedger[0]));
+  assert.ok(Object.isFrozen(changeMap.userContext));
+  assert.ok(Object.isFrozen(changeMap.userBehavior));
+  assert.ok(Object.isFrozen(changeMap.userBehavior[0]));
   assert.ok(Object.isFrozen(changeMap.missingInformation));
   assert.ok(Object.isFrozen(changeMap.behaviorChanges));
   assert.ok(Object.isFrozen(changeMap.behaviorChanges[0]?.files));
   assert.ok(Object.isFrozen(changeMap.unresolvedUnknowns));
 
-  assert.throws(() => {
-    (changeMap as unknown as { schemaVersion: number }).schemaVersion = 1;
-  }, TypeError);
   assert.throws(() => {
     (changeMap.behaviorChanges as unknown as { push: (entry: unknown) => void }).push({});
   }, TypeError);
@@ -232,7 +145,7 @@ test("Step0OutputValidator rejects invalid JSON with PARSE diagnostics", () => {
     () =>
       new Step0OutputValidator().validate({
         responseText: "not json",
-        expectedChangedPaths: []
+        userContext: []
       }),
     "PARSE"
   );
@@ -241,7 +154,7 @@ test("Step0OutputValidator rejects invalid JSON with PARSE diagnostics", () => {
     () =>
       new Step0OutputValidator().validate({
         responseText: '"not an object" trailing assistant text',
-        expectedChangedPaths: []
+        userContext: []
       }),
     "PARSE",
     /Unexpected non-whitespace character after JSON/u
@@ -254,22 +167,18 @@ test("Step0OutputValidator rejects invalid JSON with PARSE diagnostics", () => {
   assert.match(error.diagnostic.responseExcerpt ?? "", /<<<ERROR>>>trailing assistant text/u);
 });
 
-test("Step0OutputValidator syntax-repairs code fences and harmless prose around V2 JSON", () => {
+test("Step0OutputValidator syntax-repairs code fences and harmless prose around JSON", () => {
   const validator = new Step0OutputValidator();
   const fenced = validator.validateDetailed({
     responseText: ["```json", makeValidV2(), "```"].join("\n"),
-    expectedChangedPaths: expectedSinglePath,
-    expectedUserContext
+    userContext: expectedUserContext
   });
   const extracted = validator.validateDetailed({
     responseText: ["Here is the result:", makeValidV2(), "Done."].join("\n"),
-    expectedChangedPaths: expectedSinglePath,
-    expectedUserContext
+    userContext: expectedUserContext
   });
 
-  assert.equal(fenced.changeMap.schemaVersion, 2);
   assert.equal(fenced.parseMetadata.repairKind, "code_fence");
-  assert.equal(extracted.changeMap.schemaVersion, 2);
   assert.equal(extracted.parseMetadata.repairKind, "object_extraction");
 });
 
@@ -279,8 +188,7 @@ test("Step0OutputValidator rejects ambiguous or truncated JSON without repair", 
     () =>
       validator.validate({
         responseText: [makeValidV2(), makeValidV2()].join("\n"),
-        expectedChangedPaths: expectedSinglePath,
-        expectedUserContext
+        userContext: expectedUserContext
       }),
     "PARSE",
     /multiple root JSON objects/u
@@ -290,36 +198,23 @@ test("Step0OutputValidator rejects ambiguous or truncated JSON without repair", 
   const truncated = expectFailure(
     () =>
       validator.validate({
-        responseText: '{"schemaVersion":2',
-        expectedChangedPaths: []
+        responseText: '{"reviewObjective":{',
+        userContext: []
       }),
     "PARSE"
   );
   assert.equal(truncated.diagnostic.parseStage, "initial_parse");
 });
 
-test("Step0OutputValidator rejects non-object payload and non-literal schemaVersion 2", () => {
+test("Step0OutputValidator rejects non-object payload", () => {
   expectFailure(
     () =>
       new Step0OutputValidator().validate({
         responseText: "[]",
-        expectedChangedPaths: []
+        userContext: []
       }),
     "SCHEMA"
   );
-
-  for (const schemaVersion of [3, "2"]) {
-    const error = expectFailure(
-      () =>
-        new Step0OutputValidator().validate({
-          responseText: makeValidV2({ schemaVersion }),
-          expectedChangedPaths: expectedSinglePath,
-          expectedUserContext
-        }),
-      "SCHEMA"
-    );
-    assert.deepEqual(error.diagnostic.allowedValues, ["2"]);
-  }
 });
 
 test("Step0OutputValidator rejects overviewMarkdown without strict literal prefix", () => {
@@ -330,49 +225,6 @@ test("Step0OutputValidator rejects overviewMarkdown without strict literal prefi
   ]) {
     expectFailure(() => validateV2(makeValidV2({ overviewMarkdown })), "SCHEMA");
   }
-});
-
-test("Step0OutputValidator rejects placeholder markers", () => {
-  const cases = [
-    "TODO",
-    "behavior is TBD pending design",
-    "N/A",
-    "see <replace>",
-    "fill me in",
-    "placeholder text"
-  ];
-
-  for (const description of cases) {
-    expectFailure(
-      () =>
-        validateV2(
-          makeValidV2({
-            behaviorChanges: [
-              {
-                description,
-                files: ["src/app.ts"]
-              }
-            ]
-          })
-        ),
-      "PLACEHOLDER"
-    );
-  }
-});
-
-test("Step0OutputValidator does not reject correctness keywords as a fatal validation gate", () => {
-  const changeMap = validateV2(
-    makeValidV2({
-      behaviorChanges: [
-        {
-          description: "錯誤處理流程改為先回報 user context 指定的 Root Cause",
-          files: ["src/app.ts"]
-        }
-      ]
-    })
-  );
-
-  assert.equal(changeMap.behaviorChanges.length, 1);
 });
 
 test("Step0OutputValidator allows empty behaviorChanges and unresolvedUnknowns", () => {
@@ -389,7 +241,7 @@ test("Step0OutputValidator reports invalid confidence enum diagnostics", () => {
     () =>
       validateV2(
         makeValidV2({
-          expectedBehaviorLedger: [
+          userBehavior: [
             {
               statement: "Candidate findings must cite evidence refs",
               confidence: "certain"
@@ -400,8 +252,23 @@ test("Step0OutputValidator reports invalid confidence enum diagnostics", () => {
     "SCHEMA"
   );
 
-  assert.equal(error.diagnostic.offendingPath, "expectedBehaviorLedger[0].confidence");
+  assert.equal(error.diagnostic.offendingPath, "userBehavior[0].confidence");
   assert.deepEqual(error.diagnostic.allowedValues, ["explicit", "inferred"]);
+});
+
+test("Step0OutputValidator rejects missing userBehavior even when expectedBehaviorLedger is present", () => {
+  expectFailure(
+    () =>
+      validateV2(
+        makeValidV2({
+          userBehavior: undefined,
+          expectedBehaviorLedger: [
+            { statement: "legacy field name", confidence: "inferred" }
+          ]
+        })
+      ),
+    "SCHEMA"
+  );
 });
 
 test("extractChangedPathsFromChangesetEntries handles regular, rename, copy, and empty-path-free entries", () => {
@@ -424,7 +291,7 @@ test("extractChangedPathsFromChangesetEntries handles regular, rename, copy, and
   ]);
 });
 
-test("extractChangedPathsFromChangesetEntries preserves duplicates so validator can surface host path duplication", () => {
+test("extractChangedPathsFromChangesetEntries preserves duplicates", () => {
   const result = extractChangedPathsFromChangesetEntries([
     { status: "M", path: "src/dup.ts" },
     { status: "M", path: "src/dup.ts" }

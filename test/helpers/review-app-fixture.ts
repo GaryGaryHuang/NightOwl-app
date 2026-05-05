@@ -24,12 +24,10 @@ export function buildSessionResponse(
   if (/## Current Step: ReviewBasis/u.test(systemMessage)) {
     const filePath = extractDiffPath(prompt) ?? "src/app.ts";
     return JSON.stringify({
-      schemaVersion: 1,
       filePath,
       roleInChangeset: "Maintains app value behavior.",
       changedBehavior: [
         {
-          changeId: "CB1",
           before: "old value path",
           after: "new value path",
           evidenceIds: ["E1"]
@@ -37,14 +35,12 @@ export function buildSessionResponse(
       ],
       facts: [
         {
-          factId: "FCT1",
           statement: "The diff changes the reviewed file.",
           evidenceIds: ["E1"]
         }
       ],
       inferences: [
         {
-          inferenceId: "INF1",
           statement: "The changed branch may affect fallback behavior.",
           basedOnEvidenceIds: ["E1"],
           confidence: "medium"
@@ -79,8 +75,6 @@ export function buildSessionResponse(
           hypothesisId: "H1",
           statement: "Fallback behavior could be skipped.",
           triggerCondition: "empty input reaches the changed branch",
-          whyRelevantHere: "The diff changes the control flow for this file.",
-          closureCriteria: ["Trace the changed branch against fallback behavior."]
         }
       ],
       missingInformation: [],

@@ -8,9 +8,7 @@ import {
 
 export type Step0ValidationCode =
   | "PARSE"
-  | "SCHEMA"
-  | "COVERAGE"
-  | "PLACEHOLDER";
+  | "SCHEMA";
 
 export class Step0OutputValidationError extends Error {
   readonly code: Step0ValidationCode;
@@ -50,8 +48,7 @@ export interface Step0ValidationDiagnostic {
 
 export interface Step0OutputValidatorInput {
   readonly responseText: string;
-  readonly expectedChangedPaths: readonly string[];
-  readonly expectedUserContext?: readonly string[];
+  readonly userContext: readonly string[];
 }
 
 export type Step0JsonRepairKind =
@@ -71,50 +68,18 @@ export interface Step0OutputValidationResult {
   readonly parseMetadata: Step0JsonParseMetadata;
 }
 
-const ALLOWED_TOP_LEVEL_KEYS = new Set([
-  "schemaVersion",
-  "reviewObjective",
-  "userContextSSOT",
-  "expectedBehaviorLedger",
-  "missingInformation",
-  "overviewMarkdown",
-  "behaviorChanges",
-  "unresolvedUnknowns"
-]);
-
-const ALLOWED_READINESS_BEHAVIOR_CHANGE_KEYS = new Set([
-  "description",
-  "files"
-]);
-
-const ALLOWED_READINESS_UNRESOLVED_UNKNOWN_KEYS = new Set([
-  "question",
-  "resolutionPath"
-]);
-
 const ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES: ReadonlySet<string> = new Set(
   EXPECTED_BEHAVIOR_CONFIDENCES
 );
 
 const OVERVIEW_MARKDOWN_PREFIX = "## Changeset Overview";
 
-// Placeholder markers as discrete tokens; case-insensitive whole-token match
-// for short markers, plus an angle-bracket template token form like `<replace>`.
-const PLACEHOLDER_TOKEN_PATTERNS: readonly RegExp[] = [
-  /\bTODO\b/i,
-  /\bTBD\b/i,
-  /\bN\/?A\b/i,
-  /\bplaceholder\b/i,
-  /\bfill\s*me\b/i,
-  /<[^<>\n]+>/
-];
-
 /**
  * Deterministic structural validator for Step 0's `ChangeMapReadinessV2` output.
  *
  * Pure function (no I/O, no LLM). Throws `Step0OutputValidationError` with a
  * taxonomy code on any failure so the runner's existing retry path can react
- * uniformly to blank, parse, schema, coverage, and placeholder failures.
+ * uniformly to blank, parse, and schema failures.
  */
 export class Step0OutputValidator {
   validate(input: Step0OutputValidatorInput): ChangeMapReadinessV2 {
@@ -125,21 +90,6 @@ export class Step0OutputValidator {
     const { value: parsed, metadata: parseMetadata } = parseJson(input.responseText);
     const obj = ensurePlainObject(parsed, "top-level payload");
 
-    const schemaVersion = obj.schemaVersion;
-    if (schemaVersion !== 2) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `schemaVersion must be the literal number 2 (received ${describe(schemaVersion)})`,
-        {
-          offendingPath: "schemaVersion",
-          allowedValues: ["2"],
-          actualSummary: describe(schemaVersion),
-          repairHint: "Use schemaVersion: 2 for ChangeMapReadinessV2."
-        }
-      );
-    }
-
-    rejectUnknownKeys(obj, ALLOWED_TOP_LEVEL_KEYS, "top-level");
     const changeMap = validateChangeMapReadinessV2(obj, input);
 
     return { changeMap, parseMetadata };
@@ -151,21 +101,12 @@ function validateChangeMapReadinessV2(
   input: Step0OutputValidatorInput
 ): ChangeMapReadinessV2 {
   return deepFreeze({
-    schemaVersion: 2,
     reviewObjective: validateReviewObjective(obj.reviewObjective),
-    userContextSSOT: validateUserContextSSOT(
-      obj.userContextSSOT,
-      input.expectedUserContext
-    ),
-    expectedBehaviorLedger: validateExpectedBehaviorLedger(
-      obj.expectedBehaviorLedger
-    ),
+    userContext: Object.freeze([...input.userContext]),
+    userBehavior: validateUserBehavior(obj.userBehavior),
     missingInformation: validateMissingInformation(obj.missingInformation),
     overviewMarkdown: validateOverviewMarkdown(obj.overviewMarkdown),
-    behaviorChanges: validateReadinessBehaviorChanges(
-      obj.behaviorChanges,
-      validateExpectedChangedPathSet(input.expectedChangedPaths)
-    ),
+    behaviorChanges: validateReadinessBehaviorChanges(obj.behaviorChanges),
     unresolvedUnknowns: validateReadinessUnresolvedUnknowns(
       obj.unresolvedUnknowns
     )
@@ -397,54 +338,6 @@ function ensurePlainObject(value: unknown, label: string): Record<string, unknow
   return value as Record<string, unknown>;
 }
 
-function rejectUnknownKeys(
-  obj: Record<string, unknown>,
-  allowed: ReadonlySet<string>,
-  label: string
-): void {
-  for (const key of Object.keys(obj)) {
-    if (!allowed.has(key)) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `${label} contains unsupported field "${key}"`
-      );
-    }
-  }
-}
-
-function validateKnownPathsArray(
-  value: unknown,
-  knownPaths: ReadonlySet<string>,
-  label: string,
-  options: { allowEmpty: boolean; knownPathsLabel?: string }
-): readonly string[] {
-  if (!Array.isArray(value)) {
-    throw new Step0OutputValidationError("SCHEMA", `${label} must be an array`);
-  }
-  if (!options.allowEmpty && value.length === 0) {
-    throw new Step0OutputValidationError("SCHEMA", `${label} must not be empty`);
-  }
-
-  const seen = new Set<string>();
-  return value.map((rawPath, index) => {
-    const path = requireNonEmptyString(rawPath, `${label}[${index}]`);
-    if (!knownPaths.has(path)) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `${label}[${index}] "${path}" is not present in ${options.knownPathsLabel ?? "<changed_files_json>.entries[].path"}`
-      );
-    }
-    if (seen.has(path)) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `${label}[${index}] duplicates path "${path}"`
-      );
-    }
-    seen.add(path);
-    return path;
-  });
-}
-
 function validateReadinessUnresolvedUnknowns(
   value: unknown
 ): readonly ReadinessUnresolvedUnknownEntry[] {
@@ -457,11 +350,6 @@ function validateReadinessUnresolvedUnknowns(
 
   return value.map((rawEntry, index) => {
     const entry = ensurePlainObject(rawEntry, `unresolvedUnknowns[${index}]`);
-    rejectUnknownKeys(
-      entry,
-      ALLOWED_READINESS_UNRESOLVED_UNKNOWN_KEYS,
-      `unresolvedUnknowns[${index}]`
-    );
 
     const question = requireNonEmptyString(
       entry.question,
@@ -469,11 +357,6 @@ function validateReadinessUnresolvedUnknowns(
     );
     const resolutionPath = requireNonEmptyString(
       entry.resolutionPath,
-      `unresolvedUnknowns[${index}].resolutionPath`
-    );
-    rejectPlaceholderText(question, `unresolvedUnknowns[${index}].question`);
-    rejectPlaceholderText(
-      resolutionPath,
       `unresolvedUnknowns[${index}].resolutionPath`
     );
 
@@ -501,7 +384,6 @@ function validateOverviewMarkdown(value: unknown): string {
 function validateReviewObjective(value: unknown): ChangeMapReadinessV2["reviewObjective"] {
   const obj = ensurePlainObject(value, "reviewObjective");
   const summary = requireNonEmptyString(obj.summary, "reviewObjective.summary");
-  rejectPlaceholderText(summary, "reviewObjective.summary");
   return {
     summary,
     requestedFocus: validateStringArray(
@@ -515,58 +397,27 @@ function validateReviewObjective(value: unknown): ChangeMapReadinessV2["reviewOb
   };
 }
 
-function validateUserContextSSOT(
-  value: unknown,
-  expectedUserContext: readonly string[] | undefined
-): ChangeMapReadinessV2["userContextSSOT"] {
-  if (!Array.isArray(value)) {
-    throw new Step0OutputValidationError("SCHEMA", "userContextSSOT must be an array");
-  }
-  if (expectedUserContext && value.length !== expectedUserContext.length) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      `userContextSSOT length must match expected user context length ${expectedUserContext.length}`
-    );
-  }
-
-  return value.map((rawEntry, index) => {
-    const rawText = requireNonEmptyString(
-      rawEntry,
-      `userContextSSOT[${index}]`
-    );
-    if (expectedUserContext && rawText !== expectedUserContext[index]) {
-      throw new Step0OutputValidationError(
-        "SCHEMA",
-        `userContextSSOT[${index}] must preserve user context order`
-      );
-    }
-
-    return rawText;
-  });
-}
-
-function validateExpectedBehaviorLedger(
+function validateUserBehavior(
   value: unknown
-): ChangeMapReadinessV2["expectedBehaviorLedger"] {
+): ChangeMapReadinessV2["userBehavior"] {
   if (!Array.isArray(value)) {
     throw new Step0OutputValidationError(
       "SCHEMA",
-      "expectedBehaviorLedger must be an array"
+      "userBehavior must be an array"
     );
   }
   return value.map((rawEntry, index) => {
-    const entry = ensurePlainObject(rawEntry, `expectedBehaviorLedger[${index}]`);
+    const entry = ensurePlainObject(rawEntry, `userBehavior[${index}]`);
     const statement = requireNonEmptyString(
       entry.statement,
-      `expectedBehaviorLedger[${index}].statement`
+      `userBehavior[${index}].statement`
     );
-    rejectPlaceholderText(statement, `expectedBehaviorLedger[${index}].statement`);
     return {
       statement,
       confidence: requireEnum(
         entry.confidence,
         ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES,
-        `expectedBehaviorLedger[${index}].confidence`
+        `userBehavior[${index}].confidence`
       ) as ExpectedBehaviorConfidence
     };
   });
@@ -591,8 +442,6 @@ function validateMissingInformation(
       entry.whyItMatters,
       `missingInformation[${index}].whyItMatters`
     );
-    rejectPlaceholderText(description, `missingInformation[${index}].description`);
-    rejectPlaceholderText(whyItMatters, `missingInformation[${index}].whyItMatters`);
     return {
       description,
       whyItMatters
@@ -601,8 +450,7 @@ function validateMissingInformation(
 }
 
 function validateReadinessBehaviorChanges(
-  value: unknown,
-  knownPaths: ReadonlySet<string>
+  value: unknown
 ): readonly ReadinessBehaviorChangeEntry[] {
   if (!Array.isArray(value)) {
     throw new Step0OutputValidationError(
@@ -613,53 +461,20 @@ function validateReadinessBehaviorChanges(
 
   return value.map((rawEntry, index) => {
     const entry = ensurePlainObject(rawEntry, `behaviorChanges[${index}]`);
-    rejectUnknownKeys(
-      entry,
-      ALLOWED_READINESS_BEHAVIOR_CHANGE_KEYS,
-      `behaviorChanges[${index}]`
-    );
 
     const description = requireNonEmptyString(
       entry.description,
       `behaviorChanges[${index}].description`
     );
-    rejectPlaceholderText(description, `behaviorChanges[${index}].description`);
 
     return {
       description,
-      files: validateKnownPathsArray(
+      files: validateStringArray(
         entry.files,
-        knownPaths,
-        `behaviorChanges[${index}].files`,
-        {
-          allowEmpty: false,
-          knownPathsLabel: "<changed_files_json>.entries[].path"
-        }
+        `behaviorChanges[${index}].files`
       )
     };
   });
-}
-
-function validateExpectedChangedPathSet(
-  expectedChangedPaths: readonly string[]
-): ReadonlySet<string> {
-  const knownPaths = new Set<string>();
-  for (const expected of expectedChangedPaths) {
-    if (knownPaths.has(expected)) {
-      throw new Step0OutputValidationError(
-        "COVERAGE",
-        `expectedChangedPaths contains duplicate path "${expected}"`,
-        {
-          offendingPath: "expectedChangedPaths",
-          actualSummary: `duplicate=${expected}`,
-          repairHint: "Host-normalized changed file paths must be unique before Step 0 validation."
-        }
-      );
-    }
-    knownPaths.add(expected);
-  }
-
-  return knownPaths;
 }
 
 function requireNonEmptyString(value: unknown, label: string): string {
@@ -703,46 +518,9 @@ function validateStringArray(value: unknown, label: string): readonly string[] {
   if (!Array.isArray(value)) {
     throw new Step0OutputValidationError("SCHEMA", `${label} must be an array`);
   }
-  return value.map((entry, index) => {
-    const text = requireNonEmptyString(entry, `${label}[${index}]`);
-    rejectPlaceholderText(text, `${label}[${index}]`);
-    return text;
-  });
-}
-
-function validateEnumArray(
-  value: unknown,
-  allowed: ReadonlySet<string>,
-  label: string
-): readonly string[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      `${label} must be a non-empty array`
-    );
-  }
-  return value.map((entry, index) => requireEnum(entry, allowed, `${label}[${index}]`));
-}
-
-function requireNonNegativeInteger(value: unknown, label: string): number {
-  if (!Number.isInteger(value) || (value as number) < 0) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      `${label} must be a non-negative integer`
-    );
-  }
-  return value as number;
-}
-
-function rejectPlaceholderText(value: string, label: string): void {
-  for (const pattern of PLACEHOLDER_TOKEN_PATTERNS) {
-    if (pattern.test(value)) {
-      throw new Step0OutputValidationError(
-        "PLACEHOLDER",
-        `${label} appears to contain a placeholder marker matching ${pattern}`
-      );
-    }
-  }
+  return value.map((entry, index) =>
+    requireNonEmptyString(entry, `${label}[${index}]`)
+  );
 }
 
 function describe(value: unknown): string {

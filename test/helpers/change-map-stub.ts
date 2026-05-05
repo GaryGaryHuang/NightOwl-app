@@ -7,10 +7,9 @@ import type { ChangeMapReadinessV2 } from "../../src/core/change-map.ts";
  */
 export function stubChangeMap(
   overviewMarkdown: string,
-  overrides: Partial<Omit<ChangeMapReadinessV2, "schemaVersion" | "overviewMarkdown">> = {}
+  overrides: Partial<Omit<ChangeMapReadinessV2, "overviewMarkdown">> = {}
 ): ChangeMapReadinessV2 {
   return Object.freeze({
-    schemaVersion: 2,
     reviewObjective: Object.freeze(
       overrides.reviewObjective ?? {
         summary: "Test review context.",
@@ -18,9 +17,9 @@ export function stubChangeMap(
         expectedBehaviorSummary: Object.freeze([])
       }
     ),
-    userContextSSOT: Object.freeze(overrides.userContextSSOT ?? []),
-    expectedBehaviorLedger: Object.freeze(
-      overrides.expectedBehaviorLedger ?? []
+    userContext: Object.freeze(overrides.userContext ?? []),
+    userBehavior: Object.freeze(
+      overrides.userBehavior ?? []
     ),
     missingInformation: Object.freeze(overrides.missingInformation ?? []),
     overviewMarkdown,

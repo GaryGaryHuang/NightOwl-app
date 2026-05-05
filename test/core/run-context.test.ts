@@ -6,14 +6,13 @@ import { createRunContext } from "../../src/core/run-context.ts";
 
 function makeChangeMap(overviewMarkdown: string): ChangeMapReadinessV2 {
   return Object.freeze({
-    schemaVersion: 2,
     reviewObjective: Object.freeze({
       summary: "Test review context.",
       requestedFocus: Object.freeze([]),
       expectedBehaviorSummary: Object.freeze([])
     }),
-    userContextSSOT: Object.freeze([]),
-    expectedBehaviorLedger: Object.freeze([]),
+    userContext: Object.freeze([]),
+    userBehavior: Object.freeze([]),
     missingInformation: Object.freeze([]),
     overviewMarkdown,
     behaviorChanges: Object.freeze([]),
@@ -29,7 +28,6 @@ test("createRunContext exposes the ChangeMapReadinessV2 as changesetOverview by 
   });
 
   assert.equal(ctx.changesetOverview, changeMap);
-  assert.equal(ctx.changesetOverview.schemaVersion, 2);
 });
 
 test("changesetOverviewMarkdown equals overviewMarkdown when it already ends with a newline", () => {

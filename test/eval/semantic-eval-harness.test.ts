@@ -183,12 +183,10 @@ const DEFAULT_DIFF = [
 
 function createReviewBasis(): ReviewBasisV1 {
   return {
-    schemaVersion: 1,
     filePath: "SearchFragment.kt",
     roleInChangeset: "Reviews search callback state propagation.",
     changedBehavior: [
       {
-        changeId: "CB1",
         before: "Search callback used previous request state.",
         after: "Search callback records searchRequestId before dispatch.",
         evidenceIds: ["E1"]
@@ -196,7 +194,6 @@ function createReviewBasis(): ReviewBasisV1 {
     ],
     facts: [
       {
-        factId: "FCT1",
         statement: "The diff writes searchRequestId before callback dispatch.",
         evidenceIds: ["E1"]
       }
@@ -231,15 +228,11 @@ function createReviewBasis(): ReviewBasisV1 {
         hypothesisId: "H1",
         statement: "The callback could apply a stale search result.",
         triggerCondition: "Two async search requests complete out of order.",
-        whyRelevantHere: "The diff changes request identity state.",
-        closureCriteria: ["Prove callback threading and stale-result guard impact."]
       },
       {
         hypothesisId: "H2",
         statement: "The changed path may already guard stale callbacks.",
         triggerCondition: "Callback compares request ID before UI mutation.",
-        whyRelevantHere: "Counter-evidence determines whether the claim is real.",
-        closureCriteria: ["Inspect guard ordering before approval."]
       }
     ],
     missingInformation: [],

@@ -106,11 +106,9 @@ describe("Dry-run stub catalog completeness", () => {
 
     const response = buildDryRunChangesetOverviewResponse(prompt);
     const parsed = JSON.parse(response) as {
-      schemaVersion: number;
       overviewMarkdown: string;
       behaviorChanges: { files: string[] }[];
     };
-    assert.equal(parsed.schemaVersion, 2);
     assert.deepEqual(parsed.behaviorChanges[0]?.files, [
       "src/added.ts",
       "src/foo.ts",

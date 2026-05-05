@@ -386,14 +386,12 @@ function buildValidStep0ChangeMapJson(): string {
   ];
 
   return JSON.stringify({
-    schemaVersion: 2,
     reviewObjective: {
       summary: "Test review context.",
       requestedFocus: [],
       expectedBehaviorSummary: []
     },
-    userContextSSOT: [],
-    expectedBehaviorLedger: [],
+    userBehavior: [],
     missingInformation: [],
     overviewMarkdown: "## Changeset Overview\n- 調整範圍：feature",
     behaviorChanges: [

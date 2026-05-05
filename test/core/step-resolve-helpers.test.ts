@@ -146,12 +146,10 @@ function createResolveServices(): StepResolveServices {
 
 function createReviewBasis(): ReviewBasisV1 {
   return {
-    schemaVersion: 1,
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",
     changedBehavior: [
       {
-        changeId: "CB1",
         before: "Step 5 consumed prose sections.",
         after: "Step 5 consumes ReviewBasis evidence graph.",
         evidenceIds: ["E1"]
@@ -159,14 +157,12 @@ function createReviewBasis(): ReviewBasisV1 {
     ],
     facts: [
       {
-        factId: "FCT1",
         statement: "ReviewBasis is emitted before Step 5.",
         evidenceIds: ["E1"]
       }
     ],
     inferences: [
       {
-        inferenceId: "INF1",
         statement: "Step 5 can validate source evidence IDs.",
         basedOnEvidenceIds: ["E1"],
         confidence: "high"
@@ -201,8 +197,6 @@ function createReviewBasis(): ReviewBasisV1 {
         hypothesisId: "H1",
         statement: "Evidence refs may be missing.",
         triggerCondition: "Step 5 cites absent evidence ID.",
-        whyRelevantHere: "Phase 2 validates evidence refs.",
-        closureCriteria: ["Every cited evidence ID exists."]
       }
     ],
     missingInformation: [],

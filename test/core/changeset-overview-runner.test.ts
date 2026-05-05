@@ -20,14 +20,12 @@ interface ChangeMapJsonOptions {
 function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
   const paths = options.paths ?? ["src/app.ts"];
   return JSON.stringify({
-    schemaVersion: 2,
     reviewObjective: {
       summary: "Test review context.",
       requestedFocus: [],
       expectedBehaviorSummary: []
     },
-    userContextSSOT: [],
-    expectedBehaviorLedger: [],
+    userBehavior: [],
     missingInformation: [],
     overviewMarkdown:
       options.overviewMarkdown ?? "## Changeset Overview\n- 調整範圍：feature",
@@ -75,7 +73,6 @@ test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMa
     userContext: []
   });
 
-  assert.equal(runContext.changesetOverview.schemaVersion, 2);
   assert.equal(runContext.changesetOverview.behaviorChanges[0]?.files[0], "src/app.ts");
   assert.equal(
     runContext.changesetOverviewMarkdown,
@@ -165,13 +162,12 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   });
 
   assert.equal(createCalls, 2);
-  assert.equal(runContext.changesetOverview.schemaVersion, 2);
   assert.equal(prompts.length, 2);
   assert.match(prompts[0], /<validator_feedback format="json">\nnull\n<\/validator_feedback>/u);
   assert.match(prompts[1], /<validator_feedback format="json">/u);
   assert.match(prompts[1], /"code": "PARSE"/u);
   assert.match(prompts[1], /"parseStage": "initial_parse"/u);
-  assert.match(prompts[1], /Return a corrected ChangeMapReadinessV2 JSON object/u);
+  assert.match(prompts[1], /Return a corrected JSON object/u);
   assert.equal(logMessages.length, 1);
   assert.match(logMessages[0]!, /Step 0 validation failed \(attempt 1, code=PARSE/u);
   assert.match(logMessages[0]!, /stage=initial_parse/u);
@@ -249,6 +245,18 @@ test("ChangesetOverviewRunner logs successful syntax repairs", async () => {
 test("ChangesetOverviewRunner retry feedback includes structured enum diagnostics", async () => {
   let createCalls = 0;
   const prompts: string[] = [];
+  const invalidJson = JSON.stringify({
+    reviewObjective: {
+      summary: "Test review context.",
+      requestedFocus: [],
+      expectedBehaviorSummary: []
+    },
+    userBehavior: [{ statement: "x", confidence: "wrong" }],
+    missingInformation: [],
+    overviewMarkdown: "## Changeset Overview\n- 調整範圍：feature",
+    behaviorChanges: [],
+    unresolvedUnknowns: []
+  });
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
       async createSession() {
@@ -258,7 +266,7 @@ test("ChangesetOverviewRunner retry feedback includes structured enum diagnostic
           async sendAndWait(prompt) {
             prompts.push(prompt);
             return createCalls === 1
-              ? buildChangeMapJson().replace("\"schemaVersion\":2", "\"schemaVersion\":\"2\"")
+              ? invalidJson
               : buildChangeMapJson();
           }
         };
@@ -275,7 +283,7 @@ test("ChangesetOverviewRunner retry feedback includes structured enum diagnostic
 
   assert.equal(createCalls, 2);
   assert.match(prompts[1], /"code": "SCHEMA"/u);
-  assert.match(prompts[1], /"offendingPath": "schemaVersion"/u);
+  assert.match(prompts[1], /"offendingPath": "userBehavior\[0\]\.confidence"/u);
   assert.match(prompts[1], /"allowedValues": \[/u);
 });
 

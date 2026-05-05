@@ -25,7 +25,7 @@ export interface ReviewObjective {
   readonly expectedBehaviorSummary: readonly string[];
 }
 
-export interface ExpectedBehaviorLedgerEntry {
+export interface UserBehaviorEntry {
   readonly statement: string;
   readonly confidence: ExpectedBehaviorConfidence;
 }
@@ -36,10 +36,9 @@ export interface MissingInformationEntry {
 }
 
 export interface ChangeMapReadinessV2 {
-  readonly schemaVersion: 2;
   readonly reviewObjective: ReviewObjective;
-  readonly userContextSSOT: readonly string[];
-  readonly expectedBehaviorLedger: readonly ExpectedBehaviorLedgerEntry[];
+  readonly userContext: readonly string[];
+  readonly userBehavior: readonly UserBehaviorEntry[];
   readonly missingInformation: readonly MissingInformationEntry[];
   readonly overviewMarkdown: string;
   readonly behaviorChanges: readonly ReadinessBehaviorChangeEntry[];

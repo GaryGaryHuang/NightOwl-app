@@ -1,5 +1,4 @@
 import {
-  extractChangedPathsFromChangesetEntries,
   normalizeChangesetEntriesForChangeMap,
   type ChangeMapReadiness
 } from "./change-map.ts";
@@ -54,9 +53,6 @@ export class ChangesetOverviewRunner {
   }
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
-    const expectedChangedPaths = extractChangedPathsFromChangesetEntries(
-      input.changesetEntries
-    );
     const changesetFiles = normalizeChangesetEntriesForChangeMap(
       input.changesetEntries
     );
@@ -89,7 +85,7 @@ export class ChangesetOverviewRunner {
               "Step 0 changeset overview did not produce a non-empty response.",
             actualSummary: "empty_response",
             repairHint:
-              "Return exactly one ChangeMapReadinessV2 JSON object with no surrounding text."
+              "Return exactly one JSON object with no surrounding text."
           };
           throw new Step0OutputValidationError(
             "PARSE",
@@ -101,8 +97,7 @@ export class ChangesetOverviewRunner {
         try {
           const validationResult = this.#validator.validateDetailed({
             responseText: response,
-            expectedChangedPaths,
-            expectedUserContext: input.userContext
+            userContext: input.userContext
           });
           this.#emitSyntaxRepairLog(attempt, validationResult.parseMetadata);
           changeMap = validationResult.changeMap;

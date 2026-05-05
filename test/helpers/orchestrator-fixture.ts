@@ -12,12 +12,10 @@ export function escapeRegExp(value: string): string {
 
 export function buildReviewBasis(filePath: string): ReviewBasisV1 {
   return {
-    schemaVersion: 1,
     filePath,
     roleInChangeset: `${filePath} participates in the reviewed change.`,
     changedBehavior: [
       {
-        changeId: "CB1",
         before: "old behavior",
         after: "new behavior",
         evidenceIds: ["E1"]
@@ -25,14 +23,12 @@ export function buildReviewBasis(filePath: string): ReviewBasisV1 {
     ],
     facts: [
       {
-        factId: "FCT1",
         statement: `${filePath} has a changed diff hunk.`,
         evidenceIds: ["E1"]
       }
     ],
     inferences: [
       {
-        inferenceId: "INF1",
         statement: "The changed branch may affect fallback behavior.",
         basedOnEvidenceIds: ["E1"],
         confidence: "medium"
@@ -67,8 +63,6 @@ export function buildReviewBasis(filePath: string): ReviewBasisV1 {
         hypothesisId: "H1",
         statement: "Fallback behavior could be skipped.",
         triggerCondition: "empty input reaches the changed branch",
-        whyRelevantHere: "The diff changes the control flow for this file.",
-        closureCriteria: ["Trace the changed branch against fallback behavior."]
       }
     ],
     missingInformation: [],

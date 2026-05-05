@@ -23,18 +23,15 @@ interface DryRunChangedFileEntry {
  */
 export function buildDryRunChangesetOverviewResponse(prompt: string): string {
   const changedFileEntries = extractChangedFilesBlockEntries(prompt);
-  const userContextEntries = extractUserContextEntries(prompt);
   const changedPaths = changedFileEntries.map((entry) => entry.path);
 
   return JSON.stringify({
-    schemaVersion: 2,
     reviewObjective: {
       summary: "Dry-run review context.",
       requestedFocus: [],
       expectedBehaviorSummary: []
     },
-    userContextSSOT: userContextEntries,
-    expectedBehaviorLedger: [],
+    userBehavior: [],
     missingInformation: [],
     overviewMarkdown: STUB_CHANGESET_OVERVIEW_MARKDOWN,
     behaviorChanges: changedPaths.length === 0
@@ -52,12 +49,9 @@ export function buildDryRunChangesetOverviewResponse(prompt: string): string {
 export function buildDryRunReviewBasisResponse(prompt: string): string {
   const filePath = extractDiffPath(prompt) ?? "dry-run.ts";
   return JSON.stringify({
-    schemaVersion: 1,
-    filePath,
     roleInChangeset: "Dry-run file basis.",
     changedBehavior: [
       {
-        changeId: "CB1",
         before: "Before dry-run review.",
         after: "After dry-run review.",
         evidenceIds: ["E1"]
@@ -65,14 +59,12 @@ export function buildDryRunReviewBasisResponse(prompt: string): string {
     ],
     facts: [
       {
-        factId: "FCT1",
         statement: "Dry-run ReviewBasis was generated for this file.",
         evidenceIds: ["E1"]
       }
     ],
     inferences: [
       {
-        inferenceId: "INF1",
         statement: "Dry-run can continue to validation with a structured basis.",
         basedOnEvidenceIds: ["E1"],
         confidence: "medium"
@@ -106,9 +98,7 @@ export function buildDryRunReviewBasisResponse(prompt: string): string {
       {
         hypothesisId: "H1",
         statement: "Dry-run hypothesis for exercising Step 5.",
-        triggerCondition: "Dry-run pipeline reaches validation.",
-        whyRelevantHere: "Phase 1 requires a structured ReviewBasis before Step 5.",
-        closureCriteria: ["Step 5 can consume this structured hypothesis."]
+        triggerCondition: "Dry-run pipeline reaches validation."
       }
     ],
     missingInformation: [],
@@ -180,23 +170,6 @@ function extractChangedFilesJsonEntries(
           : "M";
       return [{ path: record.path, status }];
     });
-  } catch {
-    return [];
-  }
-}
-
-function extractUserContextEntries(prompt: string): string[] {
-  const match = prompt.match(
-    /<user_context format="json">\n([\s\S]*?)\n<\/user_context>/u
-  );
-  if (!match) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(match[1]) as { entries?: unknown };
-    return Array.isArray(parsed.entries)
-      ? parsed.entries.filter((entry): entry is string => typeof entry === "string")
-      : [];
   } catch {
     return [];
   }

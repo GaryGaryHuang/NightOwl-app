@@ -48,12 +48,10 @@ interface ValidationReportResult {
 
 function createReviewBasis(overrides: Partial<ReviewBasisV1> = {}): ReviewBasisV1 {
   return {
-    schemaVersion: 1,
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",
     changedBehavior: [
       {
-        changeId: "CB1",
         before: "Step 5 consumed prose sections.",
         after: "Step 5 consumes ReviewBasis evidence graph.",
         evidenceIds: ["E1"]
@@ -61,14 +59,12 @@ function createReviewBasis(overrides: Partial<ReviewBasisV1> = {}): ReviewBasisV
     ],
     facts: [
       {
-        factId: "FCT1",
         statement: "ReviewBasis is emitted before Step 5.",
         evidenceIds: ["E1"]
       }
     ],
     inferences: [
       {
-        inferenceId: "INF1",
         statement: "Step 5 can validate source evidence IDs.",
         basedOnEvidenceIds: ["E1"],
         confidence: "high"
@@ -103,15 +99,11 @@ function createReviewBasis(overrides: Partial<ReviewBasisV1> = {}): ReviewBasisV
         hypothesisId: "H1",
         statement: "Nullable input may now dereference before fallback.",
         triggerCondition: "A nullable input reaches the changed branch.",
-        whyRelevantHere: "The diff moves the guard after the dereference.",
-        closureCriteria: ["Every approved finding must cite concrete code evidence."]
       },
       {
         hypothesisId: "H2",
         statement: "The unchanged fallback may still cover nullable input.",
         triggerCondition: "Fallback executes before any dereference.",
-        whyRelevantHere: "Counter-evidence determines whether F1 is real.",
-        closureCriteria: ["The hypothesis is rejected or converted to missing information."]
       }
     ],
     missingInformation: [],

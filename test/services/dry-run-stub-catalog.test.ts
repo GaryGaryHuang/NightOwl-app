@@ -107,36 +107,16 @@ test("buildDryRunChangesetOverviewResponse skips lines without a tab separator a
   assert.deepEqual(parsed.behaviorChanges[0]?.files, ["src/kept.ts"]);
 });
 
-test("buildDryRunChangesetOverviewResponse emits a zero-file ChangeMapReadinessV2 when the prompt has no changed_files block", () => {
+test("buildDryRunChangesetOverviewResponse emits a zero-file response when the prompt has no changed_files block", () => {
   const parsed = JSON.parse(
     buildDryRunChangesetOverviewResponse("(no block at all)")
   ) as {
-    schemaVersion: number;
     behaviorChanges: unknown[];
-    userContextSSOT: unknown[];
+    userBehavior: unknown[];
   };
 
-  assert.equal(parsed.schemaVersion, 2);
   assert.deepEqual(parsed.behaviorChanges, []);
-  assert.deepEqual(parsed.userContextSSOT, []);
-});
-
-test("buildDryRunChangesetOverviewResponse preserves user context order in userContextSSOT", () => {
-  const prompt = [
-    "<changed_files>",
-    "M\tsrc/app.ts",
-    "</changed_files>",
-    "",
-    '<user_context format="json">',
-    JSON.stringify({ entries: ["first", "second"] }, null, 2),
-    "</user_context>"
-  ].join("\n");
-
-  const parsed = JSON.parse(buildDryRunChangesetOverviewResponse(prompt)) as {
-    userContextSSOT: string[];
-  };
-
-  assert.deepEqual(parsed.userContextSSOT, ["first", "second"]);
+  assert.deepEqual(parsed.userBehavior, []);
 });
 
 test("buildDryRunChangesetOverviewResponse emits a single behaviorChanges entry listing every changed path when at least one file is present", () => {

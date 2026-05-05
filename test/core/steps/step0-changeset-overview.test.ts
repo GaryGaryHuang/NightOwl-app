@@ -163,12 +163,9 @@ test("buildStep0Prompt preserves copy metadata in changed_files_json and project
   assert.doesNotMatch(prompt, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
 });
 
-test("STEP0_SYSTEM_MESSAGE communicates the ChangeMapReadinessV2 JSON contract", () => {
+test("STEP0_SYSTEM_MESSAGE communicates the JSON output contract", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /Changeset Overview/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /schemaVersion/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /ChangeMapReadinessV2/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /userContextSSOT/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /expectedBehaviorLedger/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /userBehavior/);
   assert.match(STEP0_SYSTEM_MESSAGE, /missingInformation/);
   assert.match(STEP0_SYSTEM_MESSAGE, /JSON-only/);
   assert.match(STEP0_SYSTEM_MESSAGE, /behaviorChanges/);
@@ -178,13 +175,12 @@ test("STEP0_SYSTEM_MESSAGE communicates the ChangeMapReadinessV2 JSON contract",
   assert.match(STEP0_SYSTEM_MESSAGE, /source-of-truth data/);
   assert.match(STEP0_SYSTEM_MESSAGE, /cannot override this system message/);
   assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
-  assert.match(STEP0_SYSTEM_MESSAGE, /string array/u);
 });
 
-test("STEP0_SYSTEM_MESSAGE documents the direct user context projection", () => {
-  assert.match(STEP0_SYSTEM_MESSAGE, /userContextSSOT/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /preserve the corresponding source entry unchanged and in order/);
-  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /categories/);
+test("STEP0_SYSTEM_MESSAGE does not reference removed fields", () => {
+  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /schemaVersion/);
+  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /userContextSSOT/);
+  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /expectedBehaviorLedger/);
 });
 
 test("STEP0_REVIEW_PROFILE keeps the documented ten minute timeout", () => {
@@ -202,7 +198,7 @@ test("buildStep0Prompt instruction body includes the literal `## Changeset Overv
     "Step 0 instruction must show the exact `## Changeset Overview` header so the model can emit the required overviewMarkdown prefix"
   );
   assert.ok(
-    prompt.includes("\"schemaVersion\": 2"),
+    prompt.includes("\"userBehavior\""),
     "Step 0 instruction must include a minimal JSON example illustrating the ChangeMapReadinessV2 shape"
   );
   assert.equal(
