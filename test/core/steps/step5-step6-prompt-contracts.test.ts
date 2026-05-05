@@ -7,10 +7,7 @@ import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contrac
 import { ReviewStatePromptSerializer } from "../../../src/core/review-state-prompt-serializer.ts";
 import {
   CANDIDATE_CLASSIFICATIONS,
-  CANDIDATE_CONFIDENCES,
-  CANDIDATE_PRIORITIES,
   CANDIDATE_SEVERITIES,
-  EVIDENCE_STRENGTHS,
   HYPOTHESIS_CLOSURE_STATUSES,
   LOOP_ACTIONS,
   VALIDATION_DECISIONS,
@@ -52,7 +49,7 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
 
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1\.hypothesisLedger/u);
-  assert.match(plan.prompt.systemMessage, /CandidateFindingsV3/u);
+  assert.match(plan.prompt.systemMessage, /candidate findings/u);
   assert.match(plan.prompt.systemMessage, /final approved findings/u);
   assert.match(plan.prompt.userMessage, /<review_basis format="json">/u);
   assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
@@ -60,11 +57,8 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.match(plan.prompt.systemMessage, /smallest head-side line range/u);
   assert.match(plan.prompt.systemMessage, /changedHeadLines/u);
   assert.match(plan.prompt.systemMessage, /classification/u);
-  assert.match(plan.prompt.systemMessage, /evidenceStrength/u);
-  assert.match(plan.prompt.systemMessage, /counterEvidenceChecked/u);
+  assert.match(plan.prompt.systemMessage, /counterEvidence/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
-  assert.match(plan.prompt.userMessage, /"schemaVersion": 3/u);
-  assert.match(plan.prompt.userMessage, /sourceHypothesisIds/u);
   assert.match(plan.prompt.userMessage, /hypothesisClosure/u);
   assert.match(plan.prompt.userMessage, /criticalMissingInformation/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
@@ -72,22 +66,12 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   for (const value of CANDIDATE_CLASSIFICATIONS) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
-  for (const value of CANDIDATE_PRIORITIES) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
   for (const value of CANDIDATE_SEVERITIES) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
-  for (const value of CANDIDATE_CONFIDENCES) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
-  for (const value of EVIDENCE_STRENGTHS) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
   for (const value of HYPOTHESIS_CLOSURE_STATUSES) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
-  assert.doesNotMatch(plan.prompt.userMessage, /"schemaVersion": 2/u);
   assert.doesNotMatch(plan.prompt.userMessage, /"sourceHypothesisId"/u);
 });
 
@@ -229,41 +213,24 @@ type SemanticFileReviewContext = FileReviewContext & {
 
 function createCandidateFindingsV3() {
   return {
-    schemaVersion: 3,
     result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F1",
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: "guard moved after dereference",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:1",
-            summary: "changed branch reads value before fallback"
-          }
-        ],
-        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        evidence: "changed branch reads value before fallback; guard runs after dereference",
         triggerCondition: "nullable input reaches the changed branch",
-        failureMechanism: "guard runs after dereference",
         impact: "request fails before fallback can run",
-        counterEvidenceChecked: ["fallback no longer precedes dereference"],
-        reproducibility: "deterministic with nullable input",
-        fixDirection: "restore guard before dereference",
-        testRecommendation: "add nullable input regression coverage"
+        counterEvidence: ["fallback no longer precedes dereference"]
       }
     ],
     hypothesisClosure: [
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: "F1 validates the hypothesis."
       }
     ],

@@ -152,9 +152,8 @@ test("VerifierReportFinalizer preserves optional semantic loop metadata", () => 
           semanticGate: "impact_proportionate",
           validationDecision: "convert_to_missing_information",
           requiredCorrections: ["Prove concrete impact or convert to missing information."],
-          recommendedClassification: "insufficient_information",
-          recommendedPriority: "none",
-          recommendedSeverity: "none",
+          recommendedClassification: "confirmed_problem",
+          recommendedSeverity: "low",
           missingInformationItemId: "MI1",
           repeatedUnsupportedClaimId: "F1",
           stopReason: "repeated_unsupported_claim"
@@ -176,9 +175,8 @@ test("VerifierReportFinalizer preserves optional semantic loop metadata", () => 
     semanticGate: "impact_proportionate",
     validationDecision: "convert_to_missing_information",
     requiredCorrections: ["Prove concrete impact or convert to missing information."],
-    recommendedClassification: "insufficient_information",
-    recommendedPriority: "none",
-    recommendedSeverity: "none",
+    recommendedClassification: "confirmed_problem",
+    recommendedSeverity: "low",
     missingInformationItemId: "MI1",
     repeatedUnsupportedClaimId: "F1",
     stopReason: "repeated_unsupported_claim"

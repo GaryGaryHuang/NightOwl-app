@@ -7,7 +7,6 @@
 
 import type {
   CandidateClassification,
-  CandidatePriority,
   CandidateSeverity,
   SemanticGateId,
   StopReason,
@@ -42,7 +41,6 @@ export interface VerifierReportEntry {
   readonly validationDecision?: ValidationDecision;
   readonly requiredCorrections?: readonly string[];
   readonly recommendedClassification?: CandidateClassification;
-  readonly recommendedPriority?: CandidatePriority;
   readonly recommendedSeverity?: CandidateSeverity;
   readonly missingInformationItemId?: string;
   readonly repeatedUnsupportedClaimId?: string;
@@ -103,9 +101,6 @@ export function pickSemanticFields(
     ...(entry.recommendedClassification === undefined
       ? {}
       : { recommendedClassification: entry.recommendedClassification }),
-    ...(entry.recommendedPriority === undefined
-      ? {}
-      : { recommendedPriority: entry.recommendedPriority }),
     ...(entry.recommendedSeverity === undefined
       ? {}
       : { recommendedSeverity: entry.recommendedSeverity }),

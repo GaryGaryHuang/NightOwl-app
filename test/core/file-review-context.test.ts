@@ -127,7 +127,6 @@ test("FileReviewContext stores CandidateFindingsV3 separately from approved find
   context.setCandidateFindingsV3(candidatePayload);
 
   assert.equal(context.getFindings(), undefined);
-  assert.equal(context.getCandidateFindingsV3()?.schemaVersion, 3);
   assert.equal(
     context.getCandidateFindingsV3()?.findings[0]?.classification,
     "confirmed_problem"
@@ -139,15 +138,15 @@ test("FileReviewContext returns defensive CandidateFindingsV3 snapshots", () => 
   const candidatePayload = createCandidateFindingsV3();
 
   context.setCandidateFindingsV3(candidatePayload);
-  candidatePayload.findings[0]!.classification = "insufficient_information";
+  candidatePayload.findings[0]!.classification = "reasonable_risk";
 
   const first = context.getCandidateFindingsV3()!;
-  first.findings[0]!.codeEvidence[0]!.evidenceId = "MUTATED";
+  first.findings[0]!.evidence = "MUTATED";
   first.hypothesisClosure[0]!.status = "insufficient_information";
 
   const second = context.getCandidateFindingsV3()!;
   assert.equal(second.findings[0]!.classification, "confirmed_problem");
-  assert.equal(second.findings[0]!.codeEvidence[0]!.evidenceId, "E1");
+  assert.equal(second.findings[0]!.evidence, "changed branch reads value before fallback; guard runs after dereference");
   assert.equal(second.hypothesisClosure[0]!.status, "closed_by_candidate");
 });
 
@@ -423,41 +422,24 @@ type SemanticFileReviewContext = FileReviewContext & {
 
 function createCandidateFindingsV3() {
   return {
-    schemaVersion: 3,
     result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F1",
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: "guard moved after dereference",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:1",
-            summary: "changed branch reads value before fallback"
-          }
-        ],
-        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        evidence: "changed branch reads value before fallback; guard runs after dereference",
         triggerCondition: "nullable input reaches the changed branch",
-        failureMechanism: "guard runs after dereference",
         impact: "request fails before fallback can run",
-        counterEvidenceChecked: ["fallback no longer precedes dereference"],
-        reproducibility: "deterministic with nullable input",
-        fixDirection: "restore guard before dereference",
-        testRecommendation: "add nullable input regression coverage"
+        counterEvidence: ["fallback no longer precedes dereference"]
       }
     ],
     hypothesisClosure: [
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: "F1 validates the hypothesis."
       }
     ],

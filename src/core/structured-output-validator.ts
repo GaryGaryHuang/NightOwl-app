@@ -6,14 +6,11 @@ import type {
 import type { ReviewBasisV1 } from "./review-basis.ts";
 import type {
   CandidateClassification,
-  CandidateConfidence,
   CandidateFindingV3,
   CandidateFindingsResult,
   CandidateFindingsV3,
-  CandidatePriority,
   CandidateSeverity,
   CriticalMissingInformation,
-  EvidenceStrength,
   HypothesisClosure,
   HypothesisClosureStatus,
   LoopAction,
@@ -28,11 +25,7 @@ import type {
 } from "./semantic-review.ts";
 import {
   CANDIDATE_CLASSIFICATIONS as RUNTIME_CANDIDATE_CLASSIFICATIONS,
-  CANDIDATE_CONFIDENCES as RUNTIME_CANDIDATE_CONFIDENCES,
-  CANDIDATE_FINDINGS_RESULTS as RUNTIME_CANDIDATE_FINDINGS_RESULTS,
-  CANDIDATE_PRIORITIES as RUNTIME_CANDIDATE_PRIORITIES,
   CANDIDATE_SEVERITIES as RUNTIME_CANDIDATE_SEVERITIES,
-  EVIDENCE_STRENGTHS as RUNTIME_EVIDENCE_STRENGTHS,
   HYPOTHESIS_CLOSURE_STATUSES as RUNTIME_HYPOTHESIS_CLOSURE_STATUSES,
   LOOP_ACTIONS as RUNTIME_LOOP_ACTIONS,
   SEMANTIC_GATE_IDS as RUNTIME_SEMANTIC_GATE_IDS,
@@ -87,7 +80,6 @@ export class StructuredOutputValidator {
       const payload = validateCandidateFindingsV3Record({
         record,
         reviewBasis: input.reviewBasis,
-        anchorContext: buildAnchorContext(input),
         report
       });
 
@@ -114,9 +106,9 @@ export class StructuredOutputValidator {
       if (report.length === 0 || report.every((entry) => entry.outcome !== "rejected")) {
         report.push({
           findingId: extractReportableFindingIdFromText(input.responseText) ?? "<payload>",
-          taxonomy: reason.includes("schemaVersion") ? "SCHEMA" : "SEMANTIC",
+          taxonomy: "SEMANTIC",
           outcome: "rejected",
-          gate: reason.includes("schemaVersion") ? "schema" : "semantic",
+          gate: "semantic",
           reason
         });
       }
@@ -144,7 +136,6 @@ export class StructuredOutputValidator {
       const candidatePayload = coerceCandidateFindingsV3ForValidation({
         input: input.candidateFindings,
         reviewBasis: input.reviewBasis,
-        anchorContext: buildAnchorContext(input),
         report
       });
       const payload = validateValidationReportV1Record({
@@ -238,9 +229,6 @@ function buildValidationReportSemanticFields(
     ...(result?.recommendedClassification === undefined
       ? {}
       : { recommendedClassification: result.recommendedClassification }),
-    ...(result?.recommendedPriority === undefined
-      ? {}
-      : { recommendedPriority: result.recommendedPriority }),
     ...(result?.recommendedSeverity === undefined
       ? {}
       : { recommendedSeverity: result.recommendedSeverity }),
@@ -258,36 +246,21 @@ function buildValidationReportSemanticFields(
 function validateCandidateFindingsV3Record(input: {
   record: Record<string, unknown>;
   reviewBasis: ReviewBasisV1;
-  anchorContext: FindingAnchorValidationContext | undefined;
   report: VerifierReportEntry[];
 }): CandidateFindingsV3 {
-  rejectUnknownFields(
-    input.record,
-    ALLOWED_CANDIDATE_TOP_LEVEL_KEYS,
-    "CandidateFindingsV3"
-  );
 
-  if (input.record.schemaVersion !== 3) {
-    throw new Error(
-      "deterministic validation failed: CandidateFindingsV3 schemaVersion must be 3"
-    );
-  }
-
-  const result = validateEnum<CandidateFindingsResult>(
-    input.record.result,
-    VALID_CANDIDATE_RESULTS,
-    "result"
-  );
   const findings = validateArray(input.record.findings, "findings").map(
     (finding, index) =>
       validateCandidateFindingV3({
         input: finding,
         index,
-        reviewBasis: input.reviewBasis,
-        anchorContext: input.anchorContext,
         report: input.report
       })
   );
+  // Auto-assign findingId
+  for (let i = 0; i < findings.length; i++) {
+    findings[i] = { ...findings[i], findingId: `F${i + 1}` };
+  }
   assertUniqueFindingIds(findings, "findings");
 
   const hypothesisClosure = validateArray(
@@ -305,14 +278,16 @@ function validateCandidateFindingsV3Record(input: {
     input.record.criticalMissingInformation,
     "criticalMissingInformation"
   ).map((item, index) => validateCriticalMissingInformation(item, index));
-  validateCandidateFindingsResultConsistency({
-    result,
-    findings,
-    criticalMissingInformation
-  });
+
+  // Auto-derive result
+  const result: CandidateFindingsResult =
+    findings.length > 0
+      ? "FINDINGS_READY"
+      : criticalMissingInformation.length > 0
+        ? "INSUFFICIENT_INFORMATION"
+        : "NO_FINDINGS";
 
   return {
-    schemaVersion: 3,
     result,
     findings,
     hypothesisClosure,
@@ -323,8 +298,6 @@ function validateCandidateFindingsV3Record(input: {
 function validateCandidateFindingV3(input: {
   input: unknown;
   index: number;
-  reviewBasis: ReviewBasisV1;
-  anchorContext: FindingAnchorValidationContext | undefined;
   report: VerifierReportEntry[];
 }): CandidateFindingV3 {
   if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
@@ -334,138 +307,46 @@ function validateCandidateFindingV3(input: {
   }
 
   const record = input.input as Record<string, unknown>;
-  rejectUnknownFields(
-    record,
-    ALLOWED_CANDIDATE_FINDING_KEYS,
-    `findings[${input.index}]`
-  );
-
-  const findingId = validateStringField(record.findingId, "findingId");
-  const sourceHypothesisIds = validateStringArray(
-    record.sourceHypothesisIds,
-    "sourceHypothesisIds",
-    { nonEmpty: true }
-  );
-  const reviewBasisHypothesisIds = new Set(
-    input.reviewBasis.hypothesisLedger.map((h) => h.hypothesisId)
-  );
-  for (const hypothesisId of sourceHypothesisIds) {
-    if (!reviewBasisHypothesisIds.has(hypothesisId)) {
-      throw new Error(
-        `deterministic validation failed: sourceHypothesisId ${hypothesisId} is not present in ReviewBasisV1 hypothesisLedger`
-      );
-    }
-  }
 
   const classification = validateEnum<CandidateClassification>(
     record.classification,
     VALID_CANDIDATE_CLASSIFICATIONS,
     "classification"
   );
-  const priority = validateEnum<CandidatePriority>(
-    record.priority,
-    VALID_CANDIDATE_PRIORITIES,
-    "priority"
-  );
   const severity = validateEnum<CandidateSeverity>(
     record.severity,
     VALID_CANDIDATE_SEVERITIES,
     "severity"
   );
-  const confidence = validateEnum<CandidateConfidence>(
-    record.confidence,
-    VALID_CANDIDATE_CONFIDENCES,
-    "confidence"
-  );
-  const evidenceStrength = validateEnum<EvidenceStrength>(
-    record.evidenceStrength,
-    VALID_EVIDENCE_STRENGTHS,
-    "evidenceStrength"
-  );
 
-  validateClassificationPrioritySeverity({
-    classification,
-    priority,
-    severity
-  });
-
-  const dependencyPathException = validateDependencyPathException(
-    record.dependencyPathException
-  );
   const traceabilityResult = validateTraceability(
     record.traceability,
-    input.anchorContext,
-    dependencyPathException
+    undefined,
+    undefined
   );
-  if (traceabilityResult.anchorFailure) {
-    input.report.push({
-      findingId,
-      taxonomy: "ANCHOR",
-      outcome: "rejected",
-      gate: "semantic",
-      reason: formatAnchorFailure("traceability", traceabilityResult.anchorFailure)
-    });
-    throw new Error(formatAnchorFailure("traceability", traceabilityResult.anchorFailure));
-  }
 
-  const codeEvidence = validateCodeEvidenceArray(
-    record.codeEvidence,
-    input.reviewBasis
-  );
-  const executionPath = validateStringArray(
-    record.executionPath,
-    "executionPath",
-    { nonEmpty: classification === "confirmed_problem" }
-  );
+  const evidence = validateStringField(record.evidence, "evidence");
   const triggerCondition = validateStringField(
     record.triggerCondition,
     "triggerCondition"
   );
-  const failureMechanism = validateStringField(
-    record.failureMechanism,
-    "failureMechanism"
-  );
   const impact = validateStringField(record.impact, "impact");
-  const counterEvidenceChecked = validateStringArray(
-    record.counterEvidenceChecked,
-    "counterEvidenceChecked",
+  const counterEvidence = validateStringArray(
+    record.counterEvidence,
+    "counterEvidence",
     { nonEmpty: classification === "confirmed_problem" }
   );
-  const reproducibility = validateStringField(
-    record.reproducibility,
-    "reproducibility"
-  );
-  const fixDirection = validateStringField(record.fixDirection, "fixDirection");
-  const testRecommendation = validateStringField(
-    record.testRecommendation,
-    "testRecommendation"
-  );
-
-  if (classification === "confirmed_problem" && codeEvidence.length === 0) {
-    throw new Error(
-      "deterministic validation failed: confirmed_problem requires non-empty codeEvidence"
-    );
-  }
 
   return {
-    findingId,
-    sourceHypothesisIds,
+    findingId: "", // placeholder; overwritten by caller
     classification,
-    priority,
     severity,
-    confidence,
-    evidenceStrength,
     title: validateStringField(record.title, "title"),
     traceability: traceabilityResult.traceability,
-    codeEvidence,
-    executionPath,
+    evidence,
     triggerCondition,
-    failureMechanism,
     impact,
-    counterEvidenceChecked,
-    reproducibility,
-    fixDirection,
-    testRecommendation
+    counterEvidence
   };
 }
 
@@ -615,70 +496,6 @@ function validateLoopControlStatusAlignment(input: {
   }
 }
 
-function validateClassificationPrioritySeverity(input: {
-  classification: CandidateClassification;
-  priority: CandidatePriority;
-  severity: CandidateSeverity;
-}): void {
-  if (input.classification === "reasonable_risk" && input.priority === "must") {
-    throw new Error(
-      "deterministic validation failed: reasonable_risk cannot use priority must"
-    );
-  }
-
-  if (input.classification === "reasonable_risk" && input.severity === "high") {
-    throw new Error(
-      "deterministic validation failed: reasonable_risk cannot use severity high"
-    );
-  }
-
-  if (input.classification === "insufficient_information" && input.priority === "must") {
-    throw new Error(
-      "deterministic validation failed: insufficient_information cannot use priority must"
-    );
-  }
-
-  if (input.classification === "insufficient_information" && input.severity !== "none") {
-    throw new Error(
-      "deterministic validation failed: insufficient_information severity must be none"
-    );
-  }
-}
-
-function validateCodeEvidenceArray(
-  input: unknown,
-  reviewBasis: ReviewBasisV1
-): CandidateFindingV3["codeEvidence"] {
-  const evidenceRefs = new Set(reviewBasis.evidenceRefs.map((ref) => ref.evidenceId));
-  return validateArray(input, "codeEvidence").map((item, index) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) {
-      throw new Error(
-        `deterministic validation failed: codeEvidence[${index}] must be a non-null object`
-      );
-    }
-    const record = item as Record<string, unknown>;
-    rejectUnknownFields(
-      record,
-      ALLOWED_CODE_EVIDENCE_KEYS,
-      `codeEvidence[${index}]`
-    );
-    const evidenceId = validateStringField(
-      record.evidenceId,
-      `codeEvidence[${index}].evidenceId`
-    );
-    if (!evidenceRefs.has(evidenceId)) {
-      throw new Error(
-        `deterministic validation failed: evidenceId ${evidenceId} is not present in ReviewBasisV1 evidenceRefs`
-      );
-    }
-    return {
-      evidenceId,
-      location: validateStringField(record.location, `codeEvidence[${index}].location`),
-      summary: validateStringField(record.summary, `codeEvidence[${index}].summary`)
-    };
-  });
-}
-
 function validateHypothesisClosure(
   input: unknown,
   index: number,
@@ -690,11 +507,6 @@ function validateHypothesisClosure(
     );
   }
   const record = input as Record<string, unknown>;
-  rejectUnknownFields(
-    record,
-    ALLOWED_HYPOTHESIS_CLOSURE_KEYS,
-    `hypothesisClosure[${index}]`
-  );
   const hypothesisId = validateStringField(
     record.hypothesisId,
     `hypothesisClosure[${index}].hypothesisId`
@@ -710,10 +522,6 @@ function validateHypothesisClosure(
       record.status,
       VALID_HYPOTHESIS_CLOSURE_STATUSES,
       `hypothesisClosure[${index}].status`
-    ),
-    evidenceIds: validateStringArray(
-      record.evidenceIds,
-      `hypothesisClosure[${index}].evidenceIds`
     ),
     rationale: validateStringField(
       record.rationale,
@@ -746,50 +554,10 @@ function validateCriticalMissingInformation(
     );
   }
   const record = input as Record<string, unknown>;
-  rejectUnknownFields(
-    record,
-    ALLOWED_CRITICAL_MISSING_INFORMATION_KEYS,
-    `criticalMissingInformation[${index}]`
-  );
-  const result: CriticalMissingInformation = {
-    itemId: validateStringField(record.itemId, `criticalMissingInformation[${index}].itemId`),
+  return {
     description: validateStringField(record.description, `criticalMissingInformation[${index}].description`),
     whyItMatters: validateStringField(record.whyItMatters, `criticalMissingInformation[${index}].whyItMatters`)
   };
-  if (record.sourceHypothesisIds !== undefined) {
-    result.sourceHypothesisIds = validateStringArray(
-      record.sourceHypothesisIds,
-      `criticalMissingInformation[${index}].sourceHypothesisIds`
-    );
-  }
-  return result;
-}
-
-function validateCandidateFindingsResultConsistency(input: {
-  result: CandidateFindingsResult;
-  findings: readonly CandidateFindingV3[];
-  criticalMissingInformation: readonly CriticalMissingInformation[];
-}): void {
-  if (input.result === "FINDINGS_READY" && input.findings.length === 0) {
-    throw new Error(
-      "deterministic validation failed: CandidateFindingsV3 result FINDINGS_READY requires at least one finding"
-    );
-  }
-
-  if (input.result === "NO_FINDINGS" && input.findings.length > 0) {
-    throw new Error(
-      "deterministic validation failed: CandidateFindingsV3 result NO_FINDINGS must not include findings"
-    );
-  }
-
-  if (
-    input.result === "INSUFFICIENT_INFORMATION" &&
-    input.criticalMissingInformation.length === 0
-  ) {
-    throw new Error(
-      "deterministic validation failed: CandidateFindingsV3 result INSUFFICIENT_INFORMATION requires criticalMissingInformation"
-    );
-  }
 }
 
 function validatePerFindingValidationResult(
@@ -839,13 +607,6 @@ function validatePerFindingValidationResult(
       record.recommendedClassification,
       VALID_CANDIDATE_CLASSIFICATIONS,
       `perFindingResults[${index}].recommendedClassification`
-    );
-  }
-  if (record.recommendedPriority !== undefined) {
-    result.recommendedPriority = validateEnum<CandidatePriority>(
-      record.recommendedPriority,
-      VALID_CANDIDATE_PRIORITIES,
-      `perFindingResults[${index}].recommendedPriority`
     );
   }
   if (record.recommendedSeverity !== undefined) {
@@ -982,7 +743,6 @@ function validateLoopControl(input: unknown): { action: LoopAction; reason: stri
 function coerceCandidateFindingsV3ForValidation(input: {
   input: CandidateFindingsV3 | Record<string, unknown>;
   reviewBasis: ReviewBasisV1 | undefined;
-  anchorContext: FindingAnchorValidationContext | undefined;
   report: VerifierReportEntry[];
 }): CandidateFindingsV3 {
   if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
@@ -996,10 +756,20 @@ function coerceCandidateFindingsV3ForValidation(input: {
     );
   }
 
+  // Strip auto-generated fields before re-validation
+  const { result, ...rawRecord } = input.input as Record<string, unknown>;
+  if (Array.isArray(rawRecord.findings)) {
+    rawRecord.findings = (rawRecord.findings as Record<string, unknown>[]).map(
+      (f) => {
+        const { findingId, ...rest } = f;
+        return rest;
+      }
+    );
+  }
+
   return validateCandidateFindingsV3Record({
-    record: input.input as Record<string, unknown>,
+    record: rawRecord,
     reviewBasis: input.reviewBasis,
-    anchorContext: input.anchorContext,
     report: input.report
   });
 }
@@ -1290,13 +1060,6 @@ function validateDependencyPathException(
   return result;
 }
 
-function formatAnchorFailure(
-  fieldName: string,
-  failure: AnchorVerificationFailure
-): string {
-  return `deterministic validation failed: '${fieldName}' [${failure.tag}] ${failure.detail}`;
-}
-
 function validatePositiveInteger(value: unknown, fieldName: string): number {
   if (
     typeof value !== "number" ||
@@ -1481,56 +1244,6 @@ const ALLOWED_DEPENDENCY_PATH_EXCEPTION_KEYS = [
 
 const ALLOWED_DEPENDENCY_ANCHOR_KEYS = ["filePath", "symbol"] as const;
 
-const ALLOWED_CANDIDATE_TOP_LEVEL_KEYS = [
-  "schemaVersion",
-  "result",
-  "findings",
-  "hypothesisClosure",
-  "criticalMissingInformation"
-] as const;
-
-const ALLOWED_CANDIDATE_FINDING_KEYS = [
-  "findingId",
-  "sourceHypothesisIds",
-  "classification",
-  "priority",
-  "severity",
-  "confidence",
-  "evidenceStrength",
-  "title",
-  "traceability",
-  "dependencyPathException",
-  "codeEvidence",
-  "executionPath",
-  "triggerCondition",
-  "failureMechanism",
-  "impact",
-  "counterEvidenceChecked",
-  "reproducibility",
-  "fixDirection",
-  "testRecommendation"
-] as const;
-
-const ALLOWED_CODE_EVIDENCE_KEYS = [
-  "evidenceId",
-  "location",
-  "summary"
-] as const;
-
-const ALLOWED_HYPOTHESIS_CLOSURE_KEYS = [
-  "hypothesisId",
-  "status",
-  "evidenceIds",
-  "rationale"
-] as const;
-
-const ALLOWED_CRITICAL_MISSING_INFORMATION_KEYS = [
-  "itemId",
-  "description",
-  "whyItMatters",
-  "sourceHypothesisIds"
-] as const;
-
 const ALLOWED_VALIDATION_REPORT_TOP_LEVEL_KEYS = [
   "schemaVersion",
   "overallStatus",
@@ -1547,7 +1260,6 @@ const ALLOWED_PER_FINDING_RESULT_KEYS = [
   "failedGates",
   "requiredCorrections",
   "recommendedClassification",
-  "recommendedPriority",
   "recommendedSeverity",
   "reason"
 ] as const;
@@ -1561,23 +1273,11 @@ const ALLOWED_MISSING_INFORMATION_ITEM_KEYS = [
 
 const ALLOWED_LOOP_CONTROL_KEYS = ["action", "reason"] as const;
 
-const VALID_CANDIDATE_RESULTS: readonly CandidateFindingsResult[] =
-  RUNTIME_CANDIDATE_FINDINGS_RESULTS;
-
 const VALID_CANDIDATE_CLASSIFICATIONS: readonly CandidateClassification[] =
   RUNTIME_CANDIDATE_CLASSIFICATIONS;
 
-const VALID_CANDIDATE_PRIORITIES: readonly CandidatePriority[] =
-  RUNTIME_CANDIDATE_PRIORITIES;
-
 const VALID_CANDIDATE_SEVERITIES: readonly CandidateSeverity[] =
   RUNTIME_CANDIDATE_SEVERITIES;
-
-const VALID_CANDIDATE_CONFIDENCES: readonly CandidateConfidence[] =
-  RUNTIME_CANDIDATE_CONFIDENCES;
-
-const VALID_EVIDENCE_STRENGTHS: readonly EvidenceStrength[] =
-  RUNTIME_EVIDENCE_STRENGTHS;
 
 const VALID_HYPOTHESIS_CLOSURE_STATUSES: readonly HypothesisClosureStatus[] =
   RUNTIME_HYPOTHESIS_CLOSURE_STATUSES;

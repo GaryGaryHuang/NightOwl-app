@@ -2,52 +2,23 @@ import type { Finding, FindingTraceability } from "./file-review-context.ts";
 
 export const CANDIDATE_CLASSIFICATIONS = [
   "confirmed_problem",
-  "reasonable_risk",
-  "insufficient_information"
+  "reasonable_risk"
 ] as const;
 export type CandidateClassification = (typeof CANDIDATE_CLASSIFICATIONS)[number];
 
-export const CANDIDATE_PRIORITIES = ["must", "nice", "none"] as const;
-export type CandidatePriority = (typeof CANDIDATE_PRIORITIES)[number];
-
-export const CANDIDATE_SEVERITIES = ["high", "medium", "low", "none"] as const;
+export const CANDIDATE_SEVERITIES = ["high", "low"] as const;
 export type CandidateSeverity = (typeof CANDIDATE_SEVERITIES)[number];
-
-export const CANDIDATE_CONFIDENCES = ["high", "medium", "low"] as const;
-export type CandidateConfidence = (typeof CANDIDATE_CONFIDENCES)[number];
-
-export const EVIDENCE_STRENGTHS = [
-  "direct",
-  "indirect",
-  "insufficient"
-] as const;
-export type EvidenceStrength = (typeof EVIDENCE_STRENGTHS)[number];
-
-export interface CandidateCodeEvidence {
-  evidenceId: string;
-  location: string;
-  summary: string;
-}
 
 export interface CandidateFindingV3 {
   findingId: string;
-  sourceHypothesisIds: string[];
   classification: CandidateClassification;
-  priority: CandidatePriority;
   severity: CandidateSeverity;
-  confidence: CandidateConfidence;
-  evidenceStrength: EvidenceStrength;
   title: string;
   traceability: FindingTraceability;
-  codeEvidence: CandidateCodeEvidence[];
-  executionPath: string[];
+  evidence: string;
   triggerCondition: string;
-  failureMechanism: string;
   impact: string;
-  counterEvidenceChecked: string[];
-  reproducibility: string;
-  fixDirection: string;
-  testRecommendation: string;
+  counterEvidence: string[];
 }
 
 export const CANDIDATE_FINDINGS_RESULTS = [
@@ -69,19 +40,15 @@ export type HypothesisClosureStatus =
 export interface HypothesisClosure {
   hypothesisId: string;
   status: HypothesisClosureStatus;
-  evidenceIds: string[];
   rationale: string;
 }
 
 export interface CriticalMissingInformation {
-  itemId: string;
   description: string;
   whyItMatters: string;
-  sourceHypothesisIds?: string[];
 }
 
 export interface CandidateFindingsV3 {
-  schemaVersion: 3;
   result: CandidateFindingsResult;
   findings: CandidateFindingV3[];
   hypothesisClosure: HypothesisClosure[];
@@ -122,7 +89,6 @@ export interface PerFindingValidationResult {
   failedGates: SemanticGateId[];
   requiredCorrections: string[];
   recommendedClassification?: CandidateClassification;
-  recommendedPriority?: CandidatePriority;
   recommendedSeverity?: CandidateSeverity;
   reason?: string;
 }
@@ -198,14 +164,10 @@ export function semanticCandidateFingerprint(
 ): string {
   const normalized = payload.findings.map((finding) => ({
     findingId: finding.findingId,
-    sourceHypothesisIds: [...finding.sourceHypothesisIds].sort(),
     classification: finding.classification,
-    priority: finding.priority,
     severity: finding.severity,
     title: finding.title,
-    codeEvidence: finding.codeEvidence.map((entry) => entry.evidenceId).sort(),
     triggerCondition: finding.triggerCondition,
-    failureMechanism: finding.failureMechanism,
     impact: finding.impact
   }));
 

@@ -53,41 +53,24 @@ function createFinding(findingId: string): Finding {
 
 function createCandidateFindings(): CandidateFindingsV3 {
   return {
-    schemaVersion: 3,
     result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F1",
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: "candidate F1",
         traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:1",
-            summary: "review basis state added"
-          }
-        ],
-        executionPath: ["ReviewBasisStep.prepare", "Step5ValidationInterrogationStep.prepare"],
+        evidence: "review basis state added; candidate evidence is validated against ReviewBasis evidence refs",
         triggerCondition: "Step 5 cites absent evidence ID.",
-        failureMechanism: "candidate evidence is validated against ReviewBasis evidence refs",
         impact: "unsupported review findings would reach Step 7",
-        counterEvidenceChecked: ["ReviewBasis evidenceRefs contains E1"],
-        reproducibility: "deterministic in prompt snapshot construction",
-        fixDirection: "reject absent evidence refs",
-        testRecommendation: "keep prompt snapshot contract tests updated"
+        counterEvidence: ["ReviewBasis evidenceRefs contains E1"]
       }
     ],
     hypothesisClosure: [
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: "candidate F1 covers H1"
       }
     ],

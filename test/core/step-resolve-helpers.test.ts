@@ -213,41 +213,22 @@ function createReviewBasis(): ReviewBasisV1 {
 
 function createCandidateFindingsV3() {
   return {
-    schemaVersion: 3,
-    result: "FINDINGS_READY",
     findings: [
       {
-        findingId: "F1",
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: "guard moved after dereference",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:1",
-            summary: "changed branch reads value before fallback"
-          }
-        ],
-        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        evidence: "changed branch reads value before fallback; guard runs after dereference",
         triggerCondition: "nullable input reaches the changed branch",
-        failureMechanism: "guard runs after dereference",
         impact: "request fails before fallback can run",
-        counterEvidenceChecked: ["fallback no longer precedes dereference"],
-        reproducibility: "deterministic with nullable input",
-        fixDirection: "restore guard before dereference",
-        testRecommendation: "add nullable input regression coverage"
+        counterEvidence: ["fallback no longer precedes dereference"]
       }
     ],
     hypothesisClosure: [
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: "F1 validates the hypothesis."
       }
     ],
@@ -266,7 +247,6 @@ function createValidationReportV1() {
         failedGates: [],
         requiredCorrections: [],
         recommendedClassification: "confirmed_problem",
-        recommendedPriority: "must",
         recommendedSeverity: "high",
         reason: "all gates passed"
       }

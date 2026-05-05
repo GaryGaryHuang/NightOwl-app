@@ -255,61 +255,52 @@ function createReviewBasis(): ReviewBasisV1 {
 
 function createCandidatePayload(scenario: SemanticScenario) {
   return {
-    schemaVersion: 3,
-    result: "FINDINGS_READY",
     findings: [
       {
-        findingId: "F1",
-        sourceHypothesisIds:
-          scenario === "identifier-mismatch" ? ["H404"] : ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: "searchRequestId concurrency overclaim",
         traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "SearchFragment.kt:21",
-            summary: "searchRequestId changes before callback"
-          }
-        ],
-        executionPath: ["SearchFragment.onSearchResult", "callback dispatch"],
+        evidence: "searchRequestId changes before callback at SearchFragment.kt:21",
         triggerCondition: "two search callbacks complete out of order",
-        failureMechanism: "stale callback may overwrite latest result",
         impact: "high severity search result corruption is alleged",
-        counterEvidenceChecked: ["request ID guard not proven"],
-        reproducibility: "requires async callback ordering",
-        fixDirection: "prove or add stale callback guard",
-        testRecommendation: "add out-of-order callback regression"
+        counterEvidence: ["request ID guard not proven"]
       }
     ],
     hypothesisClosure:
-      scenario === "unclosed-hypothesis"
+      scenario === "identifier-mismatch"
         ? [
             {
-              hypothesisId: "H1",
+              hypothesisId: "H404",
               status: "closed_by_candidate",
-              evidenceIds: ["E1"],
-              rationale: "candidate addresses stale callback"
-            }
-          ]
-        : [
-            {
-              hypothesisId: "H1",
-              status: "closed_by_candidate",
-              evidenceIds: ["E1"],
               rationale: "candidate addresses stale callback"
             },
             {
               hypothesisId: "H2",
               status: "insufficient_information",
-              evidenceIds: ["E2"],
               rationale: "counter-evidence is not enough to approve"
             }
-          ],
+          ]
+        : scenario === "unclosed-hypothesis"
+          ? [
+              {
+                hypothesisId: "H1",
+                status: "closed_by_candidate",
+                rationale: "candidate addresses stale callback"
+              }
+            ]
+          : [
+              {
+                hypothesisId: "H1",
+                status: "closed_by_candidate",
+                rationale: "candidate addresses stale callback"
+              },
+              {
+                hypothesisId: "H2",
+                status: "insufficient_information",
+                rationale: "counter-evidence is not enough to approve"
+              }
+            ],
     criticalMissingInformation: []
   };
 }

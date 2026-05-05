@@ -21,13 +21,10 @@ interface SemanticReportEntry {
 
 interface CandidateValidationResult {
   readonly payload: {
-    readonly schemaVersion: number;
     readonly findings: readonly {
       readonly findingId: string;
       readonly classification: string;
-      readonly priority: string;
       readonly severity: string;
-      readonly codeEvidence: readonly { readonly evidenceId: string }[];
     }[];
     readonly hypothesisClosure: readonly { readonly hypothesisId: string }[];
   };
@@ -129,35 +126,16 @@ function candidateFinding(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
-    findingId: "F1",
-    sourceHypothesisIds: ["H1"],
     classification: "confirmed_problem",
-    priority: "must",
     severity: "high",
-    confidence: "high",
-    evidenceStrength: "direct",
     title: "nullable input dereferences before fallback",
     traceability: lineRangeTraceability(21, 22),
-    codeEvidence: [
-      {
-        evidenceId: "E1",
-        location: "src/app.ts:21",
-        summary: "changed branch reads input.value before checking for null"
-      }
-    ],
-    executionPath: [
-      "entry handler receives nullable input",
-      "changed branch reads input.value"
-    ],
+    evidence: "changed branch reads input.value before checking for null; guard was moved after dereference",
     triggerCondition: "nullable input reaches the changed branch",
-    failureMechanism: "guard was moved after dereference",
     impact: "requests with null input fail with a runtime TypeError",
-    counterEvidenceChecked: [
+    counterEvidence: [
       "existing fallback path no longer runs before dereference"
     ],
-    reproducibility: "deterministic with nullable input",
-    fixDirection: "restore guard before dereference",
-    testRecommendation: "add nullable input regression coverage",
     ...overrides
   };
 }
@@ -168,7 +146,6 @@ function hypothesisClosure(
   return {
     hypothesisId: "H1",
     status: "closed_by_candidate",
-    evidenceIds: ["E1"],
     rationale: "candidate F1 covers the hypothesis",
     ...overrides
   };
@@ -178,15 +155,12 @@ function candidateFindingsV3(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
-    schemaVersion: 3,
-    result: "FINDINGS_READY",
     findings: [candidateFinding()],
     hypothesisClosure: [
       hypothesisClosure(),
       hypothesisClosure({
         hypothesisId: "H2",
         status: "rejected_by_evidence",
-        evidenceIds: ["E2"],
         rationale: "fallback no longer closes the nullable-input path"
       })
     ],
@@ -222,7 +196,6 @@ function perFindingResult(
     failedGates: [],
     requiredCorrections: [],
     recommendedClassification: "confirmed_problem",
-    recommendedPriority: "must",
     recommendedSeverity: "high",
     reason: "all semantic gates passed",
     ...overrides
@@ -303,16 +276,10 @@ function reportReasons(error: StructuredValidationReportError): string {
 test("validateCandidateFindingsV3WithReport accepts evidence-chain candidates tied to ReviewBasisV1", () => {
   const result = validateCandidateFindings();
 
-  assert.equal(result.payload.schemaVersion, 3);
   assert.equal(result.payload.findings.length, 1);
   assert.equal(result.payload.findings[0]!.findingId, "F1");
   assert.equal(result.payload.findings[0]!.classification, "confirmed_problem");
-  assert.equal(result.payload.findings[0]!.priority, "must");
   assert.equal(result.payload.findings[0]!.severity, "high");
-  assert.deepEqual(
-    result.payload.findings[0]!.codeEvidence.map((entry) => entry.evidenceId),
-    ["E1"]
-  );
   assert.deepEqual(
     result.payload.hypothesisClosure.map((entry) => entry.hypothesisId),
     ["H1", "H2"]
@@ -330,82 +297,18 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
     readonly reason: RegExp;
   }[] = [
     {
-      label: "unsupported schemaVersion",
-      payload: candidateFindingsV3({ schemaVersion: 2 }),
-      reason: /schemaVersion.*3/u
-    },
-    {
       label: "invalid classification",
       payload: candidateFindingsV3({
         findings: [candidateFinding({ classification: "legacy_bug" })]
       }),
-      reason: /classification.*confirmed_problem.*reasonable_risk.*insufficient_information/u
+      reason: /classification.*confirmed_problem.*reasonable_risk/u
     },
     {
-      label: "reasonable risk cannot be must priority",
+      label: "invalid severity",
       payload: candidateFindingsV3({
-        findings: [
-          candidateFinding({
-            classification: "reasonable_risk",
-            priority: "must",
-            severity: "medium"
-          })
-        ]
+        findings: [candidateFinding({ severity: "medium" })]
       }),
-      reason: /reasonable_risk.*priority.*must/u
-    },
-    {
-      label: "reasonable risk cannot be high severity",
-      payload: candidateFindingsV3({
-        findings: [
-          candidateFinding({
-            classification: "reasonable_risk",
-            priority: "nice",
-            severity: "high"
-          })
-        ]
-      }),
-      reason: /reasonable_risk.*severity.*high/u
-    },
-    {
-      label: "insufficient information cannot be must priority",
-      payload: candidateFindingsV3({
-        findings: [
-          candidateFinding({
-            classification: "insufficient_information",
-            priority: "must",
-            severity: "none"
-          })
-        ]
-      }),
-      reason: /insufficient_information.*priority.*must/u
-    },
-    {
-      label: "insufficient information must use none severity",
-      payload: candidateFindingsV3({
-        findings: [
-          candidateFinding({
-            classification: "insufficient_information",
-            priority: "none",
-            severity: "low"
-          })
-        ]
-      }),
-      reason: /insufficient_information.*severity.*none/u
-    },
-    {
-      label: "confirmed problem requires code evidence",
-      payload: candidateFindingsV3({
-        findings: [candidateFinding({ codeEvidence: [] })]
-      }),
-      reason: /codeEvidence/u
-    },
-    {
-      label: "confirmed problem requires execution path",
-      payload: candidateFindingsV3({
-        findings: [candidateFinding({ executionPath: [] })]
-      }),
-      reason: /executionPath/u
+      reason: /severity.*high.*low/u
     },
     {
       label: "confirmed problem requires trigger condition",
@@ -413,13 +316,6 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
         findings: [candidateFinding({ triggerCondition: "" })]
       }),
       reason: /triggerCondition/u
-    },
-    {
-      label: "confirmed problem requires failure mechanism",
-      payload: candidateFindingsV3({
-        findings: [candidateFinding({ failureMechanism: "" })]
-      }),
-      reason: /failureMechanism/u
     },
     {
       label: "confirmed problem requires impact",
@@ -431,54 +327,16 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
     {
       label: "confirmed problem requires counter-evidence",
       payload: candidateFindingsV3({
-        findings: [candidateFinding({ counterEvidenceChecked: [] })]
+        findings: [candidateFinding({ counterEvidence: [] })]
       }),
-      reason: /counterEvidenceChecked/u
+      reason: /counterEvidence/u
     },
     {
-      label: "confirmed problem requires reproducibility",
+      label: "confirmed problem requires evidence",
       payload: candidateFindingsV3({
-        findings: [candidateFinding({ reproducibility: "" })]
+        findings: [candidateFinding({ evidence: "" })]
       }),
-      reason: /reproducibility/u
-    },
-    {
-      label: "confirmed problem requires fix direction",
-      payload: candidateFindingsV3({
-        findings: [candidateFinding({ fixDirection: "" })]
-      }),
-      reason: /fixDirection/u
-    },
-    {
-      label: "confirmed problem requires test recommendation",
-      payload: candidateFindingsV3({
-        findings: [candidateFinding({ testRecommendation: "" })]
-      }),
-      reason: /testRecommendation/u
-    },
-    {
-      label: "code evidence must reference ReviewBasis evidenceRefs",
-      payload: candidateFindingsV3({
-        findings: [
-          candidateFinding({
-            codeEvidence: [
-              {
-                evidenceId: "E404",
-                location: "src/app.ts:21",
-                summary: "missing evidence ref"
-              }
-            ]
-          })
-        ]
-      }),
-      reason: /E404.*evidenceRefs/u
-    },
-    {
-      label: "source hypotheses must reference ReviewBasis hypothesisLedger",
-      payload: candidateFindingsV3({
-        findings: [candidateFinding({ sourceHypothesisIds: ["H404"] })]
-      }),
-      reason: /H404.*hypothesisLedger/u
+      reason: /evidence/u
     },
     {
       label: "hypothesis closure must cover every ReviewBasis hypothesis",
@@ -486,24 +344,6 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
         hypothesisClosure: [hypothesisClosure({ hypothesisId: "H1" })]
       }),
       reason: /H2.*hypothesisClosure/u
-    },
-    {
-      label: "FINDINGS_READY requires at least one finding",
-      payload: candidateFindingsV3({ findings: [] }),
-      reason: /FINDINGS_READY.*finding/u
-    },
-    {
-      label: "NO_FINDINGS cannot carry findings",
-      payload: candidateFindingsV3({ result: "NO_FINDINGS" }),
-      reason: /NO_FINDINGS.*findings/u
-    },
-    {
-      label: "INSUFFICIENT_INFORMATION requires critical missing information",
-      payload: candidateFindingsV3({
-        result: "INSUFFICIENT_INFORMATION",
-        findings: []
-      }),
-      reason: /INSUFFICIENT_INFORMATION.*criticalMissingInformation/u
     }
   ];
 
@@ -539,17 +379,9 @@ test("validateValidationReportV1WithReport accepts reports that approve only Ste
 test("validateValidationReportV1WithReport enforces candidate coverage and approved finding consistency", () => {
   const twoCandidates = candidateFindingsV3({
     findings: [
-      candidateFinding({ findingId: "F1" }),
+      candidateFinding(),
       candidateFinding({
-        findingId: "F2",
-        sourceHypothesisIds: ["H2"],
-        codeEvidence: [
-          {
-            evidenceId: "E2",
-            location: "src/app.ts:24",
-            summary: "fallback evidence"
-          }
-        ]
+        title: "second finding"
       })
     ]
   });
@@ -583,10 +415,10 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
       reason: /F404.*approvedFindings.*candidate/u
     },
     {
-      label: "candidateFindings must be the complete CandidateFindingsV3 payload",
+      label: "candidateFindings must be a valid payload",
       payload: validationReportV1(),
-      candidates: { findings: [{ findingId: "F1" }] },
-      reason: /CandidateFindingsV3.*schemaVersion.*3|schemaVersion.*3/u
+      candidates: { findings: "not-an-array" },
+      reason: /findings.*array/u
     },
     {
       label: "approved decisions must be reflected in approvedFindings",
@@ -602,51 +434,6 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
         approvedFindings: [approvedFinding()]
       }),
       reason: /drop.*approvedFindings/u
-    },
-    {
-      label: "blocked candidate payloads cannot be approved",
-      payload: validationReportV1(),
-      candidates: candidateFindingsV3({
-        result: "INSUFFICIENT_INFORMATION",
-        criticalMissingInformation: [
-          {
-            itemId: "CMI1",
-            description: "Need the external null-input service contract.",
-            whyItMatters: "Without this contract Step 6 cannot approve F1.",
-            sourceHypothesisIds: ["H1"]
-          }
-        ]
-      }),
-      reason: /INSUFFICIENT_INFORMATION.*cannot approve/u
-    },
-    {
-      label: "critical missing information must be represented in validation report",
-      payload: validationReportV1({
-        overallStatus: "INSUFFICIENT_INFORMATION_FOR_RELIABLE_REVIEW",
-        perFindingResults: [
-          perFindingResult({
-            decision: "convert_to_missing_information",
-            failedGates: ["missing_information_honest"],
-            reason: "external contract is unavailable"
-          })
-        ],
-        approvedFindings: [],
-        missingInformationItems: [],
-        loopControl: { action: "stop", reason: "missing critical contract" },
-        stopReason: "missing_critical_contract"
-      }),
-      candidates: candidateFindingsV3({
-        result: "INSUFFICIENT_INFORMATION",
-        criticalMissingInformation: [
-          {
-            itemId: "CMI1",
-            description: "Need the external null-input service contract.",
-            whyItMatters: "Without this contract Step 6 cannot approve F1.",
-            sourceHypothesisIds: ["H1"]
-          }
-        ]
-      }),
-      reason: /criticalMissingInformation.*missingInformationItems/u
     },
     {
       label: "converted candidates cannot be approved",

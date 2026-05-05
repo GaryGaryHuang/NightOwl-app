@@ -192,7 +192,7 @@ test("StepRunner records structured validation reports without committing partia
   assert.equal(reviewAttempts, 2);
   assert.doesNotMatch(prompts[0] ?? "", /retry_repair_context/u);
   assert.match(prompts[1] ?? "", /Structured validation report:/u);
-  assert.match(prompts[1] ?? "", /findingId=F2/u);
+  assert.match(prompts[1] ?? "", /findingId=<payload>/u);
   assert.match(prompts[1] ?? "", /taxonomy=SEMANTIC/u);
   assert.match(prompts[1] ?? "", /classification/u);
   assert.equal(context.getFindings(), undefined);
@@ -205,7 +205,7 @@ test("StepRunner records structured validation reports without committing partia
     })),
     [
       {
-        findingId: "F2",
+        findingId: "<payload>",
         taxonomy: "SEMANTIC",
         outcome: "rejected",
         gate: "semantic"
@@ -217,7 +217,7 @@ test("StepRunner records structured validation reports without committing partia
 
   assert.deepEqual(
     context.getCandidateFindingsV3()?.findings.map((finding) => finding.findingId),
-    ["F3"]
+    ["F1"]
   );
   assert.equal(context.getFindings(), undefined);
 });
@@ -593,34 +593,16 @@ function createCandidatePayload(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
-    schemaVersion: 3,
-    result: "FINDINGS_READY",
     findings: [
       {
-        findingId,
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: "guard moved after dereference",
         traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:1",
-            summary: "changed branch reads value before fallback"
-          }
-        ],
-        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        evidence: "changed branch reads value before fallback at src/app.ts:1",
         triggerCondition: "nullable input reaches the changed branch",
-        failureMechanism: "guard runs after dereference",
         impact: "request fails before fallback can run",
-        counterEvidenceChecked: ["fallback no longer precedes dereference"],
-        reproducibility: "deterministic with nullable input",
-        fixDirection: "restore guard before dereference",
-        testRecommendation: "add nullable input regression coverage",
+        counterEvidence: ["fallback no longer precedes dereference"],
         ...overrides
       }
     ],
@@ -628,7 +610,6 @@ function createCandidatePayload(
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: `${findingId} validates the hypothesis.`
       }
     ],

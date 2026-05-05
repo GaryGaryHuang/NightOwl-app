@@ -440,7 +440,6 @@ function parseReviewStateFromPrompt(prompt: string): {
 
 function createCandidateFindingsV3(priority: "must" | "nice") {
   return {
-    schemaVersion: 3,
     result: "FINDINGS_READY",
     findings: [
       {
@@ -465,7 +464,6 @@ function createCandidateFindingsV3(priority: "must" | "nice") {
         failureMechanism: "candidate mechanism",
         impact: "candidate impact",
         counterEvidenceChecked: ["candidate counter-evidence"],
-        reproducibility: "candidate reproduction",
         fixDirection: "candidate fix",
         testRecommendation: "candidate test"
       }

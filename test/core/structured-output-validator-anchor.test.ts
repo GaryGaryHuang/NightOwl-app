@@ -52,15 +52,18 @@ test("StructuredOutputValidator rejects invalid CandidateFindingsV3 traceability
   }
 });
 
-test("StructuredOutputValidator rejects CandidateFindingsV3 line-range outside changed head lines", () => {
-  const error = assertCandidateValidationFails(
+test("StructuredOutputValidator accepts CandidateFindingsV3 line-range outside changed head lines (no anchor verification for candidates)", () => {
+  const result = validateCandidatePayload(
     createCandidatePayload({
       traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 }
-    }),
-    "line-range outside changed lines"
+    })
   );
 
-  assert.equal(error.report.at(-1)?.taxonomy, "ANCHOR");
+  assert.deepEqual(result.payload.findings[0]?.traceability, {
+    kind: "line-range",
+    lineStart: 14,
+    lineEnd: 18
+  });
 });
 
 test("StructuredOutputValidator accepts CandidateFindingsV3 line-range on changed head lines", () => {
@@ -88,81 +91,6 @@ test("StructuredOutputValidator accepts CandidateFindingsV3 diff-hunk with trimm
     kind: "diff-hunk",
     hunkHeader: DEFAULT_HUNK_HEADER
   });
-});
-
-test("StructuredOutputValidator accepts CandidateFindingsV3 line-range outside changed lines when dependencyPathException is supplied", () => {
-  const result = validateCandidatePayload(
-    createCandidatePayload({
-      traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
-      dependencyPathException: {
-        reason: "called from changed initializer",
-        dependencyAnchor: {
-          filePath: "src/dep.ts",
-          symbol: "bootstrap"
-        }
-      }
-    })
-  );
-
-  assert.deepEqual(result.payload.findings[0]?.traceability, {
-    kind: "line-range",
-    lineStart: 14,
-    lineEnd: 18
-  });
-});
-
-test("StructuredOutputValidator rejects invalid CandidateFindingsV3 dependencyPathException fields", () => {
-  const cases: Array<{
-    label: string;
-    dependencyPathException: Record<string, unknown>;
-  }> = [
-    {
-      label: "empty reason",
-      dependencyPathException: {
-        reason: "",
-        dependencyAnchor: { filePath: "src/dep.ts" }
-      }
-    },
-    {
-      label: "empty dependencyAnchor.filePath",
-      dependencyPathException: {
-        reason: "ok",
-        dependencyAnchor: { filePath: "" }
-      }
-    },
-    {
-      label: "empty dependencyAnchor.symbol",
-      dependencyPathException: {
-        reason: "ok",
-        dependencyAnchor: { filePath: "src/dep.ts", symbol: "" }
-      }
-    },
-    {
-      label: "unknown dependencyPathException field",
-      dependencyPathException: {
-        reason: "called from changed initializer",
-        dependencyAnchor: { filePath: "src/dep.ts" },
-        extra: true
-      }
-    },
-    {
-      label: "unknown dependencyAnchor field",
-      dependencyPathException: {
-        reason: "called from changed initializer",
-        dependencyAnchor: { filePath: "src/dep.ts", extra: true }
-      }
-    }
-  ];
-
-  for (const testCase of cases) {
-    assertCandidateValidationFails(
-      createCandidatePayload({
-        traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
-        dependencyPathException: testCase.dependencyPathException
-      }),
-      testCase.label
-    );
-  }
 });
 
 function validateCandidatePayload(payload: Record<string, unknown>) {
@@ -200,34 +128,16 @@ function createCandidatePayload(
   findingOverrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
-    schemaVersion: 3,
-    result: "FINDINGS_READY",
     findings: [
       {
-        findingId: "F1",
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: "guard moved after dereference",
         traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:21",
-            summary: "changed branch reads value before fallback"
-          }
-        ],
-        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        evidence: "changed branch reads value before fallback; guard runs after dereference",
         triggerCondition: "nullable input reaches the changed branch",
-        failureMechanism: "guard runs after dereference",
         impact: "request fails before fallback can run",
-        counterEvidenceChecked: ["fallback no longer precedes dereference"],
-        reproducibility: "deterministic with nullable input",
-        fixDirection: "restore guard before dereference",
-        testRecommendation: "add nullable input regression coverage",
+        counterEvidence: ["fallback no longer precedes dereference"],
         ...findingOverrides
       }
     ],
@@ -235,7 +145,6 @@ function createCandidatePayload(
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: "F1 validates the hypothesis."
       }
     ],

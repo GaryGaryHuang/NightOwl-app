@@ -241,7 +241,6 @@ test("prior validator feedback is serialized only when requested", () => {
 
 function createCandidateFindingsV3() {
   return {
-    schemaVersion: 3,
     result: "FINDINGS_READY",
     findings: [
       {
@@ -266,7 +265,6 @@ function createCandidateFindingsV3() {
         failureMechanism: "guard runs after dereference",
         impact: "request fails before fallback can run",
         counterEvidenceChecked: ["fallback no longer precedes dereference"],
-        reproducibility: "deterministic with nullable input",
         fixDirection: "restore guard before dereference",
         testRecommendation: "add nullable input regression coverage"
       }

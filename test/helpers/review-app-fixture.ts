@@ -91,41 +91,22 @@ export function buildSessionResponse(
 
   if (/## Current Step: Validation & Interrogation/u.test(systemMessage)) {
     return JSON.stringify({
-      schemaVersion: 3,
-      result: "FINDINGS_READY",
       findings: [
         {
-          findingId: "F1",
-          sourceHypothesisIds: ["H1"],
           classification: "confirmed_problem",
-          priority: "must",
           severity: "high",
-          confidence: "high",
-          evidenceStrength: "direct",
           title: "問題標題",
           traceability: lineRangeTraceability(1, 1),
-          codeEvidence: [
-            {
-              evidenceId: "E1",
-              location: "src/app.ts:1",
-              summary: "新分支略過 fallback"
-            }
-          ],
-          executionPath: ["entry", "changed branch"],
+          evidence: "新分支略過 fallback at src/app.ts:1",
           triggerCondition: "empty input reaches the changed branch",
-          failureMechanism: "fallback guard is skipped",
           impact: "會造成 correctness 問題",
-          counterEvidenceChecked: ["fallback path is after the changed branch"],
-          reproducibility: "deterministic with empty input",
-          fixDirection: "補上 guard",
-          testRecommendation: "新增 fallback regression test"
+          counterEvidence: ["fallback path is after the changed branch"]
         }
       ],
       hypothesisClosure: [
         {
           hypothesisId: "H1",
           status: "closed_by_candidate",
-          evidenceIds: ["E1"],
           rationale: "candidate F1 covers the hypothesis"
         }
       ],

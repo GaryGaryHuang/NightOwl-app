@@ -55,7 +55,6 @@ export function makePassingJudgeServices(): StepResolveServices {
       validateCandidateFindingsV3WithReport(_input) {
         return {
           payload: {
-            schemaVersion: 3,
             result: "NO_FINDINGS",
             findings: [],
             hypothesisClosure: [],
@@ -181,7 +180,6 @@ export function createStructuredTestStep(input: {
         resolve: input.resolve ?? (async (_response: string, _services: StepResolveServices) => {
           return (context: FileReviewContext) => {
             context.setCandidateFindingsV3({
-              schemaVersion: 3,
               result: "NO_FINDINGS",
               findings: [],
               hypothesisClosure: [],
