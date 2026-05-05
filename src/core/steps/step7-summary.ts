@@ -35,10 +35,7 @@ export class Step7SummaryStep implements StepDefinition {
 
   prepare(context: FileReviewContext): StepExecutionPlan {
     const { stepId } = this;
-    const snapshot = buildRiskSnapshot(
-      context.getFindings(),
-      context.getDispositions()
-    );
+    const snapshot = buildRiskSnapshot(context.getFindings());
     return {
       stepId,
       prompt: {
@@ -49,8 +46,7 @@ export class Step7SummaryStep implements StepDefinition {
             include: [
               "review-basis",
               "approved-findings",
-              "missing-information",
-              "verified-findings"
+              "missing-information"
             ]
           }),
           snapshot

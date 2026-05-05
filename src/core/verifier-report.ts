@@ -12,7 +12,6 @@ import type {
 
 export const TAXONOMY_CODES = [
   "SCHEMA",
-  "ANCHOR",
   "EVIDENCE",
   "REACHABILITY",
   "OUT_OF_SCOPE",
@@ -28,11 +27,8 @@ export interface VerifierReportEntry {
   readonly findingId: string;
   readonly taxonomy: VerifierTaxonomyCode;
   readonly outcome: "accepted" | "rejected";
-  readonly gate: "schema" | "anchor" | "acceptance" | "disposition" | "semantic";
+  readonly gate: "schema" | "acceptance" | "semantic";
   readonly reason: string;
-  readonly dispositionStatus?: "retained" | "modified" | "retired";
-  readonly dispositionReason?: string;
-  readonly dispositionExplanation?: string;
   readonly semanticIteration?: number;
   readonly semanticGate?: SemanticGateId;
   readonly validationDecision?: ValidationDecision;
@@ -53,27 +49,6 @@ export interface VerifierReportSummary {
 
 function cloneEntry(entry: VerifierReportEntry): VerifierReportEntry {
   return { ...entry };
-}
-
-/**
- * Spread optional disposition fields from a VerifierReportEntry.
- * Shared by toVerifierArtifactEntries (step-resolve-helpers) and
- * renderVerifierReport (verifier-report-finalizer) to avoid duplication.
- */
-export function pickDispositionFields(
-  entry: VerifierReportEntry
-): Pick<VerifierReportEntry, "dispositionStatus" | "dispositionReason" | "dispositionExplanation"> {
-  return {
-    ...(entry.dispositionStatus === undefined
-      ? {}
-      : { dispositionStatus: entry.dispositionStatus }),
-    ...(entry.dispositionReason === undefined
-      ? {}
-      : { dispositionReason: entry.dispositionReason }),
-    ...(entry.dispositionExplanation === undefined
-      ? {}
-      : { dispositionExplanation: entry.dispositionExplanation })
-  };
 }
 
 export function pickSemanticFields(

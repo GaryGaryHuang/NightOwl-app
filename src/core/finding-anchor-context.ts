@@ -1,14 +1,14 @@
 import { buildDiffAnchorMap, type DiffAnchorMap } from "./diff-anchor-map.ts";
 
-export interface FindingAnchorValidationContext {
+export interface FindingAnchorPromptContext {
   readonly filePath: string;
   readonly diffAnchorMap: DiffAnchorMap;
 }
 
-export function buildFindingAnchorValidationContext(
+export function buildFindingAnchorPromptContext(
   filePath: string,
   diffContent: string
-): FindingAnchorValidationContext {
+): FindingAnchorPromptContext {
   return {
     filePath,
     diffAnchorMap: buildDiffAnchorMap(filePath, diffContent)

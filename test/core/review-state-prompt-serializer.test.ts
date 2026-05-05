@@ -90,7 +90,6 @@ test("snapshot includes stable file refs and diff summary hunks derived from the
   assert.equal(snapshot.candidateFindings, null);
   assert.deepEqual((snapshot as SemanticReviewStateSnapshot).approvedFindings, []);
   assert.deepEqual((snapshot as SemanticReviewStateSnapshot).missingInformationItems, []);
-  assert.deepEqual(snapshot.verifiedFindings, []);
   assert.deepEqual(snapshot.evidenceRefs, []);
 });
 
@@ -145,21 +144,18 @@ test("CandidateFindingsV3 populates candidateFindings without promoting approved
   assert.equal(candidateFindings.hypothesisClosure[0]?.hypothesisId, "H1");
   assert.deepEqual(candidateFindings.criticalMissingInformation, []);
   assert.deepEqual((snapshot as SemanticReviewStateSnapshot).approvedFindings, []);
-  assert.deepEqual(snapshot.verifiedFindings, []);
 });
 
-test("approved findings populate approvedFindings and verifiedFindings compatibility projection", () => {
+test("approved findings populate approvedFindings when requested", () => {
   const ctx = createContext() as SemanticFileReviewContext;
   ctx.setFindings([createFinding("F1")]);
   ctx.setValidationReportV1(createValidationReportV1());
 
-  const snapshot = serializeSnapshot(ctx, ["approved-findings", "verified-findings"]);
+  const snapshot = serializeSnapshot(ctx, ["approved-findings"]);
 
   assert.equal(snapshot.candidateFindings, null);
   assert.equal((snapshot as SemanticReviewStateSnapshot).approvedFindings.length, 1);
   assert.equal((snapshot as SemanticReviewStateSnapshot).approvedFindings[0].findingId, "F1");
-  assert.equal(snapshot.verifiedFindings.length, 1);
-  assert.equal(snapshot.verifiedFindings[0].findingId, "F1");
 });
 
 test("missing-information items are serialized only when requested", () => {
@@ -172,37 +168,34 @@ test("missing-information items are serialized only when requested", () => {
   assert.deepEqual((snapshot as SemanticReviewStateSnapshot).missingInformationItems, [
     {
       itemId: "MI1",
-      findingId: "F1",
       description: "Need the external null-input contract.",
       whyItMatters: "Without it the validator cannot prove expected behavior."
     }
   ]);
 });
 
-test("empty findings array is preserved when findings are requested", () => {
+test("empty approved findings array is preserved when requested", () => {
   const ctx = createContext();
   ctx.setFindings([]);
 
-  const snapshot = serializeSnapshot(ctx, ["verified-findings"]);
+  const snapshot = serializeSnapshot(ctx, ["approved-findings"]);
 
-  assert.deepEqual(snapshot.verifiedFindings, []);
+  assert.deepEqual(snapshot.approvedFindings, []);
 });
 
-test("finding JSON preserves all v2 typed fields", () => {
+test("finding JSON preserves current optional dependency-path fields", () => {
   const ctx = createContext();
   const finding = createFinding("F1");
-  finding.sourceHypothesisId = "W1";
   finding.dependencyPathException = {
     reason: "transitive dependency",
     dependencyAnchor: { filePath: "src/dep.ts", symbol: "helper" }
   };
   ctx.setFindings([finding]);
 
-  const snapshot = serializeSnapshot(ctx, ["verified-findings"]);
-  const f = snapshot.verifiedFindings[0];
+  const snapshot = serializeSnapshot(ctx, ["approved-findings"]);
+  const f = snapshot.approvedFindings[0];
 
   assert.equal(f.findingId, "F1");
-  assert.equal(f.sourceHypothesisId, "W1");
   assert.equal(f.dependencyPathException?.reason, "transitive dependency");
   assert.equal(f.dependencyPathException?.dependencyAnchor.symbol, "helper");
 });
@@ -246,35 +239,20 @@ function createCandidateFindingsV3() {
     findings: [
       {
         findingId: "F1",
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: "guard moved after dereference",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:1",
-            summary: "changed branch reads value before fallback"
-          }
-        ],
-        executionPath: ["entry receives nullable input", "changed branch reads value"],
+        evidence: "changed branch reads value before fallback",
         triggerCondition: "nullable input reaches the changed branch",
-        failureMechanism: "guard runs after dereference",
         impact: "request fails before fallback can run",
-        counterEvidenceChecked: ["fallback no longer precedes dereference"],
-        fixDirection: "restore guard before dereference",
-        testRecommendation: "add nullable input regression coverage"
+        counterEvidence: ["fallback no longer precedes dereference"]
       }
     ],
     hypothesisClosure: [
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: "F1 validates the hypothesis."
       }
     ],
@@ -284,8 +262,6 @@ function createCandidateFindingsV3() {
 
 function createValidationReportV1() {
   return {
-    schemaVersion: 1,
-    overallStatus: "PASS",
     perFindingResults: [
       {
         findingId: "F1",
@@ -295,11 +271,9 @@ function createValidationReportV1() {
         reason: "all gates passed"
       }
     ],
-    approvedFindings: [createFinding("F1")],
     missingInformationItems: [
       {
         itemId: "MI1",
-        findingId: "F1",
         description: "Need the external null-input contract.",
         whyItMatters: "Without it the validator cannot prove expected behavior."
       }

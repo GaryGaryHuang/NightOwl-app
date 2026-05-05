@@ -308,25 +308,6 @@ test("Step7SummaryStep.prepare() risk_snapshot JSON is parseable", () => {
   assert.deepEqual(snapshot.acceptedFindingIds, ["F1", "F2"]);
 });
 
-test("Step7SummaryStep.prepare() includes retiredFindingCount from dispositions", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([createFinding("nice", "F1")]);
-  context.setDispositions([
-    {
-      findingId: "F-retired",
-      status: "retired",
-      reason: "REACHABILITY",
-      explanation: "path is not reachable"
-    }
-  ]);
-
-  const plan = step.prepare(context);
-  const match = plan.prompt.userMessage.match(/<risk_snapshot>\n([\s\S]*?)\n<\/risk_snapshot>/);
-  assert.ok(match, "risk_snapshot block should be present");
-  const snapshot = JSON.parse(match[1]);
-  assert.equal(snapshot.retiredFindingCount, 1);
-});
-
 test("Step7SummaryStep.prepare() system message references risk_snapshot", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([]);
@@ -362,7 +343,6 @@ test("Step7SummaryStep.prepare() consumes approved findings and missing-informat
   assert.deepEqual(reviewState.missingInformationItems, [
     {
       itemId: "MI1",
-      findingId: "F1",
       description: "Need the external null-input contract.",
       whyItMatters: "Without it the validator cannot prove expected behavior."
     }
@@ -440,41 +420,26 @@ function parseReviewStateFromPrompt(prompt: string): {
   return JSON.parse(match[1]);
 }
 
-function createCandidateFindingsV3(priority: "must" | "nice") {
+function createCandidateFindingsV3(_type: "must" | "nice") {
   return {
     result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F-raw-candidate",
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority,
-        severity: priority === "must" ? "high" : "low",
-        confidence: "high",
-        evidenceStrength: "direct",
+        severity: "high",
         title: "raw candidate must not shape Step 7",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:1",
-            summary: "candidate evidence"
-          }
-        ],
-        executionPath: ["entry", "changed branch"],
+        evidence: "candidate evidence",
         triggerCondition: "candidate trigger",
-        failureMechanism: "candidate mechanism",
         impact: "candidate impact",
-        counterEvidenceChecked: ["candidate counter-evidence"],
-        fixDirection: "candidate fix",
-        testRecommendation: "candidate test"
+        counterEvidence: ["candidate counter-evidence"]
       }
     ],
     hypothesisClosure: [
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: "candidate closes H1"
       }
     ],
@@ -484,8 +449,6 @@ function createCandidateFindingsV3(priority: "must" | "nice") {
 
 function createValidationReportV1() {
   return {
-    schemaVersion: 1,
-    overallStatus: "PASS",
     perFindingResults: [
       {
         findingId: "F1",
@@ -495,11 +458,9 @@ function createValidationReportV1() {
         reason: "all gates passed"
       }
     ],
-    approvedFindings: [createFinding("nice", "F1")],
     missingInformationItems: [
       {
         itemId: "MI1",
-        findingId: "F1",
         description: "Need the external null-input contract.",
         whyItMatters: "Without it the validator cannot prove expected behavior."
       }

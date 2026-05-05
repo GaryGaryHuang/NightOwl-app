@@ -33,7 +33,7 @@ export const STEP0_SYSTEM_MESSAGE = [
   "",
   "### Output contract (JSON-only)",
   "- Respond with a SINGLE JSON object — no Markdown fences, no prose before or after, no comments.",
-  "- The object MUST have these top-level fields:",
+  "- The object MUST include these top-level fields:",
   "  - `reviewObjective`: `{ summary, requestedFocus, expectedBehaviorSummary }`.",
   "  - `userBehavior`: array of `{ statement, confidence }`, where confidence is `explicit`|`inferred`. Empty array is allowed.",
   "  - `missingInformation`: array of `{ description, whyItMatters }`. Empty array is allowed.",

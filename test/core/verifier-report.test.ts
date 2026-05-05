@@ -62,7 +62,6 @@ describe("VerifierReportBuilder", () => {
     assert.equal(summary.accepted, 1);
     assert.equal(summary.rejected, 0);
     assert.equal(summary.byTaxonomy.OK, 1);
-    assert.equal(summary.byTaxonomy.ANCHOR, 0);
   });
 
   // --- VR-3: Mixed entries ---
@@ -71,26 +70,26 @@ describe("VerifierReportBuilder", () => {
     const builder = new VerifierReportBuilder();
     builder.addEntry({ findingId: "F1", taxonomy: "OK", outcome: "accepted", gate: "acceptance", reason: "passed" });
     builder.addEntry({ findingId: "F2", taxonomy: "OK", outcome: "accepted", gate: "acceptance", reason: "passed" });
-    builder.addEntry({ findingId: "F3", taxonomy: "ANCHOR", outcome: "rejected", gate: "anchor", reason: "outside changed lines" });
+    builder.addEntry({ findingId: "F3", taxonomy: "SEMANTIC", outcome: "rejected", gate: "semantic", reason: "insufficient traceability" });
 
     const summary = builder.summarize();
     assert.equal(summary.total, 3);
     assert.equal(summary.accepted, 2);
     assert.equal(summary.rejected, 1);
     assert.equal(summary.byTaxonomy.OK, 2);
-    assert.equal(summary.byTaxonomy.ANCHOR, 1);
+    assert.equal(summary.byTaxonomy.SEMANTIC, 1);
   });
 
   it("VR-3.2 summarize counts all taxonomy codes correctly", () => {
     const builder = new VerifierReportBuilder();
     const codes: VerifierTaxonomyCode[] = [
       "SCHEMA",
-      "ANCHOR",
       "EVIDENCE",
       "REACHABILITY",
       "OUT_OF_SCOPE",
       "DUPLICATE",
       "CONTRADICTION",
+      "SEMANTIC",
       "OK"
     ];
     for (const code of codes) {
@@ -122,7 +121,7 @@ describe("VerifierReportBuilder", () => {
     const snapshot = builder.getEntries();
     assert.equal(snapshot.length, 1);
 
-    builder.addEntry({ findingId: "F2", taxonomy: "ANCHOR", outcome: "rejected", gate: "anchor", reason: "bad" });
+    builder.addEntry({ findingId: "F2", taxonomy: "SEMANTIC", outcome: "rejected", gate: "semantic", reason: "bad" });
 
     assert.equal(snapshot.length, 1, "snapshot should not grow after later addEntry");
     assert.equal(builder.getEntries().length, 2, "new getEntries should include both");

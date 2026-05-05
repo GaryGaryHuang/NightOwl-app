@@ -119,10 +119,7 @@ test("StepRunner does not consume retry budget or run deterministic validation w
         validateCalls += 1;
         return {
           payload: {
-            schemaVersion: 1,
-            overallStatus: "PASS",
             perFindingResults: [],
-            approvedFindings: [],
             missingInformationItems: [],
             loopControl: { action: "accept", reason: "no findings" }
           },

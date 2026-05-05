@@ -18,7 +18,7 @@ const STEP6_SYSTEM_ADDITION = [
   "- This step is a validator, not a bug hunt. Do not introduce new defects outside Step 5 candidate evidence chains.",
   "- Return `ValidationReportV1` with per-finding decisions, missing information items, and loop control.",
   "- If a concern is not already represented by a Step 5 candidate, record it as missing information only.",
-  "- Use `rewrite_required` when evidence, trigger, impact, counter-evidence, classification/severity alignment, identifiers, anchors, or hypothesis closure are insufficient and Step 5 can repair them. Use `drop` when the candidate is contradicted, out of scope, or too weak.",
+  "- Use `rewrite_required` when evidence, trigger, impact, counter-evidence, classification/severity alignment, identifiers, traceability, or hypothesis closure are insufficient and Step 5 can repair them. Use `drop` when the candidate is contradicted, out of scope, or too weak.",
   "- Output valid JSON only."
 ].join("\n");
 
@@ -34,7 +34,7 @@ const STEP6_INSTRUCTION = [
   `   Allowed gate IDs: ${formatQuotedValues(SEMANTIC_GATE_IDS)}.`,
   "   - `evidence`: the candidate's evidence must be concrete, traceable, and consistent with `ReviewBasisV1.evidenceRefs` and the reviewed code; named identifiers must match the current identifier registry; execution path and mechanism must be concrete.",
   "   - `impact`: the user/system impact must be specific and proportionate to the proven evidence; the candidate's `counterEvidence` must contain substantive checks (not just assertions or restatements); classification and severity must match the proven evidence level.",
-  "   - `traceability`: anchors must be valid for the reviewed file or carry a valid dependency-path exception; schema must be complete.",
+  "   - `traceability`: schema must be complete, and the location must be precise enough for a reviewer to inspect; exact changed-line overlap is a prompt instruction for Step 5, not a deterministic validator rule.",
   "   - `completeness`: the candidate must close or honestly account for the source hypotheses; unproven contract, trigger, impact, or identifier claims must become missing information.",
   "   - `scope`: the candidate must not be a duplicate, low-value restatement, or a new bug outside the Step 5 candidate set.",
   "",

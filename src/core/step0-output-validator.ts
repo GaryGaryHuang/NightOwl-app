@@ -383,6 +383,7 @@ function validateOverviewMarkdown(value: unknown): string {
 
 function validateReviewObjective(value: unknown): ChangeMapReadinessV2["reviewObjective"] {
   const obj = ensurePlainObject(value, "reviewObjective");
+
   const summary = requireNonEmptyString(obj.summary, "reviewObjective.summary");
   return {
     summary,
@@ -408,6 +409,7 @@ function validateUserBehavior(
   }
   return value.map((rawEntry, index) => {
     const entry = ensurePlainObject(rawEntry, `userBehavior[${index}]`);
+
     const statement = requireNonEmptyString(
       entry.statement,
       `userBehavior[${index}].statement`
@@ -434,6 +436,7 @@ function validateMissingInformation(
   }
   return value.map((rawEntry, index) => {
     const entry = ensurePlainObject(rawEntry, `missingInformation[${index}]`);
+
     const description = requireNonEmptyString(
       entry.description,
       `missingInformation[${index}].description`

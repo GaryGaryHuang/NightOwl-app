@@ -11,7 +11,7 @@ import type {
   VerifierReportArtifactEntry,
   VerifierReportEntry
 } from "../verifier-report.ts";
-import { pickDispositionFields, pickSemanticFields } from "../verifier-report.ts";
+import { pickSemanticFields } from "../verifier-report.ts";
 
 export function createCandidateFindingsV3Resolve(input: {
   stepId?: string;
@@ -96,7 +96,6 @@ function toVerifierArtifactEntries(input: {
     outcome: entry.outcome,
     gate: entry.gate,
     reason: entry.reason,
-    ...pickDispositionFields(entry),
     ...pickSemanticFields(entry)
   }));
 }

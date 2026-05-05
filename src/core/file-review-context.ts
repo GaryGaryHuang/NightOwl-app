@@ -65,30 +65,6 @@ export interface Finding {
   impact: string;
   counterEvidence: string[];
   dependencyPathException?: DependencyPathException;
-  sourceHypothesisId?: string;
-}
-
-export interface FindingsPayload {
-  schemaVersion: 2;
-  findings: Finding[];
-}
-
-export type DispositionStatus = "retained" | "modified" | "retired";
-
-export type DispositionReason =
-  | "SUPPORTED"
-  | "ANCHOR"
-  | "EVIDENCE"
-  | "REACHABILITY"
-  | "OUT_OF_SCOPE"
-  | "DUPLICATE"
-  | "CONTRADICTION";
-
-export interface FindingDisposition {
-  findingId: string;
-  status: DispositionStatus;
-  reason: DispositionReason;
-  explanation: string;
 }
 
 export interface ReviewInterruption {
@@ -108,7 +84,6 @@ export class FileReviewContext {
   readonly headRef: string;
   readonly #sections = new Map<string, string>();
   #findings?: Finding[];
-  #dispositions?: FindingDisposition[];
   #verifierReportEntries?: VerifierReportArtifactEntry[];
   #interruption?: ReviewInterruption;
   #findingsInsertionIndex?: number;
@@ -200,14 +175,6 @@ export class FileReviewContext {
     return this.#findings?.map(cloneFinding);
   }
 
-  setDispositions(dispositions: FindingDisposition[]): void {
-    this.#dispositions = dispositions.map(cloneDisposition);
-  }
-
-  getDispositions(): FindingDisposition[] | undefined {
-    return this.#dispositions ? this.#dispositions.map(cloneDisposition) : undefined;
-  }
-
   appendVerifierReportEntries(entries: VerifierReportArtifactEntry[]): void {
     if (entries.length === 0) {
       return;
@@ -248,10 +215,6 @@ function cloneFinding(finding: Finding): Finding {
   }
 
   return cloned;
-}
-
-function cloneDisposition(d: FindingDisposition): FindingDisposition {
-  return { ...d };
 }
 
 function cloneVerifierReportArtifactEntry(

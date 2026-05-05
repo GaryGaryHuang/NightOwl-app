@@ -11,7 +11,7 @@ import {
   buildSuccessfulStepResult
 } from "../helpers/orchestrator-fixture.ts";
 import type { StepResult } from "../../src/core/step-runner.ts";
-import type { FileReviewContext, Finding } from "../../src/core/file-review-context.ts";
+import type { FileReviewContext } from "../../src/core/file-review-context.ts";
 
 /**
  * Progress event contract tests owned at the orchestrator layer.
@@ -431,7 +431,7 @@ function buildSemanticLoopStepResult(
         (context as SemanticFileReviewContext).setValidationReportV1(report);
         if (options.validationMode === "missing-critical-stop") {
           context.setMissingInformationItems(report.missingInformationItems);
-          context.setFindings(report.approvedFindings);
+          context.setFindings([]);
         }
       }
     };
@@ -464,35 +464,20 @@ function createCandidateFindingsV3(variant: number) {
     findings: [
       {
         findingId: "F1",
-        sourceHypothesisIds: ["H1"],
         classification: "confirmed_problem",
-        priority: "must",
         severity: "high",
-        confidence: "high",
-        evidenceStrength: "direct",
         title: `unsupported claim ${variant}`,
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        codeEvidence: [
-          {
-            evidenceId: "E1",
-            location: "src/app.ts:1",
-            summary: "candidate evidence"
-          }
-        ],
-        executionPath: ["entry", "changed branch"],
+        evidence: "candidate evidence",
         triggerCondition: `candidate trigger ${variant}`,
-        failureMechanism: "candidate mechanism",
         impact: "candidate impact",
-        counterEvidenceChecked: ["candidate counter-evidence"],
-        fixDirection: "candidate fix",
-        testRecommendation: "candidate test"
+        counterEvidence: ["candidate counter-evidence"]
       }
     ],
     hypothesisClosure: [
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        evidenceIds: ["E1"],
         rationale: "candidate closes H1"
       }
     ],
@@ -511,7 +496,6 @@ function createRerunValidationReportV1() {
         reason: "impact is unsupported"
       }
     ],
-    approvedFindings: [] as Finding[],
     missingInformationItems: [],
     loopControl: {
       action: "rerun",
@@ -531,7 +515,6 @@ function createStopValidationReportV1() {
         reason: "approval is blocked by a missing critical contract"
       }
     ],
-    approvedFindings: [] as Finding[],
     missingInformationItems: [
       {
         itemId: "MI1",

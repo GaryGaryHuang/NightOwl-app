@@ -48,8 +48,7 @@ export function createSuccessfulFile(
     findings,
     verifierReportEntries,
     semanticReview: createSemanticReviewStats(semanticReview),
-    riskSnapshot: createRiskSnapshot(findings, semanticReview),
-    dispositions: []
+    riskSnapshot: createRiskSnapshot(findings, semanticReview)
   };
 }
 
@@ -66,8 +65,7 @@ export function createSkippedFile(
     reason,
     verifierReportEntries,
     semanticReview: createSemanticReviewStats(semanticReview),
-    riskSnapshot: createRiskSnapshot([], semanticReview),
-    dispositions: []
+    riskSnapshot: createRiskSnapshot([], semanticReview)
   };
 }
 
@@ -102,7 +100,6 @@ function createRiskSnapshot(
     mustCount,
     niceCount,
     acceptedFindingIds: findings.map((finding) => finding.findingId),
-    retiredFindingCount: 0,
     riskBasis:
       semanticReview?.missingInformationCount
         ? "No approved findings; semantic validation completed with limitations."
@@ -136,15 +133,6 @@ export function createVerifierReportArtifactEntry(
     outcome: overrides.outcome ?? "accepted",
     gate: overrides.gate ?? "acceptance",
     reason: overrides.reason ?? "passed all acceptance gates",
-    ...(overrides.dispositionStatus === undefined
-      ? {}
-      : { dispositionStatus: overrides.dispositionStatus }),
-    ...(overrides.dispositionReason === undefined
-      ? {}
-      : { dispositionReason: overrides.dispositionReason }),
-    ...(overrides.dispositionExplanation === undefined
-      ? {}
-      : { dispositionExplanation: overrides.dispositionExplanation }),
     ...overrides
   } as VerifierReportArtifactEntry;
 }

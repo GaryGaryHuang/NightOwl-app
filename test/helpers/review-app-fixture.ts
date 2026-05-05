@@ -116,8 +116,6 @@ export function buildSessionResponse(
 
   if (/## Current Step: (?:Cognitive Simulation|Semantic Validation)/u.test(systemMessage)) {
     return JSON.stringify({
-      schemaVersion: 1,
-      overallStatus: "PASS",
       perFindingResults: [
         {
           findingId: "F1",
@@ -125,19 +123,6 @@ export function buildSessionResponse(
           failedGates: [],
           requiredCorrections: [],
           reason: "all semantic gates passed"
-        }
-      ],
-      approvedFindings: [
-        {
-          type: "must",
-          title: "問題標題",
-          traceability: lineRangeTraceability(1, 1),
-          expectedBehavior: "應維持既有 fallback",
-          actualBehavior: "simulation reaches branch without fallback",
-          deviation: "預期與實際有落差",
-          impact: "會造成 correctness 問題",
-          suggestion: "補上 guard",
-          findingId: "F1"
         }
       ],
       missingInformationItems: [],

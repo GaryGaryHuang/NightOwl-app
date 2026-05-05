@@ -52,7 +52,7 @@ test("StructuredOutputValidator rejects invalid CandidateFindingsV3 traceability
   }
 });
 
-test("StructuredOutputValidator accepts CandidateFindingsV3 line-range outside changed head lines (no anchor verification for candidates)", () => {
+test("StructuredOutputValidator accepts CandidateFindingsV3 line-range outside changed head lines", () => {
   const result = validateCandidatePayload(
     createCandidatePayload({
       traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 }
@@ -64,6 +64,23 @@ test("StructuredOutputValidator accepts CandidateFindingsV3 line-range outside c
     lineStart: 14,
     lineEnd: 18
   });
+});
+
+test("StructuredOutputValidator accepts CandidateFindingsV3 dependency path exception outside changed head lines", () => {
+  const result = validateCandidatePayload(
+    createCandidatePayload({
+      traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
+      dependencyPathException: {
+        reason: "dependency path is causally linked to the changed call site",
+        dependencyAnchor: { filePath: "src/dep.ts", symbol: "helper" }
+      }
+    })
+  );
+
+  assert.equal(
+    result.payload.findings[0]?.dependencyPathException?.dependencyAnchor.symbol,
+    "helper"
+  );
 });
 
 test("StructuredOutputValidator accepts CandidateFindingsV3 line-range on changed head lines", () => {
@@ -182,7 +199,7 @@ function createReviewBasis(): ReviewBasisV1 {
       externalContracts: [],
       sharedStateOrSideEffects: ["FileReviewContext"]
     },
-    flowMap: {
+        flowMap: {
       entryPoints: ["ReviewBasisStep.prepare"],
       stateTransitions: ["setReviewBasis"],
       asyncBoundaries: [],
@@ -190,7 +207,7 @@ function createReviewBasis(): ReviewBasisV1 {
     },
     testCoverage: {
       changedTests: ["test/core/structured-output-validator-anchor.test.ts"],
-      observedCoverageSignals: ["anchor validator tests"],
+      observedCoverageSignals: ["traceability shape validator tests"],
       coverageGaps: []
     },
     identifierRegistry: {

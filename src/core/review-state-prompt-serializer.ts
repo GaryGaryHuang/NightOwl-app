@@ -1,5 +1,5 @@
 import type { FileReviewContext, Finding } from "./file-review-context.ts";
-import { buildFindingAnchorValidationContext } from "./finding-anchor-context.ts";
+import { buildFindingAnchorPromptContext } from "./finding-anchor-context.ts";
 import type {
   PriorValidatorFeedback,
   ReviewBasisEvidenceRef,
@@ -15,7 +15,6 @@ import type {
 export type FindingsBlockKind =
   | "candidate-findings"
   | "approved-findings"
-  | "verified-findings"
   | "missing-information";
 
 export type ReviewStateBlock =
@@ -62,7 +61,6 @@ export interface ReviewStateSnapshot {
   candidateFindings: CandidateFindingsV3 | null;
   approvedFindings: Finding[];
   missingInformationItems: MissingInformationItem[];
-  verifiedFindings: Finding[];
   reviewBasis: ReviewBasisV1 | null;
   evidenceRefs: ReviewBasisEvidenceRef[];
   identifierRegistry: ReviewBasisIdentifierRegistry;
@@ -87,7 +85,7 @@ export class ReviewStatePromptSerializer {
   }
 
   buildSnapshot(input: ReviewStateSerializeInput): ReviewStateSnapshot {
-    const anchorContext = buildFindingAnchorValidationContext(
+    const anchorContext = buildFindingAnchorPromptContext(
       input.context.filePath,
       input.context.diffContent
     );
@@ -126,9 +124,6 @@ export class ReviewStatePromptSerializer {
         : [],
       missingInformationItems: input.include.includes("missing-information")
         ? missingInformationItems
-        : [],
-      verifiedFindings: input.include.includes("verified-findings")
-        ? approvedFindings
         : [],
       reviewBasis: includeReviewBasis ? reviewBasis ?? null : null,
       evidenceRefs: includeReviewBasis && reviewBasis

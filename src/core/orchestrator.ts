@@ -819,11 +819,7 @@ export class ReviewOrchestrator {
           fileContext,
           semanticValidationCount
         ),
-        riskSnapshot: buildRiskSnapshot(
-          fileContext.getFindings() ?? [],
-          fileContext.getDispositions() ?? []
-        ),
-        dispositions: fileContext.getDispositions() ?? []
+        riskSnapshot: buildRiskSnapshot(fileContext.getFindings() ?? [])
       }
     };
 
@@ -877,11 +873,7 @@ export class ReviewOrchestrator {
         input.fileContext,
         input.semanticValidationCount
       ),
-      riskSnapshot: buildRiskSnapshot(
-        input.fileContext.getFindings() ?? [],
-        input.fileContext.getDispositions() ?? []
-      ),
-      dispositions: input.fileContext.getDispositions() ?? []
+      riskSnapshot: buildRiskSnapshot(input.fileContext.getFindings() ?? [])
     });
   }
 
@@ -894,7 +886,6 @@ export class ReviewOrchestrator {
     verifierReportEntries: SuccessfulFileOutcome["verifierReportEntries"];
     semanticReview: SemanticReviewStats;
     riskSnapshot: SuccessfulFileOutcome["riskSnapshot"];
-    dispositions: SuccessfulFileOutcome["dispositions"];
   }): void {
     input.outcomeSlots[input.plannedIndex] = {
       kind: "skipped",
@@ -904,8 +895,7 @@ export class ReviewOrchestrator {
         reason: input.reason,
         verifierReportEntries: input.verifierReportEntries,
         semanticReview: input.semanticReview,
-        riskSnapshot: input.riskSnapshot,
-        dispositions: input.dispositions
+        riskSnapshot: input.riskSnapshot
       }
     };
 

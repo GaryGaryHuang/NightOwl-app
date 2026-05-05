@@ -68,6 +68,15 @@ export class ReviewBasisValidator {
     const hypothesisLedger = validateHypotheses(obj.hypothesisLedger, diagnostics);
     const missingInformation = validateMissingInformation(obj.missingInformation, diagnostics);
 
+    validateReviewBasisReferences({
+      evidenceRefs,
+      changedBehavior,
+      facts,
+      inferences,
+      hypothesisLedger,
+      diagnostics
+    });
+
     if (diagnostics.length > 0) {
       return { ok: false, diagnostics };
     }
@@ -124,6 +133,74 @@ function validateEvidenceRefs(
     const summary = optionalString(entry.summary) ?? "";
     return [{ evidenceId, sourceType, location, summary }];
   });
+}
+
+function validateReviewBasisReferences(input: {
+  evidenceRefs: readonly ReviewBasisEvidenceRef[];
+  changedBehavior: readonly ReviewBasisChangedBehavior[];
+  facts: readonly ReviewBasisFact[];
+  inferences: readonly ReviewBasisInference[];
+  hypothesisLedger: readonly ReviewBasisHypothesis[];
+  diagnostics: ReviewBasisValidationDiagnostic[];
+}): void {
+  const evidenceIds = input.evidenceRefs.map((entry) => entry.evidenceId);
+  assertUniqueValues(evidenceIds, "evidenceRefs[].evidenceId", input.diagnostics);
+  assertKnownEvidenceIds(
+    input.changedBehavior.flatMap((entry) => entry.evidenceIds),
+    new Set(evidenceIds),
+    "changedBehavior[].evidenceIds",
+    input.diagnostics
+  );
+  assertKnownEvidenceIds(
+    input.facts.flatMap((entry) => entry.evidenceIds),
+    new Set(evidenceIds),
+    "facts[].evidenceIds",
+    input.diagnostics
+  );
+  assertKnownEvidenceIds(
+    input.inferences.flatMap((entry) => entry.basedOnEvidenceIds),
+    new Set(evidenceIds),
+    "inferences[].basedOnEvidenceIds",
+    input.diagnostics
+  );
+  assertUniqueValues(
+    input.hypothesisLedger.map((entry) => entry.hypothesisId),
+    "hypothesisLedger[].hypothesisId",
+    input.diagnostics
+  );
+}
+
+function assertUniqueValues(
+  values: readonly string[],
+  fieldName: string,
+  diagnostics: ReviewBasisValidationDiagnostic[]
+): void {
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) {
+      diagnostics.push({
+        code: "SCHEMA",
+        message: `${fieldName} must be unique; duplicate value "${value}"`
+      });
+    }
+    seen.add(value);
+  }
+}
+
+function assertKnownEvidenceIds(
+  values: readonly string[],
+  evidenceIds: ReadonlySet<string>,
+  fieldName: string,
+  diagnostics: ReviewBasisValidationDiagnostic[]
+): void {
+  for (const value of values) {
+    if (!evidenceIds.has(value)) {
+      diagnostics.push({
+        code: "SCHEMA",
+        message: `${fieldName} references unknown evidenceId "${value}"`
+      });
+    }
+  }
 }
 
 function validateChangedBehavior(

@@ -323,7 +323,6 @@ function createValidationReportPayload(scenario: SemanticScenario) {
         reason: "retired false-positive contradiction"
       }
     ],
-    approvedFindings: [],
     missingInformationItems: [],
     loopControl: { action: "accept", reason: "claim dropped" }
   };
@@ -340,7 +339,6 @@ function dropReport() {
         reason: "approval is blocked by insufficient proof"
       }
     ],
-    approvedFindings: [],
     missingInformationItems: [
       {
         description: "Need callback threading and stale-result guard proof.",

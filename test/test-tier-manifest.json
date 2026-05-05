@@ -14,7 +14,6 @@
     "test/core/finalizers/run-summary-finalizer.test.ts",
     "test/core/finalizers/verifier-report-finalizer.test.ts",
     "test/core/finding-anchor-context.test.ts",
-    "test/core/finding-anchor-verifier.test.ts",
     "test/core/judge.test.ts",
     "test/core/legacy-per-file-steps-removed.test.ts",
     "test/core/nightowl-namespace-path.test.ts",

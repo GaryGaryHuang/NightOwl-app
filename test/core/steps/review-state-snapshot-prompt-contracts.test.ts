@@ -46,8 +46,7 @@ function createFinding(findingId: string): Finding {
     evidence: "concrete evidence",
     triggerCondition: "trigger",
     impact: "impact",
-    counterEvidence: ["checked"],
-    sourceHypothesisId: "W1"
+    counterEvidence: ["checked"]
   };
 }
 
@@ -317,13 +316,13 @@ test("Steps 5-7 receive parseable ReviewStateSnapshot JSON", () => {
     snapshots[1].candidateFindings?.criticalMissingInformation,
     []
   );
-  assert.deepEqual(snapshots[1].verifiedFindings, []);
+  assert.deepEqual(snapshots[1].approvedFindings, []);
   assert.equal(
     snapshots[2].reviewBasis?.roleInChangeset,
     "Owns review prompt harness state handoff."
   );
   assert.deepEqual(snapshots[2].sections, {});
-  assert.equal(snapshots[2].verifiedFindings[0].findingId, "F1");
+  assert.equal(snapshots[2].approvedFindings[0].findingId, "F1");
   assert.equal(snapshots[2].candidateFindings, null);
   assert.match(
     stepPlans[2].prompt.userMessage,

@@ -209,7 +209,15 @@ const STUB_COGNITIVE_SIMULATION = '{"perFindingResults": [], "missingInformation
 
 const STUB_SUMMARY = [
   "## Summary",
-  "- Overall risk level: None"
+  "### 審查基礎",
+  "- 改動概要：dry-run 沒有實際檔案變更。",
+  "- 依據規範：dry-run stub。",
+  "- 必要假設：無。",
+  "### 行為變更提醒",
+  "- 無行為變更",
+  "### 風險評估",
+  "- 整體風險等級：None",
+  "- 風險理由：dry-run stub 沒有 approved findings。"
 ].join("\n");
 
 export type DryRunResponseProvider = (prompt: string) => string;

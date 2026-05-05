@@ -261,6 +261,38 @@ test("validateCandidateFindingsV3WithReport accepts evidence-chain candidates ti
   );
 });
 
+test("validateCandidateFindingsV3WithReport ignores non-contract extra fields", () => {
+  const result = validateCandidateFindings(
+    candidateFindingsV3({
+      schemaVersion: 3,
+      findings: [
+        candidateFinding({
+          priority: "must",
+          traceability: {
+            ...lineRangeTraceability(21, 22),
+            legacyAnchorHint: "ignored"
+          },
+          legacyFindingMetadata: {
+            confidence: "high"
+          }
+        })
+      ],
+      hypothesisClosure: [
+        hypothesisClosure({ evidenceIds: ["E1"] }),
+        hypothesisClosure({
+          hypothesisId: "H2",
+          status: "rejected_by_evidence",
+          rationale: "fallback no longer closes the nullable-input path",
+          evidenceIds: ["E2"]
+        })
+      ]
+    })
+  );
+
+  assert.equal(result.payload.findings[0]?.findingId, "F1");
+  assert.equal(result.payload.findings[0]?.classification, "confirmed_problem");
+});
+
 test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis semantic violations", () => {
   const invalidCases: readonly {
     readonly label: string;
@@ -339,6 +371,28 @@ test("validateValidationReportV1WithReport accepts reports that approve only Ste
     result.report.find((entry) => entry.findingId === "F1")?.outcome,
     "accepted"
   );
+});
+
+test("validateValidationReportV1WithReport ignores non-contract extra fields", () => {
+  const result = validateValidationReport(
+    validationReportV1({
+      overallStatus: "PASS",
+      approvedFindings: [],
+      perFindingResults: [
+        perFindingResult({
+          recommendedSeverity: "high"
+        })
+      ],
+      loopControl: {
+        action: "accept",
+        reason: "all gates passed",
+        stopReason: "ignored"
+      }
+    })
+  );
+
+  assert.equal(result.payload.perFindingResults[0]?.findingId, "F1");
+  assert.equal(result.payload.loopControl.action, "accept");
 });
 
 test("validateValidationReportV1WithReport enforces candidate coverage and approved finding consistency", () => {

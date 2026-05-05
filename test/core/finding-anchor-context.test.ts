@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildFindingAnchorValidationContext } from "../../src/core/finding-anchor-context.ts";
+import { buildFindingAnchorPromptContext } from "../../src/core/finding-anchor-context.ts";
 
-test("buildFindingAnchorValidationContext centralizes the diff-derived anchor context", () => {
-  const context = buildFindingAnchorValidationContext(
+test("buildFindingAnchorPromptContext centralizes the diff-derived prompt context", () => {
+  const context = buildFindingAnchorPromptContext(
     "src/foo.ts",
     [
       "@@ -20,2 +20,4 @@",

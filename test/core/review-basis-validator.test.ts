@@ -151,6 +151,54 @@ test("ReviewBasisValidator rejects invalid confidence enum", () => {
   assert.ok(result.diagnostics.some((d) => d.message.includes("confidence")));
 });
 
+test("ReviewBasisValidator rejects duplicate and dangling evidence references", () => {
+  const duplicateEvidence = validateFail(makeValidReviewBasis({
+    evidenceRefs: [
+      {
+        evidenceId: "E1",
+        sourceType: "diff",
+        location: "src/app.ts:1",
+        summary: "first"
+      },
+      {
+        evidenceId: "E1",
+        sourceType: "file",
+        location: "src/app.ts:2",
+        summary: "duplicate"
+      }
+    ]
+  }));
+  assert.ok(
+    duplicateEvidence.diagnostics.some((d) => d.message.includes("duplicate"))
+  );
+
+  const danglingEvidence = validateFail(makeValidReviewBasis({
+    facts: [{ statement: "bad evidence", evidenceIds: ["E404"] }]
+  }));
+  assert.ok(
+    danglingEvidence.diagnostics.some((d) => d.message.includes("E404"))
+  );
+});
+
+test("ReviewBasisValidator rejects duplicate hypothesis IDs", () => {
+  const result = validateFail(makeValidReviewBasis({
+    hypothesisLedger: [
+      {
+        hypothesisId: "H1",
+        statement: "first",
+        triggerCondition: "runtime condition"
+      },
+      {
+        hypothesisId: "H1",
+        statement: "duplicate",
+        triggerCondition: "other runtime condition"
+      }
+    ]
+  }));
+
+  assert.ok(result.diagnostics.some((d) => d.message.includes("duplicate")));
+});
+
 test("ReviewBasisValidator returns PARSE diagnostic for non-JSON input", () => {
   const result = validateFail("not json at all");
   assert.equal(result.diagnostics[0].code, "PARSE");

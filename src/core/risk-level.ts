@@ -1,4 +1,4 @@
-import type { Finding, FindingDisposition } from "./file-review-context.ts";
+import type { Finding } from "./file-review-context.ts";
 
 export type RiskLevel = "High" | "Low" | "None";
 
@@ -42,29 +42,21 @@ export interface RiskSnapshot {
   mustCount: number;
   niceCount: number;
   acceptedFindingIds: string[];
-  retiredFindingCount: number;
   riskBasis: string;
 }
 
 /**
- * Build a deterministic risk snapshot from finalized findings and dispositions.
+ * Build a deterministic risk snapshot from finalized findings.
  *
  * Delegates to `deriveFileRiskLevel()` for the risk label so the snapshot
  * is guaranteed to agree with manifests, indexes, and run summaries.
  */
-export function buildRiskSnapshot(
-  findings: Finding[] | undefined,
-  dispositions?: FindingDisposition[]
-): RiskSnapshot {
+export function buildRiskSnapshot(findings: Finding[] | undefined): RiskSnapshot {
   const derivedRiskLevel = deriveFileRiskLevel(findings);
   const safe = findings ?? [];
-  const safeDispositions = dispositions ?? [];
   const mustCount = countMustFindings(findings);
   const niceCount = countNiceFindings(findings);
   const acceptedFindingIds = safe.map((f) => f.findingId);
-  const retiredFindingCount = safeDispositions.filter(
-    (disposition) => disposition.status === "retired"
-  ).length;
 
   return {
     schemaVersion: 1,
@@ -72,12 +64,10 @@ export function buildRiskSnapshot(
     mustCount,
     niceCount,
     acceptedFindingIds,
-    retiredFindingCount,
     riskBasis: buildRiskBasis(
       derivedRiskLevel,
       mustCount,
-      niceCount,
-      retiredFindingCount
+      niceCount
     )
   };
 }
@@ -85,8 +75,7 @@ export function buildRiskSnapshot(
 function buildRiskBasis(
   level: RiskLevel,
   mustCount: number,
-  niceCount: number,
-  retiredFindingCount: number
+  niceCount: number
 ): string {
   switch (level) {
     case "High":
@@ -94,8 +83,6 @@ function buildRiskBasis(
     case "Low":
       return `Low: ${niceCount} nice-to-have finding(s) remain after verification; no must-fix findings`;
     case "None":
-      return retiredFindingCount > 0
-        ? `None: no accepted findings remain after verification; ${retiredFindingCount} candidate finding(s) were retired`
-        : "None: no accepted findings";
+      return "None: no accepted findings";
   }
 }

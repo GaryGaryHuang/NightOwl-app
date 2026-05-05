@@ -29,7 +29,7 @@ const COMMON_RETRIEVAL_SCOPE_AND_ANCHOR_MESSAGE = [
   "",
   "## Code Locations & Inline Anchors",
   "- For JSON findings, anchor the issue to the reviewed file with the smallest head-side line range that lets a reviewer understand the problem.",
-  "- Prefer a `line-range` that overlaps a changed head-side line listed in `<review_state>.diffSummary.hunks[].changedHeadLines`; use the hunk's `headLineStart`, `headLineEnd`, and changed lines to avoid guessing line numbers.",
+  "- When the changed line is the accurate issue location, use a `line-range` that overlaps a changed head-side line listed in `<review_state>.diffSummary.hunks[].changedHeadLines`; use the hunk's `headLineStart`, `headLineEnd`, and changed lines to avoid guessing line numbers.",
   "- Avoid broad ranges longer than 5-10 lines. If a wider context is needed, still choose the shortest subrange that pinpoints the defective expression, statement, or call site.",
   "- Use `diff-hunk` only when the `hunkHeader` exactly matches an actual unified diff hunk from `<diff>` or `<review_state>.diffSummary.hunks`.",
   "- If the real issue is a dependency-path effect that must be explained outside the changed lines, keep the reviewed-file anchor as close to the changed line as possible and include `dependencyPathException` with the external path details.",

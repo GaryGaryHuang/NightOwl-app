@@ -1,5 +1,4 @@
 import type { Finding } from "./file-review-context.ts";
-import type { FindingDisposition } from "./file-review-context.ts";
 import type { RiskSnapshot } from "./risk-level.ts";
 import type { LoopAction } from "./semantic-review.ts";
 import type { VerifierReportArtifactEntry } from "./verifier-report.ts";
@@ -27,7 +26,6 @@ export interface SuccessfulFileOutcome {
   verifierReportEntries: VerifierReportArtifactEntry[];
   semanticReview: SemanticReviewStats;
   riskSnapshot: RiskSnapshot;
-  dispositions: FindingDisposition[];
 }
 
 export interface SkippedFileOutcome {
@@ -37,5 +35,4 @@ export interface SkippedFileOutcome {
   verifierReportEntries: VerifierReportArtifactEntry[];
   semanticReview: SemanticReviewStats;
   riskSnapshot: RiskSnapshot;
-  dispositions: FindingDisposition[];
 }
