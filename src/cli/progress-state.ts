@@ -119,7 +119,7 @@ export function reduceProgressEvent(
       return {
         state: current,
         instruction: {
-          appendMessage: `Review session: ${event.stepId} | ${event.message}`
+          appendMessage: `Review diagnostic: ${event.stepId} | ${event.message}`
         }
       };
 

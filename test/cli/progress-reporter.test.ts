@@ -271,7 +271,7 @@ test("CliProgressReporter appends tool-audit warnings in non-TTY mode without af
   assert.equal(stdout.logs.at(-2), "Progress 0/2 | active 0");
 });
 
-test("CliProgressReporter appends review session logs while preserving progress state", () => {
+test("CliProgressReporter appends review diagnostics while preserving progress state", () => {
   const { stdout, reporter } = createInitializedReporter({
     isTTY: false,
     plannedFileCount: 2
@@ -285,13 +285,13 @@ test("CliProgressReporter appends review session logs while preserving progress 
   reporter.handleEvent({
     type: "review-session-log",
     stepId: "changeset-overview",
-    message: "streaming response received (128 B)"
+    message: "Step 0 validation failed (attempt 1, code=SCHEMA)"
   });
 
   assert.deepEqual(stdout.writes, []);
   assert.equal(
     stdout.logs.at(-1),
-    "Review session: changeset-overview | streaming response received (128 B)"
+    "Review diagnostic: changeset-overview | Step 0 validation failed (attempt 1, code=SCHEMA)"
   );
   assert.equal(stdout.logs.at(-2), "Progress 0/2 | active 0");
 });
