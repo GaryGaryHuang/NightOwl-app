@@ -220,7 +220,7 @@ test("createStep7HybridResolve rejects new finding claims outside Step 6 approve
   const response = [
     buildSummaryResponse("Low"),
     "",
-    "- 風險理由：F2 reveals a new trigger not present in Step 6 approved findings."
+    "- 風險理由：F2 reveals a new trigger not present in the validated review state."
   ].join("\n");
 
   await assert.rejects(
@@ -271,6 +271,40 @@ test("createStep7HybridResolve does not treat ordinary words as finding IDs", as
   assert.equal(judgeCalled, true);
 });
 
+test("createStep7HybridResolve rejects internal risk field wording before judge", async () => {
+  let judgeCalled = false;
+  const resolve = createStep7HybridResolve({
+    stepId: "step7-summary",
+    filePath: "src/app.ts",
+    sectionKey: "summary",
+    criteria: "test criteria",
+    expectedRiskLevel: "None",
+    allowedFindingIds: [],
+    allowedMissingInformationIds: []
+  });
+
+  const response = [
+    buildSummaryResponse("None"),
+    "",
+    "- 風險理由：derivedRiskLevel and acceptedFindingIds show no accepted findings."
+  ].join("\n");
+
+  await assert.rejects(
+    () =>
+      resolve(
+        response,
+        createResolveServices({
+          judgePasses: true,
+          onJudgeCall: () => {
+            judgeCalled = true;
+          }
+        })
+      ),
+    /internal review field|derivedRiskLevel/u
+  );
+  assert.equal(judgeCalled, false);
+});
+
 // --- Step 7 prepare() prompt tests ---
 
 test("Step7SummaryStep.prepare() includes <risk_snapshot> in user message when findings exist", () => {
@@ -280,9 +314,11 @@ test("Step7SummaryStep.prepare() includes <risk_snapshot> in user message when f
 
   assert.match(plan.prompt.userMessage, /<risk_snapshot>/);
   assert.match(plan.prompt.userMessage, /<\/risk_snapshot>/);
-  assert.match(plan.prompt.userMessage, /"derivedRiskLevel"/);
+  assert.match(plan.prompt.userMessage, /"riskLevel"/);
   assert.match(plan.prompt.userMessage, /"High"/);
-  assert.match(plan.prompt.userMessage, /"mustCount"/);
+  assert.match(plan.prompt.userMessage, /"mustFixFindingCount"/);
+  assert.doesNotMatch(plan.prompt.userMessage, /"derivedRiskLevel"/);
+  assert.doesNotMatch(plan.prompt.userMessage, /"acceptedFindingIds"/);
 });
 
 test("Step7SummaryStep.prepare() includes <risk_snapshot> with None when no findings", () => {
@@ -302,18 +338,19 @@ test("Step7SummaryStep.prepare() risk_snapshot JSON is parseable", () => {
   const match = plan.prompt.userMessage.match(/<risk_snapshot>\n([\s\S]*?)\n<\/risk_snapshot>/);
   assert.ok(match, "risk_snapshot block should be present");
   const snapshot = JSON.parse(match[1]);
-  assert.equal(snapshot.derivedRiskLevel, "High");
-  assert.equal(snapshot.mustCount, 1);
-  assert.equal(snapshot.niceCount, 1);
-  assert.deepEqual(snapshot.acceptedFindingIds, ["F1", "F2"]);
+  assert.equal(snapshot.riskLevel, "High");
+  assert.equal(snapshot.mustFixFindingCount, 1);
+  assert.equal(snapshot.niceToHaveFindingCount, 1);
+  assert.deepEqual(snapshot.findingIds, ["F1", "F2"]);
 });
 
-test("Step7SummaryStep.prepare() system message references risk_snapshot", () => {
+test("Step7SummaryStep.prepare() system message references reader-safe risk package", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([]);
   const plan = step.prepare(context);
 
   assert.match(plan.prompt.systemMessage, /risk_snapshot/);
+  assert.match(plan.prompt.systemMessage, /internal field names/);
   assert.match(plan.prompt.systemMessage, /derivedRiskLevel/);
 });
 
@@ -347,7 +384,7 @@ test("Step7SummaryStep.prepare() consumes approved findings and missing-informat
       whyItMatters: "Without it the validator cannot prove expected behavior."
     }
   ]);
-  assert.match(plan.prompt.userMessage, /Step 6-approved findings/i);
+  assert.match(plan.prompt.userMessage, /validated findings/i);
   assert.match(plan.prompt.userMessage, /Do not introduce new findings/i);
 });
 

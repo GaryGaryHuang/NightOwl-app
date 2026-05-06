@@ -3,6 +3,7 @@ import type {
   Finding,
   FindingTraceability
 } from "../file-review-context.ts";
+import type { MissingInformationItem } from "../semantic-review.ts";
 
 /**
  * Render the canonical in-memory file state into the Markdown review note shape.
@@ -10,13 +11,21 @@ import type {
 export function renderReviewNote(
   context: Pick<
     FileReviewContext,
-    "filePath" | "getSectionEntries" | "getFindingsInsertionIndex" | "getFindings" | "getInterruption"
+    | "filePath"
+    | "getSectionEntries"
+    | "getFindingsInsertionIndex"
+    | "getFindings"
+    | "getInterruption"
+    | "getMissingInformationItems"
   >
 ): string {
     const allEntries = context.getSectionEntries();
     const findingsInsertionIndex = context.getFindingsInsertionIndex();
     const findingsSection = renderFindingsSection(
       context.getFindings()
+    );
+    const missingInformationSection = renderMissingInformationSection(
+      context.getMissingInformationItems()
     );
     const warningBlock = renderInterruptionWarning(context.getInterruption());
 
@@ -72,6 +81,7 @@ export function renderReviewNote(
       ...[
         ...preFindingsSections,
         ...(findingsSection ? [findingsSection] : []),
+        ...(missingInformationSection ? [missingInformationSection] : []),
         ...postFindingsSections,
         ...(warningBlock ? [warningBlock] : [])
       ].flatMap((section, index) =>
@@ -84,6 +94,22 @@ export type ReviewNoteRenderer = typeof renderReviewNote;
 
 function renderFileHeader(filePath: string): string[] {
   return [`# ${filePath}`, "", `- Source file: \`${filePath}\``];
+}
+
+function renderMissingInformationSection(
+  items: MissingInformationItem[] | undefined
+): string | undefined {
+  if (!items || items.length === 0) {
+    return undefined;
+  }
+
+  return [
+    "## Missing Information",
+    ...items.flatMap((item) => [
+      `- [${item.itemId}] ${item.description}`,
+      `  - Why it matters: ${item.whyItMatters}`
+    ])
+  ].join("\n");
 }
 
 function renderFindingsSection(

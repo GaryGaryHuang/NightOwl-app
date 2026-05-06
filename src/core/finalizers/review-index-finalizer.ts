@@ -57,7 +57,10 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
                 `[${deriveFileRiskLevel(resolved.outcome.findings)}]`,
                 formatSemanticBadge(resolved.outcome.semanticReview)
               ].filter(Boolean).join("");
-              return `- ${prefix} [\`${note.filePath}\`](${link})`;
+              return [
+                `- ${prefix} [\`${note.filePath}\`](${link})`,
+                ...formatMissingInformationDetails(resolved.outcome.semanticReview)
+              ].join("\n");
             }
 
             return `- [Skipped] [\`${note.filePath}\`](${link})`;
@@ -83,6 +86,19 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
       "## File Notes",
       ...fileNoteLines
     ].join("\n");
+}
+
+function formatMissingInformationDetails(input: {
+  missingInformationCount: number;
+} | undefined): string[] {
+  if (!input || input.missingInformationCount === 0) {
+    return [];
+  }
+
+  const itemLabel = input.missingInformationCount === 1 ? "item" : "items";
+  return [
+    `  - Missing information: ${input.missingInformationCount} ${itemLabel}; open the file note and read \`## Missing Information\`.`
+  ];
 }
 
 export type ReviewIndexRenderer = typeof renderReviewIndex;

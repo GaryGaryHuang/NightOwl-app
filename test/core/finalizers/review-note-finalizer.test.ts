@@ -277,6 +277,31 @@ test("Finalizer renders findings stats and must before nice", () => {
   ]);
 });
 
+test("Finalizer renders missing-information details after Findings", () => {
+  const context = createContext();
+
+  context.setSection("overview", "## Overview\nContent");
+  context.setFindings([]);
+  context.setMissingInformationItems([
+    {
+      itemId: "MI1",
+      description: "Need the ShazamKit callback contract.",
+      whyItMatters: "Without it the review cannot prove timeout behavior."
+    }
+  ]);
+  context.setSection("summary", "## Summary\nSummary content");
+
+  const result = finalizer(context);
+
+  assertTextContainsInOrder(result, [
+    "## Findings",
+    "## Missing Information",
+    "- [MI1] Need the ShazamKit callback contract.",
+    "Why it matters: Without it the review cannot prove timeout behavior.",
+    "## Summary"
+  ]);
+});
+
 test("Finalizer excludes internal fields from rendered findings", () => {
   const context = createContext();
 

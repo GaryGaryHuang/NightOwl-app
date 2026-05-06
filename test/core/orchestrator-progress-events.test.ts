@@ -213,7 +213,7 @@ test("ReviewOrchestrator caps semantic Step 5/6 reruns at two before continuing 
     ]
   );
   assert.equal(step7LoopAction, "accept");
-  assert.deepEqual(step7MissingInformationIds, ["MI-semantic-3"]);
+  assert.deepEqual(step7MissingInformationIds, []);
 });
 
 test("ReviewOrchestrator stops repeated unsupported semantic claims without spending all reruns", async () => {
@@ -279,7 +279,7 @@ test("ReviewOrchestrator stops repeated unsupported semantic claims without spen
     "step7-summary"
   ]);
   assert.equal(step7LoopAction, "accept");
-  assert.deepEqual(step7MissingInformationIds, ["MI-semantic-repeated-2"]);
+  assert.deepEqual(step7MissingInformationIds, []);
 });
 
 test("ReviewOrchestrator honors Step 6 missing-critical-contract stop without semantic rerun", async () => {

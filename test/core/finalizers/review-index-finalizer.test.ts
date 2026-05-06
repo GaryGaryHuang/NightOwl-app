@@ -254,6 +254,10 @@ test("ReviewIndexFinalizer distinguishes missing-information semantic stops from
     rendered,
     /- \[None\]\[Limited\]\[MissingInfo\] \[`src\/blocked\.ts`\]\(\.\/files\/src\/blocked\.ts\.md\)/u
   );
+  assert.match(
+    rendered,
+    /Missing information: 1 item; open the file note and read `## Missing Information`/u
+  );
 });
 
 function assertTextContainsInOrder(text: string, fragments: string[]): void {

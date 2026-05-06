@@ -760,15 +760,7 @@ export class ReviewOrchestrator {
       ) {
         const fingerprint = buildCurrentCandidateFingerprint(fileContext);
         if (fingerprint && semanticCandidateFingerprints.has(fingerprint)) {
-          const missingInformationItems = [
-            ...(fileContext.getMissingInformationItems() ?? []),
-            {
-              itemId: `MI-semantic-repeated-${semanticRerunCount + 1}`,
-              description: "Step 5 repeated an unsupported candidate without new evidence.",
-              whyItMatters: "The semantic validator must stop repeated unsupported claims instead of approving or looping forever."
-            }
-          ];
-          fileContext.setMissingInformationItems(missingInformationItems);
+          const missingInformationItems = fileContext.getMissingInformationItems() ?? [];
           markSemanticLoopStopped(fileContext, {
             reason: "Step 5 repeated an unsupported candidate without new evidence.",
             missingInformationItems
@@ -789,15 +781,7 @@ export class ReviewOrchestrator {
           continue;
         }
 
-        const missingInformationItems = [
-          ...(fileContext.getMissingInformationItems() ?? []),
-          {
-            itemId: `MI-semantic-${semanticRerunCount + 1}`,
-            description: "Step 6 requested another Step 5 rerun after the semantic rerun budget was exhausted.",
-            whyItMatters: "The review cannot keep iterating without turning StepRunner format retry and semantic validation retry into the same budget."
-          }
-        ];
-        fileContext.setMissingInformationItems(missingInformationItems);
+        const missingInformationItems = fileContext.getMissingInformationItems() ?? [];
         markSemanticLoopStopped(fileContext, {
           reason: "Step 6 requested another Step 5 rerun after the semantic rerun budget was exhausted.",
           missingInformationItems

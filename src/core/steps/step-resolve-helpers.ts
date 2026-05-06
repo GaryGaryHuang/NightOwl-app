@@ -141,6 +141,7 @@ export function createStep7HybridResolve(input: {
     }
 
     rejectUnknownStep7Claims(response, input);
+    rejectInternalStep7Wording(response);
 
     // Judge check: section structure validation
     if (!services.judgeService) {
@@ -163,6 +164,17 @@ export function createStep7HybridResolve(input: {
     };
   };
 }
+
+const INTERNAL_STEP7_WORDING_PATTERNS: readonly RegExp[] = [
+  /\brisk_snapshot\b/iu,
+  /\bderivedRiskLevel\b/u,
+  /\bmustCount\b/u,
+  /\bniceCount\b/u,
+  /\bacceptedFindingIds\b/u,
+  /\bReviewBasisV1\b/u,
+  /\bapprovedFindings\b/u,
+  /\bStep\s*6\b/iu
+];
 
 function rejectUnknownStep7Claims(
   response: string,
@@ -190,6 +202,17 @@ function rejectUnknownStep7Claims(
           `Step 7 packaging introduced a new missing-information claim outside Step 6 state: ${missingInfoId}`
         );
       }
+    }
+  }
+}
+
+function rejectInternalStep7Wording(response: string): void {
+  for (const pattern of INTERNAL_STEP7_WORDING_PATTERNS) {
+    const match = pattern.exec(response);
+    if (match) {
+      throw new Error(
+        `Step 7 packaging exposed internal review field in reader-facing summary: ${match[0]}`
+      );
     }
   }
 }

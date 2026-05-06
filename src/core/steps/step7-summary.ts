@@ -10,11 +10,13 @@ import { createStep7HybridResolve } from "./step-resolve-helpers.ts";
 
 const STEP7_SYSTEM_ADDITION = [
   "## Current Step: Summary",
-  "- Produce a structured summary based on ReviewBasis, Step 6-approved findings, Step 6 missing-information items, and the host risk snapshot.",
+  "- Produce a structured summary based on the review basis, validated findings, missing-information items, and the host risk package.",
   "- The summary is the section readers check first; every sentence must earn its place. Prefer precise conclusions over generic hedging. When uncertainty is real, tie it to the exact missing fact or unresolved evidence \u2014 do not append a vague disclaimer.",
   "- Do not list specific findings, must-fix items, or paraphrased finding details \u2014 those belong in the Findings section.",
-  "- Consume only ReviewBasis, Step 6-approved findings, missing-information items, and the host risk snapshot. Do not introduce new findings, identifiers, trigger conditions, impacts, or technical claims.",
-  "- The `<risk_snapshot>` block in the user message contains the host-computed `derivedRiskLevel`. You MUST use this exact value as the `整體風險等級` in your response. Do not override or recompute the risk level based on your own assessment.",
+  "- Consume only the review basis, validated findings, missing-information items, and the host risk package. Do not introduce new findings, identifiers, trigger conditions, impacts, or technical claims.",
+  "- The `<risk_snapshot>` block in the user message contains the host-computed risk level. You MUST use that exact value as the `整體風險等級` in your response. Do not override or recompute the risk level based on your own assessment.",
+  "- Do not expose internal field names in reader-facing prose. Avoid terms such as `risk_snapshot`, `derivedRiskLevel`, `mustCount`, `niceCount`, `acceptedFindingIds`, `ReviewBasisV1`, `Step 6`, and `approvedFindings`.",
+  "- If missing-information items exist, `必要假設` must summarize those missing facts for a human reader. Do not write `無` when missing-information state is non-empty.",
   "- Begin the response with `## Summary`."
 ].join("\n");
 
@@ -72,11 +74,19 @@ export class Step7SummaryStep implements StepDefinition {
 }
 
 function buildStep7UserMessage(reviewState: string, snapshot: RiskSnapshot): string {
+  const readerSafeSnapshot = {
+    riskLevel: snapshot.derivedRiskLevel,
+    mustFixFindingCount: snapshot.mustCount,
+    niceToHaveFindingCount: snapshot.niceCount,
+    findingIds: snapshot.acceptedFindingIds,
+    basis: snapshot.riskBasis
+  };
+
   return [
     reviewState,
     "",
     "<risk_snapshot>",
-    JSON.stringify(snapshot),
+    JSON.stringify(readerSafeSnapshot),
     "</risk_snapshot>",
     "",
     buildStep7Instruction()
@@ -86,23 +96,23 @@ function buildStep7UserMessage(reviewState: string, snapshot: RiskSnapshot): str
 function buildStep7Instruction(): string {
   return [
     "This summary is the section readers check first. Every sentence must earn its place.",
-    "Use only ReviewBasis, Step 6-approved findings, Step 6 missing-information items, and the host risk snapshot. Do not introduce new findings or technical claims.",
+    "Use only the review basis, validated findings, missing-information items, and the host risk package. Do not introduce new findings or technical claims.",
     "",
     "Read <review_state> and write a structured summary with the following three sections:",
     "",
     "1. 審查基礎: Give the reader just enough context to judge whether the review's conclusions are well grounded.",
-    "   - 改動概要: One sentence describing this file's specific before→after transformation, based on `ReviewBasisV1.roleInChangeset` and `ReviewBasisV1.changedBehavior` plus Step 6-approved review state. Do not repeat content that will appear in 行為變更提醒.",
+    "   - 改動概要: One sentence describing this file's specific before→after transformation, based on the prepared role and behavior-change evidence plus the validated review state. Do not repeat content that will appear in 行為變更提醒.",
     "   - 依據規範: Only list specifications or references that were decisive for this review's conclusions — omit generic build config (gradle versions, build.gradle.kts) that applies to every file in the changeset.",
-    "   - 必要假設: State only assumptions that materially shaped the review's conclusions and still could not be confirmed from user context, source-of-truth references, repo evidence, code, dependency implementation, or tool results. If no necessary assumptions remain, write `無`.",
+    "   - 必要假設: State only assumptions or missing facts that materially shaped the review's conclusions and still could not be confirmed from user context, source-of-truth references, repo evidence, code, dependency implementation, or tool results. If `missingInformationItems` is non-empty, summarize each item in reader-facing language. If no necessary assumptions or missing facts remain, write `無`.",
     "",
     "2. 行為變更提醒: Tell the reader what changed at runtime that they or the author should verify. This section must add information beyond 改動概要.",
     "   - State each behavioral change as a direct fact (e.g. \"停止服務改為呼叫 stopForeground(STOP_FOREGROUND_REMOVE)\"), not as a meta-observation (e.g. \"可觀察到的變更是…\").",
     "   - Do not restate finding details. If correctness was established through final findings, reflect that through 風險評估 instead of duplicating the finding here.",
     "   - If the change has no runtime behavioral impact (e.g. annotation-only removal), write `無行為變更`.",
     "",
-    "3. 風險評估: Use the `derivedRiskLevel` from `<risk_snapshot>` as the `整體風險等級`. Do not recompute or override it.",
-    "   - 整體風險等級: Copy the exact value from `<risk_snapshot>` `derivedRiskLevel` field (High / Low / None).",
-    "   - 風險理由: Reference the specific findings (or their absence) that determined the level. Do not add hedging qualifiers about residual uncertainty.",
+    "3. 風險評估: Use the host-computed risk level from `<risk_snapshot>` as the `整體風險等級`. Do not recompute or override it.",
+    "   - 整體風險等級: Copy the exact `riskLevel` value from `<risk_snapshot>` (High / Low / None).",
+    "   - 風險理由: Explain in user-facing terms how confirmed findings, unresolved missing information, and affected behavior determined the level. Do not mention internal field names or add hedging tails.",
     "",
     "Respond in the following format:",
     "",
@@ -120,9 +130,9 @@ function buildStep7Instruction(): string {
     "Before submitting your response, verify:",
     "- Begins with `## Summary`",
     "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、必要假設",
-    "- 改動概要 is one sentence; 必要假設 lists only unresolved assumptions that shaped conclusions, or explicitly states 無; 依據規範 omits generic build config",
+    "- 改動概要 is one sentence; 必要假設 lists unresolved assumptions or missing facts that shaped conclusions, or explicitly states 無 only when missing-information state is empty; 依據規範 omits generic build config",
     "- Contains `### 行為變更提醒` that adds information beyond 改動概要, or states `無行為變更`",
-    "- Contains `### 風險評估` with 整體風險等級 matching `<risk_snapshot>` derivedRiskLevel exactly, and 風險理由 free of hedging tails"
+    "- Contains `### 風險評估` with 整體風險等級 matching the host-computed risk level exactly, and 風險理由 free of hedging tails or internal field names"
   ].join("\n");
 }
 
