@@ -3,7 +3,7 @@ import {
   type ChangeMapReadiness
 } from "./change-map.ts";
 import { createRunContext, type RunContext } from "./run-context.ts";
-import { retryOnce } from "./session-retry.ts";
+import { retryWithLimit } from "./session-retry.ts";
 import type { ReviewChangesetEntry } from "../providers/review-source-provider.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import {
@@ -58,7 +58,7 @@ export class ChangesetOverviewRunner {
     );
     let retryRepairFailure: Step0ValidationDiagnostic | undefined;
 
-    return retryOnce({
+    return retryWithLimit({
       execute: async (attempt) => {
         const session = await this.#reviewSessionFactory.createSession({
           stepId: "changeset-overview",

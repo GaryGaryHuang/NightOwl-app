@@ -218,7 +218,14 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     new StepRunner({
       reviewSessionFactory,
       judgeService,
-      structuredOutputValidator: new StructuredOutputValidator()
+      structuredOutputValidator: new StructuredOutputValidator(),
+      onStepRetry(info) {
+        shared.onProgressEvent?.({
+          type: "review-session-log",
+          stepId: info.stepId,
+          message: formatStepRetryDiagnostic(info)
+        });
+      }
     });
 
   return new ReviewOrchestrator({
@@ -237,6 +244,30 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     onOutputTargetReady,
     onRunLevelFailureOutputTargetReady
   });
+}
+
+function formatStepRetryDiagnostic(info: {
+  filePath: string;
+  attempt: number;
+  cause: string;
+  model?: string;
+  promptHash?: string;
+  schemaId?: string;
+  outputBaseDir?: string;
+  verifierReportPath?: string;
+}): string {
+  const fields = [
+    `file=${info.filePath}`,
+    `attempt=${info.attempt + 1}`,
+    info.model === undefined ? undefined : `model=${info.model}`,
+    info.promptHash === undefined ? undefined : `promptHash=${info.promptHash}`,
+    info.schemaId === undefined ? undefined : `schema=${info.schemaId}`,
+    info.outputBaseDir === undefined ? undefined : `outputBaseDir=${info.outputBaseDir}`,
+    info.verifierReportPath === undefined ? undefined : `verifierReport=${info.verifierReportPath}`,
+    `cause=${JSON.stringify(info.cause)}`
+  ].filter((field): field is string => field !== undefined);
+
+  return `Step retry (${fields.join(", ")})`;
 }
 
 function createProductionToolAuditLifecycle(

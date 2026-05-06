@@ -685,7 +685,7 @@ export class ReviewOrchestrator {
         result = await this.#stepRunner.run({
           step,
           context: fileContext,
-          outputBaseDir: input.repoRoot,
+          outputBaseDir: input.outputTarget.basePath,
           repoRoot: input.repoRoot,
           signal: input.signal,
           workingDirectory: input.repoRoot

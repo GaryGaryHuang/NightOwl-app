@@ -138,9 +138,9 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
               ) {
                 context7Failures += 1;
 
-                // Fail the first two attempts (initial + 1 retry), exhausting
+                // Fail the first three attempts (initial + 2 retries), exhausting
                 // one file's retry budget so it is skipped. The rest succeed.
-                if (context7Failures <= 2) {
+                if (context7Failures <= 3) {
                   throw new Error("context7 startup failed");
                 }
               }
@@ -195,7 +195,7 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
       dryRun: false
     });
 
-    assert.ok(context7Failures >= 2);
+    assert.ok(context7Failures >= 3);
     assert.equal(result.skippedFileCount, 1);
     assert.ok(result.plannedFileCount >= 3);
     assert.ok(result.successfulFileCount >= 1);

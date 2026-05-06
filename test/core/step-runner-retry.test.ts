@@ -4,6 +4,8 @@ import test from "node:test";
 import { StepRunner } from "../../src/core/step-runner.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import { createRunContext } from "../../src/core/run-context.ts";
+import { ReviewBasisStep } from "../../src/core/steps/review-basis-step.ts";
 import { createCandidateFindingsV3Resolve } from "../../src/core/steps/step-resolve-helpers.ts";
 import {
   createReviewSessionFactory,
@@ -138,7 +140,7 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
     /Step step7-summary failed for src\/app\.ts: judge rejected/u
   );
 
-  assert.equal(reviewAttempts, 2);
+  assert.equal(reviewAttempts, 3);
   assert.equal(context.getSection("summary"), undefined);
 });
 
@@ -220,6 +222,63 @@ test("StepRunner records structured validation reports without committing partia
     ["F1"]
   );
   assert.equal(context.getFindings(), undefined);
+});
+
+test("StepRunner fails ReviewBasisStep after three parse failures without fallback", async () => {
+  const prompts: string[] = [];
+  const context = createStepRunnerContext({
+    filePath: "KKBOX/src/main/java/com/kkbox/recognition/viewmodel/MusicRecognitionViewModel.kt",
+    diffContent: "@@ -10,2 +10,2 @@\n-oldUi()\n+newUi()\n"
+  });
+  const runContext = createRunContext({
+    userContext: [],
+    changesetOverview: {
+      reviewObjective: {
+        summary: "Update MusicRecognitionViewModel to use the new UseCase flow.",
+        requestedFocus: [],
+        expectedBehaviorSummary: []
+      },
+      userContext: [],
+      userBehavior: [],
+      missingInformation: [],
+      overviewMarkdown: "## Changeset Overview\n- Update MusicRecognitionViewModel to use the new UseCase flow.",
+      behaviorChanges: [
+        {
+          description: "Update MusicRecognitionViewModel to use the new UseCase flow.",
+          files: [
+            "KKBOX/src/main/java/com/kkbox/recognition/viewmodel/MusicRecognitionViewModel.kt"
+          ]
+        }
+      ],
+      unresolvedUnknowns: []
+    }
+  });
+  const runner = new StepRunner({
+    reviewSessionFactory: createReviewSessionFactory({
+      onSendAndWait({ prompt }) {
+        prompts.push(prompt);
+        return "{ invalid json";
+      }
+    })
+  });
+
+  await assert.rejects(
+    () =>
+      runner.run({
+        step: new ReviewBasisStep({ runContext }),
+        context,
+        outputBaseDir: "/workspace/output",
+        repoRoot: "/workspace/repo"
+      }),
+    /Step review-basis failed for KKBOX\/src\/main\/java\/com\/kkbox\/recognition\/viewmodel\/MusicRecognitionViewModel\.kt: ReviewBasis validation failed: response is not valid JSON/u
+  );
+
+  assert.equal(prompts.length, 3);
+  assert.doesNotMatch(prompts[0] ?? "", /retry_repair_context/u);
+  assert.match(prompts[1] ?? "", /ReviewBasis validation failed: response is not valid JSON/u);
+  assert.match(prompts[2] ?? "", /ReviewBasis validation failed: response is not valid JSON/u);
+  assert.equal(context.getReviewBasis(), undefined);
+  assert.equal(context.getVerifierReportEntries(), undefined);
 });
 
 test("StepRunner retries the whole step on judge timeout with fresh review and judge attempts", async () => {
@@ -337,7 +396,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
     /Step step7-summary failed for src\/app\.ts: review startup failed/u
   );
 
-  assert.equal(createAttempts, 2);
+  assert.equal(createAttempts, 3);
 });
 
 test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause when the first attempt fails", async () => {
@@ -368,12 +427,27 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
   result.applyTo(context);
 
   assert.equal(retryInfos.length, 1);
-  assert.deepEqual(retryInfos[0], {
-    stepId: "step7-summary",
-    filePath: "src/app.ts",
-    attempt: 0,
-    cause: "judge rejected"
-  });
+  assert.deepEqual(
+    {
+      ...(retryInfos[0] as Record<string, unknown>),
+      promptHash: "<stable-hash>"
+    },
+    {
+      stepId: "step7-summary",
+      filePath: "src/app.ts",
+      attempt: 0,
+      cause: "judge rejected",
+      model: "gpt-5-mini",
+      promptHash: "<stable-hash>",
+      schemaId: "Step7MarkdownSummary",
+      outputBaseDir: "/workspace/output",
+      verifierReportPath: "/workspace/output/verifier-report.jsonl"
+    }
+  );
+  assert.match(
+    (retryInfos[0] as { promptHash?: string }).promptHash ?? "",
+    /^[0-9a-f]{8}$/u
+  );
 });
 
 test("StepRunner does not invoke onStepRetry when the step succeeds on the first attempt", async () => {
@@ -516,9 +590,10 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
     /Step step7-summary failed for src\/app\.ts: judge rejected/u
   );
 
-  // Called exactly once for attempt 0; NOT called for the final failure (attempt 1).
-  assert.equal(retryInfos.length, 1);
+  // Called for attempts 0 and 1; NOT called for the final failure (attempt 2).
+  assert.equal(retryInfos.length, 2);
   assert.equal((retryInfos[0] as { attempt: number }).attempt, 0);
+  assert.equal((retryInfos[1] as { attempt: number }).attempt, 1);
 });
 
 function createReviewBasis(): ReviewBasisV1 {

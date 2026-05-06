@@ -2,7 +2,7 @@ import type { FileReviewContext } from "./file-review-context.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
-import { retryOnce } from "./session-retry.ts";
+import { retryWithLimit } from "./session-retry.ts";
 import {
   StructuredOutputValidator,
   StructuredValidationReportError
@@ -86,6 +86,11 @@ export interface StepRetryInfo {
   filePath: string;
   attempt: number;
   cause: string;
+  model?: string;
+  promptHash?: string;
+  schemaId?: string;
+  outputBaseDir?: string;
+  verifierReportPath?: string;
 }
 
 export interface StepRunnerOptions {
@@ -121,10 +126,23 @@ export class StepRunner {
 
   async run(input: RunStepInput): Promise<StepResult> {
     let retryFeedback: string | undefined;
+    let retryDiagnostics: Omit<
+      StepRetryInfo,
+      "attempt" | "cause"
+    > | undefined;
 
-    return retryOnce({
+    return retryWithLimit({
       execute: async (attempt) => {
         const plan = input.step.prepare(input.context);
+        retryDiagnostics = {
+          stepId: plan.stepId,
+          filePath: input.context.filePath,
+          model: plan.reviewProfile.model,
+          promptHash: hashPrompt(plan.prompt.systemMessage, plan.prompt.userMessage),
+          schemaId: schemaIdForStep(plan.stepId),
+          outputBaseDir: input.outputBaseDir,
+          verifierReportPath: `${input.outputBaseDir}/verifier-report.jsonl`
+        };
         const sessionProfile = {
           stepId: plan.stepId,
           knowledgeMode: plan.reviewProfile.knowledgeMode,
@@ -182,10 +200,21 @@ export class StepRunner {
       },
       onRetry: (attempt, cause) => {
         this.#onStepRetry?.({
-          stepId: input.step.stepId,
-          filePath: input.context.filePath,
+          stepId: retryDiagnostics?.stepId ?? input.step.stepId,
+          filePath: retryDiagnostics?.filePath ?? input.context.filePath,
           attempt,
-          cause
+          cause,
+          ...(retryDiagnostics?.model === undefined ? {} : { model: retryDiagnostics.model }),
+          ...(retryDiagnostics?.promptHash === undefined
+            ? {}
+            : { promptHash: retryDiagnostics.promptHash }),
+          ...(retryDiagnostics?.schemaId === undefined ? {} : { schemaId: retryDiagnostics.schemaId }),
+          ...(retryDiagnostics?.outputBaseDir === undefined
+            ? {}
+            : { outputBaseDir: retryDiagnostics.outputBaseDir }),
+          ...(retryDiagnostics?.verifierReportPath === undefined
+            ? {}
+            : { verifierReportPath: retryDiagnostics.verifierReportPath })
         });
       },
       buildFinalError: (lastCause) => {
@@ -194,9 +223,37 @@ export class StepRunner {
           filePath: input.context.filePath,
           cause: lastCause
         });
-      }
+      },
+      maxAttempts: 3
     });
   }
+}
+
+function schemaIdForStep(stepId: string): string {
+  switch (stepId) {
+    case "review-basis":
+      return "ReviewBasisV1";
+    case "step5-validation-interrogation":
+      return "CandidateFindingsV3";
+    case "step6-cognitive-simulation":
+      return "ValidationReportV1";
+    case "step7-summary":
+      return "Step7MarkdownSummary";
+    default:
+      return "unknown";
+  }
+}
+
+function hashPrompt(systemMessage: string, userMessage: string): string {
+  const value = `${systemMessage}\n---\n${userMessage}`;
+  let hash = 0x811c9dc5; // FNV-1a 32-bit; diagnostic identity only.
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function appendRetryRepairContext(userMessage: string, retryFeedback: string): string {
