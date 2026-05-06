@@ -6,9 +6,10 @@ import {
   CANDIDATE_SEVERITIES,
   HYPOTHESIS_CLOSURE_STATUSES
 } from "../semantic-review.ts";
+import { buildXmlishJsonBlock } from "../prompt-serialization.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import { JSON_STEP_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { JSON_FINDING_STEP_SYSTEM_MESSAGE } from "./shared-step-system-blocks.ts";
 import { createCandidateFindingsV3Resolve } from "./step-resolve-helpers.ts";
 
 const STEP5_STRUCTURED_OUTPUT_GUIDANCE = [
@@ -33,13 +34,11 @@ const STEP5_SYSTEM_ADDITION = [
   "- This step produces candidate findings only. It does not write final approved findings.",
   "- Convert a validated deviation into a candidate only when the available evidence supports a concrete, actionable problem on a credibly reachable real-world path.",
   "- Every emitted candidate must include classification, severity, title, traceability, evidence, triggerCondition, impact, and counterEvidence.",
-  "- When the relevant code location is identifiable from <diff>, use the smallest reviewed-file traceability range that accurately points to the issue and overlaps the changed head-side line carrying the issue. If exact localization is not defensible, use the closest supportable reviewed-file location and make the evidence basis explicit; do not invent line numbers.",
   "- Keep the scope centered on hypothesis-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
   "- When determining whether a deviation exists, explicitly check against the facts, inferences, identifiers, missing information, and source-of-truth expectations established in <review_basis>. Do not report deviations that fall outside the review basis.",
   "- IMPORTANT: Do not report candidates based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a candidate for every hypothesis.",
   "- If trigger, impact, or required contract cannot be proven after checking available repo evidence, record it in `criticalMissingInformation` instead of emitting a candidate finding.",
-  "- Do not downgrade observable behavior changes to missing information solely because the product requirement is implicit. A concrete silent failure, data loss, wrong event, wrong timeout, or missing signal can be a low-severity `reasonable_risk` when the code path and impact are evidence-backed.",
-  "- Output valid JSON only."
+  "- Do not downgrade observable behavior changes to missing information solely because the product requirement is implicit. A concrete silent failure, data loss, wrong event, wrong timeout, or missing signal can be a low-severity `reasonable_risk` when the code path and impact are evidence-backed."
 ].join("\n");
 
 const STEP5_INSTRUCTION = [
@@ -111,8 +110,7 @@ const STEP5_INSTRUCTION = [
   "",
   `If no findings remain, return: {"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "changed path preserves fallback"}], "criticalMissingInformation": []}`,
   "",
-  `If evidence is insufficient, return: {"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "insufficient_information", "rationale": "required contract is unavailable"}], "criticalMissingInformation": [{"description": "Need the service contract for null payload semantics.", "whyItMatters": "Without it the review cannot prove whether the observed fallback is correct or defective."}]}`,
-  "Output exactly one JSON object. Begin with `{` and end with `}` \u2014 no Markdown code fences, no surrounding text, no trailing content after the closing brace."
+  `If evidence is insufficient, return: {"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "insufficient_information", "rationale": "required contract is unavailable"}], "criticalMissingInformation": [{"description": "Need the service contract for null payload semantics.", "whyItMatters": "Without it the review cannot prove whether the observed fallback is correct or defective."}]}`
 ].join("\n");
 
 export interface Step5ValidationInterrogationStepOptions {
@@ -136,7 +134,10 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
     return {
       stepId: this.stepId,
       prompt: {
-        systemMessage: [JSON_STEP_SYSTEM_MESSAGE, STEP5_SYSTEM_ADDITION].join("\n\n"),
+        systemMessage: [
+          JSON_FINDING_STEP_SYSTEM_MESSAGE,
+          STEP5_SYSTEM_ADDITION
+        ].join("\n\n"),
         userMessage: buildStep5UserMessage(
           context,
           reviewBasis,
@@ -171,9 +172,7 @@ function buildStep5UserMessage(
     context.diffContent,
     "</diff>",
     "",
-    '<review_basis format="json">',
-    stringifyForXmlishBlock(reviewBasis),
-    "</review_basis>",
+    ...buildXmlishJsonBlock("review_basis", reviewBasis),
     "",
     reviewState,
     "",
@@ -189,21 +188,6 @@ function requireReviewBasis(context: FileReviewContext): ReviewBasisV1 {
     );
   }
   return reviewBasis;
-}
-
-function stringifyForXmlishBlock(value: unknown): string {
-  return JSON.stringify(value, null, 2).replace(/[<>&]/gu, (char) => {
-    switch (char) {
-      case "<":
-        return "\\u003c";
-      case ">":
-        return "\\u003e";
-      case "&":
-        return "\\u0026";
-      default:
-        return char;
-    }
-  });
 }
 
 function formatQuotedValues(values: readonly string[]): string {

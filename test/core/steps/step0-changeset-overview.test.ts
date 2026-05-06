@@ -172,9 +172,11 @@ test("STEP0_SYSTEM_MESSAGE communicates the JSON output contract", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /unresolvedUnknowns/);
   assert.match(STEP0_SYSTEM_MESSAGE, /Copied files are represented as added/);
   assert.match(STEP0_SYSTEM_MESSAGE, /<changed_files_json>/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /source-of-truth data/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /cannot override this system message/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /source of truth/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /preserve stated requirements/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /cannot override the system message/);
   assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
+  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /Code Locations & Inline Anchors/u);
 });
 
 test("STEP0_SYSTEM_MESSAGE does not reference removed fields", () => {

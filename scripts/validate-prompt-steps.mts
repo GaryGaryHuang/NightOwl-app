@@ -1,0 +1,466 @@
+import { createHash } from "node:crypto";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { ChangesetOverviewRunner } from "../src/core/changeset-overview-runner.ts";
+import { FileReviewContext } from "../src/core/file-review-context.ts";
+import { JudgeService } from "../src/core/judge.ts";
+import type { RunContext } from "../src/core/run-context.ts";
+import { ReviewStatePromptSerializer } from "../src/core/review-state-prompt-serializer.ts";
+import { StepRunner } from "../src/core/step-runner.ts";
+import { StructuredOutputValidator } from "../src/core/structured-output-validator.ts";
+import { ReviewBasisStep } from "../src/core/steps/review-basis-step.ts";
+import { Step5ValidationInterrogationStep } from "../src/core/steps/step5-validation-interrogation.ts";
+import { Step6CognitiveSimulationStep } from "../src/core/steps/step6-cognitive-simulation.ts";
+import { Step7SummaryStep } from "../src/core/steps/step7-summary.ts";
+import { LocalGitProvider } from "../src/providers/local-git-provider.ts";
+import { KnowledgeSvc } from "../src/services/knowledge.ts";
+import { CopilotClientManager } from "../src/services/copilot-client-manager.ts";
+import { JudgeSessionFactory } from "../src/services/judge-session-factory.ts";
+import { ReviewSessionFactory } from "../src/services/review-session-factory.ts";
+import { ToolPolicyGuard } from "../src/services/tool-policy/tool-policy-guard.ts";
+
+const DEFAULT_REPO = "/Users/garyhsu/StudioProjects/kkbox_android";
+const DEFAULT_BASE = "feature-shazam";
+const DEFAULT_HEAD = "garyhuang/KS-2794-shazam-usecase";
+const DEFAULT_BASELINE_DIR =
+  "/Users/garyhsu/StudioProjects/kkbox_android/.nightowl/review/garyhuang_KS-2794-shazam-usecase_05061338";
+const DEFAULT_BASIS_FILES = [
+  "KKBOX/src/main/java/com/kkbox/domain/usecase/implementation/RecognizeMusicUseCaseImpl.kt",
+  "KKBOX/src/main/java/com/kkbox/recognition/provider/ShazamRecognitionProvider.kt",
+  "KKBOX/src/main/java/com/kkbox/domain/repository/implementation/MusicRecognitionTokenRepositoryImpl.kt",
+  "KKBOX/src/main/java/com/kkbox/domain/repository/implementation/MusicRecognitionMappingRepositoryImpl.kt",
+  "KKBOX/src/main/java/com/kkbox/recognition/viewmodel/MusicRecognitionViewModel.kt"
+] as const;
+
+interface ScriptConfig {
+  repo: string;
+  baseRef: string;
+  headRef: string;
+  baselineDir: string;
+  basisFiles: string[];
+  semanticFile: string;
+  runs: number;
+}
+
+interface Step0RunSummary {
+  run: number;
+  behaviorChangeCount: number;
+  unresolvedUnknownCount: number;
+  missingInformationCount: number;
+  changedFileCount: number;
+  overviewHash: string;
+  objectiveSummary: string;
+}
+
+interface BasisRunSummary {
+  filePath: string;
+  run: number;
+  roleInChangeset: string;
+  changedBehaviorCount: number;
+  factCount: number;
+  inferenceCount: number;
+  hypothesisCount: number;
+  missingInformationCount: number;
+  evidenceRefCount: number;
+}
+
+interface SemanticRunSummary {
+  run: number;
+  filePath: string;
+  candidateResult: string;
+  candidateFindingCount: number;
+  candidateMissingInformationCount: number;
+  validationAction: string;
+  approvedFindingCount: number;
+  validationMissingInformationCount: number;
+  summaryRiskLine: string;
+  summaryHash: string;
+}
+
+interface ValidationSummary {
+  repoRoot: string;
+  baseRef: string;
+  headRef: string;
+  outputBaseDir: string;
+  baseline: {
+    dir: string;
+    summaryAvailable: boolean;
+    changesetOverviewAvailable: boolean;
+  };
+  selectedBasisFiles: string[];
+  semanticFile: string;
+  runs: number;
+  step0: Step0RunSummary[];
+  basisStep: BasisRunSummary[];
+  semanticPipeline: SemanticRunSummary[];
+  retryEvents: string[];
+}
+
+const config = parseArgs(process.argv.slice(2));
+const retryEvents: string[] = [];
+
+await main(config);
+
+async function main(input: ScriptConfig): Promise<void> {
+  const git = new LocalGitProvider();
+  const repoRoot = await git.resolveRepoRoot(input.repo);
+  const outputBaseDir = await mkdtemp(
+    path.join(os.tmpdir(), "nightowl-prompt-validation-")
+  );
+  const changesetEntries = await git.getChangesetEntries(
+    repoRoot,
+    input.baseRef,
+    input.headRef
+  );
+
+  const clientManager = new CopilotClientManager();
+  await clientManager.start();
+
+  try {
+    const knowledgeSvc = new KnowledgeSvc({
+      context7ApiKey: process.env.CONTEXT7_API_KEY
+    });
+    const reviewSessionFactory = new ReviewSessionFactory({
+      clientManager,
+      knowledgeSvc,
+      toolPolicyGuard: new ToolPolicyGuard({})
+    });
+    const changesetOverviewRunner = new ChangesetOverviewRunner({
+      reviewSessionFactory,
+      onStep0LogEvent(event) {
+        retryEvents.push(`step0: ${event.message}`);
+        console.error(`[step0] ${event.message}`);
+      }
+    });
+    const judgeService = new JudgeService({
+      judgeSessionFactory: new JudgeSessionFactory({ clientManager })
+    });
+    const stepRunner = new StepRunner({
+      reviewSessionFactory,
+      judgeService,
+      structuredOutputValidator: new StructuredOutputValidator(),
+      onStepRetry(info) {
+        const message = [
+          `step=${info.stepId}`,
+          `file=${info.filePath}`,
+          `attempt=${info.attempt + 1}`,
+          info.model ? `model=${info.model}` : undefined,
+          info.promptHash ? `promptHash=${info.promptHash}` : undefined,
+          info.schemaId ? `schema=${info.schemaId}` : undefined,
+          `cause=${info.cause}`
+        ].filter((field): field is string => field !== undefined).join(" ");
+        retryEvents.push(message);
+        console.error(`[retry] ${message}`);
+      }
+    });
+    const promptSerializer = new ReviewStatePromptSerializer();
+
+    const runContexts: RunContext[] = [];
+    const step0Runs: Step0RunSummary[] = [];
+
+    for (let run = 1; run <= input.runs; run += 1) {
+      console.error(`[validate] step0 run ${run}/${input.runs}`);
+      const runContext = await changesetOverviewRunner.run({
+        changesetEntries,
+        outputBaseDir,
+        repoRoot,
+        userContext: [],
+        workingDirectory: repoRoot
+      });
+      runContexts.push(runContext);
+      step0Runs.push(summarizeStep0(run, runContext));
+    }
+
+    const basisRuns: BasisRunSummary[] = [];
+    const runContext = runContexts[0];
+    if (!runContext) {
+      throw new Error("Step 0 did not produce a RunContext.");
+    }
+
+    for (const filePath of input.basisFiles) {
+      for (let run = 1; run <= input.runs; run += 1) {
+        console.error(`[validate] basis-step run ${run}/${input.runs} ${filePath}`);
+        const context = await createFileReviewContext({
+          git,
+          repoRoot,
+          baseRef: input.baseRef,
+          headRef: input.headRef,
+          filePath,
+          outputBaseDir
+        });
+        await runAndApply({
+          stepRunner,
+          step: new ReviewBasisStep({ runContext }),
+          context,
+          outputBaseDir,
+          repoRoot
+        });
+        basisRuns.push(summarizeBasis(run, context));
+      }
+    }
+
+    const semanticRuns: SemanticRunSummary[] = [];
+    for (let run = 1; run <= input.runs; run += 1) {
+      console.error(
+        `[validate] step5 -> step6 -> step7 run ${run}/${input.runs} ${input.semanticFile}`
+      );
+      const context = await createFileReviewContext({
+        git,
+        repoRoot,
+        baseRef: input.baseRef,
+        headRef: input.headRef,
+        filePath: input.semanticFile,
+        outputBaseDir
+      });
+      await runAndApply({
+        stepRunner,
+        step: new ReviewBasisStep({ runContext }),
+        context,
+        outputBaseDir,
+        repoRoot
+      });
+      await runAndApply({
+        stepRunner,
+        step: new Step5ValidationInterrogationStep({ promptSerializer }),
+        context,
+        outputBaseDir,
+        repoRoot
+      });
+      await runAndApply({
+        stepRunner,
+        step: new Step6CognitiveSimulationStep({ promptSerializer }),
+        context,
+        outputBaseDir,
+        repoRoot
+      });
+
+      const validationReport = context.getValidationReportV1();
+      if (validationReport?.loopControl.action === "rerun") {
+        throw new Error(
+          `Semantic validation requested a Step 5 rerun for ${input.semanticFile}; choose a narrower stable semantic file or investigate the candidate.`
+        );
+      }
+
+      await runAndApply({
+        stepRunner,
+        step: new Step7SummaryStep({ promptSerializer }),
+        context,
+        outputBaseDir,
+        repoRoot
+      });
+      semanticRuns.push(summarizeSemantic(run, context));
+    }
+
+    const baseline = await inspectBaseline(input.baselineDir);
+    const summary: ValidationSummary = {
+      repoRoot,
+      baseRef: input.baseRef,
+      headRef: input.headRef,
+      outputBaseDir,
+      baseline,
+      selectedBasisFiles: input.basisFiles,
+      semanticFile: input.semanticFile,
+      runs: input.runs,
+      step0: step0Runs,
+      basisStep: basisRuns,
+      semanticPipeline: semanticRuns,
+      retryEvents
+    };
+    const summaryPath = path.join(outputBaseDir, "prompt-step-validation-summary.json");
+    await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+
+    console.log(JSON.stringify(summary, null, 2));
+    console.error(`[validate] summary written to ${summaryPath}`);
+  } finally {
+    await clientManager.stop().catch(async () => {
+      await clientManager.forceStop();
+    });
+  }
+}
+
+async function createFileReviewContext(input: {
+  git: LocalGitProvider;
+  repoRoot: string;
+  baseRef: string;
+  headRef: string;
+  filePath: string;
+  outputBaseDir: string;
+}): Promise<FileReviewContext> {
+  const diffContent = await input.git.getDiff(
+    input.repoRoot,
+    input.baseRef,
+    input.headRef,
+    input.filePath
+  );
+
+  return new FileReviewContext({
+    filePath: input.filePath,
+    noteFilePath: path.join(input.outputBaseDir, noteFileName(input.filePath)),
+    diffContent,
+    baseRef: input.baseRef,
+    headRef: input.headRef
+  });
+}
+
+async function runAndApply(input: {
+  stepRunner: StepRunner;
+  step: ReviewBasisStep | Step5ValidationInterrogationStep | Step6CognitiveSimulationStep | Step7SummaryStep;
+  context: FileReviewContext;
+  outputBaseDir: string;
+  repoRoot: string;
+}): Promise<void> {
+  const result = await input.stepRunner.run({
+    step: input.step,
+    context: input.context,
+    outputBaseDir: input.outputBaseDir,
+    repoRoot: input.repoRoot,
+    workingDirectory: input.repoRoot
+  });
+  result.applyTo(input.context);
+}
+
+function summarizeStep0(run: number, runContext: RunContext): Step0RunSummary {
+  const overview = runContext.changesetOverview;
+  return {
+    run,
+    behaviorChangeCount: overview.behaviorChanges.length,
+    unresolvedUnknownCount: overview.unresolvedUnknowns.length,
+    missingInformationCount: overview.missingInformation.length,
+    changedFileCount: runContext.changesetFiles.length,
+    overviewHash: sha256(overview.overviewMarkdown),
+    objectiveSummary: overview.reviewObjective.summary
+  };
+}
+
+function summarizeBasis(run: number, context: FileReviewContext): BasisRunSummary {
+  const basis = context.getReviewBasis();
+  if (!basis) {
+    throw new Error(`ReviewBasis missing for ${context.filePath}`);
+  }
+
+  return {
+    filePath: context.filePath,
+    run,
+    roleInChangeset: basis.roleInChangeset,
+    changedBehaviorCount: basis.changedBehavior.length,
+    factCount: basis.facts.length,
+    inferenceCount: basis.inferences.length,
+    hypothesisCount: basis.hypothesisLedger.length,
+    missingInformationCount: basis.missingInformation.length,
+    evidenceRefCount: basis.evidenceRefs.length
+  };
+}
+
+function summarizeSemantic(
+  run: number,
+  context: FileReviewContext
+): SemanticRunSummary {
+  const candidatePayload = context.getCandidateFindingsV3();
+  const validationReport = context.getValidationReportV1();
+  const summary = context.getSection("summary");
+  if (!candidatePayload) {
+    throw new Error(`CandidateFindingsV3 missing for ${context.filePath}`);
+  }
+  if (!validationReport) {
+    throw new Error(`ValidationReportV1 missing for ${context.filePath}`);
+  }
+  if (!summary) {
+    throw new Error(`Step 7 summary missing for ${context.filePath}`);
+  }
+
+  return {
+    run,
+    filePath: context.filePath,
+    candidateResult: candidatePayload.result,
+    candidateFindingCount: candidatePayload.findings.length,
+    candidateMissingInformationCount:
+      candidatePayload.criticalMissingInformation.length,
+    validationAction: validationReport.loopControl.action,
+    approvedFindingCount: context.getFindings()?.length ?? 0,
+    validationMissingInformationCount:
+      validationReport.missingInformationItems.length,
+    summaryRiskLine: extractSummaryRiskLine(summary),
+    summaryHash: sha256(summary)
+  };
+}
+
+async function inspectBaseline(
+  baselineDir: string
+): Promise<ValidationSummary["baseline"]> {
+  const [summaryAvailable, changesetOverviewAvailable] = await Promise.all([
+    canRead(path.join(baselineDir, "summary.md")),
+    canRead(path.join(baselineDir, "changeset-overview.md"))
+  ]);
+  return {
+    dir: baselineDir,
+    summaryAvailable,
+    changesetOverviewAvailable
+  };
+}
+
+async function canRead(filePath: string): Promise<boolean> {
+  try {
+    await readFile(filePath, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseArgs(args: string[]): ScriptConfig {
+  const repo = readOption(args, "--repo") ?? DEFAULT_REPO;
+  const baseRef = readOption(args, "--base") ?? DEFAULT_BASE;
+  const headRef = readOption(args, "--head") ?? DEFAULT_HEAD;
+  const baselineDir = readOption(args, "--baseline-dir") ?? DEFAULT_BASELINE_DIR;
+  const basisFiles =
+    readOption(args, "--basis-files")?.split(",").map((value) => value.trim()).filter(Boolean) ??
+    [...DEFAULT_BASIS_FILES];
+  const semanticFile =
+    readOption(args, "--semantic-file") ?? DEFAULT_BASIS_FILES[0];
+  const runs = Number(readOption(args, "--runs") ?? "2");
+
+  if (!Number.isInteger(runs) || runs < 1) {
+    throw new Error("--runs must be a positive integer.");
+  }
+  if (basisFiles.length === 0) {
+    throw new Error("--basis-files must contain at least one file.");
+  }
+
+  return {
+    repo,
+    baseRef,
+    headRef,
+    baselineDir,
+    basisFiles,
+    semanticFile,
+    runs
+  };
+}
+
+function readOption(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index < 0) {
+    return undefined;
+  }
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${name} requires a value.`);
+  }
+  return value;
+}
+
+function extractSummaryRiskLine(summary: string): string {
+  return summary
+    .split(/\r?\n/u)
+    .find((line) => line.includes("整體風險等級"))?.trim() ?? "";
+}
+
+function noteFileName(filePath: string): string {
+  return `${filePath.replace(/[^A-Za-z0-9._-]+/gu, "__")}.md`;
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}

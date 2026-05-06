@@ -241,16 +241,17 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
-  assert.match(plan.prompt.systemMessage, /structured field/u);
+  assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
+  assert.match(plan.prompt.systemMessage, /JSON Completion/u);
   assert.match(plan.prompt.systemMessage, /Keep the object compact/u);
   assert.match(plan.prompt.systemMessage, /Do not use it for generic test gaps/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
   assert.match(plan.prompt.userMessage, /<change_map format="json">/u);
   assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts"/u);
   assert.match(plan.prompt.userMessage, /identifierRegistry/u);
   assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
   assert.match(plan.prompt.userMessage, /Do not produce findings/u);
-  assert.match(plan.prompt.userMessage, /Structured JSON completion rules/u);
-  assert.match(plan.prompt.userMessage, /still return a minimal valid ReviewBasisV1 object/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /ReviewBasisV1 completion/u);
 });
 
 test("default per-file pipeline starts with ReviewBasis and omits legacy Step 1-4", () => {

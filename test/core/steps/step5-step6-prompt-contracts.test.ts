@@ -76,7 +76,8 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.match(plan.prompt.userMessage, /hypothetical future callers/u);
   assert.match(plan.prompt.userMessage, /omitted optional parameters/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
-  assert.match(plan.prompt.systemMessage, /structured field/u);
+  assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
+  assert.match(plan.prompt.systemMessage, /JSON Completion/u);
   for (const value of CANDIDATE_CLASSIFICATIONS) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
@@ -198,8 +199,10 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   assert.match(plan.prompt.systemMessage, /ValidationReportV1/u);
   assert.match(plan.prompt.systemMessage, /not a bug hunt/u);
   assert.match(plan.prompt.systemMessage, /Do not introduce new defects/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
-  assert.match(plan.prompt.systemMessage, /structured field/u);
+  assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
+  assert.match(plan.prompt.systemMessage, /JSON Completion/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
   assert.match(plan.prompt.userMessage, /perFindingResults/u);
   const stepInstruction = plan.prompt.userMessage.split("</review_state>")[1] ?? "";

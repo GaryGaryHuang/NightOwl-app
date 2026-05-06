@@ -11,6 +11,7 @@ import type {
   CandidateFindingsV3,
   MissingInformationItem
 } from "./semantic-review.ts";
+import { buildXmlishJsonBlock } from "./prompt-serialization.ts";
 
 export type FindingsBlockKind =
   | "candidate-findings"
@@ -77,11 +78,7 @@ export class ReviewStatePromptSerializer {
   serialize(input: ReviewStateSerializeInput): string {
     const snapshot = this.buildSnapshot(input);
 
-    return [
-      '<review_state format="json">',
-      stringifyForXmlishBlock(snapshot),
-      "</review_state>"
-    ].join("\n");
+    return buildXmlishJsonBlock("review_state", snapshot).join("\n");
   }
 
   buildSnapshot(input: ReviewStateSerializeInput): ReviewStateSnapshot {
@@ -161,19 +158,4 @@ function emptyIdentifierRegistry(): ReviewBasisIdentifierRegistry {
 
 function emptySections(): ReviewStateSnapshotSections {
   return {};
-}
-
-function stringifyForXmlishBlock(value: unknown): string {
-  return JSON.stringify(value, null, 2).replace(/[<>&]/gu, (char) => {
-    switch (char) {
-      case "<":
-        return "\\u003c";
-      case ">":
-        return "\\u003e";
-      case "&":
-        return "\\u0026";
-      default:
-        return char;
-    }
-  });
 }

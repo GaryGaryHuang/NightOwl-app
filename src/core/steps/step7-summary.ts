@@ -4,7 +4,7 @@ import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import { buildRiskSnapshot, type RiskSnapshot } from "../risk-level.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import { COMMON_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { MARKDOWN_STEP_SYSTEM_MESSAGE } from "./shared-step-system-blocks.ts";
 import { createStep7HybridResolve } from "./step-resolve-helpers.ts";
 
 
@@ -41,7 +41,7 @@ export class Step7SummaryStep implements StepDefinition {
     return {
       stepId,
       prompt: {
-        systemMessage: [COMMON_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
+        systemMessage: [MARKDOWN_STEP_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
         userMessage: buildStep7UserMessage(
           this.#promptSerializer.serialize({
             context,
@@ -95,10 +95,9 @@ function buildStep7UserMessage(reviewState: string, snapshot: RiskSnapshot): str
 
 function buildStep7Instruction(): string {
   return [
-    "This summary is the section readers check first. Every sentence must earn its place.",
-    "Use only the review basis, validated findings, missing-information items, and the host risk package. Do not introduce new findings or technical claims.",
+    "Use the validated findings and missing-information items in <review_state> plus <risk_snapshot> as the concrete inputs for the sections below.",
     "",
-    "Read <review_state> and write a structured summary with the following three sections:",
+    "Write a structured summary with the following three sections:",
     "",
     "1. 審查基礎: Give the reader just enough context to judge whether the review's conclusions are well grounded.",
     "   - 改動概要: One sentence describing this file's specific before→after transformation, based on the prepared role and behavior-change evidence plus the validated review state. Do not repeat content that will appear in 行為變更提醒.",

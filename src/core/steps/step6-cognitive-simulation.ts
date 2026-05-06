@@ -8,7 +8,7 @@ import {
   type CandidateFindingsV3
 } from "../semantic-review.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import { JSON_STEP_SYSTEM_MESSAGE } from "./common-system-message.ts";
+import { JSON_STEP_SYSTEM_MESSAGE } from "./shared-step-system-blocks.ts";
 import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
 const STEP6_SYSTEM_ADDITION = [
@@ -17,8 +17,7 @@ const STEP6_SYSTEM_ADDITION = [
   "- This step is a validator, not a bug hunt. Do not introduce new defects outside Step 5 candidate evidence chains.",
   "- Return `ValidationReportV1` with per-finding decisions, missing information items, and loop control.",
   "- If a concern is not already represented by a Step 5 candidate, record it as missing information only when it is a specific user-actionable fact that blocks reliable review judgment.",
-  "- Use `rewrite_required` when evidence, trigger, impact, counter-evidence, classification/severity alignment, identifiers, traceability, or hypothesis closure are insufficient and Step 5 can repair them. Use `drop` when the candidate is contradicted, out of scope, or too weak.",
-  "- Output valid JSON only."
+  "- Use `rewrite_required` when evidence, trigger, impact, counter-evidence, classification/severity alignment, identifiers, traceability, or hypothesis closure are insufficient and Step 5 can repair them. Use `drop` when the candidate is contradicted, out of scope, or too weak."
 ].join("\n");
 
 const STEP6_STRUCTURED_OUTPUT_GUIDANCE = [
@@ -83,8 +82,7 @@ const STEP6_INSTRUCTION = [
   "",
   "If there are no Step 5 candidates, return: {\"perFindingResults\": [], \"missingInformationItems\": [], \"loopControl\": {\"action\": \"accept\", \"reason\": \"no candidate findings to validate\"}}",
   "",
-  "If there are no Step 5 candidates but Step 5 returned user-actionable `criticalMissingInformation`, return: {\"perFindingResults\": [], \"missingInformationItems\": [{\"description\": \"Need the binary SDK API/version information for the local AAR.\", \"whyItMatters\": \"Without it the review cannot verify runtime compatibility with the changed call sites.\"}], \"loopControl\": {\"action\": \"accept\", \"reason\": \"no candidate findings to rewrite; preserve blocking missing information\"}}",
-  "Output exactly one JSON object. Begin with `{` and end with `}` — no Markdown code fences, no surrounding text, no trailing content after the closing brace."
+  "If there are no Step 5 candidates but Step 5 returned user-actionable `criticalMissingInformation`, return: {\"perFindingResults\": [], \"missingInformationItems\": [{\"description\": \"Need the binary SDK API/version information for the local AAR.\", \"whyItMatters\": \"Without it the review cannot verify runtime compatibility with the changed call sites.\"}], \"loopControl\": {\"action\": \"accept\", \"reason\": \"no candidate findings to rewrite; preserve blocking missing information\"}}"
 ].join("\n");
 
 export interface Step6CognitiveSimulationStepOptions {

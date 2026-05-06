@@ -352,6 +352,7 @@ test("Step7SummaryStep.prepare() system message references reader-safe risk pack
   assert.match(plan.prompt.systemMessage, /risk_snapshot/);
   assert.match(plan.prompt.systemMessage, /internal field names/);
   assert.match(plan.prompt.systemMessage, /derivedRiskLevel/);
+  assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
 });
 
 test("Step7SummaryStep.prepare() includes <review_state> in user message", () => {
@@ -385,7 +386,7 @@ test("Step7SummaryStep.prepare() consumes approved findings and missing-informat
     }
   ]);
   assert.match(plan.prompt.userMessage, /validated findings/i);
-  assert.match(plan.prompt.userMessage, /Do not introduce new findings/i);
+  assert.match(plan.prompt.systemMessage, /Do not introduce new findings/i);
 });
 
 test("Step7SummaryStep.prepare() allows no necessary assumptions in summary contract", () => {
