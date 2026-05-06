@@ -787,10 +787,17 @@ function parseTopLevelObject(
   responseText: string,
   topLevelShapeMessage: string
 ): Record<string, unknown> {
+  const parseableText = extractParseableJsonObject(responseText);
+  if (parseableText === undefined) {
+    throw new Error(
+      "deterministic validation failed: response is not valid JSON"
+    );
+  }
+
   let parsed: unknown;
 
   try {
-    parsed = JSON.parse(responseText);
+    parsed = JSON.parse(parseableText);
   } catch {
     throw new Error(
       "deterministic validation failed: response is not valid JSON"
@@ -804,6 +811,103 @@ function parseTopLevelObject(
   }
 
   return parsed as Record<string, unknown>;
+}
+
+function extractParseableJsonObject(responseText: string): string | undefined {
+  const trimmed = responseText.replace(/^\uFEFF/u, "").trim();
+
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (canParse(trimmed)) {
+    return trimmed;
+  }
+
+  const fenced = extractWrappingJsonFence(trimmed);
+  if (fenced !== undefined && canParse(fenced)) {
+    return fenced;
+  }
+
+  const extracted = extractSingleRootObject(trimmed);
+  return extracted.status === "single" && canParse(extracted.text)
+    ? extracted.text
+    : undefined;
+}
+
+function canParse(value: string): boolean {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function extractWrappingJsonFence(value: string): string | undefined {
+  const match = value.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/u);
+  return match?.[1]?.trim();
+}
+
+function extractSingleRootObject(
+  value: string
+):
+  | { readonly status: "none" }
+  | { readonly status: "multiple" }
+  | { readonly status: "single"; readonly text: string } {
+  const spans: { start: number; end: number }[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === "\"") {
+      inString = true;
+      continue;
+    }
+    if (char === "{") {
+      if (depth === 0) {
+        start = index;
+      }
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      if (depth === 0) {
+        return { status: "none" };
+      }
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        spans.push({ start, end: index + 1 });
+        start = -1;
+      }
+    }
+  }
+
+  if (depth !== 0 || spans.length === 0) {
+    return { status: "none" };
+  }
+  if (spans.length > 1) {
+    return { status: "multiple" };
+  }
+  const span = spans[0];
+  if (!span) {
+    return { status: "none" };
+  }
+  return { status: "single", text: value.slice(span.start, span.end) };
 }
 
 function assertUniqueFindingIds(

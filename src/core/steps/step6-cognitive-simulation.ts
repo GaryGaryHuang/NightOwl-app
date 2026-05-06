@@ -11,16 +11,27 @@ import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { JSON_STEP_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
-
 const STEP6_SYSTEM_ADDITION = [
   "## Current Step: Semantic Validation",
   "- Validate Step 5 `CandidateFindingsV3` against the diff, `ReviewBasisV1`, candidate evidence chains, host semantic gates, and prior loop feedback.",
   "- This step is a validator, not a bug hunt. Do not introduce new defects outside Step 5 candidate evidence chains.",
   "- Return `ValidationReportV1` with per-finding decisions, missing information items, and loop control.",
-  "- If a concern is not already represented by a Step 5 candidate, record it as missing information only.",
+  "- If a concern is not already represented by a Step 5 candidate, record it as missing information only when it is a specific user-actionable fact that blocks reliable review judgment.",
   "- Use `rewrite_required` when evidence, trigger, impact, counter-evidence, classification/severity alignment, identifiers, traceability, or hypothesis closure are insufficient and Step 5 can repair them. Use `drop` when the candidate is contradicted, out of scope, or too weak.",
   "- Output valid JSON only."
 ].join("\n");
+
+const STEP6_STRUCTURED_OUTPUT_GUIDANCE = [
+  "### Structured-output guardrails",
+  "- Use candidate finding IDs only in `perFindingResults[].findingId`. Candidate IDs are the F IDs listed in `<candidate_ids>` and repeated in `<review_state>.candidateFindings.findings[].findingId`.",
+  "- Never use hypothesis IDs such as H1 in `perFindingResults[].findingId`.",
+  "- `missingInformationItems` must always be an array of objects. Never emit strings, null, IDs, or Markdown bullets in that array.",
+  "- A valid missing-information item is exactly: {\"description\": \"specific missing fact\", \"whyItMatters\": \"why this blocks reliable approval\"}.",
+  "- Do not copy all ReviewBasis or Step 5 missing information into `missingInformationItems`. Keep only user-actionable facts that still block approving or rejecting the review result.",
+  "- Do not emit generic direct-test gaps, facts absent only from the current file, or internal validator/debug notes as `missingInformationItems`.",
+  "- If there are no Step 5 candidates, return `perFindingResults: []` and set `loopControl.action` to `accept`; never use `rerun` when `perFindingResults` is empty.",
+  "- If there are no Step 5 candidates but `candidateFindings.result` is `INSUFFICIENT_INFORMATION`, convert each still-user-actionable `candidateFindings.criticalMissingInformation` blocker into `missingInformationItems` and keep `loopControl.action` as `accept`."
+] as const;
 
 const STEP6_INSTRUCTION = [
   "Validate this file's Step 5 `CandidateFindingsV3` payload and return `ValidationReportV1`.",
@@ -36,23 +47,28 @@ const STEP6_INSTRUCTION = [
   "   - `impact`: the user/system impact must be specific and proportionate to the proven evidence; the candidate's `counterEvidence` must contain substantive checks (not just assertions or restatements); classification and severity must match the proven evidence level.",
   "   - `traceability`: schema must be complete, and the location must be precise enough for a reviewer to inspect; exact changed-line overlap is a prompt instruction for Step 5, not a deterministic validator rule.",
   "   - `completeness`: the candidate must close or honestly account for the source hypotheses; unproven contract, trigger, impact, or identifier claims must become missing information.",
-  "   - `scope`: the candidate must not be a duplicate, low-value restatement, or a new bug outside the Step 5 candidate set.",
+  "   - `scope`: the candidate must not be a duplicate, low-value restatement, or a new bug outside the Step 5 candidate set. Reject candidates whose only trigger is a hypothetical future caller, custom test double, hand-written object, or omitted optional parameter that no current repo-supported call site omits.",
   "",
   "3. Decide each candidate outcome.",
   "   - `approve`: all required gates pass; the candidate will be promoted to a final finding as-is.",
   "   - `rewrite_required`: the candidate may be valid but needs machine-actionable corrections before approval. This includes cases where evidence supports a lower classification/severity, or the concern cannot be proven because a contract, trigger, identifier, or impact claim is missing.",
   "   - `drop`: the candidate is contradicted, out of scope, duplicate, unreachable, or too weak to justify a rewrite.",
+  "   - If a candidate depends on future/custom construction rather than a current repo-supported execution path, use `drop` unless Step 5 can rewrite it to a supported trigger with concrete code evidence.",
   "",
   "4. Use semantic rerun only for actionable correction.",
   "   - Set `loopControl.action = \"rerun\"` only when at least one candidate has `rewrite_required` and Step 5 can repair it with concrete required corrections.",
+  "   - If `candidateFindings.findings` is empty, Step 5 has no candidate to rewrite; set `loopControl.action = \"accept\"` even when `missingInformationItems` is non-empty.",
   "   - If all candidates are `approve` or `drop`, set `loopControl.action = \"accept\"`.",
   "   - Put corrections in `perFindingResults[].requiredCorrections`.",
   "   - Do not force approval when validation cannot prove the defect.",
   "",
   "5. Apply a final validator consistency pass before output.",
   "   - Every Step 5 candidate must have a `perFindingResults` entry.",
-  "   - Missing information must be reported in `missingInformationItems` (Step 6 output field), not in Step 5's `criticalMissingInformation` format.",
+  "   - User-facing missing information must be reported in `missingInformationItems` (Step 6 output field), not in Step 5's `criticalMissingInformation` format.",
   "   - Missing information must be explicit, scoped, and tied to why reliable approval is blocked.",
+  "   - Omit items that are only internal debug context, ordinary review uncertainty, generic test coverage suggestions, or facts the model should have checked with repository tools.",
+  "",
+  ...STEP6_STRUCTURED_OUTPUT_GUIDANCE,
   "",
   "Output the result as a single JSON object with this structure:",
   "",
@@ -63,7 +79,11 @@ const STEP6_INSTRUCTION = [
   "",
   "If no findings can be approved because Step 5 needs correction, return: {\"perFindingResults\": [{\"findingId\": \"F1\", \"decision\": \"rewrite_required\", \"failedGates\": [\"impact\"], \"requiredCorrections\": [\"Prove the concrete user/system impact or convert the candidate to missing information.\"], \"reason\": \"impact is asserted but not proven\"}], \"missingInformationItems\": [], \"loopControl\": {\"action\": \"rerun\", \"reason\": \"Step 5 must repair machine-actionable evidence gaps\"}}",
   "",
-  "If reliable approval is blocked by missing information, return: {\"perFindingResults\": [{\"findingId\": \"F1\", \"decision\": \"rewrite_required\", \"failedGates\": [\"completeness\"], \"requiredCorrections\": [\"Provide the service contract for null input handling or convert to explicit missing information.\"], \"reason\": \"required external contract is unavailable\"}], \"missingInformationItems\": [{\"description\": \"Need the service contract for null input handling.\", \"whyItMatters\": \"Without the contract the validator cannot prove expected behavior.\"}], \"loopControl\": {\"action\": \"rerun\", \"reason\": \"Step 5 must address missing critical contract\"}}",
+  "If reliable approval is blocked by user-actionable missing information, return: {\"perFindingResults\": [{\"findingId\": \"F1\", \"decision\": \"rewrite_required\", \"failedGates\": [\"completeness\"], \"requiredCorrections\": [\"Provide the service contract for null input handling or convert to explicit missing information.\"], \"reason\": \"required external contract is unavailable\"}], \"missingInformationItems\": [{\"description\": \"Need the service contract for null input handling.\", \"whyItMatters\": \"Without the contract the validator cannot prove expected behavior.\"}], \"loopControl\": {\"action\": \"rerun\", \"reason\": \"Step 5 must address missing critical contract\"}}",
+  "",
+  "If there are no Step 5 candidates, return: {\"perFindingResults\": [], \"missingInformationItems\": [], \"loopControl\": {\"action\": \"accept\", \"reason\": \"no candidate findings to validate\"}}",
+  "",
+  "If there are no Step 5 candidates but Step 5 returned user-actionable `criticalMissingInformation`, return: {\"perFindingResults\": [], \"missingInformationItems\": [{\"description\": \"Need the binary SDK API/version information for the local AAR.\", \"whyItMatters\": \"Without it the review cannot verify runtime compatibility with the changed call sites.\"}], \"loopControl\": {\"action\": \"accept\", \"reason\": \"no candidate findings to rewrite; preserve blocking missing information\"}}",
   "Output exactly one JSON object. Begin with `{` and end with `}` — no Markdown code fences, no surrounding text, no trailing content after the closing brace."
 ].join("\n");
 
@@ -98,7 +118,8 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
               "candidate-findings",
               "validation-feedback"
             ]
-          })
+          }),
+          candidatePayload
         )
       },
       reviewProfile: {
@@ -119,7 +140,8 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
 
 function buildStep6UserMessage(
   context: FileReviewContext,
-  reviewState: string
+  reviewState: string,
+  candidatePayload: CandidateFindingsV3
 ): string {
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
@@ -127,6 +149,10 @@ function buildStep6UserMessage(
     "</diff>",
     "",
     reviewState,
+    "",
+    "<candidate_ids>",
+    JSON.stringify(candidatePayload.findings.map((finding) => finding.findingId)),
+    "</candidate_ids>",
     "",
     STEP6_INSTRUCTION
   ].join("\n");

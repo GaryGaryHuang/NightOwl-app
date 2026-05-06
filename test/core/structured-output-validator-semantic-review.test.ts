@@ -203,8 +203,15 @@ function validateCandidateFindings(
   payload: Record<string, unknown> = candidateFindingsV3(),
   reviewBasis: ReviewBasisV1 = createReviewBasis()
 ): CandidateValidationResult {
+  return validateCandidateFindingsText(JSON.stringify(payload), reviewBasis);
+}
+
+function validateCandidateFindingsText(
+  responseText: string,
+  reviewBasis: ReviewBasisV1 = createReviewBasis()
+): CandidateValidationResult {
   return new StructuredOutputValidator().validateCandidateFindingsV3WithReport({
-    responseText: JSON.stringify(payload),
+    responseText,
     reviewBasis,
     diffContent: DEFAULT_DIFF,
     filePath: reviewBasis.filePath
@@ -216,8 +223,16 @@ function validateValidationReport(
   candidateFindings: Record<string, unknown> = candidateFindingsV3(),
   reviewBasis: ReviewBasisV1 = createReviewBasis()
 ): ValidationReportResult {
+  return validateValidationReportText(JSON.stringify(payload), candidateFindings, reviewBasis);
+}
+
+function validateValidationReportText(
+  responseText: string,
+  candidateFindings: Record<string, unknown> = candidateFindingsV3(),
+  reviewBasis: ReviewBasisV1 = createReviewBasis()
+): ValidationReportResult {
   return new StructuredOutputValidator().validateValidationReportV1WithReport({
-    responseText: JSON.stringify(payload),
+    responseText,
     candidateFindings,
     reviewBasis,
     diffContent: DEFAULT_DIFF,
@@ -258,6 +273,19 @@ test("validateCandidateFindingsV3WithReport accepts evidence-chain candidates ti
   assert.equal(
     result.report.find((entry) => entry.findingId === "F1")?.outcome,
     "accepted"
+  );
+});
+
+test("validateCandidateFindingsV3WithReport repairs fenced or prose-wrapped single JSON objects", () => {
+  const payload = JSON.stringify(candidateFindingsV3());
+
+  assert.equal(
+    validateCandidateFindingsText(`\uFEFF\`\`\`json\n${payload}\n\`\`\``).payload.findings[0]?.findingId,
+    "F1"
+  );
+  assert.equal(
+    validateCandidateFindingsText(`Here is the JSON:\n${payload}\nDone.`).payload.findings[0]?.findingId,
+    "F1"
   );
 });
 
@@ -370,6 +398,19 @@ test("validateValidationReportV1WithReport accepts reports that approve only Ste
   assert.equal(
     result.report.find((entry) => entry.findingId === "F1")?.outcome,
     "accepted"
+  );
+});
+
+test("validateValidationReportV1WithReport repairs fenced or prose-wrapped single JSON objects", () => {
+  const payload = JSON.stringify(validationReportV1());
+
+  assert.equal(
+    validateValidationReportText(`\`\`\`json\n${payload}\n\`\`\``).payload.perFindingResults[0]?.findingId,
+    "F1"
+  );
+  assert.equal(
+    validateValidationReportText(`Result:\n${payload}`).payload.loopControl.action,
+    "accept"
   );
 });
 

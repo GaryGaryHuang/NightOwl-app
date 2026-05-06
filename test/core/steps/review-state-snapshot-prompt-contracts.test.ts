@@ -242,11 +242,15 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
   assert.match(plan.prompt.systemMessage, /structured field/u);
+  assert.match(plan.prompt.systemMessage, /Keep the object compact/u);
+  assert.match(plan.prompt.systemMessage, /Do not use it for generic test gaps/u);
   assert.match(plan.prompt.userMessage, /<change_map format="json">/u);
   assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts"/u);
   assert.match(plan.prompt.userMessage, /identifierRegistry/u);
   assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
   assert.match(plan.prompt.userMessage, /Do not produce findings/u);
+  assert.match(plan.prompt.userMessage, /Structured JSON completion rules/u);
+  assert.match(plan.prompt.userMessage, /still return a minimal valid ReviewBasisV1 object/u);
 });
 
 test("default per-file pipeline starts with ReviewBasis and omits legacy Step 1-4", () => {
@@ -298,6 +302,10 @@ test("Steps 5-7 receive parseable ReviewStateSnapshot JSON", () => {
     stepPlans.map((plan) => plan.reviewProfile.timeoutMs),
     [REVIEW_TURN_TIMEOUT_MS, REVIEW_TURN_TIMEOUT_MS, REVIEW_TURN_TIMEOUT_MS]
   );
+  assert.deepEqual(
+    stepPlans.map((plan) => plan.reviewProfile.model),
+    ["gpt-5.4-mini", "gpt-5.4-mini", "gpt-5.4-mini"]
+  );
 
   snapshots.forEach((snapshot, index) => {
     assertBaseSnapshot(snapshot, {
@@ -326,7 +334,15 @@ test("Steps 5-7 receive parseable ReviewStateSnapshot JSON", () => {
   assert.equal(snapshots[2].candidateFindings, null);
   assert.match(
     stepPlans[2].prompt.userMessage,
-    /ReviewBasisV1\.roleInChangeset/u
+    /prepared role and behavior-change evidence/u
+  );
+  assert.doesNotMatch(
+    stepPlans[2].prompt.userMessage,
+    /ReviewBasisV1\.roleInChangeset|Step 6-approved findings/u
+  );
+  assert.match(
+    stepPlans[1].prompt.userMessage,
+    /<candidate_ids>\n\["F1"\]\n<\/candidate_ids>/u
   );
   assert.equal(stepPlans[1].prompt.userMessage.includes("<candidate_findings"), false);
 });

@@ -47,6 +47,7 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   const plan = step.prepare(createContext());
 
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
+  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1\.hypothesisLedger/u);
   assert.match(plan.prompt.systemMessage, /candidate findings/u);
   assert.match(plan.prompt.systemMessage, /final approved findings/u);
@@ -60,6 +61,20 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
   assert.match(plan.prompt.userMessage, /hypothesisClosure/u);
   assert.match(plan.prompt.userMessage, /criticalMissingInformation/u);
+  assert.match(plan.prompt.userMessage, /Structured-output guardrails/u);
+  assert.match(plan.prompt.userMessage, /criticalMissingInformation.+array of objects/u);
+  assert.match(plan.prompt.userMessage, /Missing information is not a general uncertainty bucket/u);
+  assert.match(plan.prompt.systemMessage, /observable behavior changes to missing information/u);
+  assert.match(plan.prompt.userMessage, /silently lose data/u);
+  assert.match(plan.prompt.userMessage, /low-severity `reasonable_risk` candidate/u);
+  assert.match(plan.prompt.userMessage, /locally provable orchestration risks/u);
+  assert.match(plan.prompt.userMessage, /Competing local timeouts/u);
+  assert.match(plan.prompt.userMessage, /cancellation races/u);
+  assert.match(plan.prompt.userMessage, /null-to-empty normalization/u);
+  assert.match(plan.prompt.userMessage, /partial-result loss/u);
+  assert.match(plan.prompt.userMessage, /current repo-supported production code/u);
+  assert.match(plan.prompt.userMessage, /hypothetical future callers/u);
+  assert.match(plan.prompt.userMessage, /omitted optional parameters/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
   assert.match(plan.prompt.systemMessage, /structured field/u);
   for (const value of CANDIDATE_CLASSIFICATIONS) {
@@ -165,6 +180,7 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   const plan = step.prepare(context);
 
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
+  assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
     candidateFindings: ReturnType<typeof createCandidateFindingsV3>;
     approvedFindings: Finding[];
@@ -177,6 +193,7 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   assert.deepEqual(snapshot.candidateFindings.criticalMissingInformation, []);
   assert.deepEqual(snapshot.approvedFindings, []);
   assert.equal(plan.prompt.userMessage.includes("<candidate_findings"), false);
+  assert.match(plan.prompt.userMessage, /<candidate_ids>\n\["F1"\]\n<\/candidate_ids>/u);
   assert.match(plan.prompt.systemMessage, /Semantic Validation/u);
   assert.match(plan.prompt.systemMessage, /ValidationReportV1/u);
   assert.match(plan.prompt.systemMessage, /not a bug hunt/u);
@@ -188,6 +205,17 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   const stepInstruction = plan.prompt.userMessage.split("</review_state>")[1] ?? "";
   assert.doesNotMatch(stepInstruction, /approvedFindings/u);
   assert.match(plan.prompt.userMessage, /missingInformationItems/u);
+  assert.match(plan.prompt.systemMessage, /specific user-actionable fact/u);
+  assert.match(plan.prompt.userMessage, /user-actionable facts/u);
+  assert.match(plan.prompt.userMessage, /hypothetical future caller/u);
+  assert.match(plan.prompt.userMessage, /custom test double/u);
+  assert.match(plan.prompt.userMessage, /omitted optional parameter/u);
+  assert.match(plan.prompt.userMessage, /Do not copy all ReviewBasis or Step 5 missing information/u);
+  assert.match(plan.prompt.userMessage, /internal validator\/debug notes/u);
+  assert.match(plan.prompt.userMessage, /never use `rerun` when `perFindingResults` is empty/u);
+  assert.match(plan.prompt.userMessage, /candidateFindings\.result` is `INSUFFICIENT_INFORMATION/u);
+  assert.match(plan.prompt.userMessage, /convert each still-user-actionable `candidateFindings\.criticalMissingInformation` blocker/u);
+  assert.match(plan.prompt.userMessage, /no candidate findings to rewrite; preserve blocking missing information/u);
   assert.match(plan.prompt.userMessage, /loopControl/u);
   assert.match(plan.prompt.userMessage, /rerun/u);
   assert.match(plan.prompt.userMessage, /complete candidateFindings CandidateFindingsV3 object/u);

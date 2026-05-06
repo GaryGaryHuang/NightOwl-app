@@ -11,6 +11,19 @@ import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import { JSON_STEP_SYSTEM_MESSAGE } from "./common-system-message.ts";
 import { createCandidateFindingsV3Resolve } from "./step-resolve-helpers.ts";
 
+const STEP5_STRUCTURED_OUTPUT_GUIDANCE = [
+  "### Structured-output guardrails",
+  "- Before writing the answer, choose one of these outcomes: findings ready, no findings, or insufficient information.",
+  "- `criticalMissingInformation` must always be an array of objects. Never emit strings, null, IDs, or Markdown bullets in that array.",
+  "- A valid missing-information item is exactly: {\"description\": \"specific missing fact\", \"whyItMatters\": \"why this blocks a reliable finding\"}.",
+  "- Missing information is not a general uncertainty bucket. Use it only when a specific missing fact blocks judging a hypothesis after local repo evidence and tool results are considered.",
+  "- Do not add missing information merely because a fact is absent from the current file, a direct test is absent, or a follow-up improvement would be useful.",
+  "- If the reviewed code has an observable, credibly reachable behavior problem, emit a `reasonable_risk` candidate with `severity = \"low\"` even when product intent is not fully specified; put the uncertainty in `counterEvidence` instead of converting the whole concern to missing information.",
+  "- Do not convert locally provable orchestration risks into `criticalMissingInformation` only because an external SDK/API contract is unavailable. Competing local timeouts, cancellation races, stale async result guards, null-to-empty normalization, and partial-result loss can be low-severity `reasonable_risk` candidates when changed local code proves trigger and impact.",
+  "- A candidate trigger must be reachable through current repo-supported production code, tests that document supported behavior, or an explicitly external contract. Do not create findings that require hypothetical future callers, custom test doubles, hand-written objects, or omitted optional parameters that no current call site omits.",
+  "- `hypothesisClosure` must contain exactly one entry for each `ReviewBasisV1.hypothesisLedger[].hypothesisId`; use H IDs only there, not as finding IDs.",
+  "- Do not emit `findingId`; the harness assigns F IDs after validation."
+] as const;
 
 const STEP5_SYSTEM_ADDITION = [
   "## Current Step: Validation & Interrogation",
@@ -24,7 +37,8 @@ const STEP5_SYSTEM_ADDITION = [
   "- Keep the scope centered on hypothesis-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
   "- When determining whether a deviation exists, explicitly check against the facts, inferences, identifiers, missing information, and source-of-truth expectations established in <review_basis>. Do not report deviations that fall outside the review basis.",
   "- IMPORTANT: Do not report candidates based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a candidate for every hypothesis.",
-  "- If trigger, impact, or required contract cannot be proven, record it in `criticalMissingInformation` instead of emitting a candidate finding.",
+  "- If trigger, impact, or required contract cannot be proven after checking available repo evidence, record it in `criticalMissingInformation` instead of emitting a candidate finding.",
+  "- Do not downgrade observable behavior changes to missing information solely because the product requirement is implicit. A concrete silent failure, data loss, wrong event, wrong timeout, or missing signal can be a low-severity `reasonable_risk` when the code path and impact are evidence-backed.",
   "- Output valid JSON only."
 ].join("\n");
 
@@ -45,6 +59,7 @@ const STEP5_INSTRUCTION = [
   "",
   "3. Create a candidate only when all of the following are true:",
   "   - the code path is credibly reachable in a real-world scenario",
+  "   - the trigger is present in current repo-supported production code, current tests that define supported behavior, or an explicit external API/SDK contract",
   "   - the deviation is supported by concrete evidence from the code or tool results",
   "   - the impact is meaningful enough to be actionable",
   "   - the concern is not merely theoretical or dependent on implausible assumptions",
@@ -61,6 +76,10 @@ const STEP5_INSTRUCTION = [
   "",
   "6. Do not emit speculative defect candidates.",
   "   - If evidence or reachability is weak, list the missing information in `criticalMissingInformation` instead.",
+  "   - If the code evidence shows a reachable behavior that can silently lose data, misclassify a result, or hide a failure signal, prefer a low-severity `reasonable_risk` candidate over missing information; describe uncertainty in `counterEvidence`.",
+  "   - If local code proves an orchestration boundary risk such as competing local timeouts, cancellation races, stale async result guards, null-to-empty normalization, or partial-result loss, validate that local behavior directly. Do not demote it to missing information solely because an upstream SDK/API contract is incomplete.",
+  "   - Do not emit candidates whose only trigger is a hypothetical future implementation, custom test double, hand-written object construction, or omitted optional argument when all current repo call sites pass the required value.",
+  "   - Do not list ordinary direct-test gaps, facts absent only from this file, or general follow-up checks as `criticalMissingInformation`.",
   "   - If the claim violates declared scope, omit it.",
   "",
   "7. Every candidate must include:",
@@ -81,6 +100,8 @@ const STEP5_INSTRUCTION = [
   "   - Include a newly discovered deviation only if it is directly exposed by the same validation path.",
   "   - Do not expand into a general bug hunt beyond the hypothesis-driven validation of this step.",
   "",
+  ...STEP5_STRUCTURED_OUTPUT_GUIDANCE,
+  "",
   "Output the result as a single JSON object with this structure:",
   "",
   `Allowed classification values: ${formatQuotedValues(CANDIDATE_CLASSIFICATIONS)}.`,
@@ -89,6 +110,8 @@ const STEP5_INSTRUCTION = [
   `{"findings": [{"classification": "confirmed_problem", "severity": "high", "title": "問題標題", "traceability": {"kind": "line-range", "lineStart": 21, "lineEnd": 22}, "evidence": "changed branch dereferences input.value before fallback; guard was moved after dereference", "triggerCondition": "nullable input reaches the changed branch", "impact": "requests with null input fail with a runtime TypeError", "counterEvidence": ["existing fallback path no longer runs before dereference"]}], "hypothesisClosure": [{"hypothesisId": "H1", "status": "closed_by_candidate", "rationale": "candidate covers the hypothesis"}], "criticalMissingInformation": []}`,
   "",
   `If no findings remain, return: {"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "changed path preserves fallback"}], "criticalMissingInformation": []}`,
+  "",
+  `If evidence is insufficient, return: {"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "insufficient_information", "rationale": "required contract is unavailable"}], "criticalMissingInformation": [{"description": "Need the service contract for null payload semantics.", "whyItMatters": "Without it the review cannot prove whether the observed fallback is correct or defective."}]}`,
   "Output exactly one JSON object. Begin with `{` and end with `}` \u2014 no Markdown code fences, no surrounding text, no trailing content after the closing brace."
 ].join("\n");
 
