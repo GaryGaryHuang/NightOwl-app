@@ -8,16 +8,17 @@ import {
   type CandidateFindingsV3
 } from "../semantic-review.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import { JSON_STEP_SYSTEM_MESSAGE } from "./shared-step-system-blocks.ts";
+import {
+  JSON_STEP_SYSTEM_MESSAGE,
+  MISSING_INFORMATION_DISCIPLINE_BLOCK
+} from "./shared-step-system-blocks.ts";
 import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
 const STEP6_SYSTEM_ADDITION = [
   "## Current Step: Semantic Validation",
   "- Validate Step 5 `CandidateFindingsV3` against the diff, `ReviewBasisV1`, candidate evidence chains, host semantic gates, and prior loop feedback.",
   "- This step is a validator, not a bug hunt. Do not introduce new defects outside Step 5 candidate evidence chains.",
-  "- Return `ValidationReportV1` with per-finding decisions, missing information items, and loop control.",
-  "- If a concern is not already represented by a Step 5 candidate, record it as missing information only when it is a specific user-actionable fact that blocks reliable review judgment.",
-  "- Use `rewrite_required` when evidence, trigger, impact, counter-evidence, classification/severity alignment, identifiers, traceability, or hypothesis closure are insufficient and Step 5 can repair them. Use `drop` when the candidate is contradicted, out of scope, or too weak."
+  "- If a concern is not already represented by a Step 5 candidate, record it as missing information only when it is a specific user-actionable fact that blocks reliable review judgment."
 ].join("\n");
 
 const STEP6_STRUCTURED_OUTPUT_GUIDANCE = [
@@ -56,6 +57,7 @@ const STEP6_INSTRUCTION = [
   "",
   "4. Use semantic rerun only for actionable correction.",
   "   - Set `loopControl.action = \"rerun\"` only when at least one candidate has `rewrite_required` and Step 5 can repair it with concrete required corrections.",
+  "   - When `loopControl.action = \"rerun\"`, do not set any `perFindingResults[].decision` to `approve`; use `rewrite_required` for repairable candidates and `drop` for candidates that should not continue.",
   "   - If `candidateFindings.findings` is empty, Step 5 has no candidate to rewrite; set `loopControl.action = \"accept\"` even when `missingInformationItems` is non-empty.",
   "   - If all candidates are `approve` or `drop`, set `loopControl.action = \"accept\"`.",
   "   - Put corrections in `perFindingResults[].requiredCorrections`.",
@@ -106,7 +108,11 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
     return {
       stepId: this.stepId,
       prompt: {
-        systemMessage: [JSON_STEP_SYSTEM_MESSAGE, STEP6_SYSTEM_ADDITION].join("\n\n"),
+        systemMessage: [
+          JSON_STEP_SYSTEM_MESSAGE,
+          MISSING_INFORMATION_DISCIPLINE_BLOCK.content,
+          STEP6_SYSTEM_ADDITION
+        ].join("\n\n"),
         userMessage: buildStep6UserMessage(
           context,
           this.#promptSerializer.serialize({

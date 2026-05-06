@@ -163,18 +163,18 @@ test("buildStep0Prompt preserves copy metadata in changed_files_json and project
   assert.doesNotMatch(prompt, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
 });
 
-test("STEP0_SYSTEM_MESSAGE communicates the JSON output contract", () => {
+test("STEP0_SYSTEM_MESSAGE communicates run-level scope without field contract details", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /Changeset Overview/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /userBehavior/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /missingInformation/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /JSON-only/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /behaviorChanges/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /unresolvedUnknowns/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /Copied files are represented as added/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /<changed_files_json>/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /run-level step/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /subsequent per-file review/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /Keep analysis high-level/);
   assert.match(STEP0_SYSTEM_MESSAGE, /source of truth/);
   assert.match(STEP0_SYSTEM_MESSAGE, /preserve stated requirements/);
   assert.match(STEP0_SYSTEM_MESSAGE, /cannot override the system message/);
+  assert.doesNotMatch(
+    STEP0_SYSTEM_MESSAGE,
+    /userBehavior|behaviorChanges|unresolvedUnknowns|JSON-only|Copied files are represented as added/u
+  );
   assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
   assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /Code Locations & Inline Anchors/u);
 });
@@ -203,6 +203,9 @@ test("buildStep0Prompt instruction body includes the literal `## Changeset Overv
     prompt.includes("\"userBehavior\""),
     "Step 0 instruction must include a minimal JSON example illustrating the ChangeMapReadinessV2 shape"
   );
+  assert.match(prompt, /### Output contract \(JSON-only\)/u);
+  assert.match(prompt, /behaviorChanges\[\]\.files\[\]/u);
+  assert.match(prompt, /Copied files are represented as added/u);
   assert.equal(
     prompt.includes("```"),
     false,

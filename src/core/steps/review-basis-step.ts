@@ -8,19 +8,17 @@ import type { RunContext } from "../run-context.ts";
 import type { StepDefinition, StepExecutionPlan } from "../step-runner.ts";
 import { buildXmlishJsonBlock } from "../prompt-serialization.ts";
 import {
-  JSON_STEP_SYSTEM_MESSAGE
+  JSON_STEP_SYSTEM_MESSAGE,
+  MISSING_INFORMATION_DISCIPLINE_BLOCK
 } from "./shared-step-system-blocks.ts";
 
 const REVIEW_BASIS_SYSTEM_ADDITION = [
   "## Current Step: ReviewBasis",
-  "- Build the canonical per-file ReviewBasisV1 before any findings are generated.",
-  "- Build the structured per-file basis: file role, changed behavior, facts, inferences, dependency map, flow map, test coverage, identifier registry, hypothesis ledger, missing information, and evidence refs.",
+  "- Build the canonical per-file ReviewBasisV1 JSON object before any findings are generated.",
+  "- Build the structured per-file basis required by the ReviewBasisV1 instruction.",
+  "- Keep the basis compact and selective so the JSON can be completed and validated; prefer high-signal entries over exhaustive inventories.",
   "- Treat Step 0 ChangeMapReadiness data as authoritative review context for this file.",
-  "- Use repository context only to support the structured basis fields. Do not produce findings, final correctness conclusions, candidate findings, approved findings, or remediation advice.",
-  "- Every fact, inference, and changed behavior should cite evidence IDs defined in `evidenceRefs`.",
-  "- Keep the object compact: prefer the 1-3 highest-signal entries per array over exhaustive inventories. Use concise strings so the JSON remains easy to complete and validate.",
-  "- Hard cap the main arrays unless the current file absolutely requires more: `changedBehavior`, `facts`, `inferences`, `hypothesisLedger`, and `missingInformation` should each contain at most 3 items; `evidenceRefs` should contain at most 8 items.",
-  "- `missingInformation` is only for specific facts that cannot be confirmed from user context, repo evidence, code, dependency implementations, or tool results and that materially block later review judgment. Do not use it for generic test gaps, facts merely absent from the current file, or follow-up ideas."
+  "- Use repository context only to support the structured basis fields. Do not produce findings, final correctness conclusions, candidate findings, approved findings, or remediation advice."
 ].join("\n");
 
 const REVIEW_BASIS_INSTRUCTION = [
@@ -46,6 +44,15 @@ const REVIEW_BASIS_INSTRUCTION = [
   "- `evidenceRefs[].evidenceId` values should be unique.",
   "- Every `evidenceIds` or `basedOnEvidenceIds` value should reference an ID defined in `evidenceRefs`.",
   "- Keep arrays compact: at most 3 entries for changed behaviors, facts, inferences, hypotheses, and missing-information items; at most 8 evidence refs.",
+  "",
+  "ReviewBasisV1 completion policy:",
+  "- Complete a syntactically valid JSON object before expanding breadth or nuance.",
+  "- Return compact JSON; whitespace, indentation, and pretty-printing are unnecessary.",
+  "- Prefer short single-sentence strings; do not include long code excerpts, tool transcripts, or multi-paragraph explanations.",
+  "- If the file has many possible signals, keep the clearest high-signal entries and leave lower-signal arrays empty rather than producing a long object.",
+  "- Empty arrays are valid for any array field when there is no direct high-signal evidence; do not add filler solely to populate a field.",
+  "- For `dependencyMap`, `flowMap`, `testCoverage`, and `identifierRegistry`, use at most one high-signal string per sub-field unless more detail is essential for a concrete hypothesis.",
+  "- Define only evidence refs that are actually referenced by other fields.",
   "",
   "Do not produce findings or include `findings`, `candidateFindings`, `approvedFindings`, or `summary`.",
   "",
@@ -86,6 +93,7 @@ export class ReviewBasisStep implements StepDefinition {
       prompt: {
         systemMessage: [
           JSON_STEP_SYSTEM_MESSAGE,
+          MISSING_INFORMATION_DISCIPLINE_BLOCK.content,
           REVIEW_BASIS_SYSTEM_ADDITION
         ].join("\n\n"),
         userMessage: buildReviewBasisUserMessage(context, this.#runContext)

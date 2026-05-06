@@ -15,9 +15,7 @@ const STEP7_SYSTEM_ADDITION = [
   "- Do not list specific findings, must-fix items, or paraphrased finding details \u2014 those belong in the Findings section.",
   "- Consume only the review basis, validated findings, missing-information items, and the host risk package. Do not introduce new findings, identifiers, trigger conditions, impacts, or technical claims.",
   "- The `<risk_snapshot>` block in the user message contains the host-computed risk level. You MUST use that exact value as the `整體風險等級` in your response. Do not override or recompute the risk level based on your own assessment.",
-  "- Do not expose internal field names in reader-facing prose. Avoid terms such as `risk_snapshot`, `derivedRiskLevel`, `mustCount`, `niceCount`, `acceptedFindingIds`, `ReviewBasisV1`, `Step 6`, and `approvedFindings`.",
-  "- If missing-information items exist, `必要假設` must summarize those missing facts for a human reader. Do not write `無` when missing-information state is non-empty.",
-  "- Begin the response with `## Summary`."
+  "- Do not expose internal field names in reader-facing prose. Avoid terms such as `risk_snapshot`, `derivedRiskLevel`, `mustCount`, `niceCount`, `acceptedFindingIds`, `ReviewBasisV1`, `Step 6`, and `approvedFindings`."
 ].join("\n");
 
 export interface Step7SummaryStepOptions {

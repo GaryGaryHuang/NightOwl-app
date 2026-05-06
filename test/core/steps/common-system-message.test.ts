@@ -18,6 +18,7 @@ test("common system prompt stays schema-free and globally applicable", () => {
   assert.deepEqual(COMMON_SYSTEM_BLOCK_IDS, [
     "reviewer-role",
     "evidence-traceability",
+    "host-artifact-authority",
     "global-uncertainty",
     "context-retrieval",
     "scope-discipline",
@@ -25,8 +26,10 @@ test("common system prompt stays schema-free and globally applicable", () => {
   ]);
 
   assert.match(COMMON_SYSTEM_MESSAGE, /## Evidence & Traceability/u);
+  assert.match(COMMON_SYSTEM_MESSAGE, /## Host Artifact Authority/u);
   assert.match(COMMON_SYSTEM_MESSAGE, /## Uncertainty Discipline/u);
   assert.match(COMMON_SYSTEM_MESSAGE, /## Context Retrieval/u);
+  assert.match(COMMON_SYSTEM_MESSAGE, /Do not use Python/u);
   assert.match(COMMON_SYSTEM_MESSAGE, /## Scope Discipline/u);
   assert.match(COMMON_SYSTEM_MESSAGE, /## Response Format/u);
   assert.doesNotMatch(
@@ -41,6 +44,7 @@ test("JSON step system prompt block order is deterministic and excludes finding 
   assert.deepEqual(JSON_STEP_SYSTEM_BLOCK_IDS, [
     "reviewer-role",
     "evidence-traceability",
+    "host-artifact-authority",
     "global-uncertainty",
     "context-retrieval",
     "scope-discipline",
@@ -63,6 +67,7 @@ test("finding JSON system prompt composes anchor guidance only for finding-produ
   assert.deepEqual(JSON_FINDING_STEP_SYSTEM_BLOCK_IDS, [
     "reviewer-role",
     "evidence-traceability",
+    "host-artifact-authority",
     "global-uncertainty",
     "context-retrieval",
     "scope-discipline",
@@ -86,6 +91,7 @@ test("markdown step system prompt keeps renderer uncertainty rules outside commo
   assert.deepEqual(MARKDOWN_STEP_SYSTEM_BLOCK_IDS, [
     "reviewer-role",
     "evidence-traceability",
+    "host-artifact-authority",
     "global-uncertainty",
     "context-retrieval",
     "scope-discipline",

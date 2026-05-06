@@ -27,6 +27,11 @@ const EVIDENCE_TRACEABILITY_BLOCK = createPromptBlock("evidence-traceability", [
   "- When describing what changed, use the specific before→after transformation visible in the evidence rather than substituting a generic category label. Specificity in earlier steps directly improves the precision of later steps."
 ]);
 
+const HOST_ARTIFACT_AUTHORITY_BLOCK = createPromptBlock("host-artifact-authority", [
+  "## Host Artifact Authority",
+  "- Treat host-provided structured review artifacts as authoritative inputs unless the current step explicitly requires new derivation."
+]);
+
 const GLOBAL_UNCERTAINTY_BLOCK = createPromptBlock("global-uncertainty", [
   "## Uncertainty Discipline",
   "- Make uncertainty explicit in the output form required by the current step; never invent facts to fill a gap.",
@@ -38,6 +43,7 @@ const CONTEXT_RETRIEVAL_BLOCK = createPromptBlock("context-retrieval", [
   "## Context Retrieval",
   "- Retrieve only the minimal context needed to complete the current step reliably.",
   "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for git operations (`git diff`, `git blame`, `git log`) or when built-in tools cannot fulfill the task.",
+  "- Do not use Python, Python scripts, `python`, or `python3` for repository inspection or command execution; use the allowed read-only inspection tools and bash commands instead.",
   "- Use `web_fetch` and MCP tools when the current step requires external knowledge verification that local context cannot provide. If user-provided context includes URLs or external references, attempt retrieval when tools and policy allow; if retrieval is unavailable or blocked, do not fabricate content and surface the limitation only when it materially affects the current step's output.",
   "- When multiple independent retrievals are needed, batch them in a single turn rather than retrieving sequentially.",
   "- Stop retrieving additional context once it no longer changes the current step's output."
@@ -66,6 +72,7 @@ const GLOBAL_RESPONSE_DISCIPLINE_BLOCK = createPromptBlock("global-response-disc
 export const COMMON_SYSTEM_BLOCKS = [
   REVIEWER_ROLE_BLOCK,
   EVIDENCE_TRACEABILITY_BLOCK,
+  HOST_ARTIFACT_AUTHORITY_BLOCK,
   GLOBAL_UNCERTAINTY_BLOCK,
   CONTEXT_RETRIEVAL_BLOCK,
   SCOPE_DISCIPLINE_BLOCK,

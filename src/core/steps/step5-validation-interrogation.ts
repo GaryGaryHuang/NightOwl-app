@@ -9,7 +9,10 @@ import {
 import { buildXmlishJsonBlock } from "../prompt-serialization.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import { JSON_FINDING_STEP_SYSTEM_MESSAGE } from "./shared-step-system-blocks.ts";
+import {
+  JSON_FINDING_STEP_SYSTEM_MESSAGE,
+  MISSING_INFORMATION_DISCIPLINE_BLOCK
+} from "./shared-step-system-blocks.ts";
 import { createCandidateFindingsV3Resolve } from "./step-resolve-helpers.ts";
 
 const STEP5_STRUCTURED_OUTPUT_GUIDANCE = [
@@ -17,8 +20,6 @@ const STEP5_STRUCTURED_OUTPUT_GUIDANCE = [
   "- Before writing the answer, choose one of these outcomes: findings ready, no findings, or insufficient information.",
   "- `criticalMissingInformation` must always be an array of objects. Never emit strings, null, IDs, or Markdown bullets in that array.",
   "- A valid missing-information item is exactly: {\"description\": \"specific missing fact\", \"whyItMatters\": \"why this blocks a reliable finding\"}.",
-  "- Missing information is not a general uncertainty bucket. Use it only when a specific missing fact blocks judging a hypothesis after local repo evidence and tool results are considered.",
-  "- Do not add missing information merely because a fact is absent from the current file, a direct test is absent, or a follow-up improvement would be useful.",
   "- If the reviewed code has an observable, credibly reachable behavior problem, emit a `reasonable_risk` candidate with `severity = \"low\"` even when product intent is not fully specified; put the uncertainty in `counterEvidence` instead of converting the whole concern to missing information.",
   "- Do not convert locally provable orchestration risks into `criticalMissingInformation` only because an external SDK/API contract is unavailable. Competing local timeouts, cancellation races, stale async result guards, null-to-empty normalization, and partial-result loss can be low-severity `reasonable_risk` candidates when changed local code proves trigger and impact.",
   "- A candidate trigger must be reachable through current repo-supported production code, tests that document supported behavior, or an explicitly external contract. Do not create findings that require hypothetical future callers, custom test doubles, hand-written objects, or omitted optional parameters that no current call site omits.",
@@ -33,11 +34,9 @@ const STEP5_SYSTEM_ADDITION = [
   "- Validate each hypothesis with targeted code-level analysis. Trace the relevant Data Flow and Control Flow, including entry conditions, guard conditions, state-change points, exception branches, and any rollback, retry, or compensation logic that materially affects the hypothesis.",
   "- This step produces candidate findings only. It does not write final approved findings.",
   "- Convert a validated deviation into a candidate only when the available evidence supports a concrete, actionable problem on a credibly reachable real-world path.",
-  "- Every emitted candidate must include classification, severity, title, traceability, evidence, triggerCondition, impact, and counterEvidence.",
   "- Keep the scope centered on hypothesis-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
   "- When determining whether a deviation exists, explicitly check against the facts, inferences, identifiers, missing information, and source-of-truth expectations established in <review_basis>. Do not report deviations that fall outside the review basis.",
   "- IMPORTANT: Do not report candidates based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a candidate for every hypothesis.",
-  "- If trigger, impact, or required contract cannot be proven after checking available repo evidence, record it in `criticalMissingInformation` instead of emitting a candidate finding.",
   "- Do not downgrade observable behavior changes to missing information solely because the product requirement is implicit. A concrete silent failure, data loss, wrong event, wrong timeout, or missing signal can be a low-severity `reasonable_risk` when the code path and impact are evidence-backed."
 ].join("\n");
 
@@ -136,6 +135,7 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
       prompt: {
         systemMessage: [
           JSON_FINDING_STEP_SYSTEM_MESSAGE,
+          MISSING_INFORMATION_DISCIPLINE_BLOCK.content,
           STEP5_SYSTEM_ADDITION
         ].join("\n\n"),
         userMessage: buildStep5UserMessage(

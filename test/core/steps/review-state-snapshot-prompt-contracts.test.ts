@@ -243,15 +243,24 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
   assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
   assert.match(plan.prompt.systemMessage, /JSON Completion/u);
-  assert.match(plan.prompt.systemMessage, /Keep the object compact/u);
-  assert.match(plan.prompt.systemMessage, /Do not use it for generic test gaps/u);
+  assert.match(plan.prompt.systemMessage, /Missing Information Discipline/u);
+  assert.match(plan.prompt.systemMessage, /Do not record generic test gaps/u);
+  assert.match(plan.prompt.systemMessage, /Keep the basis compact and selective/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /Hard cap the main arrays/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /Every fact, inference, and changed behavior/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
   assert.match(plan.prompt.userMessage, /<change_map format="json">/u);
   assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts"/u);
   assert.match(plan.prompt.userMessage, /identifierRegistry/u);
   assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
+  assert.match(plan.prompt.userMessage, /Keep arrays compact/u);
+  assert.match(plan.prompt.userMessage, /ReviewBasisV1 completion policy/u);
+  assert.match(plan.prompt.userMessage, /Complete a syntactically valid JSON object/u);
+  assert.match(plan.prompt.userMessage, /Return compact JSON/u);
+  assert.match(plan.prompt.userMessage, /Empty arrays are valid for any array field/u);
+  assert.match(plan.prompt.userMessage, /use at most one high-signal string per sub-field/u);
+  assert.match(plan.prompt.userMessage, /Every `evidenceIds`/u);
   assert.match(plan.prompt.userMessage, /Do not produce findings/u);
-  assert.doesNotMatch(plan.prompt.userMessage, /ReviewBasisV1 completion/u);
 });
 
 test("default per-file pipeline starts with ReviewBasis and omits legacy Step 1-4", () => {

@@ -21,6 +21,13 @@ export const JSON_COMPLETION_BLOCK = createPromptBlock("json-completion", [
   "- Close every array and object before finishing the response."
 ]);
 
+export const MISSING_INFORMATION_DISCIPLINE_BLOCK = createPromptBlock("missing-information-discipline", [
+  "## Missing Information Discipline",
+  "- Use the current step's missing-information fields only for specific facts that materially block reliable judgment for the current step.",
+  "- Missing information is not a general uncertainty bucket.",
+  "- Do not record generic test gaps, facts merely absent from the current file, internal follow-up ideas, or facts the available repo/tool context can reasonably resolve."
+]);
+
 export const MARKDOWN_UNCERTAINTY_BLOCK = createPromptBlock("markdown-uncertainty", [
   "## Reader-Facing Uncertainty",
   "- Separate facts from assumptions: annotate inferences with `[假設]`; mark any claim lacking sufficient evidence with `[待確認]`.",
