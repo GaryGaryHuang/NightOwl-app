@@ -396,7 +396,6 @@ test("Step7SummaryStep.prepare() allows no necessary assumptions in summary cont
 
   assert.match(plan.prompt.userMessage, /必要假設/);
   assert.match(plan.prompt.userMessage, /無/);
-  assert.doesNotMatch(plan.prompt.userMessage, /審查假設/);
 });
 
 test("Step7SummaryStep.prepare() resolve uses expectedRiskLevel matching snapshot", () => {

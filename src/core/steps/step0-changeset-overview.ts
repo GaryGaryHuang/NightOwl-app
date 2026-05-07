@@ -25,20 +25,20 @@ export const STEP0_SYSTEM_MESSAGE = [
   "",
   "## Current Step: Changeset Overview",
   "- This is a run-level step. Establish a high-level understanding of the overall changeset before per-file review begins.",
-  "- The goal of this step is to produce shared context that will help subsequent per-file review. Focus on scope, cross-file boundaries, observable behavioral changes, and any test-derived expectations that materially affect later review.",
+  "- The goal of this step is to produce shared context that will help subsequent per-file review. Focus on scope, cross-file boundaries, observable behavioral changes, and any test-derived expectations that materially affect that review.",
   "- Keep analysis high-level. Do not analyze every file in detail.",
-  "- Record behavioral changes as run-level context for later review. If user context states expected behavior or business background, preserve that expectation as source-of-truth context for later steps. Do not emit bug findings or final correctness conclusions in Step 0.",
-  "- If changed files have corresponding test file changes, gather the behavioral expectations and boundary conditions those tests reveal as additional context for subsequent steps.",
-  "- If <user_context> is provided, read it completely and preserve stated requirements, expected behavior, Root Cause, business decisions, and first-party background in the Step 0 output fields.",
-  "- If referenced external content cannot be retrieved and the missing content materially affects later review, record the limitation in the current step's output."
+  "- Record behavioral changes as run-level context. If user context states expected behavior or business background, preserve that expectation as review context for subsequent per-file review. Do not emit bug findings or final correctness conclusions in the current step.",
+  "- If changed files have corresponding test file changes, gather the behavioral expectations and boundary conditions those tests reveal as additional context for subsequent per-file review.",
+  "- If <user_context> is provided, read it completely and preserve stated requirements, expected behavior, Root Cause, business decisions, and first-party background in the current step's output fields.",
+  "- If referenced external content cannot be retrieved and the missing content materially affects subsequent per-file review, record the limitation in the current step's output."
 ].join("\n");
 
 const STEP0_INSTRUCTION = [
   "Analyze the changeset across all entries in <changed_files_json> and produce a high-level overview for subsequent per-file review. The JSON block is the canonical changeset input; <changed_files> is diagnostic raw name-status context only.",
   "",
-  "Use <changed_files_json> and <user_context> as primary inputs. If <user_context> is provided, read every entry and represent its stated requirements, expected behavior, Root Cause, business decisions, and first-party review background in `reviewObjective`, `userBehavior`, `missingInformation`, and related output fields with enough specificity for downstream review.",
+  "Use <changed_files_json> and <user_context> as primary inputs. If <user_context> is provided, read every entry and represent its stated requirements, expected behavior, Root Cause, business decisions, and first-party review background in `reviewObjective`, `userBehavior`, `missingInformation`, and related output fields with enough specificity for subsequent per-file review.",
   "",
-  "Retrieve additional repo context only when needed to clarify the changeset's scope, cross-file boundaries, behavioral changes, or test-derived expectations. If external reference content remains unavailable and materially affects later review, use `unresolvedUnknowns`.",
+  "Retrieve additional repo context only when needed to clarify the changeset's scope, cross-file boundaries, behavioral changes, or test-derived expectations. If external reference content remains unavailable and materially affects subsequent per-file review, use `unresolvedUnknowns`.",
   "",
   "### Output contract (JSON-only)",
   "- The object MUST include these top-level fields:",
@@ -49,7 +49,7 @@ const STEP0_INSTRUCTION = [
   "  - `behaviorChanges`: an array; each entry has `description` and `files`. Empty array is allowed.",
   "  - `unresolvedUnknowns`: an array; each entry has `question` and `resolutionPath`. Empty array is allowed.",
   "- `behaviorChanges[].files[]` should reference head-side `path` values from `<changed_files_json>`. For renames (`R<num>`), use the head-side (post-change) path. Copied files are represented as added (`A`) entries in the changed-files inputs.",
-  "- Do NOT emit bug findings or final correctness conclusions. Step 0 records review objective, user-provided expectations, run-level behavior changes, and unresolved unknowns for later per-file validation.",
+  "- Do NOT emit bug findings or final correctness conclusions. The current step records review objective, user-provided expectations, run-level behavior changes, and unresolved unknowns for subsequent per-file validation.",
   "",
   "1. Scope: What areas of the codebase are affected? Categorize each changed area using one or more of the following:",
   "   - feature: new capability or behavior",
@@ -58,19 +58,19 @@ const STEP0_INSTRUCTION = [
   "   - config: configuration, build, or infrastructure change",
   "   - test: test-only addition or modification",
   "   - docs: documentation-only change",
-  "2. Cross-file boundaries: Identify dependencies between changed files and key interaction patterns that matter for later file-level review.",
-  "3. Behavioral changes: Flag observable changes in runtime behavior (new features, removed features, changed logic flow, API changes). If user context states expected behavior or business rationale, preserve that expectation as review context without turning it into a Step 0 finding.",
-  "4. Test-derived expectations: Note which changed files have corresponding test file changes. If test changes exist, extract the behavioral expectations and boundary conditions they reveal as additional context for subsequent steps.",
+  "2. Cross-file boundaries: Identify dependencies between changed files and key interaction patterns that matter for subsequent per-file review.",
+  "3. Behavioral changes: Describe observable runtime behavior changes concisely for the reviewer (for example, new capabilities, removed behavior, changed flow, or API effects). If user context states expected behavior or business rationale, preserve that expectation as review context without reporting it as a finding in this step.",
+  "4. Test-derived expectations: Note which changed files have corresponding test file changes. If test changes exist, extract the behavioral expectations and boundary conditions they reveal as additional context for subsequent per-file review.",
   "",
-  "Keep the overview high-level and selective. Include only information that is likely to improve the accuracy of later per-file review.",
+  "Keep the overview high-level and selective. Include only information that is likely to improve the accuracy of subsequent per-file review.",
   "",
   "The `overviewMarkdown` string MUST follow this template:",
   "",
   "## Changeset Overview",
-  "- 調整範圍：[categorized scope of changes across files]",
-  "- 跨檔案邊界：[cross-file dependencies and interaction patterns, or 無跨檔案相依]",
-  "- 行為變更：[behavioral changes requiring business context validation, or 無行為變更]",
-  "- 測試覆蓋觀察：[which changed files have corresponding test changes and what behavioral context those tests reveal, or 未見對應測試異動]",
+  "- Scope: [categorized scope of changes across files]",
+  "- Cross-file boundaries: [cross-file dependencies and interaction patterns, or none]",
+  "- Behavior changes: [concise reviewer-facing summary of observable behavior changes, or none]",
+  "- Test coverage observations: [which changed files have corresponding test changes and what behavioral context those tests reveal, or no corresponding test changes observed]",
   "",
   "Minimal example (illustrative only; values must reflect the actual changeset):",
   "",
@@ -84,9 +84,9 @@ const STEP0_INSTRUCTION = [
   "    { \"statement\": \"CLI review flow emits structured run context\", \"confidence\": \"inferred\" }",
   "  ],",
   "  \"missingInformation\": [],",
-  "  \"overviewMarkdown\": \"## Changeset Overview\\n- 調整範圍：feature\\n- 跨檔案邊界：無跨檔案相依\\n- 行為變更：新增 review CLI 入口\\n- 測試覆蓋觀察：未見對應測試異動\",",
+  "  \"overviewMarkdown\": \"## Changeset Overview\\n- Scope: feature\\n- Cross-file boundaries: none\\n- Behavior changes: adds a review CLI entry point\\n- Test coverage observations: no corresponding test changes observed\",",
   "  \"behaviorChanges\": [",
-  "    { \"description\": \"新增 review CLI 入口參數\", \"files\": [\"src/app.ts\"] }",
+  "    { \"description\": \"adds a review CLI entry parameter\", \"files\": [\"src/app.ts\"] }",
   "  ],",
   "  \"unresolvedUnknowns\": []",
   "}"
@@ -137,7 +137,7 @@ export function buildStep0RetryRepairPrompt(
     {
       previousFailure,
       instruction:
-        "Return a corrected JSON object that satisfies the Step 0 output contract. Preserve the same changed_files and user_context inputs; fix only schema violations identified by the previous failure."
+        "Return a corrected JSON object that satisfies the current output contract. Preserve the same changed_files and user_context inputs; fix only schema violations identified by the previous failure."
     }
   );
 }

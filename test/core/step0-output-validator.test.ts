@@ -31,7 +31,13 @@ function makeValidV2(overrides: Record<string, unknown> = {}): string {
         whyItMatters: "severity classification would be blocked"
       }
     ],
-    overviewMarkdown: "## Changeset Overview\n- Phase 1 readiness",
+    overviewMarkdown: [
+      "## Changeset Overview",
+      "- Scope: feature",
+      "- Cross-file boundaries: none",
+      "- Behavior changes: adds structured run context",
+      "- Test coverage observations: no corresponding test changes observed"
+    ].join("\n"),
     behaviorChanges: [
       {
         description: "Step 0 records run-level behavior context",

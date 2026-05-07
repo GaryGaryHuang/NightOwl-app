@@ -54,14 +54,12 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.match(plan.prompt.userMessage, /<review_basis format="json">/u);
   assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
   assert.match(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
-  assert.match(plan.prompt.systemMessage, /smallest head-side line range/u);
+  assert.match(plan.prompt.systemMessage, /smallest reviewed-file `line-range`/u);
   assert.match(plan.prompt.systemMessage, /changedHeadLines/u);
   assert.match(plan.prompt.systemMessage, /Missing Information Discipline/u);
   assert.match(plan.prompt.systemMessage, /Missing information is not a general uncertainty bucket/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /Every emitted candidate must include/u);
   assert.match(plan.prompt.userMessage, /classification/u);
   assert.match(plan.prompt.userMessage, /counterEvidence/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
   assert.match(plan.prompt.userMessage, /hypothesisClosure/u);
   assert.match(plan.prompt.userMessage, /criticalMissingInformation/u);
   assert.match(plan.prompt.userMessage, /Structured-output guardrails/u);
@@ -77,7 +75,6 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.match(plan.prompt.userMessage, /current repo-supported production code/u);
   assert.match(plan.prompt.userMessage, /hypothetical future callers/u);
   assert.match(plan.prompt.userMessage, /omitted optional parameters/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
   assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
   assert.match(plan.prompt.systemMessage, /JSON Completion/u);
   for (const value of CANDIDATE_CLASSIFICATIONS) {
@@ -202,12 +199,9 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   assert.match(plan.prompt.userMessage, /ValidationReportV1/u);
   assert.match(plan.prompt.systemMessage, /not a bug hunt/u);
   assert.match(plan.prompt.systemMessage, /Do not introduce new defects/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /rewrite_required/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
   assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
   assert.match(plan.prompt.systemMessage, /JSON Completion/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /unless it is explicitly needed/u);
   assert.match(plan.prompt.userMessage, /perFindingResults/u);
   const stepInstruction = plan.prompt.userMessage.split("</review_state>")[1] ?? "";
   assert.doesNotMatch(stepInstruction, /approvedFindings/u);

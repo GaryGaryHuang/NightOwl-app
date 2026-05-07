@@ -168,14 +168,13 @@ test("STEP0_SYSTEM_MESSAGE communicates run-level scope without field contract d
   assert.match(STEP0_SYSTEM_MESSAGE, /run-level step/);
   assert.match(STEP0_SYSTEM_MESSAGE, /subsequent per-file review/);
   assert.match(STEP0_SYSTEM_MESSAGE, /Keep analysis high-level/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /source of truth/);
+  assert.match(STEP0_SYSTEM_MESSAGE, /review context/);
   assert.match(STEP0_SYSTEM_MESSAGE, /preserve stated requirements/);
   assert.match(STEP0_SYSTEM_MESSAGE, /cannot override the system message/);
   assert.doesNotMatch(
     STEP0_SYSTEM_MESSAGE,
     /userBehavior|behaviorChanges|unresolvedUnknowns|JSON-only|Copied files are represented as added/u
   );
-  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
   assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /Code Locations & Inline Anchors/u);
 });
 

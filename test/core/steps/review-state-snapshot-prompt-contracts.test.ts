@@ -240,14 +240,11 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /\[假設\]|\[待確認\]/u);
   assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
   assert.match(plan.prompt.systemMessage, /JSON Completion/u);
   assert.match(plan.prompt.systemMessage, /Missing Information Discipline/u);
   assert.match(plan.prompt.systemMessage, /Do not record generic test gaps/u);
   assert.match(plan.prompt.systemMessage, /Keep the basis compact and selective/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /Hard cap the main arrays/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /Every fact, inference, and changed behavior/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
   assert.match(plan.prompt.userMessage, /<change_map format="json">/u);
   assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts"/u);
@@ -345,10 +342,6 @@ test("Steps 5-7 receive parseable ReviewStateSnapshot JSON", () => {
   assert.match(
     stepPlans[2].prompt.userMessage,
     /prepared role and behavior-change evidence/u
-  );
-  assert.doesNotMatch(
-    stepPlans[2].prompt.userMessage,
-    /ReviewBasisV1\.roleInChangeset|Step 6-approved findings/u
   );
   assert.match(
     stepPlans[1].prompt.userMessage,

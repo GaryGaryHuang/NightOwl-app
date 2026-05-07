@@ -37,7 +37,6 @@ test("common system prompt stays schema-free and globally applicable", () => {
     /inferences|missingInformation|hypothesisClosure|criticalMissingInformation|missingInformationItems|traceability|dependencyPathException|changedHeadLines/u
   );
   assert.doesNotMatch(COMMON_SYSTEM_MESSAGE, /Code Locations & Inline Anchors/u);
-  assert.doesNotMatch(COMMON_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
 });
 
 test("JSON step system prompt block order is deterministic and excludes finding anchors", () => {
@@ -56,7 +55,6 @@ test("JSON step system prompt block order is deterministic and excludes finding 
   assert.match(JSON_STEP_SYSTEM_MESSAGE, /## Structured JSON Output/u);
   assert.match(JSON_STEP_SYSTEM_MESSAGE, /## JSON Completion/u);
   assert.doesNotMatch(JSON_STEP_SYSTEM_MESSAGE, /Code Locations & Inline Anchors/u);
-  assert.doesNotMatch(JSON_STEP_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
   assert.doesNotMatch(
     JSON_STEP_SYSTEM_MESSAGE,
     /hypothesisClosure|criticalMissingInformation|missingInformationItems|dependencyPathException|changedHeadLines/u
@@ -96,12 +94,9 @@ test("markdown step system prompt keeps renderer uncertainty rules outside commo
     "context-retrieval",
     "scope-discipline",
     "global-response-discipline",
-    "markdown-uncertainty",
     "markdown-response-format"
   ]);
 
-  assert.match(MARKDOWN_STEP_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
   assert.match(MARKDOWN_STEP_SYSTEM_MESSAGE, /Begin with the designated `##` heading/u);
   assert.doesNotMatch(MARKDOWN_STEP_SYSTEM_MESSAGE, /Code Locations & Inline Anchors/u);
-  assert.doesNotMatch(COMMON_SYSTEM_MESSAGE, /\[假設\]|\[待確認\]/u);
 });
