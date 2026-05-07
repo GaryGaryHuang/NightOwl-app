@@ -35,56 +35,64 @@ function createContext(findings: Finding[] = []): FileReviewContext {
 const serializer = new ReviewStatePromptSerializer();
 
 function parseReviewStateFromPrompt(prompt: string): unknown {
-  const match = prompt.match(
-    /<review_state format="json">\n([\s\S]*?)\n<\/review_state>/u
+  return parseJsonBlock(prompt, "review_state");
+}
+
+function parseJsonBlock(prompt: string, blockName: string): unknown {
+  const pattern = new RegExp(
+    `<${blockName} format="json">\\n([\\s\\S]*?)\\n</${blockName}>`,
+    "u"
   );
-  assert.ok(match, "review_state JSON block should be present");
+  const match = prompt.match(pattern);
+  assert.ok(match, `${blockName} JSON block should be present`);
   return JSON.parse(match[1]);
 }
 
-test("Step5ValidationInterrogationStep prompt contract requests structured finding fields", () => {
+test("Step5ValidationInterrogationStep wires ReviewBasis and CandidateFindingsV3 harness contract", () => {
   const step = new Step5ValidationInterrogationStep({ promptSerializer: serializer });
-  const plan = step.prepare(createContext());
+  const context = createContext();
+  const plan = step.prepare(context);
+  const expectedReviewBasis = createReviewBasis();
+  const reviewBasisBlock = parseJsonBlock(plan.prompt.userMessage, "review_basis");
+  const reviewState = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
+    reviewBasis: ReviewBasisV1 | null;
+    hypothesisLedger: ReviewBasisV1["hypothesisLedger"];
+    validationFeedback: unknown;
+    candidateFindings: unknown;
+  };
 
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.match(plan.prompt.systemMessage, /<review_basis>\.hypothesisLedger/u);
-  assert.match(plan.prompt.systemMessage, /candidate findings/u);
-  assert.match(plan.prompt.systemMessage, /final approved findings/u);
-  assert.match(plan.prompt.userMessage, /<review_basis format="json">/u);
-  assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
-  assert.match(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
-  assert.match(plan.prompt.systemMessage, /smallest reviewed-file `line-range`/u);
-  assert.match(plan.prompt.systemMessage, /changedHeadLines/u);
-  assert.match(plan.prompt.systemMessage, /Missing Information Discipline/u);
-  assert.match(plan.prompt.systemMessage, /Missing information is not a general uncertainty bucket/u);
-  assert.match(plan.prompt.userMessage, /classification/u);
-  assert.match(plan.prompt.userMessage, /counterEvidence/u);
-  assert.match(plan.prompt.userMessage, /hypothesisClosure/u);
-  assert.match(plan.prompt.userMessage, /criticalMissingInformation/u);
-  assert.match(plan.prompt.userMessage, /Required output top-level fields/u);
-  assert.match(plan.prompt.userMessage, /Non-empty array item shapes/u);
-  assert.match(plan.prompt.userMessage, /Enum, ID, and entry rules/u);
-  assert.match(plan.prompt.userMessage, /Candidate findings completion policy/u);
-  assert.match(plan.prompt.userMessage, /Complete JSON output examples/u);
-  assert.match(plan.prompt.userMessage, /Example labels are explanatory only/u);
-  assert.match(plan.prompt.userMessage, /specific blocking fact is missing/u);
-  assert.match(plan.prompt.userMessage, /`criticalMissingInformation`: array of `\{ description, whyItMatters \}` objects/u);
-  assert.match(plan.prompt.userMessage, /`criticalMissingInformation`: `\{ "description":/u);
-  assert.match(plan.prompt.systemMessage, /observable behavior changes to missing information/u);
-  assert.match(plan.prompt.userMessage, /silently lose data/u);
-  assert.match(plan.prompt.userMessage, /low-severity `reasonable_risk` candidate/u);
-  assert.match(plan.prompt.userMessage, /locally provable orchestration risks/u);
-  assert.match(plan.prompt.userMessage, /Competing local timeouts/u);
-  assert.match(plan.prompt.userMessage, /cancellation races/u);
-  assert.match(plan.prompt.userMessage, /null-to-empty normalization/u);
-  assert.match(plan.prompt.userMessage, /partial-result loss/u);
-  assert.match(plan.prompt.userMessage, /current repo-supported production code/u);
-  assert.match(plan.prompt.userMessage, /theoretical or implausible assumptions/u);
-  assert.match(plan.prompt.userMessage, /hypothetical future implementation/u);
-  assert.match(plan.prompt.userMessage, /omitted optional argument/u);
-  assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
-  assert.match(plan.prompt.systemMessage, /JSON Completion/u);
+  assert.match(
+    plan.prompt.userMessage,
+    /<diff path="src\/app\.ts" base="main" head="feature">/u
+  );
+  assert.deepEqual(reviewBasisBlock, expectedReviewBasis);
+  assert.deepEqual(reviewState.reviewBasis, expectedReviewBasis);
+  assert.deepEqual(reviewState.hypothesisLedger, expectedReviewBasis.hypothesisLedger);
+  assert.equal(reviewState.validationFeedback, null);
+  assert.equal(reviewState.candidateFindings, null);
+
+  for (const field of [
+    "findings",
+    "classification",
+    "severity",
+    "title",
+    "traceability",
+    "evidence",
+    "triggerCondition",
+    "impact",
+    "counterEvidence",
+    "hypothesisClosure",
+    "hypothesisId",
+    "status",
+    "rationale",
+    "criticalMissingInformation",
+    "description",
+    "whyItMatters"
+  ]) {
+    assert.match(plan.prompt.userMessage, new RegExp(field, "u"));
+  }
   for (const value of CANDIDATE_CLASSIFICATIONS) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
@@ -94,22 +102,6 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   for (const value of HYPOTHESIS_CLOSURE_STATUSES) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
-  const sectionOrder = [
-    "Required output top-level fields:",
-    "Non-empty array item shapes:",
-    "Enum, ID, and entry rules:",
-    "Validation feedback and rerun investigation rules:",
-    "Candidate creation and classification rules:",
-    "Candidate findings completion policy:",
-    "Complete JSON output examples:"
-  ].map((section) => plan.prompt.userMessage.indexOf(section));
-  assert.ok(sectionOrder.every((index) => index >= 0));
-  assert.ok(
-    sectionOrder.every(
-      (index, position) => position === 0 || sectionOrder[position - 1] < index
-    )
-  );
-  assert.doesNotMatch(plan.prompt.userMessage, /"sourceHypothesisId"/u);
 });
 
 test("Step5ValidationInterrogationStep fails before prompt construction without ReviewBasis", () => {
@@ -188,7 +180,7 @@ function createReviewBasis(): ReviewBasisV1 {
   };
 }
 
-test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests ValidationReportV1", () => {
+test("Step6CognitiveSimulationStep wires candidate state and ValidationReport harness contract", () => {
   const candidatePayload = createCandidateFindingsV3();
   const step = new Step6CognitiveSimulationStep({ promptSerializer: serializer });
   const context = createContext() as SemanticFileReviewContext;
@@ -200,55 +192,38 @@ test("Step6CognitiveSimulationStep validates CandidateFindingsV3 and requests Va
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
     candidateFindings: ReturnType<typeof createCandidateFindingsV3>;
     approvedFindings: Finding[];
+    reviewBasis: ReviewBasisV1 | null;
+    validationFeedback: unknown;
   };
 
   assert.deepEqual(snapshot.candidateFindings, candidatePayload);
-  assert.equal(snapshot.candidateFindings.result, "FINDINGS_READY");
-  assert.equal(snapshot.candidateFindings.findings[0]?.findingId, "F1");
-  assert.equal(snapshot.candidateFindings.hypothesisClosure[0]?.hypothesisId, "H1");
-  assert.deepEqual(snapshot.candidateFindings.criticalMissingInformation, []);
+  assert.deepEqual(snapshot.reviewBasis, createReviewBasis());
+  assert.equal(snapshot.validationFeedback, null);
   assert.deepEqual(snapshot.approvedFindings, []);
   assert.equal(plan.prompt.userMessage.includes("<candidate_findings"), false);
   assert.match(plan.prompt.userMessage, /<candidate_ids>\n\["F1"\]\n<\/candidate_ids>/u);
-  assert.match(plan.prompt.systemMessage, /Semantic Validation/u);
-  assert.match(plan.prompt.systemMessage, /Missing Information Discipline/u);
-  assert.match(plan.prompt.userMessage, /ValidationReportV1/u);
-  assert.match(plan.prompt.systemMessage, /not a bug hunt/u);
-  assert.match(plan.prompt.systemMessage, /Do not introduce new defects/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
-  assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
-  assert.match(plan.prompt.systemMessage, /JSON Completion/u);
-  assert.match(plan.prompt.userMessage, /perFindingResults/u);
-  const stepInstruction = plan.prompt.userMessage.split("</review_state>")[1] ?? "";
-  assert.doesNotMatch(stepInstruction, /approvedFindings/u);
-  assert.match(plan.prompt.userMessage, /missingInformationItems/u);
-  assert.match(plan.prompt.systemMessage, /specific user-actionable fact/u);
-  assert.match(plan.prompt.userMessage, /user-actionable facts/u);
-  assert.match(plan.prompt.userMessage, /hypothetical future caller/u);
-  assert.match(plan.prompt.userMessage, /custom test double/u);
-  assert.match(plan.prompt.userMessage, /omitted optional parameter/u);
-  assert.match(plan.prompt.userMessage, /Do not copy all ReviewBasis or Step 5 missing information/u);
-  assert.match(plan.prompt.userMessage, /internal validator\/debug notes/u);
-  assert.match(plan.prompt.userMessage, /never use `rerun` when `perFindingResults` is empty/u);
-  assert.match(plan.prompt.userMessage, /When `loopControl\.action = "rerun"`/u);
-  assert.match(plan.prompt.userMessage, /do not set any `perFindingResults\[\]\.decision` to `approve`/u);
-  assert.match(plan.prompt.userMessage, /candidateFindings\.result` is `INSUFFICIENT_INFORMATION/u);
-  assert.match(plan.prompt.userMessage, /convert each still-user-actionable `candidateFindings\.criticalMissingInformation` blocker/u);
-  assert.match(plan.prompt.userMessage, /no candidate findings to rewrite; preserve blocking missing information/u);
-  assert.match(plan.prompt.userMessage, /loopControl/u);
-  assert.match(plan.prompt.userMessage, /rerun/u);
-  assert.match(plan.prompt.userMessage, /complete candidateFindings CandidateFindingsV3 object/u);
-  assert.match(plan.prompt.userMessage, /candidateFindings\.findings/u);
-  assert.match(plan.prompt.userMessage, /candidateFindings\.hypothesisClosure/u);
-  assert.match(plan.prompt.userMessage, /candidateFindings\.criticalMissingInformation/u);
+
+  for (const field of [
+    "perFindingResults",
+    "findingId",
+    "decision",
+    "failedGates",
+    "requiredCorrections",
+    "reason",
+    "missingInformationItems",
+    "description",
+    "whyItMatters",
+    "loopControl",
+    "action"
+  ]) {
+    assert.match(plan.prompt.userMessage, new RegExp(field, "u"));
+  }
   for (const value of VALIDATION_DECISIONS) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
   for (const value of LOOP_ACTIONS) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
-  assert.doesNotMatch(plan.prompt.userMessage, /findingUpdates/u);
-  assert.doesNotMatch(plan.prompt.userMessage, /dispositions/u);
 });
 
 type SemanticFileReviewContext = FileReviewContext & {

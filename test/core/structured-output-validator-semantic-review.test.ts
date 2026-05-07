@@ -25,16 +25,23 @@ interface CandidateValidationResult {
       readonly findingId: string;
       readonly classification: string;
       readonly severity: string;
+      readonly traceability?: unknown;
     }[];
     readonly hypothesisClosure: readonly { readonly hypothesisId: string }[];
+    readonly criticalMissingInformation: readonly unknown[];
   };
   readonly report: readonly SemanticReportEntry[];
 }
 
 interface ValidationReportResult {
   readonly payload: {
-    readonly perFindingResults: readonly { readonly findingId: string }[];
-    readonly loopControl: { readonly action: string };
+    readonly perFindingResults: readonly {
+      readonly findingId: string;
+      readonly failedGates: readonly string[];
+      readonly requiredCorrections: readonly string[];
+    }[];
+    readonly missingInformationItems: readonly unknown[];
+    readonly loopControl: { readonly action: string; readonly reason: string };
   };
   readonly report: readonly SemanticReportEntry[];
 }
@@ -314,6 +321,30 @@ test("validateCandidateFindingsV3WithReport ignores non-contract extra fields", 
   assert.equal(result.payload.findings[0]?.classification, "confirmed_problem");
 });
 
+test("validateCandidateFindingsV3WithReport normalizes safe small-model formatting drift", () => {
+  const payload = candidateFindingsV3({
+    findings: [
+      candidateFinding({
+        traceability: {
+          kind: "line-range",
+          lineStart: "21",
+          lineEnd: "22"
+        }
+      })
+    ]
+  });
+  delete payload.criticalMissingInformation;
+
+  const result = validateCandidateFindings(payload);
+
+  assert.deepEqual(result.payload.findings[0]?.traceability, {
+    kind: "line-range",
+    lineStart: 21,
+    lineEnd: 22
+  });
+  assert.deepEqual(result.payload.criticalMissingInformation, []);
+});
+
 test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis semantic violations", () => {
   const invalidCases: readonly {
     readonly label: string;
@@ -368,6 +399,25 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
         hypothesisClosure: [hypothesisClosure({ hypothesisId: "H1" })]
       }),
       reason: /H2.*hypothesisClosure/u
+    },
+    {
+      label: "hypothesis closure must not duplicate a ReviewBasis hypothesis",
+      payload: candidateFindingsV3({
+        hypothesisClosure: [
+          hypothesisClosure({ hypothesisId: "H1" }),
+          hypothesisClosure({
+            hypothesisId: "H1",
+            status: "rejected_by_evidence",
+            rationale: "duplicate H1 closure"
+          }),
+          hypothesisClosure({
+            hypothesisId: "H2",
+            status: "rejected_by_evidence",
+            rationale: "fallback still handles the changed path"
+          })
+        ]
+      }),
+      reason: /H1.*more than once.*hypothesisClosure/u
     }
   ];
 
@@ -429,6 +479,31 @@ test("validateValidationReportV1WithReport ignores non-contract extra fields", (
   assert.equal(result.payload.loopControl.action, "accept");
 });
 
+test("validateValidationReportV1WithReport normalizes safe optional report metadata", () => {
+  const payload = validationReportV1({
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "approve",
+        reason: "all semantic gates passed"
+      }
+    ],
+    loopControl: {
+      action: "accept"
+    }
+  });
+  delete payload.missingInformationItems;
+
+  const result = validateValidationReport(
+    payload
+  );
+
+  assert.deepEqual(result.payload.perFindingResults[0]?.failedGates, []);
+  assert.deepEqual(result.payload.perFindingResults[0]?.requiredCorrections, []);
+  assert.deepEqual(result.payload.missingInformationItems, []);
+  assert.equal(result.payload.loopControl.reason, "semantic validation accepted");
+});
+
 test("validateValidationReportV1WithReport enforces candidate coverage and approved finding consistency", () => {
   const twoCandidates = candidateFindingsV3({
     findings: [
@@ -459,6 +534,20 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
         ]
       }),
       reason: /F404.*candidate/u
+    },
+    {
+      label: "perFindingResults cannot duplicate candidate entries",
+      payload: validationReportV1({
+        perFindingResults: [
+          perFindingResult(),
+          perFindingResult({
+            findingId: "F1",
+            decision: "drop",
+            reason: "duplicate decision"
+          })
+        ]
+      }),
+      reason: /F1.*more than once/u
     },
     {
       label: "candidateFindings must be a valid payload",
@@ -492,16 +581,14 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
         perFindingResults: [
           perFindingResult({
             decision: "rewrite_required",
-            failedGates: ["impact"],
-            requiredCorrections: [
-              "Prove concrete user impact or convert to missing information."
-            ],
+            failedGates: ["unsupported_gate"],
+            requiredCorrections: "Prove concrete user impact or convert to missing information.",
             reason: "impact is asserted but not proven"
           })
         ],
         loopControl: {
           action: "rerun",
-          reason: "Step 5 must repair machine-actionable evidence gaps"
+          reason: ""
         }
       })
     }
@@ -510,6 +597,13 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
   for (const testCase of acceptedActions) {
     const result = validateValidationReport(testCase.payload);
     assert.equal(result.payload.loopControl.action, testCase.action);
+    if (testCase.action === "rerun") {
+      assert.deepEqual(result.payload.perFindingResults[0]?.failedGates, []);
+      assert.deepEqual(result.payload.perFindingResults[0]?.requiredCorrections, [
+        "Prove concrete user impact or convert to missing information."
+      ]);
+      assert.equal(result.payload.loopControl.reason, "semantic rerun requested");
+    }
   }
 
   const invalidCases: readonly {
@@ -533,6 +627,44 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
         }
       }),
       reason: /rerun.*approve findings/u
+    },
+    {
+      label: "accept cannot leave rewrite-required candidates unresolved",
+      payload: validationReportV1({
+        perFindingResults: [
+          perFindingResult({
+            decision: "rewrite_required",
+            failedGates: ["impact"],
+            requiredCorrections: [
+              "Prove concrete user impact before approval."
+            ],
+            reason: "impact is asserted but not proven"
+          })
+        ],
+        loopControl: {
+          action: "accept",
+          reason: "incorrectly accepted unresolved rewrite"
+        }
+      }),
+      reason: /accept.*rewrite_required/u
+    },
+    {
+      label: "rewrite-required needs an actionable correction",
+      payload: validationReportV1({
+        perFindingResults: [
+          perFindingResult({
+            decision: "rewrite_required",
+            failedGates: ["impact"],
+            requiredCorrections: [],
+            reason: "impact is asserted but not proven"
+          })
+        ],
+        loopControl: {
+          action: "rerun",
+          reason: "candidate payload must repair evidence gaps"
+        }
+      }),
+      reason: /rewrite_required.*requiredCorrection/u
     }
   ];
 

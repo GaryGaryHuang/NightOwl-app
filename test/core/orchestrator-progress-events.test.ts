@@ -282,6 +282,200 @@ test("ReviewOrchestrator stops repeated unsupported semantic claims without spen
   assert.deepEqual(step7MissingInformationIds, []);
 });
 
+test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only evidence", async () => {
+  const stepEvents: string[] = [];
+  let step5Attempt = 0;
+  const orchestrator = new ReviewOrchestrator({
+    workingDirectory: "/workspace/repo",
+    timestampProvider: () => "03131434",
+    maxConcurrentFiles: 1,
+    sourceProvider: createOneFileSourceProvider(),
+    reviewFileFilter: {
+      async filterReviewableFiles(_repoRoot: string, files: string[]) {
+        return files;
+      }
+    },
+    changesetOverviewRunner: {
+      async run() {
+        return createRunContext({
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
+          userContext: []
+        });
+      }
+    },
+    outputSink: defineOutputSinkDouble({
+      async initializeRun() {
+        return this;
+      },
+      async publishFileReview() {},
+      async publishSkippedFile() {},
+      async publishArtifact() {}
+    }),
+    stepRunner: {
+      async run({ step, context }) {
+        stepEvents.push(step.stepId);
+        if (step.stepId === "step5-validation-interrogation") {
+          step5Attempt += 1;
+        }
+        return buildSemanticLoopStepResult(step.stepId, context.filePath, {
+          candidateVariant: 1,
+          candidateEvidenceVariant: step5Attempt
+        });
+      }
+    }
+  });
+
+  const result = await orchestrator.run({
+    baseRef: "main",
+    headRef: "feature-branch",
+    repoPath: ".",
+    userContext: [],
+    dryRun: false
+  });
+
+  assert.equal(result.successfulFileCount, 1);
+  assert.deepEqual(stepEvents, [
+    "review-basis",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step7-summary"
+  ]);
+});
+
+test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only hypothesis closure", async () => {
+  const stepEvents: string[] = [];
+  let step5Attempt = 0;
+  const orchestrator = new ReviewOrchestrator({
+    workingDirectory: "/workspace/repo",
+    timestampProvider: () => "03131435",
+    maxConcurrentFiles: 1,
+    sourceProvider: createOneFileSourceProvider(),
+    reviewFileFilter: {
+      async filterReviewableFiles(_repoRoot: string, files: string[]) {
+        return files;
+      }
+    },
+    changesetOverviewRunner: {
+      async run() {
+        return createRunContext({
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
+          userContext: []
+        });
+      }
+    },
+    outputSink: defineOutputSinkDouble({
+      async initializeRun() {
+        return this;
+      },
+      async publishFileReview() {},
+      async publishSkippedFile() {},
+      async publishArtifact() {}
+    }),
+    stepRunner: {
+      async run({ step, context }) {
+        stepEvents.push(step.stepId);
+        if (step.stepId === "step5-validation-interrogation") {
+          step5Attempt += 1;
+        }
+        return buildSemanticLoopStepResult(step.stepId, context.filePath, {
+          candidateVariant: 1,
+          candidateEvidenceVariant: 1,
+          candidateHypothesisClosureVariant: step5Attempt
+        });
+      }
+    }
+  });
+
+  const result = await orchestrator.run({
+    baseRef: "main",
+    headRef: "feature-branch",
+    repoPath: ".",
+    userContext: [],
+    dryRun: false
+  });
+
+  assert.equal(result.successfulFileCount, 1);
+  assert.deepEqual(stepEvents, [
+    "review-basis",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step7-summary"
+  ]);
+});
+
+test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only critical missing information", async () => {
+  const stepEvents: string[] = [];
+  let step5Attempt = 0;
+  const orchestrator = new ReviewOrchestrator({
+    workingDirectory: "/workspace/repo",
+    timestampProvider: () => "03131436",
+    maxConcurrentFiles: 1,
+    sourceProvider: createOneFileSourceProvider(),
+    reviewFileFilter: {
+      async filterReviewableFiles(_repoRoot: string, files: string[]) {
+        return files;
+      }
+    },
+    changesetOverviewRunner: {
+      async run() {
+        return createRunContext({
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
+          userContext: []
+        });
+      }
+    },
+    outputSink: defineOutputSinkDouble({
+      async initializeRun() {
+        return this;
+      },
+      async publishFileReview() {},
+      async publishSkippedFile() {},
+      async publishArtifact() {}
+    }),
+    stepRunner: {
+      async run({ step, context }) {
+        stepEvents.push(step.stepId);
+        if (step.stepId === "step5-validation-interrogation") {
+          step5Attempt += 1;
+        }
+        return buildSemanticLoopStepResult(step.stepId, context.filePath, {
+          candidateVariant: 1,
+          candidateEvidenceVariant: 1,
+          candidateCriticalMissingInformationVariant: step5Attempt
+        });
+      }
+    }
+  });
+
+  const result = await orchestrator.run({
+    baseRef: "main",
+    headRef: "feature-branch",
+    repoPath: ".",
+    userContext: [],
+    dryRun: false
+  });
+
+  assert.equal(result.successfulFileCount, 1);
+  assert.deepEqual(stepEvents, [
+    "review-basis",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step5-validation-interrogation",
+    "step6-cognitive-simulation",
+    "step7-summary"
+  ]);
+});
+
 test("ReviewOrchestrator honors Step 6 missing-critical-contract stop without semantic rerun", async () => {
   const stepEvents: string[] = [];
   let step7MissingInformationIds: string[] = [];
@@ -398,6 +592,9 @@ function buildSemanticLoopStepResult(
   filePath: string,
   options: {
     candidateVariant?: number;
+    candidateEvidenceVariant?: number;
+    candidateHypothesisClosureVariant?: number;
+    candidateCriticalMissingInformationVariant?: number;
     validationMode?: "rerun" | "missing-critical-stop";
   } = {}
 ): StepResult {
@@ -415,7 +612,12 @@ function buildSemanticLoopStepResult(
       stepId,
       applyTo(context: FileReviewContext) {
         (context as SemanticFileReviewContext).setCandidateFindingsV3(
-          createCandidateFindingsV3(options.candidateVariant ?? 1)
+          createCandidateFindingsV3(
+            options.candidateVariant ?? 1,
+            options.candidateEvidenceVariant ?? options.candidateVariant ?? 1,
+            options.candidateHypothesisClosureVariant ?? options.candidateVariant ?? 1,
+            options.candidateCriticalMissingInformationVariant
+          )
         );
       }
     };
@@ -458,7 +660,12 @@ type SemanticFileReviewContext = FileReviewContext & {
   ): void;
 };
 
-function createCandidateFindingsV3(variant: number) {
+function createCandidateFindingsV3(
+  variant: number,
+  evidenceVariant: number = variant,
+  hypothesisClosureVariant: number = variant,
+  criticalMissingInformationVariant?: number
+) {
   return {
     result: "FINDINGS_READY",
     findings: [
@@ -468,7 +675,7 @@ function createCandidateFindingsV3(variant: number) {
         severity: "high",
         title: `unsupported claim ${variant}`,
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
-        evidence: "candidate evidence",
+        evidence: `candidate evidence ${evidenceVariant}`,
         triggerCondition: `candidate trigger ${variant}`,
         impact: "candidate impact",
         counterEvidence: ["candidate counter-evidence"]
@@ -478,10 +685,18 @@ function createCandidateFindingsV3(variant: number) {
       {
         hypothesisId: "H1",
         status: "closed_by_candidate",
-        rationale: "candidate closes H1"
+        rationale: `candidate closes H1 with closure evidence ${hypothesisClosureVariant}`
       }
     ],
-    criticalMissingInformation: []
+    criticalMissingInformation:
+      criticalMissingInformationVariant === undefined
+        ? []
+        : [
+            {
+              description: `missing contract ${criticalMissingInformationVariant}`,
+              whyItMatters: "blocks reliable approval"
+            }
+          ]
   };
 }
 

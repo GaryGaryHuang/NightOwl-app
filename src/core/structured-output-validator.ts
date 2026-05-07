@@ -122,10 +122,6 @@ export class StructuredOutputValidator {
         candidatePayload
       });
 
-      const validationResultByFindingId = new Map(
-        payload.perFindingResults.map((result) => [result.findingId, result])
-      );
-
       for (const result of payload.perFindingResults) {
         report.push({
           findingId: result.findingId,
@@ -191,7 +187,6 @@ function validateCandidateFindingsV3Record(input: {
   for (let i = 0; i < findings.length; i++) {
     findings[i] = { ...findings[i], findingId: `F${i + 1}` };
   }
-  assertUniqueFindingIds(findings, "findings");
 
   const hypothesisClosure = validateArray(
     input.record.hypothesisClosure,
@@ -204,7 +199,7 @@ function validateCandidateFindingsV3Record(input: {
     input.reviewBasis
   );
 
-  const criticalMissingInformation = validateArray(
+  const criticalMissingInformation = validateOptionalArray(
     input.record.criticalMissingInformation,
     "criticalMissingInformation"
   ).map((item, index) => validateCriticalMissingInformation(item, index));
@@ -303,7 +298,7 @@ function validateValidationReportV1Record(input: {
   );
   assertPerFindingResultsCoverCandidates(perFindingResults, candidateIds);
 
-  const missingInformationItems = validateArray(
+  const missingInformationItems = validateOptionalArray(
     input.record.missingInformationItems,
     "missingInformationItems"
   ).map((item, index) => validateMissingInformationItem(item, index));
@@ -334,6 +329,7 @@ function validateLoopControlAlignment(input: {
   perFindingResults: readonly PerFindingValidationResult[];
   loopControl: LoopControl;
 }): void {
+  const hasRewrite = input.perFindingResults.some((r) => r.decision === "rewrite_required");
   if (input.loopControl.action === "rerun") {
     const hasApproval = input.perFindingResults.some((r) => r.decision === "approve");
     if (hasApproval) {
@@ -341,12 +337,17 @@ function validateLoopControlAlignment(input: {
         "deterministic validation failed: rerun ValidationReportV1 must not approve findings before semantic validation accepts them"
       );
     }
-    const hasRewrite = input.perFindingResults.some((r) => r.decision === "rewrite_required");
     if (!hasRewrite) {
       throw new Error(
         "deterministic validation failed: rerun requires at least one rewrite_required decision"
       );
     }
+  }
+
+  if (input.loopControl.action === "accept" && hasRewrite) {
+    throw new Error(
+      "deterministic validation failed: accept loopControl must not leave rewrite_required candidates unresolved"
+    );
   }
 }
 
@@ -388,7 +389,16 @@ function assertHypothesisClosureCoversReviewBasis(
   closures: readonly HypothesisClosure[],
   reviewBasis: ReviewBasisV1
 ): void {
-  const closureIds = new Set(closures.map((closure) => closure.hypothesisId));
+  const closureIds = new Set<string>();
+  for (const closure of closures) {
+    if (closureIds.has(closure.hypothesisId)) {
+      throw new Error(
+        `deterministic validation failed: ${closure.hypothesisId} appears more than once in hypothesisClosure`
+      );
+    }
+    closureIds.add(closure.hypothesisId);
+  }
+
   for (const hypothesis of reviewBasis.hypothesisLedger) {
     if (!closureIds.has(hypothesis.hypothesisId)) {
       throw new Error(
@@ -447,7 +457,8 @@ function validatePerFindingValidationResult(
     ),
     requiredCorrections: validateStringArray(
       record.requiredCorrections,
-      `perFindingResults[${index}].requiredCorrections`
+      `perFindingResults[${index}].requiredCorrections`,
+      { defaultEmpty: true, acceptSingleString: true }
     ),
     reason: validateStringField(
       record.reason,
@@ -455,14 +466,51 @@ function validatePerFindingValidationResult(
     )
   };
 
+  validatePerFindingDecisionConsistency(result, index);
+
   return result;
+}
+
+function validatePerFindingDecisionConsistency(
+  result: PerFindingValidationResult,
+  index: number
+): void {
+  if (result.decision === "approve") {
+    if (result.failedGates.length > 0) {
+      throw new Error(
+        `deterministic validation failed: perFindingResults[${index}] approve decision must not include failedGates`
+      );
+    }
+    if (result.requiredCorrections.length > 0) {
+      throw new Error(
+        `deterministic validation failed: perFindingResults[${index}] approve decision must not include requiredCorrections`
+      );
+    }
+  }
+
+  if (result.decision === "rewrite_required") {
+    if (result.requiredCorrections.length === 0) {
+      throw new Error(
+        `deterministic validation failed: perFindingResults[${index}] rewrite_required decision requires at least one requiredCorrection`
+      );
+    }
+  }
 }
 
 function assertPerFindingResultsCoverCandidates(
   results: readonly PerFindingValidationResult[],
   candidateIds: readonly string[]
 ): void {
-  const resultIds = new Set(results.map((result) => result.findingId));
+  const resultIds = new Set<string>();
+  for (const result of results) {
+    if (resultIds.has(result.findingId)) {
+      throw new Error(
+        `deterministic validation failed: perFindingResults entry ${result.findingId} appears more than once`
+      );
+    }
+    resultIds.add(result.findingId);
+  }
+
   for (const candidateId of candidateIds) {
     if (!resultIds.has(candidateId)) {
       throw new Error(
@@ -521,13 +569,18 @@ function validateLoopControl(input: unknown): { action: LoopAction; reason: stri
     );
   }
   const record = input as Record<string, unknown>;
+  const action = validateEnum<LoopAction>(
+    record.action,
+    VALID_LOOP_ACTIONS,
+    "loopControl.action"
+  );
+
   return {
-    action: validateEnum<LoopAction>(
-      record.action,
-      VALID_LOOP_ACTIONS,
-      "loopControl.action"
-    ),
-    reason: validateStringField(record.reason, "loopControl.reason")
+    action,
+    reason: validateOptionalStringField(
+      record.reason,
+      defaultLoopControlReason(action)
+    )
   };
 }
 
@@ -694,17 +747,21 @@ function validateTraceability(input: unknown): TraceabilityValidationResult {
 }
 
 function validatePositiveInteger(value: unknown, fieldName: string): number {
+  const normalized = typeof value === "string" && /^\d+$/u.test(value.trim())
+    ? Number(value.trim())
+    : value;
+
   if (
-    typeof value !== "number" ||
-    !Number.isInteger(value) ||
-    value <= 0
+    typeof normalized !== "number" ||
+    !Number.isInteger(normalized) ||
+    normalized <= 0
   ) {
     throw new Error(
       `deterministic validation failed: '${fieldName}' must be a positive integer`
     );
   }
 
-  return value;
+  return normalized;
 }
 
 function validateStringField(value: unknown, fieldName: string): string {
@@ -725,6 +782,15 @@ function validateStringField(value: unknown, fieldName: string): string {
   return trimmed;
 }
 
+function validateOptionalStringField(value: unknown, fallback: string): string {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : fallback;
+}
+
 function validateArray(value: unknown, fieldName: string): unknown[] {
   if (!Array.isArray(value)) {
     throw new Error(
@@ -734,12 +800,26 @@ function validateArray(value: unknown, fieldName: string): unknown[] {
   return value;
 }
 
+function validateOptionalArray(value: unknown, fieldName: string): unknown[] {
+  return value === undefined ? [] : validateArray(value, fieldName);
+}
+
 function validateStringArray(
   value: unknown,
   fieldName: string,
-  options: { nonEmpty?: boolean } = {}
+  options: {
+    nonEmpty?: boolean;
+    defaultEmpty?: boolean;
+    acceptSingleString?: boolean;
+  } = {}
 ): string[] {
-  const array = validateArray(value, fieldName).map((item, index) =>
+  const rawItems =
+    value === undefined && options.defaultEmpty
+      ? []
+      : typeof value === "string" && options.acceptSingleString
+        ? [value]
+        : validateArray(value, fieldName);
+  const array = rawItems.map((item, index) =>
     validateStringField(item, `${fieldName}[${index}]`)
   );
   if (options.nonEmpty && array.length === 0) {
@@ -765,15 +845,31 @@ function validateEnum<T extends string>(
 
 function validateSemanticGateArray(
   value: unknown,
-  fieldName: string
+  _fieldName: string
 ): SemanticGateId[] {
-  return validateArray(value, fieldName).map((item, index) =>
-    validateEnum<SemanticGateId>(
-      item,
-      VALID_SEMANTIC_GATES,
-      `${fieldName}[${index}]`
-    )
-  );
+  const rawItems =
+    value === undefined
+      ? []
+      : typeof value === "string"
+        ? [value]
+        : Array.isArray(value)
+          ? value
+          : [];
+  return rawItems.flatMap((item) => {
+    if (typeof item !== "string") {
+      return [];
+    }
+    const gate = item.trim();
+    return (VALID_SEMANTIC_GATES as readonly string[]).includes(gate)
+      ? [gate as SemanticGateId]
+      : [];
+  });
+}
+
+function defaultLoopControlReason(action: LoopAction): string {
+  return action === "rerun"
+    ? "semantic rerun requested"
+    : "semantic validation accepted";
 }
 
 /**
@@ -908,21 +1004,6 @@ function extractSingleRootObject(
     return { status: "none" };
   }
   return { status: "single", text: value.slice(span.start, span.end) };
-}
-
-function assertUniqueFindingIds(
-  items: ReadonlyArray<{ findingId: string }>,
-  _scope: "findings"
-): void {
-  const seen = new Set<string>();
-  for (const item of items) {
-    if (seen.has(item.findingId)) {
-      throw new Error(
-        `deterministic validation failed: duplicate findingId '${item.findingId}'`
-      );
-    }
-    seen.add(item.findingId);
-  }
 }
 
 const VALID_CANDIDATE_CLASSIFICATIONS: readonly CandidateClassification[] =

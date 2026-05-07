@@ -114,14 +114,23 @@ export function cloneMissingInformationItems(
 export function semanticCandidateFingerprint(
   payload: CandidateFindingsV3
 ): string {
-  const normalized = payload.findings.map((finding) => ({
-    findingId: finding.findingId,
-    classification: finding.classification,
-    severity: finding.severity,
-    title: finding.title,
-    triggerCondition: finding.triggerCondition,
-    impact: finding.impact
-  }));
+  const normalized = {
+    result: payload.result,
+    findings: payload.findings.map((finding) => ({
+      findingId: finding.findingId,
+      classification: finding.classification,
+      severity: finding.severity,
+      title: finding.title,
+      traceability: finding.traceability,
+      evidence: finding.evidence,
+      triggerCondition: finding.triggerCondition,
+      impact: finding.impact,
+      counterEvidence: finding.counterEvidence,
+      dependencyPathException: finding.dependencyPathException
+    })),
+    hypothesisClosure: payload.hypothesisClosure,
+    criticalMissingInformation: payload.criticalMissingInformation
+  };
 
   return JSON.stringify(normalized);
 }
