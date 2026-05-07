@@ -35,7 +35,7 @@ const STEP5_SYSTEM_ADDITION = [
   "- This step produces candidate findings only. It does not write final approved findings.",
   "- Convert a validated deviation into a candidate only when the available evidence supports a concrete, actionable problem on a credibly reachable real-world path.",
   "- Keep the scope centered on hypothesis-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
-  "- When determining whether a deviation exists, explicitly check against the facts, inferences, identifiers, missing information, and source-of-truth expectations established in <review_basis>. Do not report deviations that fall outside the review basis.",
+  "- When determining whether a deviation exists, explicitly check against the facts, inferences, named paths/symbols/API references cited by the review basis, missing information, and source-of-truth expectations established in <review_basis>. Do not report deviations that fall outside the review basis.",
   "- IMPORTANT: Do not report candidates based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a candidate for every hypothesis.",
   "- Do not downgrade observable behavior changes to missing information solely because the product requirement is implicit. A concrete silent failure, data loss, wrong event, wrong timeout, or missing signal can be a low-severity `reasonable_risk` when the code path and impact are evidence-backed."
 ].join("\n");

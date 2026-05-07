@@ -210,13 +210,6 @@ function createReviewBasis(): ReviewBasisV1 {
       observedCoverageSignals: ["traceability shape validator tests"],
       coverageGaps: []
     },
-    identifierRegistry: {
-      files: ["src/app.ts"],
-      symbols: ["ReviewBasisV1"],
-      resourceKeys: [],
-      apiNames: [],
-      stateNames: ["reviewBasis"]
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

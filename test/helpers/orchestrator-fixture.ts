@@ -47,13 +47,6 @@ export function buildReviewBasis(filePath: string): ReviewBasisV1 {
       observedCoverageSignals: [],
       coverageGaps: []
     },
-    identifierRegistry: {
-      files: [filePath],
-      symbols: [],
-      resourceKeys: [],
-      apiNames: [],
-      stateNames: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

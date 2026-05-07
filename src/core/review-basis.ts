@@ -44,14 +44,6 @@ export interface ReviewBasisTestCoverage {
   readonly coverageGaps: readonly string[];
 }
 
-export interface ReviewBasisIdentifierRegistry {
-  readonly files: readonly string[];
-  readonly symbols: readonly string[];
-  readonly resourceKeys: readonly string[];
-  readonly apiNames: readonly string[];
-  readonly stateNames: readonly string[];
-}
-
 export interface ReviewBasisHypothesis {
   readonly hypothesisId: string;
   readonly statement: string;
@@ -79,7 +71,6 @@ export interface ReviewBasisV1 {
   readonly dependencyMap: ReviewBasisDependencyMap;
   readonly flowMap: ReviewBasisFlowMap;
   readonly testCoverage: ReviewBasisTestCoverage;
-  readonly identifierRegistry: ReviewBasisIdentifierRegistry;
   readonly hypothesisLedger: readonly ReviewBasisHypothesis[];
   readonly missingInformation: readonly ReviewBasisMissingInformation[];
   readonly evidenceRefs: readonly ReviewBasisEvidenceRef[];
@@ -124,13 +115,6 @@ export function cloneReviewBasis(input: ReviewBasisV1): ReviewBasisV1 {
       changedTests: [...input.testCoverage.changedTests],
       observedCoverageSignals: [...input.testCoverage.observedCoverageSignals],
       coverageGaps: [...input.testCoverage.coverageGaps]
-    },
-    identifierRegistry: {
-      files: [...input.identifierRegistry.files],
-      symbols: [...input.identifierRegistry.symbols],
-      resourceKeys: [...input.identifierRegistry.resourceKeys],
-      apiNames: [...input.identifierRegistry.apiNames],
-      stateNames: [...input.identifierRegistry.stateNames]
     },
     hypothesisLedger: input.hypothesisLedger.map((entry) => ({
       hypothesisId: entry.hypothesisId,

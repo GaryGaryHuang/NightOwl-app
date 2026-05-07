@@ -637,13 +637,6 @@ function createReviewBasis(): ReviewBasisV1 {
       observedCoverageSignals: ["retry test"],
       coverageGaps: []
     },
-    identifierRegistry: {
-      files: ["src/app.ts"],
-      symbols: ["ReviewBasisV1"],
-      resourceKeys: [],
-      apiNames: [],
-      stateNames: ["reviewBasis"]
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

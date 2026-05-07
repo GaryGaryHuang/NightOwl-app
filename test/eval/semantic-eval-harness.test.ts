@@ -16,7 +16,7 @@ import {
 type SemanticScenario =
   | "overclaim"
   | "retired-contradiction"
-  | "identifier-mismatch"
+  | "hypothesis-id-mismatch"
   | "coverage-ambiguity"
   | "unclosed-hypothesis"
   | "repeated-stop";
@@ -43,7 +43,7 @@ test("semantic eval corpus covers Phase 3 KKBOX-derived release gates", () => {
     new Set<SemanticScenario>([
       "overclaim",
       "retired-contradiction",
-      "identifier-mismatch",
+      "hypothesis-id-mismatch",
       "coverage-ambiguity",
       "unclosed-hypothesis",
       "repeated-stop"
@@ -215,13 +215,6 @@ function createReviewBasis(): ReviewBasisV1 {
       observedCoverageSignals: [],
       coverageGaps: ["No callback-threading proof."]
     },
-    identifierRegistry: {
-      files: ["SearchFragment.kt"],
-      symbols: ["searchRequestId", "onSearchResult"],
-      resourceKeys: [],
-      apiNames: ["onSearchResult"],
-      stateNames: ["searchRequestId"]
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",
@@ -267,7 +260,7 @@ function createCandidatePayload(scenario: SemanticScenario) {
       }
     ],
     hypothesisClosure:
-      scenario === "identifier-mismatch"
+      scenario === "hypothesis-id-mismatch"
         ? [
             {
               hypothesisId: "H404",

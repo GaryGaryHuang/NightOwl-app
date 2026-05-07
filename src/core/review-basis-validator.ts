@@ -7,7 +7,6 @@ import {
   type ReviewBasisFact,
   type ReviewBasisFlowMap,
   type ReviewBasisHypothesis,
-  type ReviewBasisIdentifierRegistry,
   type ReviewBasisInference,
   type ReviewBasisInferenceConfidence,
   type ReviewBasisMissingInformation,
@@ -64,7 +63,6 @@ export class ReviewBasisValidator {
     const dependencyMap = validateDependencyMap(obj.dependencyMap, diagnostics);
     const flowMap = validateFlowMap(obj.flowMap, diagnostics);
     const testCoverage = validateTestCoverage(obj.testCoverage, diagnostics);
-    const identifierRegistry = validateIdentifierRegistry(obj.identifierRegistry, diagnostics);
     const hypothesisLedger = validateHypotheses(obj.hypothesisLedger, diagnostics);
     const missingInformation = validateMissingInformation(obj.missingInformation, diagnostics);
 
@@ -90,7 +88,6 @@ export class ReviewBasisValidator {
       dependencyMap,
       flowMap,
       testCoverage,
-      identifierRegistry,
       hypothesisLedger,
       missingInformation,
       evidenceRefs
@@ -332,25 +329,6 @@ function validateTestCoverage(
     changedTests: toStringArray(obj.changedTests),
     observedCoverageSignals: toStringArray(obj.observedCoverageSignals),
     coverageGaps: toStringArray(obj.coverageGaps)
-  };
-}
-
-function validateIdentifierRegistry(
-  value: unknown,
-  diagnostics: ReviewBasisValidationDiagnostic[]
-): ReviewBasisIdentifierRegistry {
-  const empty: ReviewBasisIdentifierRegistry = { files: [], symbols: [], resourceKeys: [], apiNames: [], stateNames: [] };
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "identifierRegistry must be an object" });
-    return empty;
-  }
-  const obj = value as Record<string, unknown>;
-  return {
-    files: toStringArray(obj.files),
-    symbols: toStringArray(obj.symbols),
-    resourceKeys: toStringArray(obj.resourceKeys),
-    apiNames: toStringArray(obj.apiNames),
-    stateNames: toStringArray(obj.stateNames)
   };
 }
 

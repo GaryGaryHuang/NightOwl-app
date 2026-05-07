@@ -155,13 +155,6 @@ function createReviewBasis(): ReviewBasisV1 {
       observedCoverageSignals: ["prompt snapshot tests"],
       coverageGaps: []
     },
-    identifierRegistry: {
-      files: ["src/app.ts"],
-      symbols: ["ReviewBasisV1"],
-      resourceKeys: [],
-      apiNames: [],
-      stateNames: ["reviewBasis"]
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",
@@ -239,25 +232,66 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.equal(plan.reviewProfile.knowledgeMode, "built-in-context7");
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
+  const userMessage = plan.prompt.userMessage;
   assert.match(plan.prompt.systemMessage, /ReviewBasisV1/u);
   assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
   assert.match(plan.prompt.systemMessage, /JSON Completion/u);
   assert.match(plan.prompt.systemMessage, /Missing Information Discipline/u);
   assert.match(plan.prompt.systemMessage, /Do not record generic test gaps/u);
-  assert.match(plan.prompt.systemMessage, /Keep the basis compact and selective/u);
+  assert.match(plan.prompt.systemMessage, /Keep the basis compact, selective, and high-signal/u);
+  assert.match(plan.prompt.systemMessage, /Use only the provided `<change_map>`, `<diff>`, and local repository context/u);
+  assert.match(plan.prompt.systemMessage, /Do not pre-emptively perform bug finding/u);
   assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
-  assert.match(plan.prompt.userMessage, /<change_map format="json">/u);
-  assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts"/u);
-  assert.match(plan.prompt.userMessage, /identifierRegistry/u);
-  assert.match(plan.prompt.userMessage, /hypothesisLedger/u);
-  assert.match(plan.prompt.userMessage, /Keep arrays compact/u);
-  assert.match(plan.prompt.userMessage, /ReviewBasisV1 completion policy/u);
-  assert.match(plan.prompt.userMessage, /Complete a syntactically valid JSON object/u);
-  assert.match(plan.prompt.userMessage, /Return compact JSON/u);
-  assert.match(plan.prompt.userMessage, /Empty arrays are valid for any array field/u);
-  assert.match(plan.prompt.userMessage, /use at most one high-signal string per sub-field/u);
-  assert.match(plan.prompt.userMessage, /Every `evidenceIds`/u);
-  assert.match(plan.prompt.userMessage, /Do not produce findings/u);
+  assert.match(userMessage, /<change_map format="json">/u);
+  assert.match(userMessage, /<diff path="src\/app\.ts"/u);
+  assert.match(userMessage, /Retrieve extra local repository context only when needed/u);
+  assert.doesNotMatch(userMessage, /identifierRegistry/u);
+  assert.match(userMessage, /hypothesisLedger/u);
+  assert.match(userMessage, /Required output top-level fields/u);
+  assert.match(userMessage, /`evidenceIds` reference `E\*` evidence IDs/u);
+  assert.match(userMessage, /`hypothesisId` uses `H\*` IDs/u);
+  assert.match(userMessage, /Keep changed behaviors, facts, inferences, and hypotheses compact/u);
+  assert.match(userMessage, /include only high-signal entries needed for downstream finding generation/u);
+  assert.doesNotMatch(userMessage, /Target 1-3 high-signal entries/u);
+  assert.match(userMessage, /Keep `missingInformation` empty unless/u);
+  assert.doesNotMatch(userMessage, /hypotheses, and missing-information items/u);
+  assert.match(userMessage, /Evidence, ID, and entry rules/u);
+  assert.doesNotMatch(userMessage, /Identifier and evidence rules/u);
+  assert.match(userMessage, /distinct behavior change/u);
+  assert.match(userMessage, /Define only `evidenceRefs\[\]` items referenced by high-signal/u);
+  assert.match(userMessage, /do not define unused evidence refs/u);
+  assert.doesNotMatch(userMessage, /Use at most 8 evidence refs/u);
+  assert.match(userMessage, /Prefer consolidating related facts/u);
+  assert.match(userMessage, /ReviewBasisV1 completion policy/u);
+  assert.match(userMessage, /Prioritize a complete, valid JSON object/u);
+  assert.match(userMessage, /Return compact JSON/u);
+  assert.match(userMessage, /Empty arrays are valid for any array field/u);
+  assert.match(userMessage, /Non-empty array item shapes/u);
+  assert.match(userMessage, /`changedBehavior`: `\{ "before": "old behavior"/u);
+  assert.match(userMessage, /`inferences`: `\{ "statement": "Bounded inference\."/u);
+  assert.match(userMessage, /`evidenceRefs`: `\{ "evidenceId": "E1"/u);
+  assert.match(userMessage, /Minimal valid shape example/u);
+  assert.match(userMessage, /"changedBehavior": \[\]/u);
+  assert.match(userMessage, /"evidenceRefs": \[\]/u);
+  assert.match(userMessage, /keep each sub-field compact/u);
+  assert.match(userMessage, /use an empty array when there is no direct high-signal information/u);
+  assert.match(userMessage, /unless another distinct string is essential to a concrete hypothesis/u);
+  assert.doesNotMatch(userMessage, /use at most one high-signal string per sub-field/u);
+  assert.match(userMessage, /Every `evidenceIds`/u);
+
+  const sectionOrder = [
+    "Required output top-level fields:",
+    "Non-empty array item shapes:",
+    "Evidence, ID, and entry rules:",
+    "ReviewBasisV1 completion policy:",
+    "Minimal valid shape example:"
+  ].map((section) => userMessage.indexOf(section));
+  assert.ok(sectionOrder.every((index) => index >= 0));
+  assert.ok(
+    sectionOrder.every(
+      (index, position) => position === 0 || sectionOrder[position - 1] < index
+    )
+  );
 });
 
 test("default per-file pipeline starts with ReviewBasis and omits legacy Step 1-4", () => {

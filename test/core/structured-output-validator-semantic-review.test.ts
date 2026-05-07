@@ -80,13 +80,6 @@ function createReviewBasis(overrides: Partial<ReviewBasisV1> = {}): ReviewBasisV
       observedCoverageSignals: ["validator tests"],
       coverageGaps: []
     },
-    identifierRegistry: {
-      files: ["src/app.ts"],
-      symbols: ["ReviewBasisV1"],
-      resourceKeys: [],
-      apiNames: ["validateCandidateFindingsV3WithReport"],
-      stateNames: ["reviewBasis"]
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

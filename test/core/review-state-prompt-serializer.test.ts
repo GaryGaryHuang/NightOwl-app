@@ -200,7 +200,7 @@ test("finding JSON preserves current optional dependency-path fields", () => {
   assert.equal(f.dependencyPathException?.dependencyAnchor.symbol, "helper");
 });
 
-test("review basis serializes structured evidence refs and registries", () => {
+test("review basis serializes structured evidence refs and hypotheses", () => {
   const ctx = createContext();
   ctx.setReviewBasis(createReviewBasis());
 
@@ -215,7 +215,6 @@ test("review basis serializes structured evidence refs and registries", () => {
       summary: "review basis state added"
     }
   ]);
-  assert.deepEqual(snapshot.identifierRegistry.symbols, ["ReviewBasisV1"]);
   assert.deepEqual(snapshot.hypothesisLedger.map((h) => h.hypothesisId), ["H1"]);
 });
 
@@ -322,13 +321,6 @@ function createReviewBasis(): ReviewBasisV1 {
       changedTests: ["test/core/review-state-prompt-serializer.test.ts"],
       observedCoverageSignals: ["serializer tests"],
       coverageGaps: []
-    },
-    identifierRegistry: {
-      files: ["src/app.ts"],
-      symbols: ["ReviewBasisV1"],
-      resourceKeys: [],
-      apiNames: [],
-      stateNames: ["reviewBasis"]
     },
     hypothesisLedger: [
       {

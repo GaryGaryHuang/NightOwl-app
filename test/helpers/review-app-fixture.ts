@@ -63,13 +63,6 @@ export function buildSessionResponse(
         observedCoverageSignals: [],
         coverageGaps: []
       },
-      identifierRegistry: {
-        files: [filePath],
-        symbols: [],
-        resourceKeys: [],
-        apiNames: [],
-        stateNames: []
-      },
       hypothesisLedger: [
         {
           hypothesisId: "H1",

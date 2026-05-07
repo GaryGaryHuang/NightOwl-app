@@ -4,7 +4,6 @@ import type {
   PriorValidatorFeedback,
   ReviewBasisEvidenceRef,
   ReviewBasisHypothesis,
-  ReviewBasisIdentifierRegistry,
   ReviewBasisV1
 } from "./review-basis.ts";
 import type {
@@ -64,7 +63,6 @@ export interface ReviewStateSnapshot {
   missingInformationItems: MissingInformationItem[];
   reviewBasis: ReviewBasisV1 | null;
   evidenceRefs: ReviewBasisEvidenceRef[];
-  identifierRegistry: ReviewBasisIdentifierRegistry;
   hypothesisLedger: ReviewBasisHypothesis[];
   validationFeedback: PriorValidatorFeedback | null;
 }
@@ -126,9 +124,6 @@ export class ReviewStatePromptSerializer {
       evidenceRefs: includeReviewBasis && reviewBasis
         ? [...reviewBasis.evidenceRefs]
         : [],
-      identifierRegistry: includeReviewBasis && reviewBasis
-        ? reviewBasis.identifierRegistry
-        : emptyIdentifierRegistry(),
       hypothesisLedger: includeReviewBasis && reviewBasis
         ? [...reviewBasis.hypothesisLedger]
         : [],
@@ -145,17 +140,6 @@ export class ReviewStatePromptSerializer {
   }
 
 }
-
-function emptyIdentifierRegistry(): ReviewBasisIdentifierRegistry {
-  return {
-    files: [],
-    symbols: [],
-    resourceKeys: [],
-    apiNames: [],
-    stateNames: []
-  };
-}
-
 function emptySections(): ReviewStateSnapshotSections {
   return {};
 }

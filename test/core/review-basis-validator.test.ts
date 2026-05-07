@@ -48,13 +48,6 @@ function makeValidReviewBasis(overrides: Record<string, unknown> = {}): string {
       observedCoverageSignals: ["validator tests"],
       coverageGaps: []
     },
-    identifierRegistry: {
-      files: ["src/app.ts"],
-      symbols: ["ReviewBasisV1"],
-      resourceKeys: [],
-      apiNames: [],
-      stateNames: ["reviewBasis"]
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

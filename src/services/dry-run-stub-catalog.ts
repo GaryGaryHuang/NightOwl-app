@@ -87,13 +87,6 @@ export function buildDryRunReviewBasisResponse(prompt: string): string {
       observedCoverageSignals: [],
       coverageGaps: []
     },
-    identifierRegistry: {
-      files: [filePath],
-      symbols: [],
-      resourceKeys: [],
-      apiNames: [],
-      stateNames: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",
