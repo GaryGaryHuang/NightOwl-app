@@ -200,9 +200,18 @@ test("buildStep0Prompt instruction body includes the literal `## Changeset Overv
   );
   assert.ok(
     prompt.includes("\"userBehavior\""),
-    "Step 0 instruction must include a minimal JSON example illustrating the ChangeMapReadinessV2 shape"
+    "Step 0 instruction must include a minimal complete JSON example illustrating the changeset overview shape"
   );
-  assert.match(prompt, /### Output contract \(JSON-only\)/u);
+  assert.match(prompt, /Required output top-level fields/u);
+  assert.match(prompt, /`confidence` must be `explicit` or `inferred`/u);
+  assert.doesNotMatch(prompt, /Non-empty array item shapes/u);
+  assert.match(prompt, /Entry rules/u);
+  assert.match(prompt, /Changeset overview completion policy/u);
+  assert.match(prompt, /Overview Markdown template/u);
+  assert.match(prompt, /The `overviewMarkdown` string MUST follow this template/u);
+  assert.match(prompt, /Minimal complete JSON example/u);
+  assert.doesNotMatch(prompt, /### Output contract \(JSON-only\)/u);
+  assert.doesNotMatch(prompt, /Minimal example \(illustrative only/u);
   assert.match(prompt, /behaviorChanges\[\]\.files\[\]/u);
   assert.match(prompt, /Copied files are represented as added/u);
   assert.equal(
