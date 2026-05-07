@@ -48,7 +48,7 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
 
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.match(plan.prompt.systemMessage, /ReviewBasisV1\.hypothesisLedger/u);
+  assert.match(plan.prompt.systemMessage, /<review_basis>\.hypothesisLedger/u);
   assert.match(plan.prompt.systemMessage, /candidate findings/u);
   assert.match(plan.prompt.systemMessage, /final approved findings/u);
   assert.match(plan.prompt.userMessage, /<review_basis format="json">/u);
@@ -62,8 +62,15 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.match(plan.prompt.userMessage, /counterEvidence/u);
   assert.match(plan.prompt.userMessage, /hypothesisClosure/u);
   assert.match(plan.prompt.userMessage, /criticalMissingInformation/u);
-  assert.match(plan.prompt.userMessage, /Structured-output guardrails/u);
-  assert.match(plan.prompt.userMessage, /criticalMissingInformation.+array of objects/u);
+  assert.match(plan.prompt.userMessage, /Required output top-level fields/u);
+  assert.match(plan.prompt.userMessage, /Non-empty array item shapes/u);
+  assert.match(plan.prompt.userMessage, /Enum, ID, and entry rules/u);
+  assert.match(plan.prompt.userMessage, /Candidate findings completion policy/u);
+  assert.match(plan.prompt.userMessage, /Complete JSON output examples/u);
+  assert.match(plan.prompt.userMessage, /Example labels are explanatory only/u);
+  assert.match(plan.prompt.userMessage, /specific blocking fact is missing/u);
+  assert.match(plan.prompt.userMessage, /`criticalMissingInformation`: array of `\{ description, whyItMatters \}` objects/u);
+  assert.match(plan.prompt.userMessage, /`criticalMissingInformation`: `\{ "description":/u);
   assert.match(plan.prompt.systemMessage, /observable behavior changes to missing information/u);
   assert.match(plan.prompt.userMessage, /silently lose data/u);
   assert.match(plan.prompt.userMessage, /low-severity `reasonable_risk` candidate/u);
@@ -73,8 +80,9 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   assert.match(plan.prompt.userMessage, /null-to-empty normalization/u);
   assert.match(plan.prompt.userMessage, /partial-result loss/u);
   assert.match(plan.prompt.userMessage, /current repo-supported production code/u);
-  assert.match(plan.prompt.userMessage, /hypothetical future callers/u);
-  assert.match(plan.prompt.userMessage, /omitted optional parameters/u);
+  assert.match(plan.prompt.userMessage, /theoretical or implausible assumptions/u);
+  assert.match(plan.prompt.userMessage, /hypothetical future implementation/u);
+  assert.match(plan.prompt.userMessage, /omitted optional argument/u);
   assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
   assert.match(plan.prompt.systemMessage, /JSON Completion/u);
   for (const value of CANDIDATE_CLASSIFICATIONS) {
@@ -86,6 +94,21 @@ test("Step5ValidationInterrogationStep prompt contract requests structured findi
   for (const value of HYPOTHESIS_CLOSURE_STATUSES) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
+  const sectionOrder = [
+    "Required output top-level fields:",
+    "Non-empty array item shapes:",
+    "Enum, ID, and entry rules:",
+    "Validation feedback and rerun investigation rules:",
+    "Candidate creation and classification rules:",
+    "Candidate findings completion policy:",
+    "Complete JSON output examples:"
+  ].map((section) => plan.prompt.userMessage.indexOf(section));
+  assert.ok(sectionOrder.every((index) => index >= 0));
+  assert.ok(
+    sectionOrder.every(
+      (index, position) => position === 0 || sectionOrder[position - 1] < index
+    )
+  );
   assert.doesNotMatch(plan.prompt.userMessage, /"sourceHypothesisId"/u);
 });
 

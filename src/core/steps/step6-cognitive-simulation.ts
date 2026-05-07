@@ -16,7 +16,7 @@ import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
 const STEP6_SYSTEM_ADDITION = [
   "## Current Step: Semantic Validation",
-  "- Validate Step 5 `CandidateFindingsV3` against the diff, `ReviewBasisV1`, candidate evidence chains, host semantic gates, and prior loop feedback.",
+  "- Validate Step 5 `CandidateFindingsV3` against the diff, the review basis, candidate evidence chains, host semantic gates, and prior loop feedback.",
   "- This step is a validator, not a bug hunt. Do not introduce new defects outside Step 5 candidate evidence chains.",
   "- If a concern is not already represented by a Step 5 candidate, record it as missing information only when it is a specific user-actionable fact that blocks reliable review judgment."
 ].join("\n");
@@ -39,11 +39,11 @@ const STEP6_INSTRUCTION = [
   "1. Start from the complete candidateFindings CandidateFindingsV3 object in <review_state>.",
   "   - Use `candidateFindings.findings`, `candidateFindings.hypothesisClosure`, and `candidateFindings.criticalMissingInformation` together.",
   "   - These are Step 5 candidate findings and closure/missing-information state, not approved defects.",
-  "   - Validate each candidate against the diff, `ReviewBasisV1`, evidence refs, hypothesis closure, prior validation feedback, and semantic gate expectations.",
+  "   - Validate each candidate against the diff, `<review_state>.reviewBasis`, evidence refs, hypothesis closure, prior validation feedback, and semantic gate expectations.",
   "",
   "2. Apply the host semantic gates for every candidate.",
   `   Allowed gate IDs: ${formatQuotedValues(SEMANTIC_GATE_IDS)}.`,
-  "   - `evidence`: the candidate's evidence must be concrete, traceable, and consistent with `ReviewBasisV1.evidenceRefs` and the reviewed code; named identifiers, execution path, and mechanism must be concrete.",
+  "   - `evidence`: the candidate's evidence must be concrete, traceable, and consistent with `<review_state>.reviewBasis.evidenceRefs` and the reviewed code; named identifiers, execution path, and mechanism must be concrete.",
   "   - `impact`: the user/system impact must be specific and proportionate to the proven evidence; the candidate's `counterEvidence` must contain substantive checks (not just assertions or restatements); classification and severity must match the proven evidence level.",
   "   - `traceability`: schema must be complete, and the location must be precise enough for a reviewer to inspect; exact changed-line overlap is a prompt instruction for Step 5, not a deterministic validator rule.",
   "   - `completeness`: the candidate must close or honestly account for the source hypotheses; unproven contract, trigger, impact, or identifier claims must become missing information.",

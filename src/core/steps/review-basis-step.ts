@@ -14,14 +14,14 @@ import {
 
 const REVIEW_BASIS_SYSTEM_ADDITION = [
   "## Current Step: ReviewBasis",
-  "- Build the canonical per-file JSON basis required by the ReviewBasisV1 instruction.",
+  "- Build the canonical per-file JSON basis required by the review basis instruction.",
   "- Keep the basis compact, selective, and high-signal.",
   "- Treat the provided `<change_map>` data as authoritative review context for this file.",
   "- Use only the provided `<change_map>`, `<diff>`, and local repository context to support the structured basis fields."
 ].join("\n");
 
 const REVIEW_BASIS_INSTRUCTION = [
-  "Produce a single JSON object using `ReviewBasisV1` for this file.",
+  "Produce a single review basis JSON object for this file.",
   "",
   "Retrieve extra local repository context only when needed to fill evidence-backed basis fields for this file.",
   "",
@@ -55,7 +55,7 @@ const REVIEW_BASIS_INSTRUCTION = [
   "- Define only `evidenceRefs[]` items referenced by high-signal `changedBehavior`, `facts`, or `inferences` entries; do not define unused evidence refs.",
   "- Prefer consolidating related facts that rely on the same evidence.",
   "",
-  "ReviewBasisV1 completion policy:",
+  "Review basis completion policy:",
   "- Prioritize a complete, valid JSON object with the highest-signal evidence before adding lower-priority breadth or nuance.",
   "- Return compact JSON; whitespace, indentation, and pretty-printing are unnecessary.",
   "- Prefer short single-sentence strings; do not include long code excerpts, tool transcripts, or multi-paragraph explanations.",
@@ -63,19 +63,8 @@ const REVIEW_BASIS_INSTRUCTION = [
   "- Empty arrays are valid for any array field when there is no direct high-signal evidence; do not add filler solely to populate a field.",
   "- For `dependencyMap`, `flowMap`, and `testCoverage`, keep each sub-field compact: use an empty array when there is no direct high-signal information; otherwise include only the clearest string unless another distinct string is essential to a concrete hypothesis.",
   "",
-  "Minimal valid shape example:",
-  "{",
-  "  \"roleInChangeset\": \"Owns the changed review flow behavior.\",",
-  "  \"changedBehavior\": [],",
-  "  \"facts\": [],",
-  "  \"inferences\": [],",
-  "  \"dependencyMap\": { \"upstreamCallers\": [], \"downstreamConsumers\": [], \"externalContracts\": [], \"sharedStateOrSideEffects\": [] },",
-  "  \"flowMap\": { \"entryPoints\": [], \"stateTransitions\": [], \"asyncBoundaries\": [], \"errorPaths\": [] },",
-  "  \"testCoverage\": { \"changedTests\": [], \"observedCoverageSignals\": [], \"coverageGaps\": [] },",
-  "  \"hypothesisLedger\": [],",
-  "  \"missingInformation\": [],",
-  "  \"evidenceRefs\": []",
-  "}"
+  "Minimal complete JSON example:",
+  `{"roleInChangeset": "Owns the changed review flow behavior.", "changedBehavior": [], "facts": [], "inferences": [], "dependencyMap": {"upstreamCallers": [], "downstreamConsumers": [], "externalContracts": [], "sharedStateOrSideEffects": []}, "flowMap": {"entryPoints": [], "stateTransitions": [], "asyncBoundaries": [], "errorPaths": []}, "testCoverage": {"changedTests": [], "observedCoverageSignals": [], "coverageGaps": []}, "hypothesisLedger": [], "missingInformation": [], "evidenceRefs": []}`
 ].join("\n");
 
 export interface ReviewBasisStepOptions {

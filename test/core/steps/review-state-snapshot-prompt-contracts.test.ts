@@ -233,7 +233,7 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   const userMessage = plan.prompt.userMessage;
-  assert.match(plan.prompt.systemMessage, /ReviewBasisV1/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /ReviewBasisV1/u);
   assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
   assert.match(plan.prompt.systemMessage, /JSON Completion/u);
   assert.match(plan.prompt.systemMessage, /Missing Information Discipline/u);
@@ -262,7 +262,8 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.match(userMessage, /do not define unused evidence refs/u);
   assert.doesNotMatch(userMessage, /Use at most 8 evidence refs/u);
   assert.match(userMessage, /Prefer consolidating related facts/u);
-  assert.match(userMessage, /ReviewBasisV1 completion policy/u);
+  assert.doesNotMatch(userMessage, /ReviewBasisV1/u);
+  assert.match(userMessage, /Review basis completion policy/u);
   assert.match(userMessage, /Prioritize a complete, valid JSON object/u);
   assert.match(userMessage, /Return compact JSON/u);
   assert.match(userMessage, /Empty arrays are valid for any array field/u);
@@ -270,7 +271,7 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.match(userMessage, /`changedBehavior`: `\{ "before": "old behavior"/u);
   assert.match(userMessage, /`inferences`: `\{ "statement": "Bounded inference\."/u);
   assert.match(userMessage, /`evidenceRefs`: `\{ "evidenceId": "E1"/u);
-  assert.match(userMessage, /Minimal valid shape example/u);
+  assert.match(userMessage, /Minimal complete JSON example/u);
   assert.match(userMessage, /"changedBehavior": \[\]/u);
   assert.match(userMessage, /"evidenceRefs": \[\]/u);
   assert.match(userMessage, /keep each sub-field compact/u);
@@ -283,8 +284,8 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
     "Required output top-level fields:",
     "Non-empty array item shapes:",
     "Evidence, ID, and entry rules:",
-    "ReviewBasisV1 completion policy:",
-    "Minimal valid shape example:"
+    "Review basis completion policy:",
+    "Minimal complete JSON example:"
   ].map((section) => userMessage.indexOf(section));
   assert.ok(sectionOrder.every((index) => index >= 0));
   assert.ok(
