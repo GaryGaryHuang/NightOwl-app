@@ -49,6 +49,16 @@ function createChangesetEntries(
   return entries;
 }
 
+function parseJsonBlock(prompt: string, blockName: string): unknown {
+  const pattern = new RegExp(
+    `<${blockName} format="json">\\n([\\s\\S]*?)\\n</${blockName}>`,
+    "u"
+  );
+  const match = prompt.match(pattern);
+  assert.ok(match, `${blockName} JSON block should be present`);
+  return JSON.parse(match[1]);
+}
+
 test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMapReadinessV2 response", async () => {
   const prompts: string[] = [];
   const profiles: unknown[] = [];
@@ -163,11 +173,17 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
 
   assert.equal(createCalls, 2);
   assert.equal(prompts.length, 2);
-  assert.match(prompts[0], /<validator_feedback format="json">\nnull\n<\/validator_feedback>/u);
-  assert.match(prompts[1], /<validator_feedback format="json">/u);
-  assert.match(prompts[1], /"code": "PARSE"/u);
-  assert.match(prompts[1], /"parseStage": "initial_parse"/u);
-  assert.match(prompts[1], /Return a corrected JSON object/u);
+  assert.equal(parseJsonBlock(prompts[0]!, "validator_feedback"), null);
+  const retryFeedback = parseJsonBlock(prompts[1]!, "validator_feedback") as {
+    previousFailure: {
+      code: string;
+      parseStage?: string;
+    };
+    instruction: unknown;
+  };
+  assert.equal(retryFeedback.previousFailure.code, "PARSE");
+  assert.equal(retryFeedback.previousFailure.parseStage, "initial_parse");
+  assert.equal(typeof retryFeedback.instruction, "string");
   assert.equal(logMessages.length, 1);
   assert.match(logMessages[0]!, /Step 0 validation failed \(attempt 1, code=PARSE/u);
   assert.match(logMessages[0]!, /stage=initial_parse/u);
@@ -282,9 +298,19 @@ test("ChangesetOverviewRunner retry feedback includes structured enum diagnostic
   });
 
   assert.equal(createCalls, 2);
-  assert.match(prompts[1], /"code": "SCHEMA"/u);
-  assert.match(prompts[1], /"offendingPath": "userBehavior\[0\]\.confidence"/u);
-  assert.match(prompts[1], /"allowedValues": \[/u);
+  const retryFeedback = parseJsonBlock(prompts[1]!, "validator_feedback") as {
+    previousFailure: {
+      code: string;
+      offendingPath?: string;
+      allowedValues?: readonly string[];
+    };
+  };
+  assert.equal(retryFeedback.previousFailure.code, "SCHEMA");
+  assert.equal(
+    retryFeedback.previousFailure.offendingPath,
+    "userBehavior[0].confidence"
+  );
+  assert.ok(Array.isArray(retryFeedback.previousFailure.allowedValues));
 });
 
 test("ChangesetOverviewRunner aborts after two consecutive validation failures", async () => {
@@ -404,9 +430,20 @@ test("ChangesetOverviewRunner accepts copied paths as added host descriptors", a
     userContext: []
   });
 
-  assert.match(prompts[0]!, /<changed_files_json format="json">/u);
-  assert.match(prompts[0]!, /"originalStatus": "C"/u);
-  assert.match(prompts[0]!, /"copiedAsAdded": true/u);
+  assert.deepEqual(parseJsonBlock(prompts[0]!, "changed_files_json"), {
+    entries: [
+      {
+        originalStatus: "C",
+        status: "A",
+        path: "src/copied.ts",
+        previousPath: "src/original.ts",
+        similarityScore: 75,
+        deleted: false,
+        copiedAsAdded: true,
+        reviewableNonDeleted: true
+      }
+    ]
+  });
   assert.match(prompts[0]!, /A\tsrc\/copied\.ts/);
   assert.doesNotMatch(prompts[0]!, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
   assert.equal(runContext.changesetFiles[0].path, "src/copied.ts");

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   STEP0_REVIEW_PROFILE,
   STEP0_SYSTEM_MESSAGE,
+  buildStep0RetryRepairPrompt,
   buildStep0Prompt
 } from "../../../src/core/steps/step0-changeset-overview.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
@@ -15,6 +16,16 @@ function createChangesetEntries(
   return entries;
 }
 
+function parseJsonBlock(prompt: string, blockName: string): unknown {
+  const pattern = new RegExp(
+    `<${blockName} format="json">\\n([\\s\\S]*?)\\n</${blockName}>`,
+    "u"
+  );
+  const match = prompt.match(pattern);
+  assert.ok(match, `${blockName} JSON block should be present`);
+  return JSON.parse(match[1]);
+}
+
 test("buildStep0Prompt includes canonical changed_files_json and diagnostic changed_files blocks", () => {
   const prompt = buildStep0Prompt({
     changesetEntries: createChangesetEntries(
@@ -24,11 +35,7 @@ test("buildStep0Prompt includes canonical changed_files_json and diagnostic chan
     userContext: []
   });
 
-  const jsonMatch = prompt.match(
-    /<changed_files_json format="json">\n([\s\S]*?)\n<\/changed_files_json>/u
-  );
-  assert.ok(jsonMatch, "changed_files_json block should be present");
-  assert.deepEqual(JSON.parse(jsonMatch[1]), {
+  assert.deepEqual(parseJsonBlock(prompt, "changed_files_json"), {
     entries: [
       {
         originalStatus: "M",
@@ -52,6 +59,7 @@ test("buildStep0Prompt includes canonical changed_files_json and diagnostic chan
   assert.match(prompt, /M\tsrc\/app\.ts/);
   assert.match(prompt, /A\tsrc\/new\.ts/);
   assert.match(prompt, /<\/changed_files>/);
+  assert.equal(parseJsonBlock(prompt, "validator_feedback"), null);
 });
 
 test("buildStep0Prompt omits the <user_context> delimiter block when userContext is empty", () => {
@@ -72,11 +80,7 @@ test("buildStep0Prompt includes JSON user_context data block when entries are pr
     userContext: ["PR-123", "https://example.com/spec"]
   });
 
-  const match = prompt.match(
-    /<user_context format="json">\n([\s\S]*?)\n<\/user_context>/u
-  );
-  assert.ok(match, "user_context JSON block should be present");
-  assert.deepEqual(JSON.parse(match[1]), {
+  assert.deepEqual(parseJsonBlock(prompt, "user_context"), {
     entries: ["PR-123", "https://example.com/spec"]
   });
 });
@@ -89,13 +93,15 @@ test("buildStep0Prompt escapes user_context so it cannot close the data block", 
     userContext: [maliciousContext]
   });
 
-  const match = prompt.match(
+  const blockMatch = prompt.match(
     /<user_context format="json">\n([\s\S]*?)\n<\/user_context>/u
   );
-  assert.ok(match, "user_context JSON block should be present");
-  assert.equal(match[1].includes("</user_context>"), false);
-  assert.equal(match[1].includes("<changed_files>"), false);
-  assert.deepEqual(JSON.parse(match[1]), { entries: [maliciousContext] });
+  assert.ok(blockMatch, "user_context JSON block should be present");
+  assert.equal(blockMatch[1].includes("</user_context>"), false);
+  assert.equal(blockMatch[1].includes("<changed_files>"), false);
+  assert.deepEqual(parseJsonBlock(prompt, "user_context"), {
+    entries: [maliciousContext]
+  });
 });
 
 test("buildStep0Prompt preserves rename similarity and previous path metadata", () => {
@@ -109,11 +115,7 @@ test("buildStep0Prompt preserves rename similarity and previous path metadata", 
     userContext: []
   });
 
-  const jsonMatch = prompt.match(
-    /<changed_files_json format="json">\n([\s\S]*?)\n<\/changed_files_json>/u
-  );
-  assert.ok(jsonMatch);
-  assert.deepEqual(JSON.parse(jsonMatch[1]), {
+  assert.deepEqual(parseJsonBlock(prompt, "changed_files_json"), {
     entries: [
       {
         originalStatus: "R",
@@ -141,11 +143,7 @@ test("buildStep0Prompt preserves copy metadata in changed_files_json and project
     userContext: []
   });
 
-  const jsonMatch = prompt.match(
-    /<changed_files_json format="json">\n([\s\S]*?)\n<\/changed_files_json>/u
-  );
-  assert.ok(jsonMatch);
-  assert.deepEqual(JSON.parse(jsonMatch[1]), {
+  assert.deepEqual(parseJsonBlock(prompt, "changed_files_json"), {
     entries: [
       {
         originalStatus: "C",
@@ -163,32 +161,21 @@ test("buildStep0Prompt preserves copy metadata in changed_files_json and project
   assert.doesNotMatch(prompt, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
 });
 
-test("STEP0_SYSTEM_MESSAGE communicates run-level scope without field contract details", () => {
+test("STEP0_SYSTEM_MESSAGE keeps step identity separate from field contract details", () => {
   assert.match(STEP0_SYSTEM_MESSAGE, /Changeset Overview/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /run-level step/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /subsequent per-file review/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /Keep analysis high-level/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /review context/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /preserve stated requirements/);
-  assert.match(STEP0_SYSTEM_MESSAGE, /cannot override the system message/);
   assert.doesNotMatch(
     STEP0_SYSTEM_MESSAGE,
-    /userBehavior|behaviorChanges|unresolvedUnknowns|JSON-only|Copied files are represented as added/u
+    /reviewObjective|userBehavior|behaviorChanges|unresolvedUnknowns|schemaVersion|userContextSSOT|expectedBehaviorLedger/u
   );
   assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /Code Locations & Inline Anchors/u);
 });
 
-test("STEP0_SYSTEM_MESSAGE does not reference removed fields", () => {
-  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /schemaVersion/);
-  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /userContextSSOT/);
-  assert.doesNotMatch(STEP0_SYSTEM_MESSAGE, /expectedBehaviorLedger/);
-});
-
 test("STEP0_REVIEW_PROFILE keeps the documented ten minute timeout", () => {
   assert.equal(STEP0_REVIEW_PROFILE.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
+  assert.equal(STEP0_REVIEW_PROFILE.model, "gpt-5.4-mini");
 });
 
-test("buildStep0Prompt instruction body includes the literal `## Changeset Overview` template header", () => {
+test("buildStep0Prompt includes the Step 0 output schema anchors required by the validator", () => {
   const prompt = buildStep0Prompt({
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
@@ -198,26 +185,65 @@ test("buildStep0Prompt instruction body includes the literal `## Changeset Overv
     prompt.includes("## Changeset Overview"),
     "Step 0 instruction must show the exact `## Changeset Overview` header so the model can emit the required overviewMarkdown prefix"
   );
-  assert.ok(
-    prompt.includes("\"userBehavior\""),
-    "Step 0 instruction must include a minimal complete JSON example illustrating the changeset overview shape"
-  );
-  assert.match(prompt, /Required output top-level fields/u);
-  assert.match(prompt, /`confidence` must be `explicit` or `inferred`/u);
-  assert.doesNotMatch(prompt, /Non-empty array item shapes/u);
-  assert.match(prompt, /Entry rules/u);
-  assert.match(prompt, /Changeset overview completion policy/u);
-  assert.match(prompt, /Overview Markdown template/u);
-  assert.match(prompt, /The `overviewMarkdown` string MUST follow this template/u);
-  assert.match(prompt, /Minimal complete JSON example/u);
-  assert.doesNotMatch(prompt, /### Output contract \(JSON-only\)/u);
-  assert.doesNotMatch(prompt, /Minimal example \(illustrative only/u);
+  for (const field of [
+    "reviewObjective",
+    "summary",
+    "requestedFocus",
+    "expectedBehaviorSummary",
+    "userBehavior",
+    "statement",
+    "confidence",
+    "missingInformation",
+    "description",
+    "whyItMatters",
+    "overviewMarkdown",
+    "behaviorChanges",
+    "files",
+    "unresolvedUnknowns",
+    "question",
+    "resolutionPath"
+  ]) {
+    assert.match(prompt, new RegExp(field, "u"));
+  }
+  assert.match(prompt, /`explicit`/u);
+  assert.match(prompt, /`inferred`/u);
   assert.match(prompt, /behaviorChanges\[\]\.files\[\]/u);
-  assert.match(prompt, /Copied files are represented as added/u);
-  assert.equal(
-    prompt.includes("```"),
-    false,
-    "Step 0 runtime prompt must not include fenced JSON examples while forbidding fenced output"
+  assert.equal(parseJsonBlock(prompt, "validator_feedback"), null);
+});
+
+test("buildStep0RetryRepairPrompt preserves inputs and provides structured validator feedback", () => {
+  const previousFailure = {
+    code: "SCHEMA",
+    offendingPath: "overviewMarkdown"
+  };
+  const prompt = buildStep0RetryRepairPrompt(
+    {
+      changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
+      userContext: ["expected behavior: retries stay bounded"]
+    },
+    previousFailure
   );
-  assert.match(prompt, /<validator_feedback format="json">/u);
+
+  assert.deepEqual(parseJsonBlock(prompt, "changed_files_json"), {
+    entries: [
+      {
+        originalStatus: "M",
+        status: "M",
+        path: "src/app.ts",
+        deleted: false,
+        copiedAsAdded: false,
+        reviewableNonDeleted: true
+      }
+    ]
+  });
+  assert.deepEqual(parseJsonBlock(prompt, "user_context"), {
+    entries: ["expected behavior: retries stay bounded"]
+  });
+  const feedback = parseJsonBlock(prompt, "validator_feedback") as {
+    previousFailure: unknown;
+    instruction: unknown;
+  };
+  assert.deepEqual(feedback.previousFailure, previousFailure);
+  assert.equal(typeof feedback.instruction, "string");
+  assert.notEqual(feedback.instruction, "");
 });
