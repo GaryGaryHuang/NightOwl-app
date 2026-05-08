@@ -115,114 +115,72 @@ export function parseRiskLevelFromResponse(response: string): RiskLevel | undefi
 }
 
 /**
- * Factory for the resolve() closure used by Step 7 with hybrid validation.
+ * Factory for the resolve() closure used by Step 7.
  *
- * 1. Deterministic pre-check: parse `整體風險等級` from the response and compare
- *    against `expectedRiskLevel`. Mismatch → throw immediately (no judge call).
- * 2. Judge check: delegate to `judgeService.evaluate()` for section structure.
- * 3. On pass → return deferred mutation writing the Summary section.
+ * Step 7 is user-facing packaging, not a semantic review step. Keep validation
+ * lightweight and deterministic: reject only broken packaging and host-owned
+ * fields before writing the composed Summary.
  */
-export function createStep7HybridResolve(input: {
+export function createStep7Resolve(input: {
   stepId: string;
   filePath: string;
   sectionKey: ReviewSectionKey;
-  criteria: string;
   expectedRiskLevel: RiskLevel;
-  allowedFindingIds?: readonly string[];
-  allowedMissingInformationIds?: readonly string[];
+  forbiddenResponsePatterns?: readonly RegExp[];
+  composeReport?: (response: string) => string;
 }): StepExecutionPlan["resolve"] {
-  return async (response, services) => {
+  return async (response) => {
+    rejectMalformedStep7Narrative(response);
+    rejectForbiddenStep7ResponsePatterns(response, input.forbiddenResponsePatterns ?? []);
+    const sectionContent = input.composeReport?.(response) ?? response;
+
     // Deterministic pre-check: risk level must match snapshot
-    const parsed = parseRiskLevelFromResponse(response);
+    const parsed = parseRiskLevelFromResponse(sectionContent);
     if (parsed !== input.expectedRiskLevel) {
       throw new Error(
         `整體風險等級 risk mismatch: expected "${input.expectedRiskLevel}" but got "${parsed ?? "(unparseable)"}"`
       );
     }
 
-    rejectUnknownStep7Claims(response, input);
-    rejectInternalStep7Wording(response);
-
-    // Judge check: section structure validation
-    if (!services.judgeService) {
-      throw new Error("judge service is not configured");
-    }
-
-    const judgeResult = await services.judgeService.evaluate({
-      stepId: input.stepId,
-      filePath: input.filePath,
-      criteria: input.criteria,
-      sectionContent: response
-    });
-
-    if (!judgeResult.passed) {
-      throw new Error(judgeResult.cause ?? "judge rejected");
-    }
-
     return (targetContext: FileReviewContext) => {
-      targetContext.setSection(input.sectionKey, response);
+      targetContext.setSection(input.sectionKey, sectionContent);
     };
   };
 }
 
-const INTERNAL_STEP7_WORDING_PATTERNS: readonly RegExp[] = [
-  /\brisk_snapshot\b/iu,
-  /\bderivedRiskLevel\b/u,
-  /\bmustCount\b/u,
-  /\bniceCount\b/u,
-  /\bacceptedFindingIds\b/u,
-  /\bReviewBasisV1\b/u,
-  /\bapprovedFindings\b/u,
-  /\bStep\s*6\b/iu
+const STEP7_NARRATIVE_SECTION_PATTERNS: readonly {
+  label: string;
+  pattern: RegExp;
+}[] = [
+  { label: "審查依據", pattern: /^#{2,4}\s+審查依據(?:[：:]|\s|$)/mu },
+  { label: "行為變更提醒", pattern: /^#{2,4}\s+行為變更提醒(?:[：:]|\s|$)/mu },
+  { label: "風險判定理由", pattern: /^#{2,4}\s+風險判定理由(?:[：:]|\s|$)/mu }
 ];
 
-function rejectUnknownStep7Claims(
-  response: string,
-  input: {
-    allowedFindingIds?: readonly string[];
-    allowedMissingInformationIds?: readonly string[];
-  }
-): void {
-  const allowedFindingIds = new Set(input.allowedFindingIds ?? []);
-  if (input.allowedFindingIds) {
-    for (const findingId of extractTokenIds(response, /\bF(?:[0-9][0-9A-Za-z_-]*|-[0-9A-Za-z_-]+)\b/gu)) {
-      if (!allowedFindingIds.has(findingId)) {
-        throw new Error(
-          `Step 7 packaging introduced a new claim outside approved findings: ${findingId}`
-        );
-      }
-    }
+function rejectMalformedStep7Narrative(response: string): void {
+  if (response.trim().length === 0) {
+    throw new Error("Step 7 narrative response is empty");
   }
 
-  const allowedMissingInformationIds = new Set(input.allowedMissingInformationIds ?? []);
-  if (input.allowedMissingInformationIds) {
-    for (const missingInfoId of extractTokenIds(response, /\bMI(?:[0-9][0-9A-Za-z_-]*|-[0-9A-Za-z_-]+)\b/gu)) {
-      if (!allowedMissingInformationIds.has(missingInfoId)) {
-        throw new Error(
-          `Step 7 packaging introduced a new missing-information claim outside Step 6 state: ${missingInfoId}`
-        );
-      }
-    }
-  }
-}
-
-function rejectInternalStep7Wording(response: string): void {
-  for (const pattern of INTERNAL_STEP7_WORDING_PATTERNS) {
-    const match = pattern.exec(response);
-    if (match) {
+  for (const section of STEP7_NARRATIVE_SECTION_PATTERNS) {
+    if (!section.pattern.test(response)) {
       throw new Error(
-        `Step 7 packaging exposed internal review field in reader-facing summary: ${match[0]}`
+        `Step 7 narrative is missing required section: ${section.label}`
       );
     }
   }
 }
 
-function extractTokenIds(response: string, pattern: RegExp): string[] {
-  const ids = new Set<string>();
-  for (const match of response.matchAll(pattern)) {
-    if (match[0]) {
-      ids.add(match[0]);
+function rejectForbiddenStep7ResponsePatterns(
+  response: string,
+  patterns: readonly RegExp[]
+): void {
+  for (const pattern of patterns) {
+    const match = pattern.exec(response);
+    if (match) {
+      throw new Error(
+        `Step 7 narrative attempted to own a host-computed report field: ${match[0]}`
+      );
     }
   }
-  return [...ids];
 }

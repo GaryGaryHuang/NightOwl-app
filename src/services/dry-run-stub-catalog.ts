@@ -201,16 +201,14 @@ const STUB_VALIDATION_INTERROGATION = '{"findings": [], "hypothesisClosure": [{"
 const STUB_COGNITIVE_SIMULATION = '{"perFindingResults": [], "missingInformationItems": [], "loopControl": {"action": "accept", "reason": "dry-run stub has no candidates"}}';
 
 const STUB_SUMMARY = [
-  "## Summary",
-  "### 審查基礎",
-  "- 改動概要：dry-run 沒有實際檔案變更。",
-  "- 依據規範：dry-run stub。",
-  "- 必要假設：無。",
+  "### 審查依據",
+  "- 異動概要：dry-run 沒有實際檔案變更。",
+  "- 已核對依據：dry-run stub。",
+  "- 待確認資訊：無。",
   "### 行為變更提醒",
   "- 無行為變更",
-  "### 風險評估",
-  "- 整體風險等級：None",
-  "- 風險理由：dry-run stub 沒有 approved findings。"
+  "### 風險判定理由",
+  "- dry-run stub 沒有 validated findings。"
 ].join("\n");
 
 export type DryRunResponseProvider = (prompt: string) => string;

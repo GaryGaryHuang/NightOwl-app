@@ -376,10 +376,8 @@ test("Steps 5-7 receive parseable ReviewStateSnapshot JSON", () => {
   assert.deepEqual(snapshots[2].sections, {});
   assert.equal(snapshots[2].approvedFindings[0].findingId, "F1");
   assert.equal(snapshots[2].candidateFindings, null);
-  assert.match(
-    stepPlans[2].prompt.userMessage,
-    /prepared role and behavior-change evidence/u
-  );
+  assert.equal(snapshots[2].validationReport?.perFindingResults[0]?.findingId, "F1");
+  assert.equal(snapshots[2].validationReport?.loopControl.action, "accept");
   assert.match(
     stepPlans[1].prompt.userMessage,
     /<candidate_ids>\n\["F1"\]\n<\/candidate_ids>/u

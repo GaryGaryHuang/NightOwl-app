@@ -11,7 +11,6 @@ import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import {
   buildSessionResponse,
   isChangesetOverviewSystemMessage,
-  isJudgeSystemMessage,
   isReviewBasisSystemMessage
 } from "../helpers/review-app-fixture.ts";
 
@@ -211,13 +210,6 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
           (config.mcpServers.context7 as { url?: string }).url ===
             "https://mcp.context7.com/mcp" &&
           isReviewBasisSystemMessage(config.systemMessage)
-      )
-    );
-    assert.ok(
-      sessionConfigs.some(
-        (config) =>
-          !config.mcpServers &&
-          isJudgeSystemMessage(config.systemMessage)
       )
     );
   } finally {

@@ -1,144 +1,225 @@
-import type { FileReviewContext } from "../file-review-context.ts";
-import { SUMMARY_SECTION_KEY } from "../review-section-contract.ts";
-import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
-import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
-import { buildRiskSnapshot, type RiskSnapshot } from "../risk-level.ts";
-import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
-import { MARKDOWN_STEP_SYSTEM_MESSAGE } from "./shared-step-system-blocks.ts";
-import { createStep7HybridResolve } from "./step-resolve-helpers.ts";
-
+import type {FileReviewContext} from "../file-review-context.ts";
+import {SUMMARY_SECTION_KEY} from "../review-section-contract.ts";
+import {REVIEW_TURN_TIMEOUT_MS} from "../review-runtime-contract.ts";
+import type {ReviewStatePromptSerializer} from "../review-state-prompt-serializer.ts";
+import {buildRiskSnapshot, type RiskSnapshot} from "../risk-level.ts";
+import type {StepExecutionPlan, StepDefinition} from "../step-runner.ts";
+import {MARKDOWN_STEP_SYSTEM_MESSAGE} from "./shared-step-system-blocks.ts";
+import {createStep7Resolve} from "./step-resolve-helpers.ts";
 
 const STEP7_SYSTEM_ADDITION = [
-  "## Current Step: Summary",
-  "- Produce a structured summary based on the review basis, validated findings, missing-information items, and the host risk package.",
-  "- The summary is the section readers check first; every sentence must earn its place. Prefer precise conclusions over generic hedging. When uncertainty is real, tie it to the exact missing fact or unresolved evidence \u2014 do not append a vague disclaimer.",
-  "- Do not list specific findings, must-fix items, or paraphrased finding details \u2014 those belong in the Findings section.",
-  "- Consume only the review basis, validated findings, missing-information items, and the host risk package. Do not introduce new findings, identifiers, trigger conditions, impacts, or technical claims.",
-  "- The `<risk_snapshot>` block in the user message contains the host-computed risk level. You MUST use that exact value as the `整體風險等級` in your response. Do not override or recompute the risk level based on your own assessment.",
-  "- Do not expose internal field names in reader-facing prose. Avoid terms such as `risk_snapshot`, `derivedRiskLevel`, `mustCount`, `niceCount`, `acceptedFindingIds`, review-basis schema version names, `Step 6`, and `approvedFindings`.",
-  "- Language: 正體中文, except identifiers, field names, enum labels, paths, commands, or literal strings specified by the step contract."
+    "## Current Step: Summary",
+    "- Produce only the narrative portion of the final summary: the review basis, behavior-change reminder, and risk rationale for this file.",
+    "- Base the narrative on the provided review state: the established file context, validated review results, and unresolved information gaps.",
+    "- Keep the narrative concise and reader-facing. Use only information supported by the review state, and synthesize the review result without duplicating the detailed Findings entries.",
+    "- This step contributes only the three requested narrative sections; the final report shell and deterministic summary fields are assembled outside this response.",
+    "- Language: 正體中文. Preserve code identifiers, file paths, function/class/property names, commands, error messages, API names, enum values, and literal values exactly as they appear in the review state."
 ].join("\n");
 
 export interface Step7SummaryStepOptions {
-  promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
+    promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
+}
+
+type Step7Verdict =
+    | "未發現需處理事項"
+    | "未發現需處理事項，但有審查限制"
+    | "僅有非阻斷性建議"
+    | "必須優先修正";
+
+type Step7ReviewConfidenceState = "complete" | "limited";
+
+interface Step7SummaryStatus {
+    readonly verdict: Step7Verdict;
+    readonly riskLevel: RiskSnapshot["derivedRiskLevel"];
+    readonly mustFixFindingCount: number;
+    readonly niceToHaveFindingCount: number;
+    readonly missingInformationCount: number;
+    readonly reviewConfidenceState: Step7ReviewConfidenceState;
+    readonly limitationSummary: string;
+    readonly actionGuidance: readonly string[];
 }
 
 /**
  * Final section step: turn the completed note into a reader-facing summary without duplicating the detailed findings.
  */
 export class Step7SummaryStep implements StepDefinition {
-  readonly stepId = "step7-summary";
-  readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
+    readonly stepId = "step7-summary";
+    readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
-  constructor(options: Step7SummaryStepOptions) {
-    this.#promptSerializer = options.promptSerializer;
-  }
+    constructor(options: Step7SummaryStepOptions) {
+        this.#promptSerializer = options.promptSerializer;
+    }
 
-  prepare(context: FileReviewContext): StepExecutionPlan {
-    const { stepId } = this;
-    const snapshot = buildRiskSnapshot(context.getFindings());
-    return {
-      stepId,
-      prompt: {
-        systemMessage: [MARKDOWN_STEP_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
-        userMessage: buildStep7UserMessage(
-          this.#promptSerializer.serialize({
-            context,
-            include: [
-              "review-basis",
-              "approved-findings",
-              "missing-information"
-            ]
-          }),
-          snapshot
-        )
-      },
-      reviewProfile: {
-        knowledgeMode: "disabled",
-        model: "gpt-5.4-mini",
-        timeoutMs: REVIEW_TURN_TIMEOUT_MS
-      },
-      resolve: createStep7HybridResolve({
-        stepId,
-        filePath: context.filePath,
-        sectionKey: SUMMARY_SECTION_KEY,
-        criteria: buildStep7JudgeCriteria(),
-        expectedRiskLevel: snapshot.derivedRiskLevel,
-        allowedFindingIds: snapshot.acceptedFindingIds,
-        allowedMissingInformationIds:
-          context.getMissingInformationItems()?.map((item) => item.itemId) ?? []
-      })
-    };
-  }
+    prepare(context: FileReviewContext): StepExecutionPlan {
+        const {stepId} = this;
+        const snapshot = buildRiskSnapshot(context.getFindings());
+        const missingInformationItems = context.getMissingInformationItems() ?? [];
+        const summaryStatus = buildStep7SummaryStatus(
+            snapshot,
+            missingInformationItems.length
+        );
+        return {
+            stepId,
+            prompt: {
+                systemMessage: [MARKDOWN_STEP_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
+                userMessage: buildStep7UserMessage(
+                    this.#promptSerializer.serialize({
+                        context,
+                        include: [
+                            "review-basis",
+                            "approved-findings",
+                            "missing-information",
+                            "validation-report"
+                        ]
+                    })
+                )
+            },
+            reviewProfile: {
+                knowledgeMode: "disabled",
+                model: "gpt-5.4-mini",
+                timeoutMs: REVIEW_TURN_TIMEOUT_MS
+            },
+            resolve: createStep7Resolve({
+                stepId,
+                filePath: context.filePath,
+                sectionKey: SUMMARY_SECTION_KEY,
+                expectedRiskLevel: snapshot.derivedRiskLevel,
+                forbiddenResponsePatterns: [
+                    /^##\s+Summary\b/mu,
+                    /^###\s+審查結論(?:\s|$)/mu,
+                    /^###\s+後續行動(?:\s|$)/mu,
+                    /(?:整體風險等級|Overall risk level)[：:]/iu
+                ],
+                composeReport: (response) => composeStep7Report(response, summaryStatus)
+            })
+        };
+    }
 }
 
-function buildStep7UserMessage(reviewState: string, snapshot: RiskSnapshot): string {
-  const readerSafeSnapshot = {
-    riskLevel: snapshot.derivedRiskLevel,
-    mustFixFindingCount: snapshot.mustCount,
-    niceToHaveFindingCount: snapshot.niceCount,
-    findingIds: snapshot.acceptedFindingIds,
-    basis: snapshot.riskBasis
-  };
-
-  return [
-    reviewState,
-    "",
-    "<risk_snapshot>",
-    JSON.stringify(readerSafeSnapshot),
-    "</risk_snapshot>",
-    "",
-    buildStep7Instruction()
-  ].join("\n");
+function buildStep7UserMessage(reviewState: string): string {
+    return [
+        buildStep7Instruction(),
+        "",
+        reviewState
+    ].join("\n");
 }
 
 function buildStep7Instruction(): string {
-  return [
-    "Use the validated findings and missing-information items in <review_state> plus <risk_snapshot> as the concrete inputs for the sections below.",
-    "",
-    "Write a structured summary with the following three sections:",
-    "",
-    "1. 審查基礎: Give the reader just enough context to judge whether the review's conclusions are well grounded.",
-    "   - 改動概要: One sentence describing this file's specific before→after transformation, based on the prepared role and behavior-change evidence plus the validated review state. Do not repeat content that will appear in 行為變更提醒.",
-    "   - 依據規範: Only list specifications or references that were decisive for this review's conclusions — omit generic build config (gradle versions, build.gradle.kts) that applies to every file in the changeset.",
-    "   - 必要假設: State only assumptions or missing facts that materially shaped the review's conclusions and still could not be confirmed from user context, source-of-truth references, repo evidence, code, dependency implementation, or tool results. If `missingInformationItems` is non-empty, summarize each item in reader-facing language. If no necessary assumptions or missing facts remain, write `無`.",
-    "",
-    "2. 行為變更提醒: Tell the reader what changed at runtime that they or the author should verify. This section must add information beyond 改動概要.",
-    "   - State each behavioral change as a direct fact (e.g. \"停止服務改為呼叫 stopForeground(STOP_FOREGROUND_REMOVE)\"), not as a meta-observation (e.g. \"可觀察到的變更是…\").",
-    "   - Do not restate finding details. If correctness was established through final findings, reflect that through 風險評估 instead of duplicating the finding here.",
-    "   - If the change has no runtime behavioral impact (e.g. annotation-only removal), write `無行為變更`.",
-    "",
-    "3. 風險評估: Use the host-computed risk level from `<risk_snapshot>` as the `整體風險等級`. Do not recompute or override it.",
-    "   - 整體風險等級: Copy the exact `riskLevel` value from `<risk_snapshot>` (High / Low / None).",
-    "   - 風險理由: Explain in user-facing terms how confirmed findings, unresolved missing information, and affected behavior determined the level. Do not mention internal field names or add hedging tails.",
-    "",
-    "Respond in the following format:",
-    "",
-    "## Summary",
-    "### 審查基礎",
-    "- 改動概要：[one-sentence before→after transformation]",
-    "- 依據規範：[only decisive references — omit generic build config]",
-    "- 必要假設：[necessary assumptions that shaped conclusions, or 無]",
-    "### 行為變更提醒",
-    "- [runtime behavioral changes as direct facts, or 無行為變更]",
-    "### 風險評估",
-    "- 整體風險等級：[High / Low / None]",
-    "- 風險理由：[reference specific findings or their absence — no hedging]",
-    "",
-    "Before submitting your response, verify:",
-    "- Begins with `## Summary`",
-    "- Contains `### 審查基礎` with all three sub-fields answered: 改動概要、依據規範、必要假設",
-    "- 改動概要 is one sentence; 必要假設 lists unresolved assumptions or missing facts that shaped conclusions, or explicitly states 無 only when missing-information state is empty; 依據規範 omits generic build config",
-    "- Contains `### 行為變更提醒` that adds information beyond 改動概要, or states `無行為變更`",
-    "- Contains `### 風險評估` with 整體風險等級 matching the host-computed risk level exactly, and 風險理由 free of hedging tails or internal field names"
-  ].join("\n");
+    return [
+        "Use the <review_state> block as the concrete input.",
+        "Use this source map when transferring review state into prose:",
+        "- 審查依據: use reviewBasis for the file role, behavior changes, confirmed evidence, source-of-truth references, tool-backed facts, and code paths.",
+        "- 待確認資訊: summarize only <review_state>.missingInformationItems; write 無 when that array is empty.",
+        "- 行為變更提醒: use reviewBasis.changedBehavior, dependencyMap, flowMap, and approved finding context to describe runtime behavior changes as direct facts.",
+        "- 風險判定理由: use approvedFindings, validationReport, missingInformationItems, and affected behavior to explain why the review result is clean, nice-to-have, must-fix, or limited.",
+        "- When using validationReport, describe the semantic validation outcome in reader-facing terms.",
+        "",
+        "Return exactly these three Markdown sections in this order:",
+        "",
+        "### 審查依據",
+        "- 異動概要：[one sentence describing this file's before→after transformation]",
+        "- 已核對依據：[decisive confirmed evidence, source-of-truth references, tool results, or code paths]",
+        "- 待確認資訊：[summarize <review_state>.missingInformationItems; write 無 when that array is empty]",
+        "",
+        "### 行為變更提醒",
+        "- [runtime behavior changes the reader should verify, stated as direct facts; write 無行為變更 only when there is no runtime behavior change]",
+        "",
+        "### 風險判定理由",
+        "- [how approvedFindings, validationReport, missingInformationItems, and affected behavior lead to the review result]"
+    ].join("\n");
 }
 
-function buildStep7JudgeCriteria(): string {
-  return [
-    "段落 `## Summary` 必須存在，且符合以下條件：",
-    "- 包含 `### 審查基礎` 子段落，且「改動概要」、「依據規範」、「必要假設」三個欄位都必須出現並對應回答欄位要求；若無必要假設，必須明確寫 `無`。",
-    "- 包含 `### 行為變更提醒` 子段落，且有具體內容或明確寫 `無行為變更`。",
-    "- 包含 `### 風險評估` 子段落，且「整體風險等級」為 High / Low / None 其中之一，「風險理由」非空。"
-  ].join("\n");
+function buildStep7SummaryStatus(
+    snapshot: RiskSnapshot,
+    missingInformationCount: number
+): Step7SummaryStatus {
+    const reviewConfidenceState: Step7ReviewConfidenceState =
+        missingInformationCount > 0 ? "limited" : "complete";
+    return {
+        verdict: deriveStep7Verdict(snapshot, missingInformationCount),
+        riskLevel: snapshot.derivedRiskLevel,
+        mustFixFindingCount: snapshot.mustCount,
+        niceToHaveFindingCount: snapshot.niceCount,
+        missingInformationCount,
+        reviewConfidenceState,
+        limitationSummary: missingInformationCount === 0
+            ? "無"
+            : `${missingInformationCount} 項 missing information`,
+        actionGuidance: buildStep7ActionGuidance(
+            snapshot,
+            reviewConfidenceState,
+            missingInformationCount
+        )
+    };
+}
+
+function deriveStep7Verdict(
+    snapshot: RiskSnapshot,
+    missingInformationCount: number
+): Step7Verdict {
+    if (snapshot.mustCount > 0) {
+        return "必須優先修正";
+    }
+    if (snapshot.niceCount > 0) {
+        return "僅有非阻斷性建議";
+    }
+    if (missingInformationCount > 0) {
+        return "未發現需處理事項，但有審查限制";
+    }
+    return "未發現需處理事項";
+}
+
+function buildStep7ActionGuidance(
+    snapshot: RiskSnapshot,
+    reviewConfidenceState: Step7ReviewConfidenceState,
+    missingInformationCount: number
+): string[] {
+    const limitationGuidance = reviewConfidenceState === "limited"
+        ? [
+            `審查限制：仍有 ${missingInformationCount} 項 missing information。`
+        ]
+        : [];
+
+    if (snapshot.mustCount > 0) {
+        return [
+            "Must-fix：有已確認的 must-fix findings。",
+            snapshot.niceCount > 0
+                ? "Nice-to-have：有已確認的 nice-to-have findings。"
+                : "Nice-to-have：無。",
+            ...limitationGuidance
+        ];
+    }
+    if (snapshot.niceCount > 0) {
+        return [
+            "Must-fix：無。",
+            "Nice-to-have：有已確認的 nice-to-have findings。",
+            ...limitationGuidance
+        ];
+    }
+    if (limitationGuidance.length > 0) {
+        return [
+            "Clean：沒有 validated findings。",
+            ...limitationGuidance
+        ];
+    }
+    return [
+        "Clean：沒有 validated findings。"
+    ];
+}
+
+function composeStep7Report(response: string, status: Step7SummaryStatus): string {
+    const narrative = response.trim();
+    return [
+        "## Summary",
+        "### 審查結論",
+        `- 結論：${status.verdict}`,
+        `- 整體風險等級：${status.riskLevel}`,
+        `- 已驗證的結果：must-fix ${status.mustFixFindingCount}；nice-to-have ${status.niceToHaveFindingCount}`,
+        `- 審查限制：${status.limitationSummary}`,
+        "",
+        narrative,
+        "",
+        "### 後續行動",
+        ...status.actionGuidance.map((line) => `- ${line}`)
+    ].join("\n");
 }

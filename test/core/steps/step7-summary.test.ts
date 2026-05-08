@@ -5,7 +5,7 @@ import { FileReviewContext, type Finding } from "../../../src/core/file-review-c
 import { Step7SummaryStep } from "../../../src/core/steps/step7-summary.ts";
 import {
   parseRiskLevelFromResponse,
-  createStep7HybridResolve
+  createStep7Resolve
 } from "../../../src/core/steps/step-resolve-helpers.ts";
 import type { StepResolveServices } from "../../../src/core/step-runner.ts";
 import { StructuredOutputValidator } from "../../../src/core/structured-output-validator.ts";
@@ -53,7 +53,7 @@ const FAKE_SERIALIZER = new ReviewStatePromptSerializer();
 test("parseRiskLevelFromResponse extracts valid risk levels", async (t) => {
   await t.test("extracts High", () => {
     assert.equal(
-      parseRiskLevelFromResponse("### 風險評估\n- 整體風險等級：High\n- 風險理由：..."),
+      parseRiskLevelFromResponse("- 整體風險等級：High"),
       "High"
     );
   });
@@ -102,278 +102,202 @@ test("parseRiskLevelFromResponse extracts valid risk levels", async (t) => {
 
   await t.test("picks first match in multi-line response", () => {
     const response = [
-      "### 審查基礎",
-      "- 改動概要：...",
-      "### 風險評估",
+      "before",
       "- 整體風險等級：Low",
-      "- 風險理由：..."
+      "- 整體風險等級：High"
     ].join("\n");
     assert.equal(parseRiskLevelFromResponse(response), "Low");
   });
 });
 
-// --- createStep7HybridResolve tests ---
+// --- createStep7Resolve tests ---
 
-test("createStep7HybridResolve rejects when risk level mismatches snapshot", async () => {
-  const resolve = createStep7HybridResolve({
+test("createStep7Resolve rejects when risk level mismatches snapshot", async () => {
+  const resolve = createStep7Resolve({
     stepId: "step7-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
-    criteria: "test criteria",
     expectedRiskLevel: "High"
   });
 
   const response = buildSummaryResponse("Low");
 
   await assert.rejects(
-    () => resolve(response, createResolveServices({ judgePasses: true })),
+    () => resolve(response, createResolveServices()),
     /risk.*mismatch|整體風險等級/i
   );
 });
 
-test("createStep7HybridResolve rejects when risk level is unparseable", async () => {
-  const resolve = createStep7HybridResolve({
+test("createStep7Resolve rejects when risk level is unparseable", async () => {
+  const resolve = createStep7Resolve({
     stepId: "step7-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
-    criteria: "test criteria",
     expectedRiskLevel: "None"
   });
 
-  const response = "## Summary\n### 審查基礎\n- 改動概要：...\n### 行為變更提醒\n- 無行為變更\n### 風險評估\n- 風險理由：none";
+  const response = [
+    buildNarrativeResponse(),
+    "No risk line"
+  ].join("\n");
 
   await assert.rejects(
-    () => resolve(response, createResolveServices({ judgePasses: true })),
+    () => resolve(response, createResolveServices()),
     /risk.*mismatch|整體風險等級/i
   );
 });
 
-test("createStep7HybridResolve proceeds to judge when risk matches, judge passes → returns deferred mutation", async () => {
+test("createStep7Resolve accepts matching risk without a judge service", async () => {
   const context = createContext();
-  const resolve = createStep7HybridResolve({
+  const resolve = createStep7Resolve({
     stepId: "step7-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
-    criteria: "test criteria",
     expectedRiskLevel: "None"
   });
 
   const response = buildSummaryResponse("None");
-  const applyTo = await resolve(response, createResolveServices({ judgePasses: true }));
+  const applyTo = await resolve(response, createResolveServices());
   applyTo(context);
 
   assert.equal(context.getSection("summary"), response);
 });
 
-test("createStep7HybridResolve rejects when risk matches but judge fails", async () => {
-  const resolve = createStep7HybridResolve({
+test("createStep7Resolve rejects empty narrative packaging", async () => {
+  const resolve = createStep7Resolve({
     stepId: "step7-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
-    criteria: "test criteria",
-    expectedRiskLevel: "High"
+    expectedRiskLevel: "None"
   });
-
-  const response = buildSummaryResponse("High");
 
   await assert.rejects(
-    () => resolve(response, createResolveServices({ judgePasses: false })),
-    /judge rejected/
+    () => resolve("", createResolveServices()),
+    /narrative response is empty/u
   );
 });
 
-test("createStep7HybridResolve does not call judge when risk mismatches", async () => {
-  let judgeCalled = false;
-  const resolve = createStep7HybridResolve({
+test("createStep7Resolve rejects narrative missing required sections", async () => {
+  const resolve = createStep7Resolve({
     stepId: "step7-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
-    criteria: "test criteria",
-    expectedRiskLevel: "High"
+    expectedRiskLevel: "None"
   });
-
-  const services = createResolveServices({
-    judgePasses: true,
-    onJudgeCall: () => {
-      judgeCalled = true;
-    }
-  });
-
-  const response = buildSummaryResponse("Low");
-
-  await assert.rejects(() => resolve(response, services));
-  assert.equal(judgeCalled, false, "judge should not be called on risk mismatch");
-});
-
-test("createStep7HybridResolve rejects new finding claims outside Step 6 approved results", async () => {
-  let judgeCalled = false;
-  const resolve = createStep7HybridResolve({
-    stepId: "step7-summary",
-    filePath: "src/app.ts",
-    sectionKey: "summary",
-    criteria: "test criteria",
-    expectedRiskLevel: "Low",
-    allowedFindingIds: ["F1"],
-    allowedMissingInformationIds: ["MI1"]
-  });
-
-  const response = [
-    buildSummaryResponse("Low"),
-    "",
-    "- 風險理由：F2 reveals a new trigger not present in the validated review state."
-  ].join("\n");
 
   await assert.rejects(
-    () =>
-      resolve(
-        response,
-        createResolveServices({
-          judgePasses: true,
-          onJudgeCall: () => {
-            judgeCalled = true;
-          }
-        })
-      ),
-    /new.*claim|approved findings|F2/i
+    () => resolve("### 審查依據\n- only one section", createResolveServices()),
+    /missing required section: 行為變更提醒/u
   );
-  assert.equal(judgeCalled, false, "judge should not be called when packaging adds a new claim");
 });
 
-test("createStep7HybridResolve does not treat ordinary words as finding IDs", async () => {
-  let judgeCalled = false;
-  const resolve = createStep7HybridResolve({
-    stepId: "step7-summary",
-    filePath: "src/app.ts",
-    sectionKey: "summary",
-    criteria: "test criteria",
-    expectedRiskLevel: "Low",
-    allowedFindingIds: [],
-    allowedMissingInformationIds: []
-  });
+// --- Step 7 prepare() harness contract tests ---
 
-  const response = [
-    buildSummaryResponse("Low"),
-    "",
-    "- 風險理由：Feature packaging stayed within the approved review state."
-  ].join("\n");
-
-  const mutation = await resolve(
-    response,
-    createResolveServices({
-      judgePasses: true,
-      onJudgeCall: () => {
-        judgeCalled = true;
-      }
-    })
-  );
-
-  assert.equal(typeof mutation, "function");
-  assert.equal(judgeCalled, true);
-});
-
-test("createStep7HybridResolve rejects internal risk field wording before judge", async () => {
-  let judgeCalled = false;
-  const resolve = createStep7HybridResolve({
-    stepId: "step7-summary",
-    filePath: "src/app.ts",
-    sectionKey: "summary",
-    criteria: "test criteria",
-    expectedRiskLevel: "None",
-    allowedFindingIds: [],
-    allowedMissingInformationIds: []
-  });
-
-  const response = [
-    buildSummaryResponse("None"),
-    "",
-    "- 風險理由：derivedRiskLevel and acceptedFindingIds show no accepted findings."
-  ].join("\n");
-
-  await assert.rejects(
-    () =>
-      resolve(
-        response,
-        createResolveServices({
-          judgePasses: true,
-          onJudgeCall: () => {
-            judgeCalled = true;
-          }
-        })
-      ),
-    /internal review field|derivedRiskLevel/u
-  );
-  assert.equal(judgeCalled, false);
-});
-
-// --- Step 7 prepare() prompt tests ---
-
-test("Step7SummaryStep.prepare() includes <risk_snapshot> in user message when findings exist", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([createFinding("must", "F1")]);
-  const plan = step.prepare(context);
-
-  assert.match(plan.prompt.userMessage, /<risk_snapshot>/);
-  assert.match(plan.prompt.userMessage, /<\/risk_snapshot>/);
-  assert.match(plan.prompt.userMessage, /"riskLevel"/);
-  assert.match(plan.prompt.userMessage, /"High"/);
-  assert.match(plan.prompt.userMessage, /"mustFixFindingCount"/);
-  assert.doesNotMatch(plan.prompt.userMessage, /"derivedRiskLevel"/);
-  assert.doesNotMatch(plan.prompt.userMessage, /"acceptedFindingIds"/);
-});
-
-test("Step7SummaryStep.prepare() includes <risk_snapshot> with None when no findings", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([]);
-  const plan = step.prepare(context);
-
-  assert.match(plan.prompt.userMessage, /<risk_snapshot>/);
-  assert.match(plan.prompt.userMessage, /"None"/);
-});
-
-test("Step7SummaryStep.prepare() risk_snapshot JSON is parseable", () => {
+test("Step7SummaryStep.prepare() does not expose host-owned summary data blocks", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("must", "F1"), createFinding("nice", "F2")]);
   const plan = step.prepare(context);
 
-  const match = plan.prompt.userMessage.match(/<risk_snapshot>\n([\s\S]*?)\n<\/risk_snapshot>/);
-  assert.ok(match, "risk_snapshot block should be present");
-  const snapshot = JSON.parse(match[1]);
-  assert.equal(snapshot.riskLevel, "High");
-  assert.equal(snapshot.mustFixFindingCount, 1);
-  assert.equal(snapshot.niceToHaveFindingCount, 1);
-  assert.deepEqual(snapshot.findingIds, ["F1", "F2"]);
+  assert.doesNotMatch(plan.prompt.userMessage, /<risk_snapshot>/u);
+  assert.doesNotMatch(plan.prompt.userMessage, /<summary_status>/u);
 });
 
-test("Step7SummaryStep.prepare() system message references reader-safe risk package", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([]);
-  const plan = step.prepare(context);
+test("Step7SummaryStep.resolve composes host-owned status data", async (t) => {
+  const cases = [
+    {
+      name: "clean",
+      setup: () => createContext([]),
+      expected: {
+        riskLevel: "None",
+        mustFixFindingCount: 0,
+        niceToHaveFindingCount: 0,
+        limitationSummary: "無"
+      }
+    },
+    {
+      name: "clean with limitations",
+      setup: () => {
+        const context = createContext([]) as SemanticFileReviewContext;
+        context.setMissingInformationItems(createValidationReportV1().missingInformationItems);
+        return context;
+      },
+      expected: {
+        riskLevel: "None",
+        mustFixFindingCount: 0,
+        niceToHaveFindingCount: 0,
+        limitationSummary: "1 項 missing information",
+        actionPattern: /審查限制：仍有 1 項 missing information/u
+      }
+    },
+    {
+      name: "nice only",
+      setup: () => createContext([createFinding("nice", "F1")]),
+      expected: {
+        riskLevel: "Low",
+        mustFixFindingCount: 0,
+        niceToHaveFindingCount: 1,
+        limitationSummary: "無"
+      }
+    },
+    {
+      name: "must wins over nice",
+      setup: () => createContext([createFinding("must", "F1"), createFinding("nice", "F2")]),
+      expected: {
+        riskLevel: "High",
+        mustFixFindingCount: 1,
+        niceToHaveFindingCount: 1,
+        limitationSummary: "無"
+      }
+    }
+  ];
 
-  assert.match(plan.prompt.systemMessage, /risk_snapshot/);
-  assert.match(plan.prompt.systemMessage, /internal field names/);
-  assert.match(plan.prompt.systemMessage, /derivedRiskLevel/);
-  assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
-});
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+      const context = testCase.setup();
+      const plan = step.prepare(context);
+      const mutation = await plan.resolve(
+        buildNarrativeResponse(),
+        createResolveServices()
+      );
+      mutation(context);
 
-test("Step7SummaryStep.prepare() includes <review_state> in user message", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([]);
-  const plan = step.prepare(context);
-
-  assert.match(plan.prompt.userMessage, /<review_state\b/);
-  assert.match(plan.prompt.userMessage, /<\/review_state>/);
+      const summary = context.getSection("summary") ?? "";
+      const { beforeNarrative, afterNarrative } = splitComposedReport(summary);
+      assert.equal(
+        parseRiskLevelFromResponse(beforeNarrative),
+        testCase.expected.riskLevel
+      );
+      assert.match(
+        beforeNarrative,
+        new RegExp(`must-fix ${testCase.expected.mustFixFindingCount}；nice-to-have ${testCase.expected.niceToHaveFindingCount}`, "u")
+      );
+      assert.match(
+        beforeNarrative,
+        new RegExp(`審查限制：${testCase.expected.limitationSummary}`, "u")
+      );
+      assert.notEqual(afterNarrative.trim(), "");
+      const actionPattern =
+        "actionPattern" in testCase.expected ? testCase.expected.actionPattern : undefined;
+      if (actionPattern) {
+        assert.match(afterNarrative, actionPattern);
+      }
+    });
+  }
 });
 
 test("Step7SummaryStep.prepare() consumes approved findings and missing-information state", () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("nice", "F1")]) as SemanticFileReviewContext;
   context.setCandidateFindingsV3(createCandidateFindingsV3("must"));
-  context.setValidationReportV1(createValidationReportV1());
+  const validationReport = createValidationReportV1();
+  context.setValidationReportV1(validationReport);
   context.setMissingInformationItems(createValidationReportV1().missingInformationItems);
   const plan = step.prepare(context);
 
   const reviewState = parseReviewStateFromPrompt(plan.prompt.userMessage);
   assert.equal(reviewState.candidateFindings, null);
+  assert.deepEqual(reviewState.validationReport, validationReport);
   assert.deepEqual(
     reviewState.approvedFindings.map((finding: Finding) => finding.findingId),
     ["F1"]
@@ -385,26 +309,76 @@ test("Step7SummaryStep.prepare() consumes approved findings and missing-informat
       whyItMatters: "Without it the validator cannot prove expected behavior."
     }
   ]);
-  assert.match(plan.prompt.userMessage, /validated findings/i);
-  assert.match(plan.prompt.systemMessage, /Do not introduce new findings/i);
 });
 
-test("Step7SummaryStep.prepare() allows no necessary assumptions in summary contract", () => {
+test("Step7SummaryStep.resolve composes host-owned report shell around narrative response", async () => {
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+  const context = createContext([
+    createFinding("must", "F1"),
+    createFinding("nice", "F2")
+  ]) as SemanticFileReviewContext;
+  context.setMissingInformationItems(createValidationReportV1().missingInformationItems);
+  const plan = step.prepare(context);
+
+  const mutation = await plan.resolve(
+    buildNarrativeResponse(),
+    createResolveServices()
+  );
+  mutation(context);
+
+  const summary = context.getSection("summary") ?? "";
+  const { beforeNarrative, afterNarrative } = splitComposedReport(summary);
+
+  assert.match(summary, /^## Summary/mu);
+  assert.equal(parseRiskLevelFromResponse(beforeNarrative), "High");
+  assert.match(beforeNarrative, /must-fix 1/u);
+  assert.match(beforeNarrative, /nice-to-have 1/u);
+  assert.match(beforeNarrative, /1 項 missing information/u);
+  assert.match(afterNarrative, /審查限制：仍有 1 項 missing information/u);
+  assert.notEqual(afterNarrative.trim(), "");
+});
+
+test("Step7SummaryStep.resolve rejects narrative that tries to own host-computed report fields", async () => {
   const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([]);
   const plan = step.prepare(context);
 
-  assert.match(plan.prompt.userMessage, /必要假設/);
-  assert.match(plan.prompt.userMessage, /無/);
+  await assert.rejects(
+    () =>
+      plan.resolve(
+        [
+          buildNarrativeResponse(),
+          "- 整體風險等級：Low"
+        ].join("\n"),
+        createResolveServices()
+      ),
+    /host-computed report field/u
+  );
 });
 
-test("Step7SummaryStep.prepare() resolve uses expectedRiskLevel matching snapshot", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([createFinding("must", "F1")]);
-  const plan = step.prepare(context);
+test("Step7SummaryStep.resolve rejects narrative that tries to own host-composed sections", async (t) => {
+  const cases = ["### 審查結論", "### 後續行動"];
 
-  // The resolve function exists and is a function (hybrid resolve)
-  assert.equal(typeof plan.resolve, "function");
+  for (const heading of cases) {
+    await t.test(heading, async () => {
+      const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+      const context = createContext([]);
+      const plan = step.prepare(context);
+
+      await assert.rejects(
+        () =>
+          plan.resolve(
+            [
+              buildNarrativeResponse(),
+              heading,
+              "- model-owned action guidance"
+            ].join("\n"),
+            createResolveServices()
+          ),
+        /host-computed report field/u
+      );
+    });
+  }
 });
 
 // --- helpers ---
@@ -412,29 +386,39 @@ test("Step7SummaryStep.prepare() resolve uses expectedRiskLevel matching snapsho
 function buildSummaryResponse(riskLevel: string): string {
   return [
     "## Summary",
-    "### 審查基礎",
-    "- 改動概要：changed value from 1 to 2",
-    "- 依據規範：無",
-    "- 必要假設：無",
-    "### 行為變更提醒",
-    "- 無行為變更",
-    "### 風險評估",
     `- 整體風險等級：${riskLevel}`,
-    "- 風險理由：no must-fix findings"
+    buildNarrativeResponse()
   ].join("\n");
 }
 
-function createResolveServices(
-  opts: { judgePasses?: boolean; onJudgeCall?: () => void } = {}
-): StepResolveServices {
-  const { judgePasses = true, onJudgeCall } = opts;
+function buildNarrativeResponse(): string {
+  return [
+    "### 審查依據",
+    "- 異動概要：value changed from 1 to 2.",
+    "- 已核對依據：validated review state.",
+    "- 待確認資訊：無",
+    "### 行為變更提醒",
+    "- 無行為變更",
+    "### 風險判定理由",
+    "- Review result follows from validated review state."
+  ].join("\n");
+}
+
+function splitComposedReport(summary: string): {
+  beforeNarrative: string;
+  afterNarrative: string;
+} {
+  const narrative = buildNarrativeResponse();
+  const narrativeIndex = summary.indexOf(narrative);
+  assert.notEqual(narrativeIndex, -1);
   return {
-    judgeService: {
-      async evaluate() {
-        onJudgeCall?.();
-        return { passed: judgePasses, cause: judgePasses ? undefined : "judge rejected" };
-      }
-    },
+    beforeNarrative: summary.slice(0, narrativeIndex),
+    afterNarrative: summary.slice(narrativeIndex + narrative.length)
+  };
+}
+
+function createResolveServices(): StepResolveServices {
+  return {
     validator: new StructuredOutputValidator()
   };
 }
@@ -446,9 +430,10 @@ type SemanticFileReviewContext = FileReviewContext & {
 };
 
 function parseReviewStateFromPrompt(prompt: string): {
-  candidateFindings: unknown[];
+  candidateFindings: unknown[] | null;
   approvedFindings: Finding[];
   missingInformationItems: ReturnType<typeof createValidationReportV1>["missingInformationItems"];
+  validationReport: ReturnType<typeof createValidationReportV1> | null;
 } {
   const match = prompt.match(
     /<review_state format="json">\n([\s\S]*?)\n<\/review_state>/u

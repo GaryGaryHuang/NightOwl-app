@@ -8,7 +8,8 @@ import type {
 } from "./review-basis.ts";
 import type {
   CandidateFindingsV3,
-  MissingInformationItem
+  MissingInformationItem,
+  ValidationReportV1
 } from "./semantic-review.ts";
 import { buildXmlishJsonBlock } from "./prompt-serialization.ts";
 
@@ -21,6 +22,7 @@ export type ReviewStateBlock =
   | "sections"
   | "review-basis"
   | "validation-feedback"
+  | "validation-report"
   | FindingsBlockKind;
 
 export interface ReviewStateSerializeInput {
@@ -61,6 +63,7 @@ export interface ReviewStateSnapshot {
   candidateFindings: CandidateFindingsV3 | null;
   approvedFindings: Finding[];
   missingInformationItems: MissingInformationItem[];
+  validationReport: ValidationReportV1 | null;
   reviewBasis: ReviewBasisV1 | null;
   evidenceRefs: ReviewBasisEvidenceRef[];
   hypothesisLedger: ReviewBasisHypothesis[];
@@ -120,6 +123,9 @@ export class ReviewStatePromptSerializer {
       missingInformationItems: input.include.includes("missing-information")
         ? missingInformationItems
         : [],
+      validationReport: input.include.includes("validation-report")
+        ? input.context.getValidationReportV1?.() ?? null
+        : null,
       reviewBasis: includeReviewBasis ? reviewBasis ?? null : null,
       evidenceRefs: includeReviewBasis && reviewBasis
         ? [...reviewBasis.evidenceRefs]

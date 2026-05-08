@@ -61,6 +61,7 @@ type SemanticFileReviewContext = FileReviewContext & {
 type SemanticReviewStateSnapshot = ReviewStateSnapshot & {
   approvedFindings: Finding[];
   missingInformationItems: ReturnType<typeof createValidationReportV1>["missingInformationItems"];
+  validationReport: ReturnType<typeof createValidationReportV1> | null;
 };
 
 test("serializes one stable review_state JSON block", () => {
@@ -172,6 +173,18 @@ test("missing-information items are serialized only when requested", () => {
       whyItMatters: "Without it the validator cannot prove expected behavior."
     }
   ]);
+});
+
+test("validation report is serialized only when requested", () => {
+  const ctx = createContext() as SemanticFileReviewContext;
+  const report = createValidationReportV1();
+  ctx.setValidationReportV1(report);
+
+  assert.equal((serializeSnapshot(ctx, []) as SemanticReviewStateSnapshot).validationReport, null);
+  assert.deepEqual(
+    (serializeSnapshot(ctx, ["validation-report"]) as SemanticReviewStateSnapshot).validationReport,
+    report
+  );
 });
 
 test("empty approved findings array is preserved when requested", () => {

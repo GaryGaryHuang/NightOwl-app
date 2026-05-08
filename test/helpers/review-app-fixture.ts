@@ -125,16 +125,14 @@ export function buildSessionResponse(
 
   if (/## Current Step: Summary/u.test(systemMessage)) {
     return [
-      "## Summary",
-      "### 審查基礎",
-      "- 改動概要：這次改動主要調整執行流程。",
-      "- 依據規範：依 repo source-of-truth 與版本假設審查。",
-      "- 必要假設：無。",
+      "### 審查依據",
+      "- 異動概要：這次改動主要調整執行流程。",
+      "- 已核對依據：依 repo source-of-truth 與版本假設審查。",
+      "- 待確認資訊：無。",
       "### 行為變更提醒",
-      "- 無",
-      "### 風險評估",
-      "- 整體風險等級：High",
-      "- 風險理由：至少一個 must-fix finding 經驗證後仍成立。"
+      "- 無行為變更",
+      "### 風險判定理由",
+      "- 至少一個 must-fix finding 經驗證後仍成立。"
     ].join("\n");
   }
 

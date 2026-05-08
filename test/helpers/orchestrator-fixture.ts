@@ -84,15 +84,23 @@ export function buildSummaryResponse(
   const riskLevel = options.riskLevel ?? "High";
   return [
     "## Summary",
-    "### 審查基礎",
-    `- 改動概要：${label} 這次改動主要調整執行流程。`,
-    `- 依據規範：依 ${label} 的 repo source-of-truth 與版本假設審查。`,
-    "- 必要假設：無。",
-    "### 行為變更提醒",
-    "- 無",
-    "### 風險評估",
+    "### 審查結論",
+    "- 結論：測試結論",
     `- 整體風險等級：${riskLevel}`,
-    "- 風險理由：final findings 仍需留意。"
+    "- 已驗證的結果：must-fix 1；nice-to-have 0",
+    "- 審查限制：無",
+    "",
+    "### 審查依據",
+    `- 異動概要：${label} 這次改動主要調整執行流程。`,
+    `- 已核對依據：依 ${label} 的 repo source-of-truth 與版本假設審查。`,
+    "- 待確認資訊：無。",
+    "### 行為變更提醒",
+    "- 無行為變更",
+    "### 風險判定理由",
+    "- final findings 仍需留意。",
+    "",
+    "### 後續行動",
+    "- 測試 fixture action。"
   ].join("\n");
 }
 

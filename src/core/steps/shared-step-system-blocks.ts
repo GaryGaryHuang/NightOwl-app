@@ -29,7 +29,7 @@ export const MISSING_INFORMATION_DISCIPLINE_BLOCK = createPromptBlock("missing-i
 
 const MARKDOWN_RESPONSE_FORMAT_BLOCK = createPromptBlock("markdown-response-format", [
   "## Markdown Response Format",
-  "- Begin with the designated `##` heading."
+  "- Begin with the heading designated by the current step."
 ]);
 
 const FINDING_ANCHOR_SYSTEM_BLOCK = createPromptBlock("finding-anchor-guidance", [
