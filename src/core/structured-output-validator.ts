@@ -199,10 +199,14 @@ function validateCandidateFindingsV3Record(input: {
     input.reviewBasis
   );
 
-  const criticalMissingInformation = validateOptionalArray(
+  const criticalMissingInformation = validateArray(
     input.record.criticalMissingInformation,
     "criticalMissingInformation"
   ).map((item, index) => validateCriticalMissingInformation(item, index));
+  assertInsufficientHypothesesHaveCriticalMissingInformation({
+    hypothesisClosure,
+    criticalMissingInformation
+  });
 
   // Auto-derive result
   const result: CandidateFindingsResult =
@@ -298,7 +302,7 @@ function validateValidationReportV1Record(input: {
   );
   assertPerFindingResultsCoverCandidates(perFindingResults, candidateIds);
 
-  const missingInformationItems = validateOptionalArray(
+  const missingInformationItems = validateArray(
     input.record.missingInformationItems,
     "missingInformationItems"
   ).map((item, index) => validateMissingInformationItem(item, index));
@@ -405,6 +409,20 @@ function assertHypothesisClosureCoversReviewBasis(
         `deterministic validation failed: ${hypothesis.hypothesisId} missing from hypothesisClosure`
       );
     }
+  }
+}
+
+function assertInsufficientHypothesesHaveCriticalMissingInformation(input: {
+  hypothesisClosure: readonly HypothesisClosure[];
+  criticalMissingInformation: readonly CriticalMissingInformation[];
+}): void {
+  const hasInsufficientHypothesis = input.hypothesisClosure.some(
+    (closure) => closure.status === "insufficient_information"
+  );
+  if (hasInsufficientHypothesis && input.criticalMissingInformation.length === 0) {
+    throw new Error(
+      "deterministic validation failed: insufficient_information hypothesisClosure entries require criticalMissingInformation"
+    );
   }
 }
 
@@ -800,10 +818,6 @@ function validateArray(value: unknown, fieldName: string): unknown[] {
   return value;
 }
 
-function validateOptionalArray(value: unknown, fieldName: string): unknown[] {
-  return value === undefined ? [] : validateArray(value, fieldName);
-}
-
 function validateStringArray(
   value: unknown,
   fieldName: string,
@@ -845,25 +859,15 @@ function validateEnum<T extends string>(
 
 function validateSemanticGateArray(
   value: unknown,
-  _fieldName: string
+  fieldName: string
 ): SemanticGateId[] {
-  const rawItems =
-    value === undefined
-      ? []
-      : typeof value === "string"
-        ? [value]
-        : Array.isArray(value)
-          ? value
-          : [];
-  return rawItems.flatMap((item) => {
-    if (typeof item !== "string") {
-      return [];
-    }
-    const gate = item.trim();
-    return (VALID_SEMANTIC_GATES as readonly string[]).includes(gate)
-      ? [gate as SemanticGateId]
-      : [];
-  });
+  return validateArray(value, fieldName).map((item, index) =>
+    validateEnum<SemanticGateId>(
+      item,
+      VALID_SEMANTIC_GATES,
+      `${fieldName}[${index}]`
+    )
+  );
 }
 
 function defaultLoopControlReason(action: LoopAction): string {

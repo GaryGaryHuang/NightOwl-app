@@ -100,16 +100,33 @@ function validateChangeMapReadinessV2(
   obj: Record<string, unknown>,
   input: Step0OutputValidatorInput
 ): ChangeMapReadinessV2 {
+  const userBehavior = validateUserBehavior(obj.userBehavior);
+  const missingInformation = validateMissingInformation(obj.missingInformation);
+  const behaviorChanges = validateReadinessBehaviorChanges(obj.behaviorChanges);
+  const unresolvedUnknowns = validateReadinessUnresolvedUnknowns(
+    obj.unresolvedUnknowns
+  );
+  const reviewObjective = validateReviewObjective(obj.reviewObjective, {
+    behaviorChanges,
+    missingInformation,
+    overviewMarkdown: obj.overviewMarkdown,
+    unresolvedUnknowns,
+    userBehavior
+  });
+  const overviewMarkdown = validateOverviewMarkdown({
+    value: obj.overviewMarkdown,
+    behaviorChanges,
+    reviewObjective
+  });
+
   return deepFreeze({
-    reviewObjective: validateReviewObjective(obj.reviewObjective),
+    reviewObjective,
     userContext: Object.freeze([...input.userContext]),
-    userBehavior: validateUserBehavior(obj.userBehavior),
-    missingInformation: validateMissingInformation(obj.missingInformation),
-    overviewMarkdown: validateOverviewMarkdown(obj.overviewMarkdown),
-    behaviorChanges: validateReadinessBehaviorChanges(obj.behaviorChanges),
-    unresolvedUnknowns: validateReadinessUnresolvedUnknowns(
-      obj.unresolvedUnknowns
-    )
+    userBehavior,
+    missingInformation,
+    overviewMarkdown,
+    behaviorChanges,
+    unresolvedUnknowns
   });
 }
 
@@ -342,85 +359,129 @@ function validateReadinessUnresolvedUnknowns(
   value: unknown
 ): readonly ReadinessUnresolvedUnknownEntry[] {
   if (!Array.isArray(value)) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      "unresolvedUnknowns must be an array"
-    );
+    return [];
   }
 
-  return value.map((rawEntry, index) => {
-    const entry = ensurePlainObject(rawEntry, `unresolvedUnknowns[${index}]`);
+  return value.flatMap((rawEntry) => {
+    const entry = asPlainRecord(rawEntry);
+    if (!entry) {
+      return [];
+    }
 
-    const question = requireNonEmptyString(
-      entry.question,
-      `unresolvedUnknowns[${index}].question`
-    );
-    const resolutionPath = requireNonEmptyString(
-      entry.resolutionPath,
-      `unresolvedUnknowns[${index}].resolutionPath`
-    );
-
-    return { question, resolutionPath };
+    const question = optionalNonEmptyString(entry.question);
+    if (!question) {
+      return [];
+    }
+    return {
+      question,
+      resolutionPath:
+        optionalNonEmptyString(entry.resolutionPath) ??
+        "Clarify this question before relying on the affected review assumption."
+    };
   });
 }
 
-function validateOverviewMarkdown(value: unknown): string {
-  if (typeof value !== "string") {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      "overviewMarkdown must be a string"
-    );
+function validateOverviewMarkdown(input: {
+  value: unknown;
+  reviewObjective: ChangeMapReadinessV2["reviewObjective"];
+  behaviorChanges: readonly ReadinessBehaviorChangeEntry[];
+}): string {
+  const value = optionalNonEmptyString(input.value);
+  if (!value) {
+    return buildOverviewMarkdownFallback(input.reviewObjective, input.behaviorChanges);
   }
-  if (!value.startsWith(OVERVIEW_MARKDOWN_PREFIX)) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      `overviewMarkdown must begin with the literal prefix "${OVERVIEW_MARKDOWN_PREFIX}"`
-    );
+  if (value.startsWith(OVERVIEW_MARKDOWN_PREFIX)) {
+    return value;
   }
 
-  return value;
+  const lines = value.split("\n");
+  if (/^#+\s*changeset overview\s*$/iu.test(lines[0] ?? "")) {
+    return [OVERVIEW_MARKDOWN_PREFIX, ...lines.slice(1)].join("\n");
+  }
+
+  return `${OVERVIEW_MARKDOWN_PREFIX}\n${value}`;
 }
 
-function validateReviewObjective(value: unknown): ChangeMapReadinessV2["reviewObjective"] {
-  const obj = ensurePlainObject(value, "reviewObjective");
+function buildOverviewMarkdownFallback(
+  reviewObjective: ChangeMapReadinessV2["reviewObjective"],
+  behaviorChanges: readonly ReadinessBehaviorChangeEntry[]
+): string {
+  const behaviorSummary = behaviorChanges[0]?.description ?? "none recorded";
+  const expectedBehavior =
+    reviewObjective.expectedBehaviorSummary[0] ?? "none recorded";
 
-  const summary = requireNonEmptyString(obj.summary, "reviewObjective.summary");
+  return [
+    OVERVIEW_MARKDOWN_PREFIX,
+    `- Scope: ${reviewObjective.summary}`,
+    "- Cross-file boundaries: none recorded",
+    `- Behavior changes: ${behaviorSummary}`,
+    `- Test coverage observations: ${expectedBehavior}`
+  ].join("\n");
+}
+
+function validateReviewObjective(
+  value: unknown,
+  fallback: {
+    behaviorChanges: readonly ReadinessBehaviorChangeEntry[];
+    missingInformation: ChangeMapReadinessV2["missingInformation"];
+    overviewMarkdown: unknown;
+    unresolvedUnknowns: readonly ReadinessUnresolvedUnknownEntry[];
+    userBehavior: ChangeMapReadinessV2["userBehavior"];
+  }
+): ChangeMapReadinessV2["reviewObjective"] {
+  const obj = asPlainRecord(value);
+
+  const summary =
+    optionalNonEmptyString(obj?.summary) ??
+    summarizeOverviewMarkdown(fallback.overviewMarkdown) ??
+    fallback.behaviorChanges[0]?.description ??
+    fallback.userBehavior[0]?.statement ??
+    fallback.missingInformation[0]?.description ??
+    fallback.unresolvedUnknowns[0]?.question;
+  if (!summary) {
+    throw new Step0OutputValidationError(
+      "SCHEMA",
+      "reviewObjective.summary or overviewMarkdown must provide non-empty review context"
+    );
+  }
   return {
     summary,
-    requestedFocus: validateStringArray(
-      obj.requestedFocus,
-      "reviewObjective.requestedFocus"
-    ),
-    expectedBehaviorSummary: validateStringArray(
-      obj.expectedBehaviorSummary,
-      "reviewObjective.expectedBehaviorSummary"
-    )
+    requestedFocus: validateStringArray(obj?.requestedFocus),
+    expectedBehaviorSummary: validateStringArray(obj?.expectedBehaviorSummary)
   };
+}
+
+function summarizeOverviewMarkdown(value: unknown): string | undefined {
+  const overview = optionalNonEmptyString(value);
+  if (!overview) {
+    return undefined;
+  }
+
+  return overview
+    .split("\n")
+    .map((line) => line.trim().replace(/^[-*]\s*/u, ""))
+    .find((line) => line.length > 0 && !/^#+\s*changeset overview\s*$/iu.test(line));
 }
 
 function validateUserBehavior(
   value: unknown
 ): ChangeMapReadinessV2["userBehavior"] {
   if (!Array.isArray(value)) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      "userBehavior must be an array"
-    );
+    return [];
   }
-  return value.map((rawEntry, index) => {
-    const entry = ensurePlainObject(rawEntry, `userBehavior[${index}]`);
+  return value.flatMap((rawEntry) => {
+    const entry = asPlainRecord(rawEntry);
+    if (!entry) {
+      return [];
+    }
 
-    const statement = requireNonEmptyString(
-      entry.statement,
-      `userBehavior[${index}].statement`
-    );
+    const statement = optionalNonEmptyString(entry.statement);
+    if (!statement) {
+      return [];
+    }
     return {
       statement,
-      confidence: requireEnum(
-        entry.confidence,
-        ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES,
-        `userBehavior[${index}].confidence`
-      ) as ExpectedBehaviorConfidence
+      confidence: normalizeExpectedBehaviorConfidence(entry.confidence)
     };
   });
 }
@@ -429,25 +490,23 @@ function validateMissingInformation(
   value: unknown
 ): ChangeMapReadinessV2["missingInformation"] {
   if (!Array.isArray(value)) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      "missingInformation must be an array"
-    );
+    return [];
   }
-  return value.map((rawEntry, index) => {
-    const entry = ensurePlainObject(rawEntry, `missingInformation[${index}]`);
+  return value.flatMap((rawEntry) => {
+    const entry = asPlainRecord(rawEntry);
+    if (!entry) {
+      return [];
+    }
 
-    const description = requireNonEmptyString(
-      entry.description,
-      `missingInformation[${index}].description`
-    );
-    const whyItMatters = requireNonEmptyString(
-      entry.whyItMatters,
-      `missingInformation[${index}].whyItMatters`
-    );
+    const description = optionalNonEmptyString(entry.description);
+    if (!description) {
+      return [];
+    }
     return {
       description,
-      whyItMatters
+      whyItMatters:
+        optionalNonEmptyString(entry.whyItMatters) ??
+        "This missing context may affect subsequent per-file review."
     };
   });
 }
@@ -456,74 +515,61 @@ function validateReadinessBehaviorChanges(
   value: unknown
 ): readonly ReadinessBehaviorChangeEntry[] {
   if (!Array.isArray(value)) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      "behaviorChanges must be an array"
-    );
+    return [];
   }
 
-  return value.map((rawEntry, index) => {
-    const entry = ensurePlainObject(rawEntry, `behaviorChanges[${index}]`);
+  return value.flatMap((rawEntry) => {
+    const entry = asPlainRecord(rawEntry);
+    if (!entry) {
+      return [];
+    }
 
-    const description = requireNonEmptyString(
-      entry.description,
-      `behaviorChanges[${index}].description`
-    );
+    const description = optionalNonEmptyString(entry.description);
+    if (!description) {
+      return [];
+    }
 
     return {
       description,
-      files: validateStringArray(
-        entry.files,
-        `behaviorChanges[${index}].files`
-      )
+      files: validateStringArray(entry.files)
     };
   });
 }
 
-function requireNonEmptyString(value: unknown, label: string): string {
-  if (typeof value !== "string") {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      `${label} must be a string (received ${describe(value)})`
-    );
+function normalizeExpectedBehaviorConfidence(
+  value: unknown
+): ExpectedBehaviorConfidence {
+  if (typeof value === "string" && ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES.has(value)) {
+    return value as ExpectedBehaviorConfidence;
   }
-  if (value.trim().length === 0) {
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      `${label} must be a non-empty string`
-    );
-  }
-  return value;
+  return "inferred";
 }
 
-function requireEnum(
-  value: unknown,
-  allowed: ReadonlySet<string>,
-  label: string
-): string {
-  if (typeof value !== "string" || !allowed.has(value)) {
-    const allowedValues = [...allowed];
-    throw new Step0OutputValidationError(
-      "SCHEMA",
-      `${label} must be one of ${allowedValues.join(", ")} (received ${describe(value)})`,
-      {
-        offendingPath: label,
-        allowedValues,
-        actualSummary: describe(value),
-        repairHint: `Use one of the allowed values for ${label}.`
-      }
-    );
+function validateStringArray(value: unknown): readonly string[] {
+  if (typeof value === "string") {
+    const item = optionalNonEmptyString(value);
+    return item ? [item] : [];
   }
-  return value;
-}
-
-function validateStringArray(value: unknown, label: string): readonly string[] {
   if (!Array.isArray(value)) {
-    throw new Step0OutputValidationError("SCHEMA", `${label} must be an array`);
+    return [];
   }
-  return value.map((entry, index) =>
-    requireNonEmptyString(entry, `${label}[${index}]`)
-  );
+  return value.flatMap((entry) => {
+    const item = optionalNonEmptyString(entry);
+    return item ? [item] : [];
+  });
+}
+
+function optionalNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
 }
 
 function describe(value: unknown): string {

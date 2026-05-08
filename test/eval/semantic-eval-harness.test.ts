@@ -246,6 +246,15 @@ function createReviewBasis(): ReviewBasisV1 {
 }
 
 function createCandidatePayload(scenario: SemanticScenario) {
+  const criticalMissingInformation =
+    scenario === "overclaim" || scenario === "repeated-stop"
+      ? [
+          {
+            description: "Need callback threading and stale-result guard proof.",
+            whyItMatters: "Without it the concurrency claim is under-proven."
+          }
+        ]
+      : [];
   return {
     findings: [
       {
@@ -287,13 +296,19 @@ function createCandidatePayload(scenario: SemanticScenario) {
                 status: "closed_by_candidate",
                 rationale: "candidate addresses stale callback"
               },
-              {
-                hypothesisId: "H2",
-                status: "insufficient_information",
-                rationale: "counter-evidence is not enough to approve"
-              }
+              scenario === "retired-contradiction"
+                ? {
+                    hypothesisId: "H2",
+                    status: "rejected_by_evidence",
+                    rationale: "counter-evidence contradicts the claimed stale-callback defect"
+                  }
+                : {
+                    hypothesisId: "H2",
+                    status: "insufficient_information",
+                    rationale: "counter-evidence is not enough to approve"
+                  }
             ],
-    criticalMissingInformation: []
+    criticalMissingInformation
   };
 }
 

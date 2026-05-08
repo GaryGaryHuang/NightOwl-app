@@ -130,8 +130,8 @@ test("ReviewBasisValidator rejects hypotheses without triggerCondition", () => {
   assert.ok(result.diagnostics.some((d) => d.message.includes("triggerCondition")));
 });
 
-test("ReviewBasisValidator rejects invalid confidence enum", () => {
-  const result = validateFail(makeValidReviewBasis({
+test("ReviewBasisValidator defaults invalid inference confidence to low", () => {
+  const result = validateOk(makeValidReviewBasis({
     inferences: [
       {
         statement: "bad confidence",
@@ -141,7 +141,7 @@ test("ReviewBasisValidator rejects invalid confidence enum", () => {
     ]
   }));
 
-  assert.ok(result.diagnostics.some((d) => d.message.includes("confidence")));
+  assert.equal(result.value.inferences[0]?.confidence, "low");
 });
 
 test("ReviewBasisValidator rejects duplicate and dangling evidence references", () => {
@@ -173,8 +173,8 @@ test("ReviewBasisValidator rejects duplicate and dangling evidence references", 
   );
 });
 
-test("ReviewBasisValidator rejects duplicate hypothesis IDs", () => {
-  const result = validateFail(makeValidReviewBasis({
+test("ReviewBasisValidator normalizes duplicate hypothesis IDs to stable H IDs", () => {
+  const result = validateOk(makeValidReviewBasis({
     hypothesisLedger: [
       {
         hypothesisId: "H1",
@@ -189,7 +189,22 @@ test("ReviewBasisValidator rejects duplicate hypothesis IDs", () => {
     ]
   }));
 
-  assert.ok(result.diagnostics.some((d) => d.message.includes("duplicate")));
+  assert.deepEqual(
+    result.value.hypothesisLedger.map((entry) => entry.hypothesisId),
+    ["H1", "H2"]
+  );
+});
+
+test("ReviewBasisValidator rejects malformed missingInformation entries", () => {
+  const result = validateFail(makeValidReviewBasis({
+    missingInformation: [
+      {
+        description: "Need SDK contract"
+      }
+    ]
+  }));
+
+  assert.ok(result.diagnostics.some((d) => d.message.includes("whyItMatters")));
 });
 
 test("ReviewBasisValidator returns PARSE diagnostic for non-JSON input", () => {
@@ -197,10 +212,17 @@ test("ReviewBasisValidator returns PARSE diagnostic for non-JSON input", () => {
   assert.equal(result.diagnostics[0].code, "PARSE");
 });
 
-test("ReviewBasisValidator returns SCHEMA diagnostic for missing roleInChangeset", () => {
-  const result = validateFail(makeValidReviewBasis({ roleInChangeset: "" }));
+test("ReviewBasisValidator defaults missing roleInChangeset when basis signals exist", () => {
+  const result = validateOk(makeValidReviewBasis({ roleInChangeset: "" }));
+
+  assert.equal(result.value.roleInChangeset, `Changed file under review: ${FILE_PATH}`);
+});
+
+test("ReviewBasisValidator rejects an empty object with no usable basis signal", () => {
+  const result = validateFail(JSON.stringify({}));
+
   assert.equal(result.diagnostics[0].code, "SCHEMA");
-  assert.ok(result.diagnostics[0].message.includes("roleInChangeset"));
+  assert.ok(result.diagnostics[0].message.includes("hypothesisLedger"));
 });
 
 test("ReviewBasisValidator repairs BOM prefix", () => {

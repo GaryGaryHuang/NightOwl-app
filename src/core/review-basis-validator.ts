@@ -50,34 +50,52 @@ export class ReviewBasisValidator {
     const obj = parsed as Record<string, unknown>;
 
     const diagnostics: ReviewBasisValidationDiagnostic[] = [];
-
-    const roleInChangeset = optionalString(obj.roleInChangeset) ?? "";
-    if (!roleInChangeset) {
-      diagnostics.push({ code: "SCHEMA", message: "roleInChangeset must be a non-empty string" });
-    }
-
+    const rawRoleInChangeset = optionalString(obj.roleInChangeset);
     const evidenceRefs = validateEvidenceRefs(obj.evidenceRefs, diagnostics);
-    const changedBehavior = validateChangedBehavior(obj.changedBehavior, diagnostics);
-    const facts = validateFacts(obj.facts, diagnostics);
-    const inferences = validateInferences(obj.inferences, diagnostics);
-    const dependencyMap = validateDependencyMap(obj.dependencyMap, diagnostics);
-    const flowMap = validateFlowMap(obj.flowMap, diagnostics);
-    const testCoverage = validateTestCoverage(obj.testCoverage, diagnostics);
-    const hypothesisLedger = validateHypotheses(obj.hypothesisLedger, diagnostics);
-    const missingInformation = validateMissingInformation(obj.missingInformation, diagnostics);
-
-    validateReviewBasisReferences({
-      evidenceRefs,
-      changedBehavior,
-      facts,
-      inferences,
-      hypothesisLedger,
+    const evidenceIdSet = new Set(evidenceRefs.map((entry) => entry.evidenceId));
+    const changedBehavior = validateChangedBehavior(
+      obj.changedBehavior,
+      evidenceIdSet,
       diagnostics
-    });
-
+    );
+    const facts = validateFacts(obj.facts, evidenceIdSet, diagnostics);
+    const inferences = validateInferences(
+      obj.inferences,
+      evidenceIdSet,
+      diagnostics
+    );
+    const dependencyMap = validateDependencyMap(obj.dependencyMap);
+    const flowMap = validateFlowMap(obj.flowMap);
+    const testCoverage = validateTestCoverage(obj.testCoverage);
+    const hypothesisLedger = validateHypotheses(obj.hypothesisLedger, diagnostics);
+    const missingInformation = validateMissingInformation(
+      obj.missingInformation,
+      diagnostics
+    );
     if (diagnostics.length > 0) {
       return { ok: false, diagnostics };
     }
+    if (
+      !rawRoleInChangeset &&
+      !hasReviewBasisContent({
+        changedBehavior,
+        dependencyMap,
+        evidenceRefs,
+        facts,
+        flowMap,
+        hypothesisLedger,
+        inferences,
+        missingInformation,
+        testCoverage
+      })
+    ) {
+      return fail(
+        "SCHEMA",
+        "review basis must contain roleInChangeset or at least one structured basis signal"
+      );
+    }
+    const roleInChangeset =
+      rawRoleInChangeset ?? `Changed file under review: ${filePath}`;
 
     const basis: ReviewBasisV1 = {
       filePath,
@@ -110,182 +128,139 @@ function validateEvidenceRefs(
   diagnostics: ReviewBasisValidationDiagnostic[]
 ): readonly ReviewBasisEvidenceRef[] {
   if (!Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "evidenceRefs must be an array" });
     return [];
   }
 
+  const byEvidenceId = new Map<string, ReviewBasisEvidenceRef>();
   return value.flatMap((raw, index) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    const entry = asPlainRecord(raw);
+    if (!entry) {
       diagnostics.push({ code: "SCHEMA", message: `evidenceRefs[${index}] must be an object` });
       return [];
     }
-    const entry = raw as Record<string, unknown>;
     const evidenceId = optionalString(entry.evidenceId);
     if (!evidenceId) {
       diagnostics.push({ code: "SCHEMA", message: `evidenceRefs[${index}].evidenceId must be a non-empty string` });
       return [];
     }
+    if (byEvidenceId.has(evidenceId)) {
+      diagnostics.push({
+        code: "SCHEMA",
+        message: `evidenceRefs[].evidenceId must be unique; duplicate value "${evidenceId}"`
+      });
+      return [];
+    }
     const sourceType = optionalString(entry.sourceType) ?? "unknown";
     const location = optionalString(entry.location) ?? "";
     const summary = optionalString(entry.summary) ?? "";
-    return [{ evidenceId, sourceType, location, summary }];
+    const normalized = { evidenceId, sourceType, location, summary };
+    byEvidenceId.set(evidenceId, normalized);
+    return [normalized];
   });
-}
-
-function validateReviewBasisReferences(input: {
-  evidenceRefs: readonly ReviewBasisEvidenceRef[];
-  changedBehavior: readonly ReviewBasisChangedBehavior[];
-  facts: readonly ReviewBasisFact[];
-  inferences: readonly ReviewBasisInference[];
-  hypothesisLedger: readonly ReviewBasisHypothesis[];
-  diagnostics: ReviewBasisValidationDiagnostic[];
-}): void {
-  const evidenceIds = input.evidenceRefs.map((entry) => entry.evidenceId);
-  assertUniqueValues(evidenceIds, "evidenceRefs[].evidenceId", input.diagnostics);
-  assertKnownEvidenceIds(
-    input.changedBehavior.flatMap((entry) => entry.evidenceIds),
-    new Set(evidenceIds),
-    "changedBehavior[].evidenceIds",
-    input.diagnostics
-  );
-  assertKnownEvidenceIds(
-    input.facts.flatMap((entry) => entry.evidenceIds),
-    new Set(evidenceIds),
-    "facts[].evidenceIds",
-    input.diagnostics
-  );
-  assertKnownEvidenceIds(
-    input.inferences.flatMap((entry) => entry.basedOnEvidenceIds),
-    new Set(evidenceIds),
-    "inferences[].basedOnEvidenceIds",
-    input.diagnostics
-  );
-  assertUniqueValues(
-    input.hypothesisLedger.map((entry) => entry.hypothesisId),
-    "hypothesisLedger[].hypothesisId",
-    input.diagnostics
-  );
-}
-
-function assertUniqueValues(
-  values: readonly string[],
-  fieldName: string,
-  diagnostics: ReviewBasisValidationDiagnostic[]
-): void {
-  const seen = new Set<string>();
-  for (const value of values) {
-    if (seen.has(value)) {
-      diagnostics.push({
-        code: "SCHEMA",
-        message: `${fieldName} must be unique; duplicate value "${value}"`
-      });
-    }
-    seen.add(value);
-  }
-}
-
-function assertKnownEvidenceIds(
-  values: readonly string[],
-  evidenceIds: ReadonlySet<string>,
-  fieldName: string,
-  diagnostics: ReviewBasisValidationDiagnostic[]
-): void {
-  for (const value of values) {
-    if (!evidenceIds.has(value)) {
-      diagnostics.push({
-        code: "SCHEMA",
-        message: `${fieldName} references unknown evidenceId "${value}"`
-      });
-    }
-  }
 }
 
 function validateChangedBehavior(
   value: unknown,
+  evidenceIds: ReadonlySet<string>,
   diagnostics: ReviewBasisValidationDiagnostic[]
 ): readonly ReviewBasisChangedBehavior[] {
   if (!Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "changedBehavior must be an array" });
     return [];
   }
   return value.flatMap((raw, index) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    const entry = asPlainRecord(raw);
+    if (!entry) {
       diagnostics.push({ code: "SCHEMA", message: `changedBehavior[${index}] must be an object` });
       return [];
     }
-    const entry = raw as Record<string, unknown>;
     const before = optionalString(entry.before);
     const after = optionalString(entry.after);
     if (!before || !after) {
       diagnostics.push({ code: "SCHEMA", message: `changedBehavior[${index}] requires non-empty before and after` });
       return [];
     }
-    return [{ before, after, evidenceIds: toStringArray(entry.evidenceIds) }];
+    return [{
+      before,
+      after,
+      evidenceIds: validateEvidenceIdArray(
+        entry.evidenceIds,
+        evidenceIds,
+        `changedBehavior[${index}].evidenceIds`,
+        diagnostics
+      )
+    }];
   });
 }
 
 function validateFacts(
   value: unknown,
+  evidenceIds: ReadonlySet<string>,
   diagnostics: ReviewBasisValidationDiagnostic[]
 ): readonly ReviewBasisFact[] {
   if (!Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "facts must be an array" });
     return [];
   }
   return value.flatMap((raw, index) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    const entry = asPlainRecord(raw);
+    if (!entry) {
       diagnostics.push({ code: "SCHEMA", message: `facts[${index}] must be an object` });
       return [];
     }
-    const entry = raw as Record<string, unknown>;
     const statement = optionalString(entry.statement);
     if (!statement) {
       diagnostics.push({ code: "SCHEMA", message: `facts[${index}].statement must be a non-empty string` });
       return [];
     }
-    return [{ statement, evidenceIds: toStringArray(entry.evidenceIds) }];
+    return [{
+      statement,
+      evidenceIds: validateEvidenceIdArray(
+        entry.evidenceIds,
+        evidenceIds,
+        `facts[${index}].evidenceIds`,
+        diagnostics
+      )
+    }];
   });
 }
 
 function validateInferences(
   value: unknown,
+  evidenceIds: ReadonlySet<string>,
   diagnostics: ReviewBasisValidationDiagnostic[]
 ): readonly ReviewBasisInference[] {
   if (!Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "inferences must be an array" });
     return [];
   }
   return value.flatMap((raw, index) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    const entry = asPlainRecord(raw);
+    if (!entry) {
       diagnostics.push({ code: "SCHEMA", message: `inferences[${index}] must be an object` });
       return [];
     }
-    const entry = raw as Record<string, unknown>;
     const statement = optionalString(entry.statement);
     if (!statement) {
       diagnostics.push({ code: "SCHEMA", message: `inferences[${index}].statement must be a non-empty string` });
       return [];
     }
     const confidence = optionalString(entry.confidence);
-    if (!confidence || !ALLOWED_INFERENCE_CONFIDENCES.has(confidence)) {
-      diagnostics.push({ code: "SCHEMA", message: `inferences[${index}].confidence must be one of: high, medium, low` });
-      return [];
-    }
     return [{
       statement,
-      basedOnEvidenceIds: toStringArray(entry.basedOnEvidenceIds),
-      confidence: confidence as ReviewBasisInferenceConfidence
+      basedOnEvidenceIds: validateEvidenceIdArray(
+        entry.basedOnEvidenceIds,
+        evidenceIds,
+        `inferences[${index}].basedOnEvidenceIds`,
+        diagnostics
+      ),
+      confidence: ALLOWED_INFERENCE_CONFIDENCES.has(confidence ?? "")
+        ? confidence as ReviewBasisInferenceConfidence
+        : "low"
     }];
   });
 }
 
-function validateDependencyMap(
-  value: unknown,
-  diagnostics: ReviewBasisValidationDiagnostic[]
-): ReviewBasisDependencyMap {
+function validateDependencyMap(value: unknown): ReviewBasisDependencyMap {
   const empty: ReviewBasisDependencyMap = { upstreamCallers: [], downstreamConsumers: [], externalContracts: [], sharedStateOrSideEffects: [] };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "dependencyMap must be an object" });
     return empty;
   }
   const obj = value as Record<string, unknown>;
@@ -297,13 +272,9 @@ function validateDependencyMap(
   };
 }
 
-function validateFlowMap(
-  value: unknown,
-  diagnostics: ReviewBasisValidationDiagnostic[]
-): ReviewBasisFlowMap {
+function validateFlowMap(value: unknown): ReviewBasisFlowMap {
   const empty: ReviewBasisFlowMap = { entryPoints: [], stateTransitions: [], asyncBoundaries: [], errorPaths: [] };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "flowMap must be an object" });
     return empty;
   }
   const obj = value as Record<string, unknown>;
@@ -315,13 +286,9 @@ function validateFlowMap(
   };
 }
 
-function validateTestCoverage(
-  value: unknown,
-  diagnostics: ReviewBasisValidationDiagnostic[]
-): ReviewBasisTestCoverage {
+function validateTestCoverage(value: unknown): ReviewBasisTestCoverage {
   const empty: ReviewBasisTestCoverage = { changedTests: [], observedCoverageSignals: [], coverageGaps: [] };
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "testCoverage must be an object" });
     return empty;
   }
   const obj = value as Record<string, unknown>;
@@ -340,21 +307,26 @@ function validateHypotheses(
     diagnostics.push({ code: "SCHEMA", message: "hypothesisLedger must be an array" });
     return [];
   }
-  return value.flatMap((raw, index) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+  const normalized: ReviewBasisHypothesis[] = [];
+  for (const [index, raw] of value.entries()) {
+    const entry = asPlainRecord(raw);
+    if (!entry) {
       diagnostics.push({ code: "SCHEMA", message: `hypothesisLedger[${index}] must be an object` });
-      return [];
+      continue;
     }
-    const entry = raw as Record<string, unknown>;
-    const hypothesisId = optionalString(entry.hypothesisId);
     const statement = optionalString(entry.statement);
     const triggerCondition = optionalString(entry.triggerCondition);
-    if (!hypothesisId || !statement || !triggerCondition) {
-      diagnostics.push({ code: "SCHEMA", message: `hypothesisLedger[${index}] requires hypothesisId, statement, triggerCondition` });
-      return [];
+    if (!statement || !triggerCondition) {
+      diagnostics.push({ code: "SCHEMA", message: `hypothesisLedger[${index}] requires statement and triggerCondition` });
+      continue;
     }
-    return [{ hypothesisId, statement, triggerCondition }];
-  });
+    normalized.push({
+      hypothesisId: `H${normalized.length + 1}`,
+      statement,
+      triggerCondition
+    });
+  }
+  return normalized;
 }
 
 function validateMissingInformation(
@@ -362,15 +334,14 @@ function validateMissingInformation(
   diagnostics: ReviewBasisValidationDiagnostic[]
 ): readonly ReviewBasisMissingInformation[] {
   if (!Array.isArray(value)) {
-    diagnostics.push({ code: "SCHEMA", message: "missingInformation must be an array" });
     return [];
   }
   return value.flatMap((raw, index) => {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    const entry = asPlainRecord(raw);
+    if (!entry) {
       diagnostics.push({ code: "SCHEMA", message: `missingInformation[${index}] must be an object` });
       return [];
     }
-    const entry = raw as Record<string, unknown>;
     const description = optionalString(entry.description);
     const whyItMatters = optionalString(entry.whyItMatters);
     if (!description || !whyItMatters) {
@@ -381,9 +352,66 @@ function validateMissingInformation(
   });
 }
 
+function hasReviewBasisContent(input: {
+  changedBehavior: readonly ReviewBasisChangedBehavior[];
+  dependencyMap: ReviewBasisDependencyMap;
+  evidenceRefs: readonly ReviewBasisEvidenceRef[];
+  facts: readonly ReviewBasisFact[];
+  flowMap: ReviewBasisFlowMap;
+  hypothesisLedger: readonly ReviewBasisHypothesis[];
+  inferences: readonly ReviewBasisInference[];
+  missingInformation: readonly ReviewBasisMissingInformation[];
+  testCoverage: ReviewBasisTestCoverage;
+}): boolean {
+  return [
+    input.changedBehavior,
+    input.evidenceRefs,
+    input.facts,
+    input.hypothesisLedger,
+    input.inferences,
+    input.missingInformation,
+    input.dependencyMap.upstreamCallers,
+    input.dependencyMap.downstreamConsumers,
+    input.dependencyMap.externalContracts,
+    input.dependencyMap.sharedStateOrSideEffects,
+    input.flowMap.entryPoints,
+    input.flowMap.stateTransitions,
+    input.flowMap.asyncBoundaries,
+    input.flowMap.errorPaths,
+    input.testCoverage.changedTests,
+    input.testCoverage.observedCoverageSignals,
+    input.testCoverage.coverageGaps
+  ].some((entries) => entries.length > 0);
+}
+
 function toStringArray(value: unknown): readonly string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function validateEvidenceIdArray(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+  fieldName: string,
+  diagnostics: ReviewBasisValidationDiagnostic[]
+): readonly string[] {
+  const ids = toStringArray(value);
+  for (const id of ids) {
+    if (!allowed.has(id)) {
+      diagnostics.push({
+        code: "SCHEMA",
+        message: `${fieldName} references unknown evidenceId "${id}"`
+      });
+    }
+  }
+  return ids;
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
 }
 
 function deepFreeze<T>(value: T): T {

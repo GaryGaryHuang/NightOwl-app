@@ -223,14 +223,20 @@ test("Step0OutputValidator rejects non-object payload", () => {
   );
 });
 
-test("Step0OutputValidator rejects overviewMarkdown without strict literal prefix", () => {
-  for (const overviewMarkdown of [
-    "##  Changeset Overview\nx",
-    " ## Changeset Overview\nx",
-    "## changeset overview\nx"
-  ]) {
-    expectFailure(() => validateV2(makeValidV2({ overviewMarkdown })), "SCHEMA");
-  }
+test("Step0OutputValidator normalizes overviewMarkdown presentation drift", () => {
+  const extraSpace = validateV2(makeValidV2({
+    overviewMarkdown: " ## Changeset Overview\nx"
+  }));
+  const lowercase = validateV2(makeValidV2({
+    overviewMarkdown: "## changeset overview\nx"
+  }));
+  const missingHeader = validateV2(makeValidV2({
+    overviewMarkdown: "Scope: feature"
+  }));
+
+  assert.equal(extraSpace.overviewMarkdown.startsWith("## Changeset Overview"), true);
+  assert.equal(lowercase.overviewMarkdown, "## Changeset Overview\nx");
+  assert.equal(missingHeader.overviewMarkdown, "## Changeset Overview\nScope: feature");
 });
 
 test("Step0OutputValidator allows empty behaviorChanges and unresolvedUnknowns", () => {
@@ -242,36 +248,79 @@ test("Step0OutputValidator allows empty behaviorChanges and unresolvedUnknowns",
   assert.equal(changeMap.unresolvedUnknowns.length, 0);
 });
 
-test("Step0OutputValidator reports invalid confidence enum diagnostics", () => {
-  const error = expectFailure(
-    () =>
-      validateV2(
-        makeValidV2({
-          userBehavior: [
-            {
-              statement: "Candidate findings must cite evidence refs",
-              confidence: "certain"
-            }
-          ]
-        })
-      ),
-    "SCHEMA"
+test("Step0OutputValidator defaults invalid userBehavior confidence to inferred", () => {
+  const changeMap = validateV2(
+    makeValidV2({
+      userBehavior: [
+        {
+          statement: "Candidate findings must cite evidence refs",
+          confidence: "certain"
+        }
+      ]
+    })
   );
 
-  assert.equal(error.diagnostic.offendingPath, "userBehavior[0].confidence");
-  assert.deepEqual(error.diagnostic.allowedValues, ["explicit", "inferred"]);
+  assert.equal(changeMap.userBehavior[0]?.confidence, "inferred");
 });
 
-test("Step0OutputValidator rejects missing userBehavior even when expectedBehaviorLedger is present", () => {
+test("Step0OutputValidator defaults missing optional arrays to empty arrays", () => {
+  const changeMap = validateV2(
+    makeValidV2({
+      behaviorChanges: undefined,
+      missingInformation: undefined,
+      reviewObjective: {
+        summary: "Review prompt harness redesign"
+      },
+      unresolvedUnknowns: undefined,
+      userBehavior: undefined
+    })
+  );
+
+  assert.deepEqual(changeMap.reviewObjective.requestedFocus, []);
+  assert.deepEqual(changeMap.reviewObjective.expectedBehaviorSummary, []);
+  assert.deepEqual(changeMap.behaviorChanges, []);
+  assert.deepEqual(changeMap.missingInformation, []);
+  assert.deepEqual(changeMap.unresolvedUnknowns, []);
+  assert.deepEqual(changeMap.userBehavior, []);
+});
+
+test("Step0OutputValidator drops malformed optional entries and preserves usable fields", () => {
+  const changeMap = validateV2(
+    makeValidV2({
+      behaviorChanges: [
+        null,
+        { files: ["src/missing-description.ts"] },
+        { description: "single-file behavior", files: "src/app.ts" }
+      ],
+      missingInformation: [
+        "not an object",
+        { description: "Need SDK contract" }
+      ],
+      unresolvedUnknowns: [
+        {},
+        { question: "Which API version is used?" }
+      ],
+      userBehavior: [
+        [],
+        { statement: "Expected behavior is stated" }
+      ]
+    })
+  );
+
+  assert.deepEqual(changeMap.behaviorChanges[0], {
+    description: "single-file behavior",
+    files: ["src/app.ts"]
+  });
+  assert.ok((changeMap.missingInformation[0]?.whyItMatters.length ?? 0) > 0);
+  assert.ok((changeMap.unresolvedUnknowns[0]?.resolutionPath.length ?? 0) > 0);
+  assert.equal(changeMap.userBehavior[0]?.confidence, "inferred");
+});
+
+test("Step0OutputValidator rejects an empty object with no usable review context", () => {
   expectFailure(
     () =>
       validateV2(
-        makeValidV2({
-          userBehavior: undefined,
-          expectedBehaviorLedger: [
-            { statement: "legacy field name", confidence: "inferred" }
-          ]
-        })
+        JSON.stringify({})
       ),
     "SCHEMA"
   );

@@ -258,7 +258,7 @@ test("ChangesetOverviewRunner logs successful syntax repairs", async () => {
   assert.match(logMessages[0]!, /parsedBytes=/u);
 });
 
-test("ChangesetOverviewRunner retry feedback includes structured enum diagnostics", async () => {
+test("ChangesetOverviewRunner normalizes invalid Step 0 confidence without retry", async () => {
   let createCalls = 0;
   const prompts: string[] = [];
   const invalidJson = JSON.stringify({
@@ -281,36 +281,26 @@ test("ChangesetOverviewRunner retry feedback includes structured enum diagnostic
         return {
           async sendAndWait(prompt) {
             prompts.push(prompt);
-            return createCalls === 1
-              ? invalidJson
-              : buildChangeMapJson();
+            return invalidJson;
           }
         };
       }
     }
   });
 
-  await runner.run({
+  const runContext = await runner.run({
     outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
   });
 
-  assert.equal(createCalls, 2);
-  const retryFeedback = parseJsonBlock(prompts[1]!, "validator_feedback") as {
-    previousFailure: {
-      code: string;
-      offendingPath?: string;
-      allowedValues?: readonly string[];
-    };
-  };
-  assert.equal(retryFeedback.previousFailure.code, "SCHEMA");
+  assert.equal(createCalls, 1);
+  assert.equal(prompts.length, 1);
   assert.equal(
-    retryFeedback.previousFailure.offendingPath,
-    "userBehavior[0].confidence"
+    runContext.changesetOverview.userBehavior[0]?.confidence,
+    "inferred"
   );
-  assert.ok(Array.isArray(retryFeedback.previousFailure.allowedValues));
 });
 
 test("ChangesetOverviewRunner aborts after two consecutive validation failures", async () => {

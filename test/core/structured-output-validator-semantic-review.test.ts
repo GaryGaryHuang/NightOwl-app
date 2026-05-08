@@ -333,7 +333,6 @@ test("validateCandidateFindingsV3WithReport normalizes safe small-model formatti
       })
     ]
   });
-  delete payload.criticalMissingInformation;
 
   const result = validateCandidateFindings(payload);
 
@@ -418,6 +417,35 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
         ]
       }),
       reason: /H1.*more than once.*hypothesisClosure/u
+    },
+    {
+      label: "criticalMissingInformation must remain explicit",
+      payload: (() => {
+        const payload = candidateFindingsV3();
+        delete payload.criticalMissingInformation;
+        return payload;
+      })(),
+      reason: /criticalMissingInformation.*array/u
+    },
+    {
+      label: "insufficient closures must preserve blocking missing information",
+      payload: candidateFindingsV3({
+        findings: [],
+        hypothesisClosure: [
+          hypothesisClosure({
+            hypothesisId: "H1",
+            status: "insufficient_information",
+            rationale: "missing contract blocks validation"
+          }),
+          hypothesisClosure({
+            hypothesisId: "H2",
+            status: "rejected_by_evidence",
+            rationale: "fallback still handles the changed path"
+          })
+        ],
+        criticalMissingInformation: []
+      }),
+      reason: /insufficient_information.*criticalMissingInformation/u
     }
   ];
 
@@ -485,6 +513,7 @@ test("validateValidationReportV1WithReport normalizes safe optional report metad
       {
         findingId: "F1",
         decision: "approve",
+        failedGates: [],
         reason: "all semantic gates passed"
       }
     ],
@@ -492,7 +521,6 @@ test("validateValidationReportV1WithReport normalizes safe optional report metad
       action: "accept"
     }
   });
-  delete payload.missingInformationItems;
 
   const result = validateValidationReport(
     payload
@@ -554,6 +582,15 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
       payload: validationReportV1(),
       candidates: { findings: "not-an-array" },
       reason: /findings.*array/u
+    },
+    {
+      label: "missingInformationItems must remain explicit",
+      payload: (() => {
+        const payload = validationReportV1();
+        delete payload.missingInformationItems;
+        return payload;
+      })(),
+      reason: /missingInformationItems.*array/u
     }
   ];
 
@@ -581,7 +618,7 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
         perFindingResults: [
           perFindingResult({
             decision: "rewrite_required",
-            failedGates: ["unsupported_gate"],
+            failedGates: ["impact"],
             requiredCorrections: "Prove concrete user impact or convert to missing information.",
             reason: "impact is asserted but not proven"
           })
@@ -598,7 +635,7 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
     const result = validateValidationReport(testCase.payload);
     assert.equal(result.payload.loopControl.action, testCase.action);
     if (testCase.action === "rerun") {
-      assert.deepEqual(result.payload.perFindingResults[0]?.failedGates, []);
+      assert.deepEqual(result.payload.perFindingResults[0]?.failedGates, ["impact"]);
       assert.deepEqual(result.payload.perFindingResults[0]?.requiredCorrections, [
         "Prove concrete user impact or convert to missing information."
       ]);
@@ -665,6 +702,40 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
         }
       }),
       reason: /rewrite_required.*requiredCorrection/u
+    },
+    {
+      label: "failedGates must remain explicit",
+      payload: validationReportV1({
+        perFindingResults: [
+          {
+            findingId: "F1",
+            decision: "approve",
+            requiredCorrections: [],
+            reason: "all semantic gates passed"
+          }
+        ]
+      }),
+      reason: /failedGates.*array/u
+    },
+    {
+      label: "failedGates must use known semantic gate IDs",
+      payload: validationReportV1({
+        perFindingResults: [
+          perFindingResult({
+            decision: "rewrite_required",
+            failedGates: ["unsupported_gate"],
+            requiredCorrections: [
+              "Prove concrete user impact before approval."
+            ],
+            reason: "impact is asserted but not proven"
+          })
+        ],
+        loopControl: {
+          action: "rerun",
+          reason: "candidate payload must repair evidence gaps"
+        }
+      }),
+      reason: /failedGates\[0\].*evidence.*impact.*traceability.*completeness.*scope/u
     }
   ];
 
