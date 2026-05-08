@@ -16,6 +16,7 @@ const REVIEW_BASIS_SYSTEM_ADDITION = [
   "## Current Step: ReviewBasis",
   "- Build the canonical per-file JSON basis required by the review basis instruction.",
   "- Keep the basis compact, selective, and high-signal.",
+  "- Treat `hypothesisLedger` as the downstream validation queue, not as assumed defects.",
   "- Treat the provided `<change_map>` data as authoritative review context for this file.",
   "- Use only the provided `<change_map>`, `<diff>`, and local repository context to support the structured basis fields."
 ].join("\n");
@@ -24,6 +25,12 @@ const REVIEW_BASIS_INSTRUCTION = [
   "Produce a single review basis JSON object for this file.",
   "",
   "Retrieve extra local repository context only when needed to fill evidence-backed basis fields for this file.",
+  "",
+  "Downstream review support rules:",
+  "- `hypothesisLedger` is the downstream validation queue. Include every distinct high-signal, evidence-backed validation target that later review stages must check for this file; keep it empty only when no concrete target is supported by the diff, change map, or retrieved repo context.",
+  "- A hypothesis is not an assumed defect. Phrase it as testable review work; `triggerCondition` must describe the current code path or runtime condition that downstream validation can verify.",
+  "- For each hypothesis, ensure the supporting basis fields give downstream validation enough context to trace reachability, expected behavior, impact, and counter-evidence without inventing missing facts.",
+  "- Compact means merge duplicate targets and omit low-signal speculation; do not omit a separate evidence-backed validation target only to keep the JSON short.",
   "",
   "Required output top-level fields:",
   "- `roleInChangeset`: this file's specific role in the changeset",
@@ -52,6 +59,7 @@ const REVIEW_BASIS_INSTRUCTION = [
   "- Keep changed behaviors, facts, inferences, and hypotheses compact; include only high-signal entries needed for downstream finding generation.",
   "- Keep `missingInformation` empty unless a specific missing fact materially blocks reliable downstream finding generation.",
   "- Add an entry only when it captures a distinct behavior change, concrete review hypothesis, or evidence-backed constraint needed by downstream finding generation.",
+  "- Do not add a hypothesis unless the current `changedBehavior`, `facts`, `inferences`, `dependencyMap`, `flowMap`, `testCoverage`, `missingInformation`, or `evidenceRefs` provide enough support for downstream validation.",
   "- Define only `evidenceRefs[]` items referenced by high-signal `changedBehavior`, `facts`, or `inferences` entries; do not define unused evidence refs.",
   "- Prefer consolidating related facts that rely on the same evidence.",
   "",

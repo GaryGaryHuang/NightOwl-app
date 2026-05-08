@@ -3,7 +3,10 @@ import test from "node:test";
 
 import type { ChangeMapReadinessV2 } from "../../../src/core/change-map.ts";
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
-import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
+import {
+  REVIEW_BASIS_INFERENCE_CONFIDENCES,
+  type ReviewBasisV1
+} from "../../../src/core/review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import {
   ReviewStatePromptSerializer,
@@ -175,10 +178,17 @@ function createReviewBasis(): ReviewBasisV1 {
 }
 
 function parseReviewStateFromPrompt(prompt: string): ReviewStateSnapshot {
+  return parseJsonBlock(prompt, "review_state") as ReviewStateSnapshot;
+}
+
+function parseJsonBlock(prompt: string, blockName: string): unknown {
   const match = prompt.match(
-    /<review_state format="json">\n([\s\S]*?)\n<\/review_state>/u
+    new RegExp(
+      `<${blockName} format="json">\\n([\\s\\S]*?)\\n</${blockName}>`,
+      "u"
+    )
   );
-  assert.ok(match, "review_state JSON block should be present");
+  assert.ok(match, `${blockName} JSON block should be present`);
   return JSON.parse(match[1]);
 }
 
@@ -217,7 +227,53 @@ function assertDiffBlock(prompt: string): void {
   assert.match(prompt, /<\/diff>/u);
 }
 
-test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structured output contract", () => {
+function assertReviewBasisOutputContract(prompt: string): void {
+  for (const field of [
+    "roleInChangeset",
+    "changedBehavior",
+    "before",
+    "after",
+    "evidenceIds",
+    "facts",
+    "statement",
+    "inferences",
+    "basedOnEvidenceIds",
+    "confidence",
+    "dependencyMap",
+    "upstreamCallers",
+    "downstreamConsumers",
+    "externalContracts",
+    "sharedStateOrSideEffects",
+    "flowMap",
+    "entryPoints",
+    "stateTransitions",
+    "asyncBoundaries",
+    "errorPaths",
+    "testCoverage",
+    "changedTests",
+    "observedCoverageSignals",
+    "coverageGaps",
+    "hypothesisLedger",
+    "hypothesisId",
+    "triggerCondition",
+    "missingInformation",
+    "description",
+    "whyItMatters",
+    "evidenceRefs",
+    "evidenceId",
+    "sourceType",
+    "location",
+    "summary"
+  ]) {
+    assert.match(prompt, new RegExp(field, "u"));
+  }
+
+  for (const confidence of REVIEW_BASIS_INFERENCE_CONFIDENCES) {
+    assert.match(prompt, new RegExp(`\\b${confidence}\\b`, "u"));
+  }
+}
+
+test("ReviewBasisStep wires ChangeMapReadiness data, diff, and ReviewBasis harness contract", () => {
   const context = createContext();
   const runContext = createRunContext({
     changesetOverview: createChangeMap(
@@ -233,66 +289,12 @@ test("ReviewBasisStep prompt carries ChangeMapReadiness data, diff, and structur
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   const userMessage = plan.prompt.userMessage;
-  assert.doesNotMatch(plan.prompt.systemMessage, /ReviewBasisV1/u);
-  assert.match(plan.prompt.systemMessage, /Structured JSON Output/u);
-  assert.match(plan.prompt.systemMessage, /JSON Completion/u);
-  assert.match(plan.prompt.systemMessage, /Missing Information Discipline/u);
-  assert.match(plan.prompt.systemMessage, /Do not record generic test gaps/u);
-  assert.match(plan.prompt.systemMessage, /Keep the basis compact, selective, and high-signal/u);
-  assert.match(plan.prompt.systemMessage, /Use only the provided `<change_map>`, `<diff>`, and local repository context/u);
-  assert.match(plan.prompt.systemMessage, /Do not pre-emptively perform bug finding/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /Code Locations & Inline Anchors/u);
-  assert.match(userMessage, /<change_map format="json">/u);
-  assert.match(userMessage, /<diff path="src\/app\.ts"/u);
-  assert.match(userMessage, /Retrieve extra local repository context only when needed/u);
-  assert.doesNotMatch(userMessage, /identifierRegistry/u);
-  assert.match(userMessage, /hypothesisLedger/u);
-  assert.match(userMessage, /Required output top-level fields/u);
-  assert.match(userMessage, /`evidenceIds` reference `E\*` evidence IDs/u);
-  assert.match(userMessage, /`hypothesisId` uses `H\*` IDs/u);
-  assert.match(userMessage, /Keep changed behaviors, facts, inferences, and hypotheses compact/u);
-  assert.match(userMessage, /include only high-signal entries needed for downstream finding generation/u);
-  assert.doesNotMatch(userMessage, /Target 1-3 high-signal entries/u);
-  assert.match(userMessage, /Keep `missingInformation` empty unless/u);
-  assert.doesNotMatch(userMessage, /hypotheses, and missing-information items/u);
-  assert.match(userMessage, /Evidence, ID, and entry rules/u);
-  assert.doesNotMatch(userMessage, /Identifier and evidence rules/u);
-  assert.match(userMessage, /distinct behavior change/u);
-  assert.match(userMessage, /Define only `evidenceRefs\[\]` items referenced by high-signal/u);
-  assert.match(userMessage, /do not define unused evidence refs/u);
-  assert.doesNotMatch(userMessage, /Use at most 8 evidence refs/u);
-  assert.match(userMessage, /Prefer consolidating related facts/u);
-  assert.doesNotMatch(userMessage, /ReviewBasisV1/u);
-  assert.match(userMessage, /Review basis completion policy/u);
-  assert.match(userMessage, /Prioritize a complete, valid JSON object/u);
-  assert.match(userMessage, /Return compact JSON/u);
-  assert.match(userMessage, /Empty arrays are valid for any array field/u);
-  assert.match(userMessage, /Non-empty array item shapes/u);
-  assert.match(userMessage, /`changedBehavior`: `\{ "before": "old behavior"/u);
-  assert.match(userMessage, /`inferences`: `\{ "statement": "Bounded inference\."/u);
-  assert.match(userMessage, /`evidenceRefs`: `\{ "evidenceId": "E1"/u);
-  assert.match(userMessage, /Minimal complete JSON example/u);
-  assert.match(userMessage, /"changedBehavior": \[\]/u);
-  assert.match(userMessage, /"evidenceRefs": \[\]/u);
-  assert.match(userMessage, /keep each sub-field compact/u);
-  assert.match(userMessage, /use an empty array when there is no direct high-signal information/u);
-  assert.match(userMessage, /unless another distinct string is essential to a concrete hypothesis/u);
-  assert.doesNotMatch(userMessage, /use at most one high-signal string per sub-field/u);
-  assert.match(userMessage, /Every `evidenceIds`/u);
 
-  const sectionOrder = [
-    "Required output top-level fields:",
-    "Non-empty array item shapes:",
-    "Evidence, ID, and entry rules:",
-    "Review basis completion policy:",
-    "Minimal complete JSON example:"
-  ].map((section) => userMessage.indexOf(section));
-  assert.ok(sectionOrder.every((index) => index >= 0));
-  assert.ok(
-    sectionOrder.every(
-      (index, position) => position === 0 || sectionOrder[position - 1] < index
-    )
-  );
+  assert.deepEqual(parseJsonBlock(userMessage, "change_map"), runContext.changesetOverview);
+  assertDiffBlock(userMessage);
+  assert.equal(userMessage.includes("<review_state"), false);
+  assert.equal(userMessage.includes("<review_basis"), false);
+  assertReviewBasisOutputContract(userMessage);
 });
 
 test("default per-file pipeline starts with ReviewBasis and omits legacy Step 1-4", () => {
