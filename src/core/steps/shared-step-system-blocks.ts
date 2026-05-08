@@ -8,14 +8,13 @@ import {
 
 const JSON_STRUCTURED_OUTPUT_BLOCK = createPromptBlock("json-structured-output", [
   "## Structured JSON Output",
-  "- Express assumptions, missing facts, and limitations through the fields required by the current step's JSON contract, not through reader-facing markers or prose outside the object.",
-  "- Preserve the exact keys, enum values, and object shape specified by the current step instruction. Do not invent alternate keys or aliases."
+  "- Put assumptions, missing facts, and limitations only in the current step's designated JSON fields.",
+  "- Follow the current step instruction for object shape; do not invent alternate keys or aliases."
 ]);
 
-export const JSON_COMPLETION_BLOCK = createPromptBlock("json-completion", [
+const JSON_COMPLETION_BLOCK = createPromptBlock("json-completion", [
   "## JSON Completion",
-  "- Output exactly one JSON object. Begin with `{` and end with `}`.",
-  "- Do not include Markdown, code fences, scratch notes, tool transcripts, or a second object.",
+  "- Output exactly one JSON object that begins with `{` and ends with `}`; do not include Markdown, code fences, scratch notes, tool transcripts, or any text outside that object.",
   "- If context is incomplete or a tool result is unavailable, still return a minimal valid object for the current step and record only material blockers in the step's designated uncertainty fields.",
   "- Prioritize syntactically complete JSON over exhaustive detail. If the response is getting long, shorten strings or omit lower-signal entries before risking an incomplete object.",
   "- Close every array and object before finishing the response."
@@ -30,11 +29,10 @@ export const MISSING_INFORMATION_DISCIPLINE_BLOCK = createPromptBlock("missing-i
 
 const MARKDOWN_RESPONSE_FORMAT_BLOCK = createPromptBlock("markdown-response-format", [
   "## Markdown Response Format",
-  "- Begin with the designated `##` heading.",
-  "- Do not add a preamble or extra sections outside the current step's rendering contract."
+  "- Begin with the designated `##` heading."
 ]);
 
-export const FINDING_ANCHOR_SYSTEM_BLOCK = createPromptBlock("finding-anchor-guidance", [
+const FINDING_ANCHOR_SYSTEM_BLOCK = createPromptBlock("finding-anchor-guidance", [
   "## Code Locations & Inline Anchors",
   "- For JSON findings, use the smallest reviewed-file `line-range` that lets a reviewer inspect the defective expression, statement, or call site.",
   "- When the changed line is the accurate issue location, overlap a head-side line from `<review_state>.diffSummary.hunks[].changedHeadLines`; use `headLineStart`, `headLineEnd`, and changed lines instead of guessing.",
@@ -77,5 +75,3 @@ export const JSON_FINDING_STEP_SYSTEM_MESSAGE = composePromptBlocks(
 export const MARKDOWN_STEP_SYSTEM_MESSAGE = composePromptBlocks(
   MARKDOWN_STEP_SYSTEM_BLOCKS
 );
-
-export const SHARED_JSON_COMPLETION_GUIDANCE = JSON_COMPLETION_BLOCK.content;

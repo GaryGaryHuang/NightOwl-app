@@ -24,7 +24,7 @@ const STEP5_SYSTEM_ADDITION = [
   "- This step produces candidate findings only. It does not write final approved findings.",
   "- Convert a validated deviation into a candidate only when the available evidence supports a concrete, actionable problem on a credibly reachable current code path.",
   "- Keep the scope centered on hypothesis-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
-  "- Use missing information only for specific facts that block proving trigger, impact, expected contract, or reachability; do not use it for ordinary uncertainty or low-signal gaps.",
+  "- For this step, missing-information blockers must be limited to facts that block proving trigger, impact, expected contract, or reachability.",
   "- IMPORTANT: Do not report candidates based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a candidate for every hypothesis.",
   "- Do not downgrade observable behavior changes to missing information solely because the product requirement is implicit. A concrete silent failure, data loss, wrong event, wrong timeout, or missing signal can be a low-severity `reasonable_risk` when the code path and impact are evidence-backed."
 ].join("\n");
