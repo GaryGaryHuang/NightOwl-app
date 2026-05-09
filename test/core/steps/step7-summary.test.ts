@@ -202,6 +202,59 @@ test("Step7SummaryStep.prepare() does not expose host-owned summary data blocks"
   assert.doesNotMatch(plan.prompt.userMessage, /<summary_status>/u);
 });
 
+test("Step7SummaryStep.prepare() frames internal review state as source material for reader-facing prose", () => {
+  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+  const plan = step.prepare(createContext([]));
+  const instruction = getStep7InstructionText(plan.prompt.userMessage);
+
+  assert.match(
+    plan.prompt.systemMessage,
+    /reader-facing narrative portion of the final per-file review summary/u
+  );
+  assert.match(
+    plan.prompt.systemMessage,
+    /provided review state as the evidence source[\s\S]*internal record names, validator objects, and bookkeeping are private source material/u
+  );
+  assert.doesNotMatch(plan.prompt.systemMessage, /run-level index\/summary/u);
+  assert.doesNotMatch(plan.prompt.systemMessage, /## Findings|## Missing Information|designated first response heading/u);
+  assert.match(
+    instruction,
+    /private source material[\s\S]*not printed verbatim in the final review output/u
+  );
+  assert.match(
+    instruction,
+    /Internal source labels are never report wording[\s\S]*Use them only to locate source data[\s\S]*reviewBasis[\s\S]*approvedFindings[\s\S]*validationReport[\s\S]*missingInformationItems[\s\S]*Step 5[\s\S]*Step 6/u
+  );
+  assert.match(
+    instruction,
+    /Required output sections, in this order; begin with `### 審查依據`:[\s\S]*### 行為變更提醒[\s\S]*### 風險判定理由/u
+  );
+  assert.match(
+    instruction,
+    /Section line shapes:[\s\S]*異動概要[\s\S]*已核對依據[\s\S]*待確認資訊/u
+  );
+  assert.match(
+    instruction,
+    /Source-material translation rules:[\s\S]*Translate internal source material into reader-facing statements/u
+  );
+  assert.match(
+    instruction,
+    /final `<review_state>\.missingInformationItems` array[\s\S]*If that final list is empty, write exactly `無`/u
+  );
+  assert.match(
+    instruction,
+    /Completion policy:[\s\S]*do not add an outer summary heading, conclusion or action sections/u
+  );
+  assert.match(
+    instruction,
+    /Complete Markdown output example:[\s\S]*The label is explanatory only/u
+  );
+  assert.doesNotMatch(
+    instruction,
+    /Clean example:|Limited example:|src\/api\.ts/u
+  );
+});
+
 test("Step7SummaryStep.resolve composes host-owned status data", async (t) => {
   const cases = [
     {
@@ -440,6 +493,12 @@ function parseReviewStateFromPrompt(prompt: string): {
   );
   assert.ok(match, "review_state JSON block should be present");
   return JSON.parse(match[1]);
+}
+
+function getStep7InstructionText(prompt: string): string {
+  const reviewStateEnd = prompt.indexOf("</review_state>");
+  assert.notEqual(reviewStateEnd, -1, "review_state block should be present");
+  return prompt.slice(reviewStateEnd + "</review_state>".length);
 }
 
 function createCandidateFindingsV3(_type: "must" | "nice") {

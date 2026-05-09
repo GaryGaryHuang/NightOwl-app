@@ -9,10 +9,9 @@ import {createStep7Resolve} from "./step-resolve-helpers.ts";
 
 const STEP7_SYSTEM_ADDITION = [
     "## Current Step: Summary",
-    "- Produce only the narrative portion of the final summary: the review basis, behavior-change reminder, and risk rationale for this file.",
-    "- Base the narrative on the provided review state: the established file context, validated review results, and unresolved information gaps.",
-    "- Keep the narrative concise and reader-facing. Use only information supported by the review state, and synthesize the review result without duplicating the detailed Findings entries.",
-    "- This step contributes only the three requested narrative sections; the final report shell and deterministic summary fields are assembled outside this response.",
+    "- Produce the reader-facing narrative portion of the final per-file review summary.",
+    "- Use the provided review state as the evidence source; internal record names, validator objects, and bookkeeping are private source material, not report text.",
+    "- This step contributes only the requested narrative sections; the final report shell and deterministic summary fields are assembled outside this response.",
     "- Language: 正體中文. Preserve code identifiers, file paths, function/class/property names, commands, error messages, API names, enum values, and literal values exactly as they appear in the review state."
 ].join("\n");
 
@@ -98,34 +97,55 @@ export class Step7SummaryStep implements StepDefinition {
 
 function buildStep7UserMessage(reviewState: string): string {
     return [
-        buildStep7Instruction(),
+        reviewState,
         "",
-        reviewState
+        buildStep7Instruction()
     ].join("\n");
 }
 
 function buildStep7Instruction(): string {
     return [
-        "Use the <review_state> block as the concrete input.",
-        "Use this source map when transferring review state into prose:",
-        "- 審查依據: use reviewBasis for the file role, behavior changes, confirmed evidence, source-of-truth references, tool-backed facts, and code paths.",
-        "- 待確認資訊: summarize only <review_state>.missingInformationItems; write 無 when that array is empty.",
-        "- 行為變更提醒: use reviewBasis.changedBehavior, dependencyMap, flowMap, and approved finding context to describe runtime behavior changes as direct facts.",
-        "- 風險判定理由: use approvedFindings, validationReport, missingInformationItems, and affected behavior to explain why the review result is clean, nice-to-have, must-fix, or limited.",
-        "- When using validationReport, describe the semantic validation outcome in reader-facing terms.",
+        "Use the `<review_state>` block above as private source material for this Step 7 summary. It is not printed verbatim in the final review output.",
         "",
-        "Return exactly these three Markdown sections in this order:",
+        "Required output sections, in this order; begin with `### 審查依據`:",
+        "- `### 審查依據`",
+        "- `### 行為變更提醒`",
+        "- `### 風險判定理由`",
+        "",
+        "Section line shapes:",
+        "- `### 審查依據` must contain exactly these bullets:",
+        "  - `- 異動概要：...`",
+        "  - `- 已核對依據：...`",
+        "  - `- 待確認資訊：...`",
+        "- `### 行為變更提醒` must contain one or more bullets, or exactly `- 無行為變更` when there is no runtime behavior change.",
+        "- `### 風險判定理由` must contain one or more bullets explaining how the review outcome follows from the evidence and limitations.",
+        "",
+        "Source-material translation rules:",
+        "- Internal source labels are never report wording. Use them only to locate source data; do not print labels such as `reviewBasis`, `approvedFindings`, `validationReport`, `missingInformationItems`, Step 5, Step 6, or synthetic IDs such as `E1`, `F1`, `H1` in the narrative.",
+        "- Translate internal source material into reader-facing statements about evidence, finding outcomes, missing-information limits, code paths, and behavior.",
+        "- 審查依據: use the review basis and validated state for the file role, behavior changes, confirmed evidence, source-of-truth references, tool-backed facts, and code paths.",
+        "- 待確認資訊: use only the final `<review_state>.missingInformationItems` array as the final missing-information list. If that final list is empty, write exactly `無` even if review basis, broader changeset context, adjacent-file absence, missing collaborators, test gaps, external contracts, or intermediate review notes mention uncertainty.",
+        "- 行為變更提醒: use the reviewed behavior, dependency, flow, and finding-outcome context to describe runtime behavior changes as direct facts.",
+        "- 風險判定理由: use the final finding outcomes, final review outcome, final missing-information list, and affected behavior to explain why the review result is clean, nice-to-have, must-fix, or limited. Describe concerns as confirmed, not confirmed, or still limited by missing information with reader-facing phrases such as `目前未確認有缺陷` or `仍受 missing information 限制`, instead of naming internal validation objects.",
+        "",
+        "Completion policy:",
+        "- Output only the three required Markdown sections; do not add an outer summary heading, conclusion or action sections, prefaces, code fences, or explanatory labels.",
+        "- Preserve concrete identifiers, file paths, API names, commands, and literal values exactly when they are useful evidence.",
+        "- Keep the summary compact; do not duplicate detailed Findings entries, but keep the decisive facts needed to understand the result.",
+        "",
+        "Complete Markdown output example:",
+        "The label is explanatory only; output only the three Markdown sections.",
         "",
         "### 審查依據",
-        "- 異動概要：[one sentence describing this file's before→after transformation]",
-        "- 已核對依據：[decisive confirmed evidence, source-of-truth references, tool results, or code paths]",
-        "- 待確認資訊：[summarize <review_state>.missingInformationItems; write 無 when that array is empty]",
+        "- 異動概要：...",
+        "- 已核對依據：...",
+        "- 待確認資訊：...",
         "",
         "### 行為變更提醒",
-        "- [runtime behavior changes the reader should verify, stated as direct facts; write 無行為變更 only when there is no runtime behavior change]",
+        "- ...",
         "",
         "### 風險判定理由",
-        "- [how approvedFindings, validationReport, missingInformationItems, and affected behavior lead to the review result]"
+        "- ..."
     ].join("\n");
 }
 
