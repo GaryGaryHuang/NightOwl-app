@@ -123,7 +123,7 @@ These are product safety boundaries that must not be circumvented or relaxed:
 
 ## Copilot SDK Notes
 
-- Using `@github/copilot-sdk@^0.2.0`. Before upgrading, re-verify: runtime imports, session lifecycle, permission hooks (`onPreToolUse`), MCP config types, and test behavior.
+- Using `@github/copilot-sdk@^0.3.0`. Before upgrading, re-verify: runtime imports, session lifecycle, permission hooks (`onPreToolUse`), MCP config types, and test behavior.
 
 ## Commit Guidance
 

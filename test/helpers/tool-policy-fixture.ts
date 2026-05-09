@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 
+import type { PermissionRequest } from "@github/copilot-sdk";
+
 import { ToolPolicyGuard } from "../../src/services/tool-policy/tool-policy-guard.ts";
 import type { ToolPolicyBoundaryContext } from "../../src/services/tool-policy/tool-policy-types.ts";
 import { ToolPolicyWebFetchPolicy } from "../../src/services/tool-policy/tool-policy-web-fetch-policy.ts";
@@ -39,6 +41,12 @@ export function assertAuditRecord(
   if (expected.args !== undefined) {
     assert.deepEqual(actual.args, expected.args);
   }
+}
+
+export function createPermissionRequest(
+  request: { kind: string } & Record<string, unknown>
+): PermissionRequest {
+  return request as PermissionRequest;
 }
 
 // Returns both the guard instance and its derived hook/handler so tests can

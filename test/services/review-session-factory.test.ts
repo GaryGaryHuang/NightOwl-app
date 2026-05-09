@@ -119,7 +119,7 @@ function getRecordedConfig(
 class SpyToolPolicyGuard extends ToolPolicyGuard {
   readonly preToolUseHook: PreToolUseHook = async () => undefined;
   readonly permissionHandler: PermissionHandler = async () => ({
-    kind: "denied-no-approval-rule-and-could-not-request-from-user"
+    kind: "user-not-available"
   });
   readonly preToolUseCalls: Array<{
     auditWriter?: ToolAuditSink;

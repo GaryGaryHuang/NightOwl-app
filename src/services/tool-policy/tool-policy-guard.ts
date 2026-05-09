@@ -60,6 +60,7 @@ type HandlerDecisionRecord = {
   reason?: string;
   args: Record<string, string | undefined>;
 };
+type PermissionRequestPayload = PermissionRequest & Record<string, unknown>;
 
 type PreToolUseDecisionResult =
   | PreToolUseHookResult
@@ -257,7 +258,7 @@ export class ToolPolicyGuard {
   // Adding a new SDK permission kind requires only a new evaluator + a dispatch entry.
 
   #evaluateRead(
-    request: Record<string, unknown>,
+    request: PermissionRequestPayload,
     profile: ToolPolicyBoundaryContext
   ): HandlerDecisionRecord {
     const readPath = typeof request.path === "string" ? request.path : undefined;
@@ -282,7 +283,7 @@ export class ToolPolicyGuard {
   }
 
   #evaluateWrite(
-    request: Record<string, unknown>
+    request: PermissionRequestPayload
   ): HandlerDecisionRecord {
     const fileName =
       "fileName" in request && typeof request.fileName === "string"
@@ -298,7 +299,7 @@ export class ToolPolicyGuard {
   }
 
   #evaluateShell(
-    request: Record<string, unknown>,
+    request: PermissionRequestPayload,
     profile: ToolPolicyBoundaryContext
   ): HandlerDecisionRecord {
     const fullCommandText =
@@ -321,7 +322,7 @@ export class ToolPolicyGuard {
   }
 
   async #evaluateUrl(
-    request: Record<string, unknown>
+    request: PermissionRequestPayload
   ): Promise<HandlerDecisionRecord> {
     const url = typeof request.url === "string" ? request.url : "";
     const args = url ? this.#buildStringArgs("url", url) : {};
@@ -338,7 +339,7 @@ export class ToolPolicyGuard {
   }
 
   #evaluateMcp(
-    request: Record<string, unknown>
+    request: PermissionRequestPayload
   ): HandlerDecisionRecord {
     const serverName =
       typeof request.serverName === "string" ? request.serverName : undefined;
@@ -352,7 +353,7 @@ export class ToolPolicyGuard {
   }
 
   #evaluateCustomTool(
-    request: Record<string, unknown>
+    request: PermissionRequestPayload
   ): HandlerDecisionRecord {
     const toolName =
       typeof request.toolName === "string" ? request.toolName : undefined;
@@ -363,10 +364,8 @@ export class ToolPolicyGuard {
   }
 
   #evaluateMemory(
-    request: Record<string, unknown>
+    request: PermissionRequestPayload
   ): HandlerDecisionRecord {
-    // Defensive: memory kind (not in SDK PermissionRequest.kind union,
-    // but exists in session-events.d.ts). Low-risk; approve.
     const subject =
       typeof request.subject === "string" ? request.subject : undefined;
     const args: Record<string, string | undefined> = {};
@@ -376,9 +375,8 @@ export class ToolPolicyGuard {
   }
 
   #evaluateHook(
-    request: Record<string, unknown>
+    request: PermissionRequestPayload
   ): HandlerDecisionRecord {
-    // Defensive: hook kind (not in SDK PermissionRequest.kind union).
     // Unknown security implications; fail-closed deny.
     const toolName =
       typeof request.toolName === "string" ? request.toolName : undefined;
@@ -404,7 +402,7 @@ export class ToolPolicyGuard {
     auditWriter?: ToolAuditSink
   ): PermissionHandler {
     type PermissionEvaluator = (
-      request: PermissionRequest
+      request: PermissionRequestPayload
     ) => HandlerDecisionRecord | Promise<HandlerDecisionRecord>;
 
     // Registry of per-kind evaluators. The `satisfies` clause covers every kind
@@ -416,23 +414,24 @@ export class ToolPolicyGuard {
       shell: (request) => this.#evaluateShell(request, profile),
       url: (request) => this.#evaluateUrl(request),
       mcp: (request) => this.#evaluateMcp(request),
-      "custom-tool": (request) => this.#evaluateCustomTool(request)
-    } satisfies Record<PermissionRequest["kind"], PermissionEvaluator>;
-
-    // Defensive entries for kinds observed in session-events.d.ts but absent
-    // from the SDK PermissionRequest.kind union. Lookup is by string at runtime.
-    const evaluators: { [kind: string]: PermissionEvaluator | undefined } = {
-      ...sdkEvaluators,
+      "custom-tool": (request) => this.#evaluateCustomTool(request),
       memory: (request) => this.#evaluateMemory(request),
       hook: (request) => this.#evaluateHook(request)
+    } satisfies Record<PermissionRequest["kind"], PermissionEvaluator>;
+
+    // Keep lookup string-indexed so unknown future runtime kinds fail closed
+    // before the SDK type union catches up.
+    const evaluators: { [kind: string]: PermissionEvaluator | undefined } = {
+      ...sdkEvaluators
     };
 
     return async (request) => {
-      const evaluator = evaluators[request.kind];
+      const requestPayload = request as PermissionRequestPayload;
+      const evaluator = evaluators[requestPayload.kind];
       const record: HandlerDecisionRecord = evaluator
-        ? await evaluator(request)
+        ? await evaluator(requestPayload)
         : {
-            tool: request.kind as string,
+            tool: requestPayload.kind as string,
             decision: "deny",
             reason: UNKNOWN_KIND_DENY_REASON,
             args: {}
@@ -444,8 +443,8 @@ export class ToolPolicyGuard {
       auditWriter?.append(this.#buildAuditEntry(record));
 
       return record.decision === "allow"
-        ? { kind: "approved" }
-        : { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
+        ? { kind: "approve-once" }
+        : { kind: "user-not-available" };
     };
   }
 

@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   BASE_PROFILE,
+  createPermissionRequest,
   createPolicySession
 } from "../helpers/tool-policy-fixture.ts";
 
@@ -24,7 +25,7 @@ test("dual-path consistency: shell deny remains aligned between handler and hook
   const { handler, hook } = createPolicySession();
 
   const handlerResult = await handler(
-    { kind: "shell", fullCommandText: "rm -rf /" },
+    createPermissionRequest({ kind: "shell", fullCommandText: "rm -rf /" }),
     SESSION_CONTEXT
   );
   const hookResult = await hook(
@@ -33,7 +34,7 @@ test("dual-path consistency: shell deny remains aligned between handler and hook
   );
 
   assert.deepEqual(handlerResult, {
-    kind: "denied-no-approval-rule-and-could-not-request-from-user"
+    kind: "user-not-available"
   });
   assert.notEqual(hookResult, undefined);
   assert.equal(
@@ -46,7 +47,7 @@ test("dual-path consistency: URL deny remains aligned between handler and hook",
   const { handler, hook } = createPolicySession();
 
   const handlerResult = await handler(
-    { kind: "url", url: "http://localhost:8080" },
+    createPermissionRequest({ kind: "url", url: "http://localhost:8080" }),
     SESSION_CONTEXT
   );
   const hookResult = await hook(
@@ -55,7 +56,7 @@ test("dual-path consistency: URL deny remains aligned between handler and hook",
   );
 
   assert.deepEqual(handlerResult, {
-    kind: "denied-no-approval-rule-and-could-not-request-from-user"
+    kind: "user-not-available"
   });
   assert.notEqual(hookResult, undefined);
   assert.equal(
