@@ -42,11 +42,11 @@ type OutputCall = "initializeRun"
 
 type RunLevelArtifact = "index";
 
-const RUN_LEVEL_FINALIZER_CALLS: OutputCall[] = [
+const INDEX_FINALIZER_CALLS: OutputCall[] = [
   "publishArtifact:index"
 ];
 
-test("ReviewOrchestrator dispatches every run-level finalizer for an all-successful run and writes their artifacts", async () => {
+test("ReviewOrchestrator dispatches the index finalizer for an all-successful run and writes its artifact", async () => {
   await withReviewHarness({}, async (harness) => {
     const outputSink = new RecordingOutputSink();
     const result = await runOrchestrator(harness, {
@@ -60,13 +60,13 @@ test("ReviewOrchestrator dispatches every run-level finalizer for an all-success
     assert.deepEqual(result.finalizerFailures, []);
     assertOutputTargetPaths(result.outputTarget, harness.repoRoot);
     assertOutputArtifactsExist(result.outputTarget);
-    for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+    for (const call of INDEX_FINALIZER_CALLS) {
       assert.equal(outputSink.calls.includes(call), true, call);
     }
   });
 });
 
-test("ReviewOrchestrator feeds finalizers in-memory outcomes rather than reading back corrupted on-disk artifacts", async () => {
+test("ReviewOrchestrator feeds the index finalizer in-memory outcomes rather than reading back corrupted on-disk artifacts", async () => {
   await withReviewHarness(
     {
       commitMessage: "add third changed file for in-memory data source contract",
@@ -93,7 +93,7 @@ test("ReviewOrchestrator feeds finalizers in-memory outcomes rather than reading
   );
 });
 
-test("ReviewOrchestrator still dispatches every run-level finalizer when zero files are planned", async () => {
+test("ReviewOrchestrator still dispatches the index finalizer when zero files are planned", async () => {
   await withReviewHarness({ reviewignore: "**\n" }, async (harness) => {
     const outputSink = new RecordingOutputSink();
     const result = await runOrchestrator(harness, {
@@ -106,13 +106,13 @@ test("ReviewOrchestrator still dispatches every run-level finalizer when zero fi
     assert.equal(result.skippedFileCount, 0);
     assert.deepEqual(result.finalizerFailures, []);
     assertOutputArtifactsExist(result.outputTarget);
-    for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+    for (const call of INDEX_FINALIZER_CALLS) {
       assert.equal(outputSink.calls.includes(call), true, call);
     }
   });
 });
 
-test("ReviewOrchestrator treats an all-skipped run as a completed run that still dispatches every run-level finalizer", async () => {
+test("ReviewOrchestrator treats an all-skipped run as a completed run that still dispatches the index finalizer", async () => {
   await withReviewHarness({}, async (harness) => {
     const outputSink = new RecordingOutputSink();
     const result = await runOrchestrator(harness, {
@@ -124,7 +124,7 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run that still
     assert.equal(result.skippedFileCount, harness.reviewableFiles.length);
     assert.deepEqual(result.finalizerFailures, []);
     assertOutputArtifactsExist(result.outputTarget);
-    for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+    for (const call of INDEX_FINALIZER_CALLS) {
       assert.equal(outputSink.calls.includes(call), true, call);
     }
   });
@@ -156,7 +156,7 @@ test("ReviewOrchestrator does not publish run-level artifacts when applyTo fails
       /apply failed/u
     );
 
-    for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+    for (const call of INDEX_FINALIZER_CALLS) {
       assert.equal(outputSink.calls.includes(call), false, call);
     }
   });
@@ -204,14 +204,14 @@ test("ReviewOrchestrator publishes run-level artifacts when getDiff failure down
 
       assert.equal(result.skippedFileCount, 1);
       assert.equal(result.successfulFileCount, harness.reviewableFiles.length - 1);
-      for (const call of RUN_LEVEL_FINALIZER_CALLS) {
+      for (const call of INDEX_FINALIZER_CALLS) {
         assert.equal(outputSink.calls.includes(call), true, call);
       }
     }
   );
 });
 
-test("ReviewOrchestrator records finalizerFailure and stops dependent finalizers", async () => {
+test("ReviewOrchestrator records index finalizerFailure without failing completed runs", async () => {
   const cases: Array<{
     artifact: RunLevelArtifact;
     message: RegExp;

@@ -295,7 +295,7 @@ export class ReviewOrchestrator {
       skippedFileCount: skippedFiles.length
     });
 
-    const finalizerFailures = await this.#publishFinalizers({
+    const finalizerFailures = await this.#publishIndexFinalizer({
       outputPublisher,
       outputTarget,
       plannedNoteFiles,
@@ -374,7 +374,7 @@ export class ReviewOrchestrator {
     }
   }
 
-  async #publishFinalizers(input: {
+  async #publishIndexFinalizer(input: {
     outputPublisher: RunOutputPublisher;
     outputTarget: OutputTarget;
     plannedNoteFiles: PlannedNoteFile[];
@@ -395,7 +395,7 @@ export class ReviewOrchestrator {
       ).length
     });
 
-    const indexPublished = await this.#tryPublishFinalizer("index", failures, () =>
+    await this.#tryPublishFinalizer("index", failures, () =>
       input.outputPublisher.publishArtifact("index", {
         content: this.#renderReviewIndex({
           repoRoot: input.repoRoot,
@@ -408,9 +408,6 @@ export class ReviewOrchestrator {
         })
       })
     );
-    if (!indexPublished) {
-      return failures;
-    }
 
     return failures;
   }

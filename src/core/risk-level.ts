@@ -18,7 +18,7 @@ export function countNiceFindings(findings: Finding[] | undefined): number {
 }
 
 /**
- * Collapse finalized findings into the run-level risk label shown in summaries, indexes, and manifests.
+ * Collapse finalized findings into the risk label shown in review notes and the run index.
  *
  * Any accepted confirmed_problem/high finding escalates the file to High;
  * remaining findings (confirmed_problem/low or reasonable_risk) map to Low;
@@ -49,7 +49,7 @@ export interface RiskSnapshot {
  * Build a deterministic risk snapshot from finalized findings.
  *
  * Delegates to `deriveFileRiskLevel()` for the risk label so the snapshot
- * is guaranteed to agree with manifests, indexes, and run summaries.
+ * is guaranteed to agree with review notes and the run index summary.
  */
 export function buildRiskSnapshot(findings: Finding[] | undefined): RiskSnapshot {
   const derivedRiskLevel = deriveFileRiskLevel(findings);

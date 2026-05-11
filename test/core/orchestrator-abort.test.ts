@@ -177,17 +177,11 @@ function recordReviewBasisCalls(reviewBasisCalls: string[]): StepRunnerDouble {
 }
 
 function assertNoRunLevelArtifactsPublished(sink: TrackingOutputSink): void {
-  for (const kind of [
-    "summary",
-    "index"
-  ]) {
-    const call = `publishArtifact:${kind}`;
-    assert.equal(
-      sink.calls.includes(call),
-      false,
-      `${call} should not be called after abort`
-    );
-  }
+  assert.equal(
+    sink.calls.includes("publishArtifact:index"),
+    false,
+    "publishArtifact:index should not be called after abort"
+  );
 }
 
 test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already aborted before dispatch", async () => {

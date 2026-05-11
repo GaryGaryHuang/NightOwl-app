@@ -10,7 +10,7 @@ export type ResolvedFileOutcome =
  *
  * When a file appears in both outcome sets, successfulFiles takes precedence.
  * Throws when a planned file is absent from both sets, enforcing data integrity
- * at the boundary between the Orchestrator and all downstream finalizers.
+ * at the boundary between the Orchestrator and the index finalizer.
  */
 export function resolveFileOutcomes(
   plannedNotes: PlannedNoteFile[],
