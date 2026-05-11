@@ -107,7 +107,7 @@ const SEMANTIC_VALIDATION_INSTRUCTION = [
   "If there are no candidates but `<review_state>.candidateFindings.criticalMissingInformation` contains user-actionable blockers, return: {\"perFindingResults\": [], \"missingInformationItems\": [{\"description\": \"Need the binary SDK API/version information for the local AAR.\", \"whyItMatters\": \"Without it the review cannot verify runtime compatibility with the changed call sites.\"}], \"loopControl\": {\"action\": \"accept\", \"reason\": \"no candidate findings to rewrite; preserve blocking missing information\"}}"
 ].join("\n");
 
-export interface SemanticValidationStepOptions {
+interface SemanticValidationStepOptions {
   promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
@@ -152,7 +152,6 @@ export class SemanticValidationStep implements StepDefinition {
         timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createValidationReportV1Resolve({
-        stepId: this.stepId,
         filePath: context.filePath,
         diffContent: context.diffContent,
         reviewBasis: context.getReviewBasis(),

@@ -12,7 +12,7 @@ import { renderRunSummarySection } from "./run-summary-section.ts";
 // Derives from RISK_ORDER key count so skipped items always sort after every known risk level.
 const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;
 
-export interface ReviewIndexRenderInput {
+interface ReviewIndexRenderInput {
   repoRoot: string;
   baseRef: string;
   headRef: string;

@@ -79,7 +79,6 @@ export interface ReviewRunSummary {
 
 export interface ReviewPerFileStepsFactoryInput {
   runContext: RunContext;
-  renderReviewNote: ReviewNoteRenderer;
   promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
@@ -257,7 +256,6 @@ export class ReviewOrchestrator {
     // Per-file steps receive progressively built review state via <review_state> so each step builds on prior output.
     const steps = this.#perFileStepsFactory({
       runContext,
-      renderReviewNote: this.#renderReviewNote,
       promptSerializer: this.#promptSerializer
     });
     const outcomeSlots: (PlannedOutcomeSlot | undefined)[] = new Array(plannedNoteFiles.length);

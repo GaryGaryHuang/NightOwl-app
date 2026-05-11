@@ -104,7 +104,7 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   `{"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "insufficient_information", "rationale": "specific missing contract blocks validation"}], "criticalMissingInformation": [{"description": "Need null contract.", "whyItMatters": "Expected behavior is unclear."}]}`
 ].join("\n");
 
-export interface CandidateFindingsStepOptions {
+interface CandidateFindingsStepOptions {
   promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
@@ -145,7 +145,6 @@ export class CandidateFindingsStep implements StepDefinition {
         timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
       resolve: createCandidateFindingsV3Resolve({
-        stepId: this.stepId,
         filePath: context.filePath,
         diffContent: context.diffContent,
         reviewBasis

@@ -161,7 +161,6 @@ test("StepRunner records structured validation reports without committing partia
             timeoutMs: REVIEW_TURN_TIMEOUT_MS
           },
           resolve: createCandidateFindingsV3Resolve({
-            stepId: "candidate-findings",
             filePath: stepContext.filePath,
             diffContent: stepContext.diffContent,
             reviewBasis

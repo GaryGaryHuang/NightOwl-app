@@ -16,7 +16,7 @@ const REVIEW_SUMMARY_SYSTEM_ADDITION = [
     "- Language: 正體中文. Preserve code identifiers, file paths, function/class/property names, commands, error messages, API names, enum values, and literal values exactly as they appear in the review state."
 ].join("\n");
 
-export interface ReviewSummaryStepOptions {
+interface ReviewSummaryStepOptions {
     promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 

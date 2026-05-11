@@ -303,9 +303,6 @@ test("default per-file pipeline starts with ReviewBasis and omits retired prose 
       changesetOverview: createChangeMap(),
       userContext: []
     }),
-    renderReviewNote() {
-      return "";
-    },
     promptSerializer: serializer
   });
 

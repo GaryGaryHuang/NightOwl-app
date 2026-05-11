@@ -8,7 +8,7 @@ import {
   type ReviewChangesetEntry
 } from "../../providers/review-source-provider.ts";
 
-export const CHANGESET_OVERVIEW_TIMEOUT_MS = REVIEW_TURN_TIMEOUT_MS;
+const CHANGESET_OVERVIEW_TIMEOUT_MS = REVIEW_TURN_TIMEOUT_MS;
 
 export const CHANGESET_OVERVIEW_REVIEW_PROFILE = {
   knowledgeMode: "built-in-context7",
@@ -82,7 +82,7 @@ const CHANGESET_OVERVIEW_INSTRUCTION = [
   `{"reviewObjective": {"summary": "Review the changeset with evidence-backed per-file basis", "requestedFocus": ["review-flow"], "expectedBehaviorSummary": ["CLI review flow emits structured run context"]}, "userBehavior": [{"statement": "CLI review flow emits structured run context", "confidence": "inferred"}], "missingInformation": [], "overviewMarkdown": "## Changeset Overview\\n- Scope: feature\\n- Cross-file boundaries: none\\n- Behavior changes: adds a review CLI entry point\\n- Test coverage observations: no corresponding test changes observed", "behaviorChanges": [{"description": "adds a review CLI entry parameter", "files": ["src/app.ts"]}], "unresolvedUnknowns": []}`
 ].join("\n");
 
-export interface ChangesetOverviewPromptInput {
+interface ChangesetOverviewPromptInput {
   changesetEntries: ReviewChangesetEntry[];
   userContext: string[];
 }

@@ -76,7 +76,7 @@ const REVIEW_BASIS_INSTRUCTION = [
   `{"roleInChangeset": "Owns the changed review flow behavior.", "changedBehavior": [], "facts": [], "inferences": [], "dependencyMap": {"upstreamCallers": [], "downstreamConsumers": [], "externalContracts": [], "sharedStateOrSideEffects": []}, "flowMap": {"entryPoints": [], "stateTransitions": [], "asyncBoundaries": [], "errorPaths": []}, "testCoverage": {"changedTests": [], "observedCoverageSignals": [], "coverageGaps": []}, "hypothesisLedger": [], "missingInformation": [], "evidenceRefs": []}`
 ].join("\n");
 
-export interface ReviewBasisStepOptions {
+interface ReviewBasisStepOptions {
   runContext: RunContext;
   validator?: Pick<ReviewBasisValidator, "validate">;
 }

@@ -2,18 +2,10 @@ import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewBasisV1 } from "../review-basis.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { RiskLevel } from "../risk-level.ts";
-import {
-  CANDIDATE_FINDINGS_STEP_ID,
-  SEMANTIC_VALIDATION_STEP_ID
-} from "../review-step-ids.ts";
-import type {
-  CandidateFindingsV3,
-  ValidationReportV1
-} from "../semantic-review.ts";
+import type { CandidateFindingsV3 } from "../semantic-review.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
 
 export function createCandidateFindingsV3Resolve(input: {
-  stepId?: string;
   filePath: string;
   diffContent?: string;
   reviewBasis: ReviewBasisV1;
@@ -34,7 +26,6 @@ export function createCandidateFindingsV3Resolve(input: {
 }
 
 export function createValidationReportV1Resolve(input: {
-  stepId?: string;
   filePath: string;
   diffContent?: string;
   reviewBasis?: ReviewBasisV1;

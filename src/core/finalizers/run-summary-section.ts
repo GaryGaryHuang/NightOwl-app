@@ -9,7 +9,7 @@ import type { RunCoverageBuckets } from "../run-coverage.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 import type { SemanticReviewStats } from "../run-outcomes.ts";
 
-export interface RunSummarySectionRenderInput {
+interface RunSummarySectionRenderInput {
   resolvedOutcomes: ResolvedFileOutcome[];
   coverage?: RunCoverageBuckets;
 }
@@ -120,8 +120,6 @@ export function renderRunSummarySection(input: RunSummarySectionRenderInput): st
     ...skippedLines
   ].join("\n");
 }
-
-export type RunSummarySectionRenderer = typeof renderRunSummarySection;
 
 function buildSemanticSummary(outcomes: ResolvedFileOutcome[]): {
   passedCleanly: number;
