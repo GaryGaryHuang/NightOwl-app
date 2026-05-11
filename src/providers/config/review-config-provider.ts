@@ -1,6 +1,6 @@
 import type { ReviewMcpServers } from "../../core/review-mcp-server-config.ts";
 
-export type ReviewConfigProviderOperation = "loadReviewConfig";
+type ReviewConfigProviderOperation = "loadReviewConfig";
 
 export class ReviewConfigProviderError extends Error {
   readonly operation: ReviewConfigProviderOperation;

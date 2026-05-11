@@ -30,7 +30,7 @@ export async function resolveOutputWriteFailureAssessment(
   }
 }
 
-export function createOutputWriteFailureEvidence(
+function createOutputWriteFailureEvidence(
   error: unknown
 ): OutputWriteFailureEvidence {
   const boundaryError =

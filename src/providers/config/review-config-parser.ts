@@ -37,7 +37,7 @@ export function buildDefaultReviewConfig(): ReviewConfig {
   };
 }
 
-export function parseReviewConfigObject(
+function parseReviewConfigObject(
   configText: string
 ): Record<string, unknown> {
   let parsed: unknown;
@@ -55,7 +55,7 @@ export function parseReviewConfigObject(
   return parsed;
 }
 
-export function resolveTopLevelReviewConfig(
+function resolveTopLevelReviewConfig(
   configObject: Record<string, unknown>
 ): ReviewConfig {
   for (const key of Object.keys(configObject)) {
