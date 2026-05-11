@@ -10,8 +10,8 @@ import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-
  * End-to-end dry-run integration tests.
  *
  * These tests run the full review pipeline with dryRun: true on a real
- * git repo fixture, using the production DryRunReviewSessionFactory and
- * DryRunReviewSessionFactory. No Copilot SDK or AI API is invoked.
+ * git repo fixture, using the production dry-run session factory path.
+ * No Copilot SDK or AI API is invoked.
  *
  * Verifies only happy-path dry-run behavior:
  *  - clientManager.start() / stop() are never called
