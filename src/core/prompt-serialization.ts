@@ -5,7 +5,7 @@
  * tags are not a parser boundary. JSON payloads must still be encoded and
  * delimiter-like characters escaped by the harness before they are injected.
  */
-export function stringifyForXmlishBlock(value: unknown): string {
+function stringifyForXmlishBlock(value: unknown): string {
   return JSON.stringify(value, null, 2).replace(/[<>&]/gu, (char) => {
     switch (char) {
       case "<":

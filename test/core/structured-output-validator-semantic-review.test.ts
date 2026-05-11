@@ -6,10 +6,22 @@ import {
   StructuredOutputValidator,
   StructuredValidationReportError
 } from "../../src/core/structured-output-validator.ts";
-import {
-  DEFAULT_DIFF,
-  lineRangeTraceability
-} from "../helpers/structured-output-validator-fixture.ts";
+
+const DEFAULT_DIFF = [
+  "@@ -20,2 +20,4 @@",
+  " context-before",
+  "+added-21",
+  "+added-22",
+  " context-after"
+].join("\n");
+
+function lineRangeTraceability(lineStart: unknown, lineEnd: unknown) {
+  return {
+    kind: "line-range",
+    lineStart,
+    lineEnd
+  };
+}
 
 interface SemanticReportEntry {
   readonly findingId?: string;

@@ -191,7 +191,7 @@ The project exclusively uses Node.js built-in test APIs. Do not introduce extern
 
 - Test files end in `.test.ts` and live under `test/`
 - Directory structure mirrors `src/`: for example, `test/core/orchestrator-bounded-concurrency.test.ts` tests `src/core/orchestrator.ts`
-- When a single source module needs multiple focused test suites, they share a prefix: `orchestrator-abort.test.ts`, `orchestrator-bounded-concurrency.test.ts`, `orchestrator-output-failures.test.ts`, etc.
+- When a single source module needs multiple focused test suites, they share a prefix: `orchestrator-abort.test.ts`, `orchestrator-bounded-concurrency.test.ts`, `orchestrator-run-summary.test.ts`, etc.
 - `test/scripts/` contains tests for the build and manifest tooling itself
 - Shared test utilities live in `test/helpers/` — these are fixture modules, not test suites
 

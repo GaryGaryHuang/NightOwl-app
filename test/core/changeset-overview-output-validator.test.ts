@@ -7,7 +7,7 @@ import {
 } from "../../src/core/changeset-overview-output-validator.ts";
 import {
   type ChangeMapReadinessV2,
-  extractChangedPathsFromChangesetEntries
+  normalizeChangesetEntriesForChangeMap
 } from "../../src/core/change-map.ts";
 
 const expectedUserContext = ["Root Cause: context loss before Candidate Findings"];
@@ -326,7 +326,7 @@ test("ChangesetOverviewOutputValidator rejects an empty object with no usable re
   );
 });
 
-test("extractChangedPathsFromChangesetEntries handles regular, rename, copy, and empty-path-free entries", () => {
+test("normalizeChangesetEntriesForChangeMap handles regular, rename, copy, and empty-path-free entries", () => {
   const entries = [
     { status: "M" as const, path: "src/foo.ts" },
     { status: "A" as const, path: "src/bar.ts" },
@@ -335,8 +335,10 @@ test("extractChangedPathsFromChangesetEntries handles regular, rename, copy, and
     { status: "C" as const, similarityScore: 75, previousPath: "src/a.ts", path: "src/b.ts" },
     { status: "M" as const, path: "src/qux.ts" }
   ];
-  const result = extractChangedPathsFromChangesetEntries(entries);
-  assert.deepEqual([...result], [
+
+  const result = normalizeChangesetEntriesForChangeMap(entries);
+
+  assert.deepEqual(result.map((entry) => entry.path), [
     "src/foo.ts",
     "src/bar.ts",
     "src/baz.ts",
@@ -344,12 +346,22 @@ test("extractChangedPathsFromChangesetEntries handles regular, rename, copy, and
     "src/b.ts",
     "src/qux.ts"
   ]);
+  assert.deepEqual(result.map((entry) => entry.status), [
+    "M",
+    "A",
+    "D",
+    "R",
+    "A",
+    "M"
+  ]);
+  assert.equal(result[4]?.copiedAsAdded, true);
+  assert.equal(result[2]?.reviewableNonDeleted, false);
 });
 
-test("extractChangedPathsFromChangesetEntries preserves duplicates", () => {
-  const result = extractChangedPathsFromChangesetEntries([
+test("normalizeChangesetEntriesForChangeMap preserves duplicates", () => {
+  const result = normalizeChangesetEntriesForChangeMap([
     { status: "M", path: "src/dup.ts" },
     { status: "M", path: "src/dup.ts" }
   ]);
-  assert.deepEqual([...result], ["src/dup.ts", "src/dup.ts"]);
+  assert.deepEqual(result.map((entry) => entry.path), ["src/dup.ts", "src/dup.ts"]);
 });

@@ -7,16 +7,6 @@ import {
   type Finding
 } from "../../../src/core/file-review-context.ts";
 import { renderReviewNote } from "../../../src/core/finalizers/review-note-finalizer.ts";
-import {
-  assertBootstrapShape,
-  assertFindingsStats,
-  assertFindingsTitlesInOrder,
-  assertTextContainsInOrder,
-  assertTextExcludesAll,
-  assertTraceabilityForms,
-  assertWarningBlock,
-  assertWarningBlockAtEnd
-} from "../../helpers/finalizer-contract-fixture.ts";
 
 const FILE_PATH = "src/app.ts";
 
@@ -62,20 +52,143 @@ function makeNiceFinding(title: string): Finding {
 
 const finalizer = renderReviewNote;
 
+type TextPattern = string | RegExp;
+
+function assertTextContainsAll(
+  text: string,
+  patterns: TextPattern[]
+): void {
+  for (const pattern of patterns) {
+    if (typeof pattern === "string") {
+      assert.match(text, new RegExp(escapeRegExp(pattern), "u"));
+      continue;
+    }
+
+    assert.match(text, pattern);
+  }
+}
+
+function assertTextExcludesAll(
+  text: string,
+  patterns: TextPattern[]
+): void {
+  for (const pattern of patterns) {
+    if (typeof pattern === "string") {
+      assert.doesNotMatch(text, new RegExp(escapeRegExp(pattern), "u"));
+      continue;
+    }
+
+    assert.doesNotMatch(text, pattern);
+  }
+}
+
+function assertTextContainsInOrder(
+  text: string,
+  patterns: TextPattern[]
+): void {
+  let searchStart = 0;
+
+  for (const pattern of patterns) {
+    if (typeof pattern === "string") {
+      const index = text.indexOf(pattern, searchStart);
+
+      assert.ok(index >= 0, `expected pattern after index ${searchStart}: ${pattern}`);
+      searchStart = index + pattern.length;
+      continue;
+    }
+
+    const flags = pattern.flags.replace(/g|y/gu, "");
+    const regex = new RegExp(pattern.source, `${flags}g`);
+    const remainingText = text.slice(searchStart);
+    const match = regex.exec(remainingText);
+
+    assert.ok(match, `expected pattern after index ${searchStart}: ${String(pattern)}`);
+    searchStart += match.index + match[0].length;
+  }
+}
+
+function assertBootstrapShape(text: string, filePath: string): void {
+  assertTextContainsInOrder(text, [
+    `# ${filePath}`,
+    `- Source file: \`${filePath}\``
+  ]);
+}
+
+function assertFindingsStats(
+  text: string,
+  counts: { must: number; nice: number }
+): void {
+  assertTextContainsAll(text, [
+    `${counts.must} must-fix issue(s), ${counts.nice} nice-to-have suggestion(s).`
+  ]);
+}
+
+function assertFindingsTitlesInOrder(
+  text: string,
+  findings: Array<{ type: "must" | "nice"; title: string }>
+): void {
+  assertTextContainsInOrder(
+    text,
+    findings.map((finding) => {
+      const severity = finding.type === "must" ? "high" : "low";
+      return `- [${severity}] ${finding.title}`;
+    })
+  );
+}
+
+function assertTraceabilityForms(
+  text: string,
+  values: string[]
+): void {
+  assertTextContainsAll(
+    text,
+    values.map((value) => `- Traceability: ${value}`)
+  );
+}
+
+function assertWarningBlock(
+  text: string,
+  input: { stepId: string; reason: string }
+): void {
+  assertTextContainsAll(text, [
+    "> [!WARNING] Review Interrupted",
+    `> 本檔案在執行 ${input.stepId} 時失敗（原因：${input.reason}），後續審查已略過。`
+  ]);
+}
+
+function assertWarningBlockAtEnd(
+  text: string,
+  input: { stepId: string; reason: string }
+): void {
+  const warningBlock = [
+    "> [!WARNING] Review Interrupted",
+    `> 本檔案在執行 ${input.stepId} 時失敗（原因：${input.reason}），後續審查已略過。`
+  ].join("\n");
+
+  assert.ok(
+    text.endsWith(warningBlock),
+    "expected warning block to be the final rendered content"
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
 // 5.2: sections render in insertion order
 test("Finalizer renders sections in insertion order", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nOverview content");
-  context.setSection("strategy", "## Strategy\nStrategy content");
+  context.setSection("review-basis", "## Review Basis\nReview basis content");
+  context.setSection("candidate-findings", "## Candidate Findings\nCandidate findings content");
   context.setSection("custom-analysis", "## Custom Analysis\nCustom content");
   context.setSection("summary", "## Summary\nSummary content");
 
   const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
-    "## Overview",
-    "## Strategy",
+    "## Review Basis",
+    "## Candidate Findings",
     "## Custom Analysis",
     "## Summary"
   ]);
@@ -85,7 +198,7 @@ test("Finalizer renders sections in insertion order", () => {
 test("Finalizer renders custom section before findings when written before setFindings", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nOverview content");
+  context.setSection("review-basis", "## Review Basis\nReview basis content");
   context.setSection("custom-pre", "## Custom Pre\nBefore findings");
   context.setFindings([]);
   context.setSection("summary", "## Summary\nSummary content");
@@ -93,7 +206,7 @@ test("Finalizer renders custom section before findings when written before setFi
   const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
-    "## Overview",
+    "## Review Basis",
     "## Custom Pre",
     "## Findings",
     "## Summary"
@@ -103,7 +216,7 @@ test("Finalizer renders custom section before findings when written before setFi
 test("Finalizer renders custom section after findings when written after setFindings", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nOverview content");
+  context.setSection("review-basis", "## Review Basis\nReview basis content");
   context.setFindings([]);
   context.setSection("custom-post", "## Custom Post\nAfter findings");
   context.setSection("summary", "## Summary\nSummary content");
@@ -111,7 +224,7 @@ test("Finalizer renders custom section after findings when written after setFind
   const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
-    "## Overview",
+    "## Review Basis",
     "## Findings",
     "## Custom Post",
     "## Summary"
@@ -161,13 +274,13 @@ test("Finalizer splits sections at findingsInsertionIndex", () => {
 test("Finalizer renders no Findings block when setFindings never called", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nOverview content");
+  context.setSection("review-basis", "## Review Basis\nReview basis content");
   context.setSection("custom", "## Custom\nCustom content");
 
   const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
-    "## Overview",
+    "## Review Basis",
     "## Custom"
   ]);
   assertTextExcludesAll(result, ["## Findings"]);
@@ -202,12 +315,12 @@ test("Finalizer renders bootstrap with interruption warning", () => {
 test("Finalizer renders partial state with some sections", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nPartial content");
+  context.setSection("review-basis", "## Review Basis\nPartial content");
 
   const result = finalizer(context);
 
   assertBootstrapShape(result, FILE_PATH);
-  assertTextContainsInOrder(result, ["## Overview", "Partial content"]);
+  assertTextContainsInOrder(result, ["## Review Basis", "Partial content"]);
   assertTextExcludesAll(result, ["## Findings"]);
 });
 
@@ -229,7 +342,7 @@ test("Finalizer filters out whitespace-only and empty sections", () => {
 test("Finalizer renders interruption warning after all content", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nOverview content");
+  context.setSection("review-basis", "## Review Basis\nReview basis content");
   context.setFindings([makeMustFinding("issue-1")]);
   context.setSection("summary", "## Summary\nSummary content");
   context.markInterrupted("review-summary", "context-length");
@@ -237,7 +350,7 @@ test("Finalizer renders interruption warning after all content", () => {
   const result = finalizer(context);
 
   assertTextContainsInOrder(result, [
-    "## Overview",
+    "## Review Basis",
     "## Findings",
     "## Summary",
     "> [!WARNING] Review Interrupted"
@@ -249,7 +362,7 @@ test("Finalizer renders interruption warning after all content", () => {
 test("Finalizer renders empty findings as - 無", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nContent");
+  context.setSection("review-basis", "## Review Basis\nContent");
   context.setFindings([]);
 
   const result = finalizer(context);
@@ -260,7 +373,7 @@ test("Finalizer renders empty findings as - 無", () => {
 test("Finalizer renders findings stats and must before nice", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nContent");
+  context.setSection("review-basis", "## Review Basis\nContent");
   context.setFindings([
     makeNiceFinding("nice-suggestion"),
     makeMustFinding("must-fix-1"),
@@ -280,7 +393,7 @@ test("Finalizer renders findings stats and must before nice", () => {
 test("Finalizer renders missing-information details after Findings", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nContent");
+  context.setSection("review-basis", "## Review Basis\nContent");
   context.setFindings([]);
   context.setMissingInformationItems([
     {
@@ -305,7 +418,7 @@ test("Finalizer renders missing-information details after Findings", () => {
 test("Finalizer excludes internal fields from rendered findings", () => {
   const context = createContext();
 
-  context.setSection("overview", "## Overview\nContent");
+  context.setSection("review-basis", "## Review Basis\nContent");
   context.setFindings([makeMustFinding("issue-1")]);
 
   const result = finalizer(context);
@@ -350,7 +463,7 @@ test("Finalizer renders traceability formats correctly", () => {
     }
   ];
 
-  context.setSection("overview", "## Overview\nContent");
+  context.setSection("review-basis", "## Review Basis\nContent");
   context.setFindings(findings);
 
   const result = finalizer(context);

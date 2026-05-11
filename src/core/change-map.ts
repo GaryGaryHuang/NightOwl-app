@@ -80,21 +80,6 @@ export function normalizeChangesetEntriesForChangeMap(
     });
 }
 
-/**
- * Extract the set of head-side changed paths from provider-normalized changeset
- * entries. Rename / copy entries already expose the head-side path through
- * `path`, so downstream coverage checks compare against the same post-change
- * path that per-file review uses.
- *
- * Order is preserved; duplicates are NOT removed, because validator coverage
- * checks surface unexpected duplicates as `COVERAGE` failures.
- */
-export function extractChangedPathsFromChangesetEntries(
-  entries: readonly ReviewChangesetEntry[]
-): readonly string[] {
-  return normalizeChangesetEntriesForChangeMap(entries).map((entry) => entry.path);
-}
-
 function normalizeChangeMapStatus(
   status: ReviewChangesetEntry["status"]
 ): ChangeMapStatus {

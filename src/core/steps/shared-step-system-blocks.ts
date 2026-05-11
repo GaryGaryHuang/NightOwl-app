@@ -40,20 +40,20 @@ const FINDING_ANCHOR_SYSTEM_BLOCK = createPromptBlock("finding-anchor-guidance",
   "- For dependency-path issues outside the changed lines, keep the reviewed-file anchor closest to the changed trigger and include `dependencyPathException` for the external path."
 ]);
 
-export const JSON_STEP_SYSTEM_BLOCKS = [
+const JSON_STEP_SYSTEM_BLOCKS = [
   ...COMMON_SYSTEM_BLOCKS,
   JSON_STRUCTURED_OUTPUT_BLOCK,
   JSON_COMPLETION_BLOCK
 ] as const satisfies readonly PromptBlock[];
 
-export const JSON_FINDING_STEP_SYSTEM_BLOCKS = [
+const JSON_FINDING_STEP_SYSTEM_BLOCKS = [
   ...COMMON_SYSTEM_BLOCKS,
   JSON_STRUCTURED_OUTPUT_BLOCK,
   JSON_COMPLETION_BLOCK,
   FINDING_ANCHOR_SYSTEM_BLOCK
 ] as const satisfies readonly PromptBlock[];
 
-export const MARKDOWN_STEP_SYSTEM_BLOCKS = [
+const MARKDOWN_STEP_SYSTEM_BLOCKS = [
   ...COMMON_SYSTEM_BLOCKS,
   MARKDOWN_RESPONSE_FORMAT_BLOCK
 ] as const satisfies readonly PromptBlock[];
