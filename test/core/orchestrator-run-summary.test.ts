@@ -42,10 +42,9 @@ type OutputCall = "initializeRun"
   | "publishSkippedFile"
   | `publishArtifact:${ReviewArtifactKind}`;
 
-type RunLevelArtifact = "summary" | "index";
+type RunLevelArtifact = "index";
 
 const RUN_LEVEL_FINALIZER_CALLS: OutputCall[] = [
-  "publishArtifact:summary",
   "publishArtifact:index"
 ];
 
@@ -87,12 +86,11 @@ test("ReviewOrchestrator feeds finalizers in-memory outcomes rather than reading
       assert.equal(result.successfulFileCount, harness.reviewableFiles.length - 1);
       assert.equal(result.skippedFileCount, 1);
 
-      const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
       const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
 
-      assert.doesNotMatch(summaryContent, /CORRUPTED/u);
       assert.doesNotMatch(indexContent, /CORRUPTED/u);
       assert.doesNotMatch(indexContent, /EXTRA DISK FILE/u);
+      assert.match(indexContent, /## Run Summary/u);
     }
   );
 });
@@ -235,17 +233,10 @@ test("ReviewOrchestrator records finalizerFailure and stops dependent finalizers
     skippedCalls: OutputCall[];
   }> = [
     {
-      artifact: "summary",
-      message: /summary write failed/u,
-      failure: { summary: "summary write failed" },
-      expectedCalls: ["publishArtifact:summary"],
-      skippedCalls: ["publishArtifact:index"]
-    },
-    {
       artifact: "index",
       message: /index write failed/u,
       failure: { index: "index write failed" },
-      expectedCalls: ["publishArtifact:summary", "publishArtifact:index"],
+      expectedCalls: ["publishArtifact:index"],
       skippedCalls: []
     }
   ];
@@ -289,9 +280,6 @@ test("ReviewOrchestrator publishes artifacts in deterministic order after per-fi
 
       assert.equal(outputSink.calls.at(-1), "publishArtifact:index");
       assert.equal(outputSink.calls.includes("publishSkippedFile"), true);
-      assertCallAfter(outputSink.calls, "publishArtifact:summary", "publishSkippedFile");
-      assertCallAfter(outputSink.calls, "publishArtifact:summary", "publishFileReview");
-      assertCallAfter(outputSink.calls, "publishArtifact:index", "publishArtifact:summary");
       assertCallAfter(outputSink.calls, "publishArtifact:index", "publishSkippedFile");
       assertCallAfter(outputSink.calls, "publishArtifact:index", "publishFileReview");
     }
@@ -485,7 +473,6 @@ class RecordingOutputSink {
   #resolveArtifactPath(kind: ReviewArtifactKind): string {
     const pathMap: Record<ReviewArtifactKind, string> = {
       "changeset-overview": this.outputTarget.changesetOverviewPath,
-      summary: this.outputTarget.summaryPath,
       index: this.outputTarget.indexPath
     };
 
@@ -557,7 +544,6 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
   #resolveOverridePath(kind: ReviewArtifactKind): string {
     const pathMap: Record<ReviewArtifactKind, string> = {
       "changeset-overview": this.outputTarget.changesetOverviewPath,
-      summary: this.outputTarget.summaryPath,
       index: this.outputTarget.indexPath
     };
 
@@ -569,10 +555,7 @@ function resolveRunLevelFailure(
   failures: Partial<Record<RunLevelArtifact, string>>,
   kind: ReviewArtifactKind
 ): string | undefined {
-  if (
-    kind === "summary" ||
-    kind === "index"
-  ) {
+  if (kind === "index") {
     return failures[kind];
   }
 
@@ -585,7 +568,6 @@ function writeArtifact(filePath: string, content: string): void {
 }
 
 function assertOutputArtifactsExist(outputTarget: OutputTarget): void {
-  assert.equal(existsSync(outputTarget.summaryPath), true);
   assert.equal(existsSync(outputTarget.indexPath), true);
 }
 
@@ -602,7 +584,6 @@ function assertOutputTargetPaths(outputTarget: OutputTarget, repoRoot: string): 
     changesetOverviewPath: path.join(basePath, "changeset-overview.md"),
     filesPath: path.join(basePath, "files"),
     skippedPath: path.join(basePath, "skipped.md"),
-    summaryPath: path.join(basePath, "summary.md"),
     indexPath: path.join(basePath, "index.md"),
     toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   });

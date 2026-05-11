@@ -5,7 +5,9 @@ import type {
   PlannedNoteFile
 } from "../review-path-resolver.ts";
 import { deriveFileRiskLevel, RISK_ORDER } from "../risk-level.ts";
+import type { RunCoverageBuckets } from "../run-coverage.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
+import { renderRunSummarySection } from "./run-summary-section.ts";
 
 // Derives from RISK_ORDER key count so skipped items always sort after every known risk level.
 const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;
@@ -17,6 +19,7 @@ export interface ReviewIndexRenderInput {
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
   resolvedOutcomes: ResolvedFileOutcome[];
+  coverage?: RunCoverageBuckets;
 }
 
 /**
@@ -78,8 +81,12 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
       "",
       "## Run Artifacts",
       `- [changeset-overview.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.changesetOverviewPath)})`,
-      `- [summary.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.summaryPath)})`,
       `- [skipped.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.skippedPath)})`,
+      "",
+      renderRunSummarySection({
+        resolvedOutcomes: input.resolvedOutcomes,
+        coverage: input.coverage
+      }),
       "",
       "## File Notes",
       ...fileNoteLines

@@ -15,7 +15,6 @@ function createInput(): OutputWriteFailureAssessmentRequest {
       changesetOverviewPath: "/tmp/review/changeset-overview.md",
       filesPath: "/tmp/review/files",
       skippedPath: "/tmp/review/skipped.md",
-      summaryPath: "/tmp/review/summary.md",
       indexPath: "/tmp/review/index.md",
       toolAuditPath: "/tmp/review/tool-audit.jsonl"
     },

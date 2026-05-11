@@ -11,7 +11,7 @@
     "test/core/file-review-context.test.ts",
     "test/core/finalizers/review-index-finalizer.test.ts",
     "test/core/finalizers/review-note-finalizer.test.ts",
-    "test/core/finalizers/run-summary-finalizer.test.ts",
+    "test/core/finalizers/run-summary-section.test.ts",
     "test/core/finding-anchor-context.test.ts",
     "test/core/judge.test.ts",
     "test/core/legacy-per-file-steps-removed.test.ts",

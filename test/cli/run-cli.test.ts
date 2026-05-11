@@ -362,7 +362,7 @@ test("runCli does not print partial completed-run counts or artifact lines on fa
     {
       app: {
         async run() {
-          throw new Error("summary write failed");
+          throw new Error("index write failed");
         }
       }
     }
@@ -370,7 +370,7 @@ test("runCli does not print partial completed-run counts or artifact lines on fa
 
   assert.equal(exitCode, 2);
   assert.deepEqual(stdout, [renderExpectedStartup()]);
-  assert.match(stderr.join("\n"), /summary write failed/u);
+  assert.match(stderr.join("\n"), /index write failed/u);
   assert.doesNotMatch(stderr.join("\n"), /Review run completed\.|Output:/u);
   assert.doesNotMatch(stderr.join("\n"), /Successful files:/u);
   assert.doesNotMatch(stderr.join("\n"), /Skipped files:/u);
@@ -383,7 +383,6 @@ test("runCli keeps fatal runs on the error path even when artifacts already exis
     const basePath = path.join(tempDir, ".nightowl", "review", "feature-branch_03131430");
     mkdirSync(path.join(basePath, "files"), { recursive: true });
     writeFileSync(path.join(basePath, "files", "src__app.ts.md"), "# note\n");
-    writeFileSync(path.join(basePath, "summary.md"), "# Review Summary\n");
     writeFileSync(path.join(basePath, "index.md"), "# Review Index\n");
     writeFileSync(path.join(basePath, "skipped.md"), "");
 

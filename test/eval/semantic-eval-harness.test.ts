@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { renderRunSummary } from "../../src/core/finalizers/run-summary-finalizer.ts";
+import { renderRunSummarySection } from "../../src/core/finalizers/run-summary-section.ts";
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
 import { StructuredOutputValidator, StructuredValidationReportError } from "../../src/core/structured-output-validator.ts";
 import {
@@ -71,10 +71,7 @@ function runSemanticCase(
 ): SemanticCorpusCase["expected"] {
   if (corpusCase.scenario === "coverage-ambiguity") {
     const plannedNotes = createPlannedNotesFromPaths(["src/a.ts", "src/b.ts"]);
-    const rendered = renderRunSummary({
-      repoRoot: "/workspace/repo",
-      baseRef: "main",
-      headRef: "feature",
+    const rendered = renderRunSummarySection({
       resolvedOutcomes: createResolvedOutcomes(
         plannedNotes,
         [

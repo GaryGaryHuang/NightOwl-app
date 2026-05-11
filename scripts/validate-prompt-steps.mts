@@ -86,7 +86,7 @@ interface ValidationSummary {
   outputBaseDir: string;
   baseline: {
     dir: string;
-    summaryAvailable: boolean;
+    indexAvailable: boolean;
     changesetOverviewAvailable: boolean;
   };
   selectedBasisFiles: string[];
@@ -268,11 +268,17 @@ async function main(input: ScriptConfig): Promise<void> {
       semanticPipeline: semanticRuns,
       retryEvents
     };
-    const summaryPath = path.join(outputBaseDir, "prompt-step-validation-summary.json");
-    await writeFile(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
+    const validationSummaryPath = path.join(
+      outputBaseDir,
+      "prompt-step-validation-summary.json"
+    );
+    await writeFile(
+      validationSummaryPath,
+      `${JSON.stringify(summary, null, 2)}\n`
+    );
 
     console.log(JSON.stringify(summary, null, 2));
-    console.error(`[validate] summary written to ${summaryPath}`);
+    console.error(`[validate] summary written to ${validationSummaryPath}`);
   } finally {
     await clientManager.stop().catch(async () => {
       await clientManager.forceStop();
@@ -389,13 +395,13 @@ function summarizeSemantic(
 async function inspectBaseline(
   baselineDir: string
 ): Promise<ValidationSummary["baseline"]> {
-  const [summaryAvailable, changesetOverviewAvailable] = await Promise.all([
-    canRead(path.join(baselineDir, "summary.md")),
+  const [indexAvailable, changesetOverviewAvailable] = await Promise.all([
+    canRead(path.join(baselineDir, "index.md")),
     canRead(path.join(baselineDir, "changeset-overview.md"))
   ]);
   return {
     dir: baselineDir,
-    summaryAvailable,
+    indexAvailable,
     changesetOverviewAvailable
   };
 }

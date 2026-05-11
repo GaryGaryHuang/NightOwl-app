@@ -5,7 +5,6 @@ export interface ReviewOutputTarget {
   changesetOverviewPath: string;
   filesPath: string;
   skippedPath: string;
-  summaryPath: string;
   indexPath: string;
   toolAuditPath: string;
 }
@@ -22,7 +21,6 @@ export interface ReviewOutputPlan {
 
 export type ReviewArtifactKind =
   | "changeset-overview"
-  | "summary"
   | "index";
 
 export type ReviewOutputBoundaryOperation =

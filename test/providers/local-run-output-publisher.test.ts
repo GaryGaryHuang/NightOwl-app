@@ -85,11 +85,9 @@ test("LocalRunOutputPublisher writes each run-level artifact to its configured o
     const publisher = createPublisher(fixture.outputPlan);
 
     await publisher.publishArtifact("changeset-overview", { content: "overview\n" });
-    await publisher.publishArtifact("summary", { content: "summary\n" });
     await publisher.publishArtifact("index", { content: "index\n" });
 
     assert.equal(fixture.readFile(fixture.outputTarget.changesetOverviewPath), "overview\n");
-    assert.equal(fixture.readFile(fixture.outputTarget.summaryPath), "summary\n");
     assert.equal(fixture.readFile(fixture.outputTarget.indexPath), "index\n");
   } finally {
     fixture.cleanup();

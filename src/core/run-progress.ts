@@ -43,7 +43,7 @@ export type RunProgressEvent =
     }
   | {
       type: "finalizer-failed";
-      artifact: "summary" | "index";
+      artifact: "index";
       message: string;
     }
   | {

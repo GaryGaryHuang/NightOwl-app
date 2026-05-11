@@ -77,7 +77,6 @@ describe("dry-run integration", () => {
     const { outputTarget } = result;
     assert.ok(existsSync(outputTarget.filesPath), "files/ directory must exist");
     assert.ok(existsSync(outputTarget.changesetOverviewPath), "changeset-overview.md must exist");
-    assert.ok(existsSync(outputTarget.summaryPath), "summary.md must exist");
     assert.ok(existsSync(outputTarget.indexPath), "index.md must exist");
     assert.ok(existsSync(outputTarget.toolAuditPath), "tool-audit.jsonl must exist");
     assert.ok(existsSync(outputTarget.skippedPath), "skipped.md must exist");

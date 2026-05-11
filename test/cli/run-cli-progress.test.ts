@@ -35,10 +35,10 @@ test("runCli finalizes a live TTY progress surface before terminal output", asyn
     {
       name: "fatal error",
       runAfterProgress() {
-        throw new Error("summary write failed");
+        throw new Error("index write failed");
       },
       expectedExitCode: 2,
-      expectedStderr: ["summary write failed"],
+      expectedStderr: ["index write failed"],
       expectsCompletedSummary: false
     },
     {

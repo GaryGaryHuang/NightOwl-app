@@ -15,7 +15,6 @@ import { FileReviewContext } from "./file-review-context.ts";
 import { DEFAULT_MAX_CONCURRENT_FILES } from "./max-concurrent-files.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
 import { renderReviewNote, type ReviewNoteRenderer } from "./finalizers/review-note-finalizer.ts";
-import { renderRunSummary, type RunSummaryRenderer } from "./finalizers/run-summary-finalizer.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
 import { renderReviewIndex, type ReviewIndexRenderer } from "./finalizers/review-index-finalizer.ts";
 import { resolveFileOutcomes, type ResolvedFileOutcome } from "./run-outcome-resolver.ts";
@@ -63,7 +62,7 @@ import type { ReviewSourceProvider } from "../providers/review-source-provider.t
 import { SessionTurnAbortedError } from "./session-turn-aborted-error.ts";
 
 export interface FinalizerFailure {
-  artifact: "summary" | "index";
+  artifact: "index";
   message: string;
 }
 
@@ -98,7 +97,6 @@ export interface ReviewOrchestratorOptions {
   reviewFileFilter: ReviewFileFilter;
   renderReviewNote?: ReviewNoteRenderer;
   renderReviewIndex?: ReviewIndexRenderer;
-  renderRunSummary?: RunSummaryRenderer;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor?: OutputWriteHealthAssessor;
@@ -120,7 +118,6 @@ export class ReviewOrchestrator {
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
   readonly #renderReviewNote: ReviewNoteRenderer;
-  readonly #renderRunSummary: RunSummaryRenderer;
   readonly #renderReviewIndex: ReviewIndexRenderer;
   readonly #maxConcurrentFiles: number;
   readonly #onProgressEvent?: RunProgressEventHandler;
@@ -152,7 +149,6 @@ export class ReviewOrchestrator {
     this.#workingDirectory = options.workingDirectory;
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
     this.#renderReviewNote = options.renderReviewNote ?? renderReviewNote;
-    this.#renderRunSummary = options.renderRunSummary ?? renderRunSummary;
     this.#renderReviewIndex = options.renderReviewIndex ?? renderReviewIndex;
     this.#maxConcurrentFiles =
       options.maxConcurrentFiles ?? DEFAULT_MAX_CONCURRENT_FILES;
@@ -399,21 +395,6 @@ export class ReviewOrchestrator {
       ).length
     });
 
-    const summaryPublished = await this.#tryPublishFinalizer("summary", failures, () =>
-      input.outputPublisher.publishArtifact("summary", {
-        content: this.#renderRunSummary({
-          repoRoot: input.repoRoot,
-          baseRef: input.request.baseRef,
-          headRef: input.request.headRef,
-          resolvedOutcomes: input.resolvedOutcomes,
-          coverage
-        })
-      })
-    );
-    if (!summaryPublished) {
-      return failures;
-    }
-
     const indexPublished = await this.#tryPublishFinalizer("index", failures, () =>
       input.outputPublisher.publishArtifact("index", {
         content: this.#renderReviewIndex({
@@ -422,7 +403,8 @@ export class ReviewOrchestrator {
           headRef: input.request.headRef,
           resolvedOutcomes: input.resolvedOutcomes,
           outputTarget: input.outputTarget,
-          plannedNotes: input.plannedNoteFiles
+          plannedNotes: input.plannedNoteFiles,
+          coverage
         })
       })
     );

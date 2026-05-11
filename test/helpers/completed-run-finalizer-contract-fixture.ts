@@ -131,7 +131,6 @@ export function createOutputTarget(
       overrides.changesetOverviewPath ?? `${basePath}/changeset-overview.md`,
     filesPath: overrides.filesPath ?? `${basePath}/files`,
     skippedPath: overrides.skippedPath ?? `${basePath}/skipped.md`,
-    summaryPath: overrides.summaryPath ?? `${basePath}/summary.md`,
     indexPath: overrides.indexPath ?? `${basePath}/index.md`,
     toolAuditPath: overrides.toolAuditPath ?? `${basePath}/tool-audit.jsonl`
   };
