@@ -365,7 +365,7 @@ function createAllSkippedRunner(
         throw new StepExecutionError({
           stepId: step.stepId,
           filePath: context.filePath,
-          cause: "judge rejected"
+          cause: "deterministic validation failed"
         });
       }
 

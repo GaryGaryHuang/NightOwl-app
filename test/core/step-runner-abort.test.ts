@@ -9,16 +9,15 @@ import {
 import {
   createSectionTestStep,
   createStructuredTestStep,
-  createStepRunnerContext,
-  DEFAULT_JUDGE_RESOLVE
+  createStepRunnerContext
 } from "../helpers/step-runner-contract-fixture.ts";
 
-test("StepRunner does not consume retry budget or start judge when a section-step review turn is aborted", async () => {
+test("StepRunner does not consume retry budget or run resolve when a section-step review turn is aborted", async () => {
   const controller = new AbortController();
   const context = createStepRunnerContext();
   let reviewAttempts = 0;
   let abortCalls = 0;
-  let judgeCalls = 0;
+  let resolveCalls = 0;
   let retryCallCount = 0;
   let resolveSend:
     | ((value: { data?: { content?: string } } | undefined) => void)
@@ -43,12 +42,6 @@ test("StepRunner does not consume retry budget or start judge when a section-ste
         });
       }
     },
-    judgeService: {
-      async evaluate() {
-        judgeCalls += 1;
-        return { passed: true };
-      }
-    },
     onStepRetry() {
       retryCallCount += 1;
     }
@@ -58,7 +51,10 @@ test("StepRunner does not consume retry budget or start judge when a section-ste
     () =>
       runner.run({
         step: createSectionTestStep({
-          resolve: DEFAULT_JUDGE_RESOLVE
+          resolve: async () => {
+            resolveCalls += 1;
+            return () => {};
+          }
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -69,7 +65,7 @@ test("StepRunner does not consume retry budget or start judge when a section-ste
   );
   assert.equal(reviewAttempts, 1);
   assert.equal(abortCalls, 1);
-  assert.equal(judgeCalls, 0);
+  assert.equal(resolveCalls, 0);
   assert.equal(retryCallCount, 0);
 });
 

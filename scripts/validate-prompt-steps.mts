@@ -5,7 +5,6 @@ import path from "node:path";
 
 import { ChangesetOverviewRunner } from "../src/core/changeset-overview-runner.ts";
 import { FileReviewContext } from "../src/core/file-review-context.ts";
-import { JudgeService } from "../src/core/judge.ts";
 import type { RunContext } from "../src/core/run-context.ts";
 import { ReviewStatePromptSerializer } from "../src/core/review-state-prompt-serializer.ts";
 import { StepRunner } from "../src/core/step-runner.ts";
@@ -17,7 +16,6 @@ import { ReviewSummaryStep } from "../src/core/steps/review-summary-step.ts";
 import { LocalGitProvider } from "../src/providers/local-git-provider.ts";
 import { KnowledgeSvc } from "../src/services/knowledge.ts";
 import { CopilotClientManager } from "../src/services/copilot-client-manager.ts";
-import { JudgeSessionFactory } from "../src/services/judge-session-factory.ts";
 import { ReviewSessionFactory } from "../src/services/review-session-factory.ts";
 import { ToolPolicyGuard } from "../src/services/tool-policy/tool-policy-guard.ts";
 
@@ -134,12 +132,8 @@ async function main(input: ScriptConfig): Promise<void> {
         console.error(`[changeset-overview] ${event.message}`);
       }
     });
-    const judgeService = new JudgeService({
-      judgeSessionFactory: new JudgeSessionFactory({ clientManager })
-    });
     const stepRunner = new StepRunner({
       reviewSessionFactory,
-      judgeService,
       structuredOutputValidator: new StructuredOutputValidator(),
       onStepRetry(info) {
         const message = [

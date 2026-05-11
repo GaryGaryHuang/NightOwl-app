@@ -30,7 +30,7 @@ export function createStepRunnerContext(
 }
 
 // Minimal step-definition factory used by tests that focus on StepRunner
-// behavior (retry, error wrapping) rather than prompt content or judge/validator logic.
+// behavior (retry, error wrapping) rather than prompt content or validator logic.
 export function createSectionTestStep(input: {
   stepId?: string;
   sectionKey?: ReviewSectionKey;
@@ -66,27 +66,14 @@ export function createSectionTestStep(input: {
   };
 }
 
-// Helper resolve that calls judgeService — use in tests that verify judge invocation or retry via judge rejection.
-export function makeSectionResolveWithJudge(
-  stepId: string,
-  filePath: string,
+export function makeSectionResolveWithDeterministicCheck(
   sectionKey: ReviewSectionKey,
-  criteria: string
+  check: (response: string) => string | undefined
 ): StepExecutionPlan["resolve"] {
-  return async (response: string, services: StepResolveServices) => {
-    if (!services.judgeService) {
-      throw new Error("judge service is not configured");
-    }
-
-    const judgeResult = await services.judgeService.evaluate({
-      stepId,
-      filePath,
-      criteria,
-      sectionContent: response
-    });
-
-    if (!judgeResult.passed) {
-      throw new Error(judgeResult.cause ?? "judge rejected");
+  return async (response: string) => {
+    const failure = check(response);
+    if (failure !== undefined) {
+      throw new Error(failure);
     }
 
     return (context: FileReviewContext) => {
@@ -132,8 +119,10 @@ export function createStructuredTestStep(input: {
   };
 }
 
-export const DEFAULT_JUDGE_RESOLVE = makeSectionResolveWithJudge(
-  "review-summary", "src/app.ts", "summary", "must contain summary fields"
+export const DEFAULT_CHECKED_SECTION_RESOLVE = makeSectionResolveWithDeterministicCheck(
+  "summary",
+  (response) =>
+    /attempt 1/u.test(response) ? "deterministic completion failed" : undefined
 );
 
 export function runDefaultSectionStep(
@@ -148,13 +137,13 @@ export function runDefaultSectionStep(
   });
 }
 
-export function runDefaultJudgeSectionStep(
+export function runDefaultCheckedSectionStep(
   runner: StepRunner,
   context: ReturnType<typeof createStepRunnerContext>
 ) {
   return runner.run({
     step: createSectionTestStep({
-      resolve: DEFAULT_JUDGE_RESOLVE
+      resolve: DEFAULT_CHECKED_SECTION_RESOLVE
     }),
     context,
     outputBaseDir: "/workspace/output",

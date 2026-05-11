@@ -147,7 +147,7 @@ test("createReviewSummaryResolve rejects when risk level is unparseable", async 
   );
 });
 
-test("createReviewSummaryResolve accepts matching risk without a judge service", async () => {
+test("createReviewSummaryResolve accepts matching risk without external completion service", async () => {
   const context = createContext();
   const resolve = createReviewSummaryResolve({
     stepId: "review-summary",

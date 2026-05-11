@@ -11,17 +11,16 @@ import {
   createReviewSessionFactory,
   createSectionTestStep,
   createStepRunnerContext,
-  DEFAULT_JUDGE_RESOLVE,
-  runDefaultJudgeSectionStep,
+  DEFAULT_CHECKED_SECTION_RESOLVE,
+  runDefaultCheckedSectionStep,
   runDefaultSectionStep
 } from "../helpers/step-runner-contract-fixture.ts";
 
-test("StepRunner retries the whole section-step when judge rejects the first attempt and applies only the successful retry", async () => {
+test("StepRunner retries the whole section-step when deterministic completion fails the first attempt and applies only the successful retry", async () => {
   const lifecycle: unknown[] = [];
   const prompts: string[] = [];
   const context = createStepRunnerContext();
   let reviewAttempts = 0;
-  let judgeAttempts = 0;
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onCreateSession(profile) {
@@ -36,24 +35,12 @@ test("StepRunner retries the whole section-step when judge rejects the first att
       onDisconnect() {
         lifecycle.push(["review.disconnect", reviewAttempts]);
       }
-    }),
-    judgeService: {
-      async evaluate(input) {
-        judgeAttempts += 1;
-        lifecycle.push(["judge.evaluate", input, judgeAttempts]);
-
-        if (judgeAttempts === 1) {
-          return { passed: false, cause: "judge rejected" };
-        }
-
-        return { passed: true };
-      }
-    }
+    })
   });
 
   const result = await runner.run({
     step: createSectionTestStep({
-      resolve: DEFAULT_JUDGE_RESOLVE
+      resolve: DEFAULT_CHECKED_SECTION_RESOLVE
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -65,10 +52,9 @@ test("StepRunner retries the whole section-step when judge rejects the first att
   result.applyTo(context);
   assert.equal(context.getSection("summary"), "## Summary\n- 整體理解：attempt 2");
   assert.equal(reviewAttempts, 2);
-  assert.equal(judgeAttempts, 2);
   assert.doesNotMatch(prompts[0] ?? "", /retry_repair_context/u);
   assert.match(prompts[1] ?? "", /<retry_repair_context>/u);
-  assert.match(prompts[1] ?? "", /Failure reason: judge rejected/u);
+  assert.match(prompts[1] ?? "", /Failure reason: deterministic completion failed/u);
 });
 
 test("StepRunner adds empty-response repair feedback to the retry prompt", async () => {
@@ -110,7 +96,7 @@ test("StepRunner adds empty-response repair feedback to the retry prompt", async
   );
 });
 
-test("StepRunner fails after retry exhaustion on judge rejection and does not apply provisional state", async () => {
+test("StepRunner fails after retry exhaustion on deterministic completion failure and does not apply provisional state", async () => {
   const context = createStepRunnerContext();
   let reviewAttempts = 0;
   const runner = new StepRunner({
@@ -119,25 +105,22 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
         reviewAttempts += 1;
         return `## Summary\n- 整體理解：attempt ${reviewAttempts}`;
       }
-    }),
-    judgeService: {
-      async evaluate() {
-        return { passed: false, cause: "judge rejected" };
-      }
-    }
+    })
   });
 
   await assert.rejects(
     () =>
       runner.run({
         step: createSectionTestStep({
-          resolve: DEFAULT_JUDGE_RESOLVE
+          resolve: async () => {
+            throw new Error("deterministic completion failed");
+          }
         }),
         context,
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /Step review-summary failed for src\/app\.ts: judge rejected/u
+    /Step review-summary failed for src\/app\.ts: deterministic completion failed/u
   );
 
   assert.equal(reviewAttempts, 3);
@@ -264,33 +247,32 @@ test("StepRunner fails ReviewBasisStep after three parse failures without fallba
   assert.equal(context.getReviewBasis(), undefined);
 });
 
-test("StepRunner retries the whole step on judge timeout with fresh review and judge attempts", async () => {
+test("StepRunner retries the whole step when resolve throws after a review response", async () => {
   const context = createStepRunnerContext();
   let reviewAttempts = 0;
-  let judgeAttempts = 0;
+  let resolveAttempts = 0;
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
         reviewAttempts += 1;
         return `## Summary\n- 整體理解：attempt ${reviewAttempts}`;
       }
-    }),
-    judgeService: {
-      async evaluate() {
-        judgeAttempts += 1;
-
-        if (judgeAttempts === 1) {
-          throw new Error("judge timeout");
-        }
-
-        return { passed: true };
-      }
-    }
+    })
   });
 
   const result = await runner.run({
     step: createSectionTestStep({
-      resolve: DEFAULT_JUDGE_RESOLVE
+      resolve: async (response: string) => {
+        resolveAttempts += 1;
+
+        if (resolveAttempts === 1) {
+          throw new Error("deterministic completion timed out");
+        }
+
+        return (targetContext) => {
+          targetContext.setSection("summary", response);
+        };
+      }
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -299,7 +281,7 @@ test("StepRunner retries the whole step on judge timeout with fresh review and j
 
   result.applyTo(context);
   assert.equal(reviewAttempts, 2);
-  assert.equal(judgeAttempts, 2);
+  assert.equal(resolveAttempts, 2);
   assert.equal(context.getSection("summary"), "## Summary\n- 整體理解：attempt 2");
 });
 
@@ -327,17 +309,12 @@ test("StepRunner retries the whole step when review session startup fails and ev
           systemMessage: "system prompt"
         });
       }
-    },
-    judgeService: {
-      async evaluate() {
-        return { passed: true };
-      }
     }
   });
 
   const result = await runner.run({
     step: createSectionTestStep({
-      resolve: DEFAULT_JUDGE_RESOLVE
+      resolve: DEFAULT_CHECKED_SECTION_RESOLVE
     }),
     context,
     outputBaseDir: "/workspace/output",
@@ -358,11 +335,6 @@ test("StepRunner reports standardized review startup failure after retry exhaust
         createAttempts += 1;
         throw new Error("review startup failed");
       }
-    },
-    judgeService: {
-      async evaluate() {
-        return { passed: true };
-      }
     }
   });
 
@@ -370,7 +342,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
     () =>
       runner.run({
         step: createSectionTestStep({
-          resolve: DEFAULT_JUDGE_RESOLVE
+          resolve: DEFAULT_CHECKED_SECTION_RESOLVE
         }),
         context,
         outputBaseDir: "/workspace/output",
@@ -387,25 +359,16 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
   const retryInfos: unknown[] = [];
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
-      onSendAndWait() {
-        return "## Summary\n- 整體理解：attempt 1";
+      onSendAndWait({ sessionIndex }) {
+        return `## Summary\n- 整體理解：attempt ${sessionIndex}`;
       }
     }),
-    judgeService: {
-      async evaluate(input) {
-        if (retryInfos.length === 0) {
-          return { passed: false, cause: "judge rejected" };
-        }
-
-        return { passed: true };
-      }
-    },
     onStepRetry(info) {
       retryInfos.push({ ...info });
     }
   });
 
-  const result = await runDefaultJudgeSectionStep(runner, context);
+  const result = await runDefaultCheckedSectionStep(runner, context);
 
   result.applyTo(context);
 
@@ -419,7 +382,7 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
       stepId: "review-summary",
       filePath: "src/app.ts",
       attempt: 0,
-      cause: "judge rejected",
+      cause: "deterministic completion failed",
       model: "gpt-5-mini",
       promptHash: "<stable-hash>",
       schemaId: "ReviewSummaryMarkdown",
@@ -463,22 +426,13 @@ test("StepRunner swallows exceptions thrown by onStepRetry and does not propagat
         return `## Summary\n- 整體理解：attempt ${reviewAttempts}`;
       }
     }),
-    judgeService: {
-      async evaluate() {
-        if (reviewAttempts === 1) {
-          return { passed: false, cause: "judge rejected" };
-        }
-
-        return { passed: true };
-      }
-    },
     onStepRetry() {
       throw new Error("onStepRetry exploded");
     }
   });
 
   // Should not throw despite onStepRetry throwing
-  const result = await runDefaultJudgeSectionStep(runner, context);
+  const result = await runDefaultCheckedSectionStep(runner, context);
 
   result.applyTo(context);
 
@@ -553,14 +507,9 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
-        return "## Summary\n- 整體理解：always fails judge";
+        return "## Summary\n- 整體理解：always fails completion";
       }
     }),
-    judgeService: {
-      async evaluate() {
-        return { passed: false, cause: "judge rejected" };
-      }
-    },
     onStepRetry(info) {
       retryInfos.push({ ...info });
     }
@@ -568,8 +517,17 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
 
   await assert.rejects(
     () =>
-      runDefaultJudgeSectionStep(runner, context),
-    /Step review-summary failed for src\/app\.ts: judge rejected/u
+      runner.run({
+        step: createSectionTestStep({
+          resolve: async () => {
+            throw new Error("deterministic completion failed");
+          }
+        }),
+        context,
+        outputBaseDir: "/workspace/output",
+        repoRoot: "/workspace/repo"
+      }),
+    /Step review-summary failed for src\/app\.ts: deterministic completion failed/u
   );
 
   // Called for attempts 0 and 1; NOT called for the final failure (attempt 2).

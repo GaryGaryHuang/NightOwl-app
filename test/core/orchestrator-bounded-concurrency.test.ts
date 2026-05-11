@@ -125,7 +125,7 @@ test("ReviewOrchestrator honors a maxConcurrentFiles cap below the planned file 
           ),
           failedFiles: new Set(harness.reviewableFiles),
           failedStepId: "review-basis",
-          failureCause: "judge rejected"
+          failureCause: "deterministic validation failed"
         })
       });
 
@@ -242,7 +242,7 @@ function createConcurrentRunner(input: {
   failedFiles?: Set<string>;
   failedFile?: string;
   failedStepId?: "review-basis" | "candidate-findings";
-  failureCause?: "judge rejected" | "deterministic validation failed";
+  failureCause?: "deterministic completion failed" | "deterministic validation failed";
 }): StepRunnerDouble {
   const activeFiles = new Set<string>();
   const startedFiles = new Set<string>();

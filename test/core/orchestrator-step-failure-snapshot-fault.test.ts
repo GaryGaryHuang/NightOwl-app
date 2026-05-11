@@ -50,8 +50,8 @@ function createStepFailureRunner(input: {
     | "semantic-validation"
     | "review-summary";
   failureCause:
-    | "judge rejected"
-    | "judge timeout"
+    | "deterministic completion failed"
+    | "structured validation failed"
     | "deterministic validation failed";
 }): Pick<StepRunner, "run"> {
   return {

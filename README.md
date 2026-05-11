@@ -117,7 +117,7 @@ NightOwl runs a two-phase review pipeline:
 1. **Changeset Overview**: scans the entire changeset once to build global context (scope of changes, cross-file relationships, user-provided context).
 2. **Per-file semantic review**: each changed file runs `ReviewBasis -> Candidate Findings -> Semantic Validation -> Review Summary`. Files are processed in parallel across files (bounded concurrency, default 5) and strictly sequential within each file.
 
-Each per-file step runs in its own Copilot SDK session with a completion check (Agent Judge or deterministic validation). A failed step retries once; if it fails again, the file is skipped.
+Each per-file step runs in its own Copilot SDK session and must pass deterministic validation before state is updated. A failed step retries once; if it fails again, the file is skipped.
 
 ## Development
 

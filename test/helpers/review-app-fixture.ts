@@ -6,8 +6,6 @@ import {
  * Produces a minimal but structurally valid session response for each SOP
  * step by matching against the system-message content.
  *
- * Judge sessions (no availableTools) receive a plain "Y" so the completion
- * check passes without needing real AI output.
  * Candidate Findings and Semantic Validation return compact JSON; Review Summary returns Markdown in the
  * format expected by the finalizer.
  */
@@ -15,10 +13,6 @@ export function buildSessionResponse(
   config: { systemMessage?: unknown; availableTools?: string[] },
   prompt: string
 ): string {
-  if (Array.isArray(config.availableTools) && config.availableTools.length === 0) {
-    return "Y";
-  }
-
   const systemMessage = extractSystemMessageContent(config.systemMessage);
 
   if (/## Current Step: ReviewBasis/u.test(systemMessage)) {
@@ -170,8 +164,4 @@ export function isChangesetOverviewSystemMessage(systemMessage: unknown): boolea
   return /## Current Step: Changeset Overview/u.test(
     extractSystemMessageContent(systemMessage)
   );
-}
-
-export function isJudgeSystemMessage(systemMessage: unknown): boolean {
-  return /Output only Y or N/u.test(extractSystemMessageContent(systemMessage));
 }

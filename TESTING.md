@@ -75,7 +75,7 @@ Each behavior should have exactly one owner layer. Lower layers own deterministi
 | Steps | per-file analyzer logic, prompt assembly, structured-output validation per step | orchestration order, fan-out, abort plumbing, finalizer rendering | `test/core/steps/*.test.ts` |
 | Finalizers and pure core | artifact content, sorting, formatting, outcome resolution, deterministic value logic | orchestration lifecycle and fan-out rules | `test/core/finalizers/*.test.ts`, focused pure core unit tests |
 | Providers | parser semantics, path resolution, repo-local fallback, git/fs boundary behavior | duplicated lower-layer matrices at provider smoke level | `test/providers/*.test.ts` |
-| Services | SDK adapter contracts, session lifecycle, review/judge session config, MCP merge/validation | app wiring smoke, whole-run lifecycle, top-level exit behavior | `test/services/*.test.ts` |
+| Services | SDK adapter contracts, session lifecycle, review session config, MCP merge/validation | app wiring smoke, whole-run lifecycle, top-level exit behavior | `test/services/*.test.ts` |
 | Safety policy | shell policy, web-fetch policy, address classification, dual SDK surfaces, audit writing | repeated policy matrices in app or unrelated integration tests | `test/services/tool-policy-*.test.ts`, `test/services/web-fetch-*.test.ts` |
 | Tooling and release | build, test-tier verification, package/install guardrails | internal helper detail not tied to a published tool contract | `test/scripts/*.test.ts`, [test/cli/package-bin.test.ts](test/cli/package-bin.test.ts) |
 
@@ -206,7 +206,7 @@ Production modules accept collaborators through option objects. Tests pass hand-
 ```ts
 const stepRunner = new StepRunner({
   reviewSessionFactory: { async createSession() { /* fake */ } },
-  judgeService: { async evaluate() { return { passed: true }; } },
+  structuredOutputValidator: fakeValidator,
 });
 ```
 

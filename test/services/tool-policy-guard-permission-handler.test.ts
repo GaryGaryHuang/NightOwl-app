@@ -19,8 +19,8 @@ import {
 } from "../helpers/tool-policy-fixture.ts";
 
 const SESSION_CONTEXT = { sessionId: "s1" };
-const APPROVED = { kind: "approved" } as const;
-const DENIED = { kind: "denied-no-approval-rule-and-could-not-request-from-user" } as const;
+const APPROVED = { kind: "approve-once" } as const;
+const DENIED = { kind: "user-not-available" } as const;
 
 test("tool policy guard permission handler enforces the read and write boundary and records representative audit decisions", async () => {
   const sink = new InMemoryAuditSink();

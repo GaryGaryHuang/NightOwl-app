@@ -6,8 +6,7 @@ import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.t
 import {
   createReviewSessionFactory,
   createSectionTestStep,
-  createStepRunnerContext,
-  DEFAULT_JUDGE_RESOLVE
+  createStepRunnerContext
 } from "../helpers/step-runner-contract-fixture.ts";
 
 // The step runner returns a result object; state is not written to the context
@@ -169,31 +168,28 @@ test("StepRunner wraps prepare failures with step and file context", async () =>
   );
 });
 
-test("StepRunner does not duplicate contextual prefixes for judge failures", async () => {
+test("StepRunner does not duplicate contextual prefixes for resolve failures", async () => {
   const context = createStepRunnerContext();
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait() {
         return "## Summary\n- 整體理解：attempt 1";
       }
-    }),
-    judgeService: {
-      async evaluate() {
-        throw new Error("judge timeout");
-      }
-    }
+    })
   });
 
   await assert.rejects(
     () =>
       runner.run({
         step: createSectionTestStep({
-          resolve: DEFAULT_JUDGE_RESOLVE
+          resolve: async () => {
+            throw new Error("deterministic completion timed out");
+          }
         }),
         context,
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /^StepExecutionError: Step review-summary failed for src\/app\.ts: judge timeout$/u
+    /^StepExecutionError: Step review-summary failed for src\/app\.ts: deterministic completion timed out$/u
   );
 });

@@ -6,7 +6,6 @@ import {
   ReviewOrchestrator,
   type ReviewPerFileStepsFactory
 } from "../core/orchestrator.ts";
-import { JudgeService } from "../core/judge.ts";
 import { StepRunner } from "../core/step-runner.ts";
 import { StructuredOutputValidator } from "../core/structured-output-validator.ts";
 import type { ReviewConfig } from "../providers/config/review-config-provider.ts";
@@ -14,7 +13,6 @@ import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
 import type { OutputWriteHealthAssessor } from "../providers/review-output-health-assessor.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
-import { JudgeSessionFactory } from "../services/judge-session-factory.ts";
 import { KnowledgeSvc } from "../services/knowledge.ts";
 import {
   type ClientManagerLike
@@ -31,9 +29,6 @@ import type { WebFetchHostnameClassifier } from "../services/tool-policy/web-fet
 import {
   DryRunReviewSessionFactory
 } from "../services/dry-run-review-session-factory.ts";
-import {
-  DryRunJudgeSessionFactory
-} from "../services/dry-run-judge-session-factory.ts";
 import { RunLifecycleManager } from "./run-lifecycle-manager.ts";
 import { CHANGESET_OVERVIEW_STEP_ID } from "../core/review-step-ids.ts";
 
@@ -99,11 +94,6 @@ export class ProductionRunDepsBuilder implements RunDepsBuilder {
     const toolAuditLifecycle = createProductionToolAuditLifecycle(
       options.onToolAuditWriteFailure
     );
-    const judgeSessionFactory = new JudgeSessionFactory({
-      clientManager: options.clientManager
-    });
-    const judgeService = new JudgeService({ judgeSessionFactory });
-
     const knowledgeSvc =
       options.knowledgeSvc ??
       new KnowledgeSvc({
@@ -128,7 +118,6 @@ export class ProductionRunDepsBuilder implements RunDepsBuilder {
       shared: options,
       reviewConfig,
       reviewSessionFactory,
-      judgeService,
       onOutputTargetReady: toolAuditLifecycle.onOutputTargetReady,
       onRunLevelFailureOutputTargetReady:
         toolAuditLifecycle.onRunLevelFailureOutputTargetReady
@@ -156,15 +145,12 @@ export class DryRunRunDepsBuilder implements RunDepsBuilder {
 
   build(reviewConfig: ReviewConfig): RunDeps {
     const options = this.#options;
-    const judgeSessionFactory = new DryRunJudgeSessionFactory();
-    const judgeService = new JudgeService({ judgeSessionFactory });
     const reviewSessionFactory = new DryRunReviewSessionFactory();
 
     const orchestrator = buildOrchestrator({
       shared: options,
       reviewConfig,
       reviewSessionFactory,
-      judgeService,
       onOutputTargetReady: undefined,
       onRunLevelFailureOutputTargetReady: undefined
     });
@@ -185,7 +171,6 @@ interface BuildOrchestratorParams {
   shared: RunDepsSharedOptions;
   reviewConfig: ReviewConfig;
   reviewSessionFactory: Pick<ReviewSessionFactory, "createSession">;
-  judgeService: JudgeService;
   onOutputTargetReady: ((outputTarget: ToolAuditOutputTarget) => void) | undefined;
   onRunLevelFailureOutputTargetReady:
     | ((outputTarget: ToolAuditOutputTarget) => Promise<void>)
@@ -197,7 +182,6 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     shared,
     reviewConfig,
     reviewSessionFactory,
-    judgeService,
     onOutputTargetReady,
     onRunLevelFailureOutputTargetReady
   } = params;
@@ -218,7 +202,6 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     shared.stepRunner ??
     new StepRunner({
       reviewSessionFactory,
-      judgeService,
       structuredOutputValidator: new StructuredOutputValidator(),
       onStepRetry(info) {
         shared.onProgressEvent?.({

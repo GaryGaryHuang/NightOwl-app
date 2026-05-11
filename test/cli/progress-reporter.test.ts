@@ -133,12 +133,12 @@ test("CliProgressReporter pins skipped-file events above the TTY live line and k
     type: "file-skipped",
     filePath: "src/app.ts",
     stepId: SEMANTIC_VALIDATION,
-    reason: "judge rejected"
+    reason: "deterministic validation failed"
   });
 
   assert.match(
     stdout.logs.at(-1) ?? "",
-    /Skipped: src\/app\.ts \| semantic-validation \| judge rejected/u
+    /Skipped: src\/app\.ts \| semantic-validation \| deterministic validation failed/u
   );
   assert.match(stdout.writes.at(-1) ?? "", /1\/2/u);
   assert.match(stdout.writes.at(-1) ?? "", /src\/lib\.ts/u);
@@ -204,13 +204,13 @@ test("CliProgressReporter falls back to append-only snapshots when stdout is not
     type: "file-skipped",
     filePath: "src/app.ts",
     stepId: SEMANTIC_VALIDATION,
-    reason: "judge rejected"
+    reason: "deterministic validation failed"
   });
 
   assert.deepEqual(stdout.writes, []);
   assert.equal(
     stdout.logs.at(-2),
-    "Skipped: src/app.ts | semantic-validation | judge rejected"
+    "Skipped: src/app.ts | semantic-validation | deterministic validation failed"
   );
   assert.ok(stdout.logs.every((entry) => !entry.includes("\r")));
   assert.equal(stdout.logs.at(-1), "Progress 1/2 | active 0");

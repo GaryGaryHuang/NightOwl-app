@@ -5,9 +5,6 @@ import {
   DryRunReviewSessionFactory
 } from "../../src/services/dry-run-review-session-factory.ts";
 import {
-  DryRunJudgeSessionFactory
-} from "../../src/services/dry-run-judge-session-factory.ts";
-import {
   BUILT_IN_DRY_RUN_STEP_IDS,
   buildDryRunChangesetOverviewResponse,
   getDryRunStubResponse
@@ -42,46 +39,6 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
 
     const response = await session.sendAndWait("please review");
     assert.equal(response, "[dry-run] No built-in stub template for this step.");
-  });
-});
-
-describe("DryRunJudgeSessionFactory dry-run behavior", () => {
-  test("approves regardless of prompt wording", async () => {
-    const factory = new DryRunJudgeSessionFactory();
-    const firstSession = await factory.createSession({
-      model: "gpt-5.4-mini",
-      systemMessage: "judge system"
-    });
-    const secondSession = await factory.createSession({
-      model: "gpt-5.4-mini",
-      systemMessage: "judge system"
-    });
-
-    assert.equal(await firstSession.sendAndWait("please evaluate"), "Y");
-    assert.equal(await secondSession.sendAndWait("N"), "Y");
-  });
-
-  test("honors a custom responseProvider override (e.g., simulate denial)", async () => {
-    const seenProfiles: { model: string; systemMessage: string }[] = [];
-    const factory = new DryRunJudgeSessionFactory({
-      responseProvider: (prompt, profile) => {
-        seenProfiles.push({
-          model: profile.model,
-          systemMessage: profile.systemMessage
-        });
-        return prompt.includes("deny") ? "N" : "Y";
-      }
-    });
-
-    const session = await factory.createSession({
-      model: "gpt-5.4-mini",
-      systemMessage: "judge system"
-    });
-
-    assert.equal(await session.sendAndWait("please deny this"), "N");
-    assert.deepEqual(seenProfiles, [
-      { model: "gpt-5.4-mini", systemMessage: "judge system" }
-    ]);
   });
 });
 

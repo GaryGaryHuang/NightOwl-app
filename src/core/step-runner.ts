@@ -37,14 +37,6 @@ export interface StructuredOutputValidatorLike {
 }
 
 export interface StepResolveServices {
-  judgeService?: {
-    evaluate(input: {
-      stepId: string;
-      filePath: string;
-      criteria: string;
-      sectionContent: string;
-    }): Promise<{ passed: boolean; cause?: string }>;
-  };
   validator: StructuredOutputValidatorLike;
 }
 
@@ -97,14 +89,6 @@ export interface StepRetryInfo {
 
 export interface StepRunnerOptions {
   reviewSessionFactory: ReviewSessionFactoryLike;
-  judgeService?: {
-    evaluate(input: {
-      stepId: string;
-      filePath: string;
-      criteria: string;
-      sectionContent: string;
-    }): Promise<{ passed: boolean; cause?: string }>;
-  };
   structuredOutputValidator?: StructuredOutputValidatorLike;
   onStepRetry?: (info: StepRetryInfo) => void;
 }
@@ -114,13 +98,11 @@ export interface StepRunnerOptions {
  */
 export class StepRunner {
   readonly #reviewSessionFactory: ReviewSessionFactoryLike;
-  readonly #judgeService?: StepRunnerOptions["judgeService"];
   readonly #structuredOutputValidator: NonNullable<StepRunnerOptions["structuredOutputValidator"]>;
   readonly #onStepRetry?: (info: StepRetryInfo) => void;
 
   constructor(options: StepRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
-    this.#judgeService = options.judgeService;
     this.#structuredOutputValidator =
       options.structuredOutputValidator ?? new StructuredOutputValidator();
     this.#onStepRetry = options.onStepRetry;
@@ -175,7 +157,6 @@ export class StepRunner {
         let deferred: (context: FileReviewContext) => void;
         try {
           deferred = await plan.resolve(response, {
-            judgeService: this.#judgeService,
             validator: this.#structuredOutputValidator
           });
         } catch (error) {
