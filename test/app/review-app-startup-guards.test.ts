@@ -43,7 +43,6 @@ test("createLocalReviewRunApp fails before client startup, Changeset Overview, a
           return this;
         },
         async publishFileReview() {},
-        async publishSkippedFile() {},
         async publishArtifact() {}
       })
     });
@@ -100,7 +99,6 @@ test("createLocalReviewRunApp passes context7ApiKey option to the session config
           return this;
         },
         async publishFileReview() {},
-        async publishSkippedFile() {},
         async publishArtifact() {}
       })
     });

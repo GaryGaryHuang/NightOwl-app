@@ -66,7 +66,6 @@ test("buildOutputTarget returns review output paths", () => {
     basePath: "/workspace/.nightowl/review/feature_login_03131430",
     changesetOverviewPath: "/workspace/.nightowl/review/feature_login_03131430/changeset-overview.md",
     filesPath: "/workspace/.nightowl/review/feature_login_03131430/files",
-    skippedPath: "/workspace/.nightowl/review/feature_login_03131430/skipped.md",
     indexPath: "/workspace/.nightowl/review/feature_login_03131430/index.md",
     toolAuditPath: "/workspace/.nightowl/review/feature_login_03131430/tool-audit.jsonl"
   });

@@ -18,7 +18,6 @@ function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): Revi
       basePath: base,
       changesetOverviewPath: `${base}/changeset-overview.md`,
       filesPath: `${base}/files`,
-      skippedPath: `${base}/skipped.md`,
       indexPath: `${base}/index.md`,
       toolAuditPath: `${base}/tool-audit.jsonl`
     },

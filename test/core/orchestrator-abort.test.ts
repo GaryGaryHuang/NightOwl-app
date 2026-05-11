@@ -95,9 +95,6 @@ function createTrackingOutputSink(): TrackingOutputSink {
     async publishFileReview(_result) {
       calls.push("publishFileReview");
     },
-    async publishSkippedFile(_record) {
-      calls.push("publishSkippedFile");
-    },
     async publishArtifact(kind, _result) {
       calls.push(`publishArtifact:${kind}`);
     }

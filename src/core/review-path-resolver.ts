@@ -12,7 +12,6 @@ export interface OutputTarget {
   basePath: string;
   changesetOverviewPath: string;
   filesPath: string;
-  skippedPath: string;
   indexPath: string;
   toolAuditPath: string;
 }
@@ -45,7 +44,6 @@ export function buildOutputTarget(
     basePath,
     changesetOverviewPath: path.join(basePath, "changeset-overview.md"),
     filesPath: path.join(basePath, "files"),
-    skippedPath: path.join(basePath, "skipped.md"),
     indexPath: path.join(basePath, "index.md"),
     toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   };

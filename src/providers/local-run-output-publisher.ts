@@ -1,8 +1,7 @@
-import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
-  formatSkippedFileRecord,
   ReviewOutputBoundaryError,
   type ReviewOutputBoundaryOperation,
   type ContentResult,
@@ -10,11 +9,9 @@ import {
   type ReviewArtifactKind,
   type ReviewOutputPlan,
   type RunOutputPublisher,
-  type SkipRecord,
   type ReviewOutputTarget
 } from "./review-output-sink.ts";
 import { wrapBoundaryError } from "./boundary-error-helper.ts";
-import { AsyncMutex } from "./async-mutex.ts";
 
 /**
  * Run-scoped local artifact publisher bound to one resolved OutputTarget.
@@ -22,7 +19,6 @@ import { AsyncMutex } from "./async-mutex.ts";
 export class LocalRunOutputPublisher implements RunOutputPublisher {
   readonly #outputTarget: ReviewOutputTarget;
   readonly #notePathByFilePath: Map<string, string>;
-  readonly #skippedMutex = new AsyncMutex();
 
   constructor(outputPlan: ReviewOutputPlan) {
     this.#outputTarget = outputPlan.outputTarget;
@@ -43,22 +39,6 @@ export class LocalRunOutputPublisher implements RunOutputPublisher {
         await writeFile(noteFilePath, fileResult.content);
       },
       (cause) => toOutputBoundaryError("publishFileReview", cause, noteFilePath)
-    );
-  }
-
-  async publishSkippedFile(skipRecord: SkipRecord): Promise<void> {
-    return this.#skippedMutex.run(() =>
-      wrapBoundaryError(
-        () => appendFile(
-          this.#outputTarget.skippedPath,
-          formatSkippedFileRecord(skipRecord)
-        ),
-        (cause) => toOutputBoundaryError(
-          "publishSkippedFile",
-          cause,
-          this.#outputTarget.skippedPath
-        )
-      )
     );
   }
 

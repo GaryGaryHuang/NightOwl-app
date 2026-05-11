@@ -87,7 +87,6 @@ Each run produces output under `<repo_root>/.nightowl/review/<session_id>/`:
 | `changeset-overview.md` | Run-level changeset overview produced by Changeset Overview |
 | `index.md` | Landing page linking all per-file notes and embedding run summary details |
 | `tool-audit.jsonl` | Tool usage audit log (every allow/deny decision) |
-| `skipped.md` | Record of files skipped due to failure |
 
 ## Configuration
 

@@ -95,9 +95,6 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
         async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.filePath]);
         },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        },
         async publishArtifact() {}
       }),
       stepRunner: {
@@ -128,16 +125,12 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
     );
 
     assert.deepEqual(stepEvents, [["review-basis", reviewableFiles[0]]]);
-    assert.equal(
-      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
-      false
-    );
   } finally {
     fixture.cleanup();
   }
 });
 
-test("ReviewOrchestrator aborts with the output error when interrupted snapshot publication fails and does not append a skipped record", async () => {
+test("ReviewOrchestrator aborts with the output error when interrupted snapshot publication fails", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -180,9 +173,6 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
 
           writtenNotes.set(noteFilePath, fileResult.content);
         },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        },
         async publishArtifact() {}
       }),
       stepRunner: createStepFailureRunner({
@@ -203,10 +193,6 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
     );
 
     assert.equal(
-      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
-      false
-    );
-    assert.equal(
       stepEvents.some(([, filePath]) => filePath === laterFile),
       false
     );
@@ -215,86 +201,6 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       /^# [\s\S]*^- Status: Review not yet generated\./mu
     );
     assert.doesNotMatch(
-      writtenNotes.get(failedNotePath) ?? "",
-      /> \[!WARNING\] Review Interrupted/u
-    );
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("ReviewOrchestrator aborts with the output error when publishSkippedFile fails after the interrupted snapshot is written", async () => {
-  const fixture = createReviewRepoFixture();
-
-  try {
-    fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
-    fixture.writeFile("README.md", "# Demo feature change\n");
-    fixture.commitAll("add third changed file for skipped log publish failure");
-
-    const harness = await bootstrapReviewHarness(fixture);
-    const failedFile = harness.reviewableFiles[1];
-    const laterFile = harness.reviewableFiles[2];
-    const plannedNotes = planNoteFiles(
-      path.join(harness.repoRoot, ".nightowl", "review", "feature-branch_03131430", "files"),
-      harness.reviewableFiles
-    );
-    const notePathLookup = buildNotePathLookup(plannedNotes);
-    const failedNotePath = plannedNotes.find(
-      ({ filePath }) => filePath === failedFile
-    )!.noteFilePath;
-    const writtenNotes = new Map<string, string>();
-    const outputCalls: OutputCall[] = [];
-    const stepEvents: StepEvent[] = [];
-    const orchestrator = new ReviewOrchestrator({
-      sourceProvider: harness.sourceProvider,
-      reviewFileFilter: harness.reviewFileFilter,
-      outputSink: defineOutputSinkDouble({
-        async initializeRun(outputPlan) {
-          outputCalls.push(["initializeRun", outputPlan.outputTarget.basePath]);
-          return this;
-        },
-        async publishFileReview(fileResult) {
-          const noteFilePath = requireNotePath(notePathLookup, fileResult.filePath);
-          outputCalls.push(["publishFileReview", noteFilePath]);
-          writtenNotes.set(noteFilePath, fileResult.content);
-        },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-
-          if (skipRecord.filePath === failedFile) {
-            throw new Error("skipped log write failed");
-          }
-        },
-        async publishArtifact() {}
-      }),
-      stepRunner: createStepFailureRunner({
-        stepEvents,
-        failedFile,
-        failedStepId: "review-summary",
-        failureCause: "judge rejected"
-      }),
-      changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
-      workingDirectory: fixture.repoDir,
-      timestampProvider: () => RUN_TIMESTAMP,
-      maxConcurrentFiles: 1
-    });
-
-    await assert.rejects(
-      () => orchestrator.run(REQUEST),
-      /skipped log write failed/u
-    );
-
-    assert.equal(
-      stepEvents.some(([, filePath]) => filePath === laterFile),
-      false
-    );
-    assert.deepEqual(
-      outputCalls.filter(([callType, filePath]) =>
-        callType === "publishSkippedFile" && filePath === failedFile
-      ),
-      [["publishSkippedFile", failedFile]]
-    );
-    assert.match(
       writtenNotes.get(failedNotePath) ?? "",
       /> \[!WARNING\] Review Interrupted/u
     );

@@ -71,7 +71,6 @@ test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links"
     "- Skipped files: 2",
     "## Run Artifacts",
     "- [changeset-overview.md](./changeset-overview.md)",
-    "- [skipped.md](./skipped.md)",
     "## Run Summary",
     "- Final findings totals: must=0, nice=0",
     "### Coverage",
@@ -106,7 +105,6 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
       basePath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430`,
       changesetOverviewPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\changeset-overview.md`,
       filesPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\files`,
-      skippedPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\skipped.md`,
       indexPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\index.md`,
       toolAuditPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\tool-audit.jsonl`
     }),
@@ -275,8 +273,7 @@ function assertTextContainsInOrder(text: string, fragments: string[]): void {
 function assertRunArtifacts(rendered: string): void {
   assertTextContainsInOrder(rendered, [
     "## Run Artifacts",
-    "- [changeset-overview.md](./changeset-overview.md)",
-    "- [skipped.md](./skipped.md)"
+    "- [changeset-overview.md](./changeset-overview.md)"
   ]);
 }
 

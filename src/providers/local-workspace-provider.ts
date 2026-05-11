@@ -25,7 +25,6 @@ export class LocalWorkspaceProvider implements ReviewOutputSink {
         // Create shared run directories up front and truncate append-only artifacts before workers start.
         await mkdir(outputTarget.basePath, { recursive: true });
         await mkdir(outputTarget.filesPath, { recursive: true });
-        await writeFile(outputTarget.skippedPath, "");
         await writeFile(outputTarget.toolAuditPath, "");
         return new LocalRunOutputPublisher(outputPlan);
       },

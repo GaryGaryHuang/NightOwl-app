@@ -15,17 +15,14 @@ test("LocalWorkspaceProvider bootstraps run directories and truncates append-onl
     assert.ok(publisher, "initializeRun should yield a run-scoped output publisher");
     assert.equal(existsSync(fixture.outputTarget.basePath), true);
     assert.equal(existsSync(fixture.outputTarget.filesPath), true);
-    assert.equal(fixture.readFile(fixture.outputTarget.skippedPath), "");
     assert.equal(fixture.readFile(fixture.outputTarget.toolAuditPath), "");
     assert.equal(existsSync(fixture.outputTarget.indexPath), false);
     assert.equal(existsSync(fixture.outputTarget.changesetOverviewPath), false);
 
-    writeFileSync(fixture.outputTarget.skippedPath, "stale skip line\n");
     writeFileSync(fixture.outputTarget.toolAuditPath, "{\"stale\":true}\n");
 
     await fixture.provider.initializeRun(fixture.outputPlan);
 
-    assert.equal(fixture.readFile(fixture.outputTarget.skippedPath), "");
     assert.equal(fixture.readFile(fixture.outputTarget.toolAuditPath), "");
   } finally {
     fixture.cleanup();

@@ -4,7 +4,6 @@ import type { SessionConfig } from "@github/copilot-sdk";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
-import type { SkipRecord } from "../../src/providers/review-output-sink.ts";
 import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
@@ -69,7 +68,6 @@ test("createLocalReviewRunApp aborts Changeset Overview MCP startup failure afte
           return this;
         },
         async publishFileReview() {},
-        async publishSkippedFile() {},
         async publishArtifact() {}
       })
     });
@@ -116,7 +114,7 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
 
     const sessionConfigs: SessionConfig[] = [];
     let context7Failures = 0;
-    const skippedRecords: SkipRecord[] = [];
+    const publishedNotes: string[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
       clientManager: {
@@ -178,9 +176,8 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
         async initializeRun() {
           return this;
         },
-        async publishFileReview() {},
-        async publishSkippedFile(skipRecord) {
-          skippedRecords.push(skipRecord);
+        async publishFileReview(fileResult) {
+          publishedNotes.push(fileResult.content);
         },
         async publishArtifact() {}
       })
@@ -198,9 +195,9 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
     assert.equal(result.skippedFileCount, 1);
     assert.ok(result.plannedFileCount >= 3);
     assert.ok(result.successfulFileCount >= 1);
-    assert.match(
-      skippedRecords[0]?.reason ?? "",
-      /context7 startup failed/u
+    assert.ok(
+      publishedNotes.some((note) => /context7 startup failed/u.test(note)),
+      "skipped interrupted note should include the startup failure reason"
     );
     assert.ok(
       sessionConfigs.some(

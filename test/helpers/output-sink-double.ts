@@ -1,4 +1,4 @@
-import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type {
@@ -8,7 +8,6 @@ import type {
   ReviewOutputTarget,
   RunOutputPublisher
 } from "../../src/providers/review-output-sink.ts";
-import { formatSkippedFileRecord } from "../../src/providers/review-output-sink.ts";
 
 export type ReviewOutputBootstrapAndPublisher =
   ReviewOutputSink & RunOutputPublisher;
@@ -27,7 +26,6 @@ export function createWritableOutputSink(): ReviewOutputBootstrapAndPublisher {
     async initializeRun(plan: ReviewOutputPlan): Promise<RunOutputPublisher> {
       await mkdir(plan.outputTarget.basePath, { recursive: true });
       await mkdir(plan.outputTarget.filesPath, { recursive: true });
-      await writeFile(plan.outputTarget.skippedPath, "");
       outputPlan = plan;
       notePathByFilePath = new Map(
         plan.plannedNotes.map((plannedNote) => [
@@ -46,13 +44,6 @@ export function createWritableOutputSink(): ReviewOutputBootstrapAndPublisher {
 
       await mkdir(path.dirname(noteFilePath), { recursive: true });
       await writeFile(noteFilePath, fileResult.content);
-    },
-
-    async publishSkippedFile(skipRecord) {
-      await appendFile(
-        outputPlan.outputTarget.skippedPath,
-        formatSkippedFileRecord(skipRecord)
-      );
     },
 
     async publishArtifact(kind: ReviewArtifactKind, result) {

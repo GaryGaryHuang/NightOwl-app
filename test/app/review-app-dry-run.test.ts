@@ -17,7 +17,6 @@ import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-
  *  - clientManager.start() / stop() are never called
  *  - Output folder structure matches production layout
  *  - tool-audit.jsonl is empty (no SDK tool calls)
- *  - skipped.md has no skipped file records
  */
 describe("dry-run integration", () => {
   let fixture: ReviewRepoFixture;
@@ -79,7 +78,6 @@ describe("dry-run integration", () => {
     assert.ok(existsSync(outputTarget.changesetOverviewPath), "changeset-overview.md must exist");
     assert.ok(existsSync(outputTarget.indexPath), "index.md must exist");
     assert.ok(existsSync(outputTarget.toolAuditPath), "tool-audit.jsonl must exist");
-    assert.ok(existsSync(outputTarget.skippedPath), "skipped.md must exist");
   });
 
   test("tool-audit.jsonl is empty (no SDK calls in dry-run)", () => {
@@ -87,8 +85,4 @@ describe("dry-run integration", () => {
     assert.equal(content.trim(), "", "tool-audit.jsonl must be empty in dry-run");
   });
 
-  test("skipped.md contains no skipped file records", () => {
-    const content = readFileSync(result.outputTarget.skippedPath, "utf8");
-    assert.ok(!content.includes("##"), "skipped.md should have no skipped file sections in dry-run");
-  });
 });

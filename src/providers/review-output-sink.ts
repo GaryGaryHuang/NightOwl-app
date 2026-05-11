@@ -4,7 +4,6 @@ export interface ReviewOutputTarget {
   basePath: string;
   changesetOverviewPath: string;
   filesPath: string;
-  skippedPath: string;
   indexPath: string;
   toolAuditPath: string;
 }
@@ -26,7 +25,6 @@ export type ReviewArtifactKind =
 export type ReviewOutputBoundaryOperation =
   | "initializeRun"
   | "publishFileReview"
-  | "publishSkippedFile"
   | `publishArtifact:${ReviewArtifactKind}`;
 
 export class ReviewOutputBoundaryError extends Error {
@@ -50,23 +48,12 @@ export interface FileReviewResult {
   content: string;
 }
 
-export interface SkipRecord {
-  filePath: string;
-  stepId: string;
-  reason: string;
-}
-
-export function formatSkippedFileRecord(skipRecord: SkipRecord): string {
-  return `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`;
-}
-
 export interface ContentResult {
   content: string;
 }
 
 export interface RunOutputPublisher {
   publishFileReview(fileResult: FileReviewResult): Promise<void>;
-  publishSkippedFile(skipRecord: SkipRecord): Promise<void>;
   publishArtifact(kind: ReviewArtifactKind, result: ContentResult): Promise<void>;
 }
 

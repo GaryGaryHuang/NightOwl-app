@@ -61,9 +61,6 @@ test("ReviewOrchestrator aborts when Changeset Overview fails before initializin
         async publishFileReview() {
           calls.push("publishFileReview");
         },
-        async publishSkippedFile() {
-          calls.push("publishSkippedFile");
-        },
         async publishArtifact() {}
       }),
       stepRunner: {
@@ -119,7 +116,6 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
         async publishFileReview() {
           calls.push("publishFileReview");
         },
-        async publishSkippedFile() {},
         async publishArtifact(kind) {
           if (kind === "changeset-overview") {
             calls.push("publishChangesetOverview");
@@ -186,9 +182,6 @@ test("ReviewOrchestrator aborts when initializeRun fails before any bootstrap no
         async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.filePath]);
         },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        },
         async publishArtifact() {}
       }),
       stepRunner: {
@@ -248,9 +241,6 @@ test("ReviewOrchestrator aborts before output initialization and file dispatch w
         },
         async publishFileReview(fileResult) {
           outputCalls.push(["publishFileReview", fileResult.filePath]);
-        },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
         },
         async publishArtifact() {}
       }),
@@ -322,9 +312,6 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
 
           writtenNotes.set(noteFilePath, fileResult.content);
         },
-        async publishSkippedFile(skipRecord) {
-          outputCalls.push(["publishSkippedFile", skipRecord.filePath]);
-        },
         async publishArtifact() {}
       }),
       successfulSnapshotOutputHealthAssessor,
@@ -358,10 +345,6 @@ test("ReviewOrchestrator aborts when bootstrap note publication fails, preserves
     );
     assert.equal(writtenNotes.has(plannedNotes[1].noteFilePath), false);
     assert.equal(writtenNotes.has(plannedNotes[2].noteFilePath), false);
-    assert.equal(
-      outputCalls.some(([callType]) => callType === "publishSkippedFile"),
-      false
-    );
   } finally {
     fixture.cleanup();
   }

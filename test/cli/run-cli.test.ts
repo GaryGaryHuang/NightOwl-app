@@ -384,7 +384,6 @@ test("runCli keeps fatal runs on the error path even when artifacts already exis
     mkdirSync(path.join(basePath, "files"), { recursive: true });
     writeFileSync(path.join(basePath, "files", "src__app.ts.md"), "# note\n");
     writeFileSync(path.join(basePath, "index.md"), "# Review Index\n");
-    writeFileSync(path.join(basePath, "skipped.md"), "");
 
     // The CLI must not infer success from on-disk artifacts; the authoritative
     // signal is the app throwing an error or returning a summary object.

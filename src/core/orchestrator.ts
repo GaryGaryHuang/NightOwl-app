@@ -788,17 +788,6 @@ export class ReviewOrchestrator {
       throw outputError;
     }
 
-    try {
-      await input.outputPublisher.publishSkippedFile({
-        filePath: input.fileContext.filePath,
-        stepId: input.stepId,
-        reason: input.reason
-      });
-    } catch (outputError) {
-      input.abortGuard.markAborted(outputError);
-      throw outputError;
-    }
-
     this.#recordFileSkipped({
       outcomeSlots: input.outcomeSlots,
       plannedIndex: input.plannedIndex,

@@ -49,35 +49,6 @@ test("LocalRunOutputPublisher writes file reviews to the planned note path", asy
   }
 });
 
-test("LocalRunOutputPublisher preserves intact skipped.md records across concurrent appends", async () => {
-  const fixture = createWorkspaceProviderFixture();
-
-  try {
-    const publisher = createPublisher(fixture.outputPlan);
-
-    await Promise.all([
-      publisher.publishSkippedFile({
-        filePath: "src/app.ts",
-        stepId: "candidate-findings",
-        reason: "deterministic validation failed"
-      }),
-      publisher.publishSkippedFile({
-        filePath: "src/other.ts",
-        stepId: "review-summary",
-        reason: "judge rejected"
-      })
-    ]);
-
-    const lines = fixture.readFile(fixture.outputTarget.skippedPath).trimEnd().split("\n");
-    assert.deepEqual(lines.sort(), [
-      "- `src/app.ts` — candidate-findings — deterministic validation failed",
-      "- `src/other.ts` — review-summary — judge rejected"
-    ]);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
 test("LocalRunOutputPublisher writes each run-level artifact to its configured output path", async () => {
   const fixture = createWorkspaceProviderFixture();
 

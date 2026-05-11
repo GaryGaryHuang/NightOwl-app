@@ -71,7 +71,6 @@ describe("ReviewOrchestrator progress events", () => {
           return this;
         },
         async publishFileReview() {},
-        async publishSkippedFile() {},
         async publishArtifact() {}
       }),
       stepRunner: {
@@ -156,7 +155,6 @@ test("ReviewOrchestrator caps semantic Candidate Findings reruns at two before c
         return this;
       },
       async publishFileReview() {},
-      async publishSkippedFile() {},
       async publishArtifact() {}
     }),
     stepRunner: {
@@ -243,7 +241,6 @@ test("ReviewOrchestrator stops repeated unsupported semantic claims without spen
         return this;
       },
       async publishFileReview() {},
-      async publishSkippedFile() {},
       async publishArtifact() {}
     }),
     stepRunner: {
@@ -308,7 +305,6 @@ test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings ch
         return this;
       },
       async publishFileReview() {},
-      async publishSkippedFile() {},
       async publishArtifact() {}
     }),
     stepRunner: {
@@ -372,7 +368,6 @@ test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings ch
         return this;
       },
       async publishFileReview() {},
-      async publishSkippedFile() {},
       async publishArtifact() {}
     }),
     stepRunner: {
@@ -437,7 +432,6 @@ test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings ch
         return this;
       },
       async publishFileReview() {},
-      async publishSkippedFile() {},
       async publishArtifact() {}
     }),
     stepRunner: {
@@ -502,7 +496,6 @@ test("ReviewOrchestrator honors Semantic Validation missing-critical-contract st
         return this;
       },
       async publishFileReview() {},
-      async publishSkippedFile() {},
       async publishArtifact() {}
     }),
     stepRunner: {

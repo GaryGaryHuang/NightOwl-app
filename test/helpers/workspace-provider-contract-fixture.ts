@@ -15,7 +15,6 @@ export function createWorkspaceProviderFixture() {
     basePath,
     changesetOverviewPath: path.join(basePath, "changeset-overview.md"),
     filesPath: path.join(basePath, "files"),
-    skippedPath: path.join(basePath, "skipped.md"),
     indexPath: path.join(basePath, "index.md"),
     toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   };

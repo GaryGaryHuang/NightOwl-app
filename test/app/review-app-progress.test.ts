@@ -87,7 +87,6 @@ describe("createLocalReviewRunApp progress wiring", () => {
           return this;
         },
         async publishFileReview() {},
-        async publishSkippedFile() {},
         async publishArtifact() {}
       }),
       stepRunner: {
@@ -221,7 +220,6 @@ test("createLocalReviewRunApp emits a progress warning when tool-audit writes fa
           return this;
         },
         async publishFileReview() {},
-        async publishSkippedFile() {},
         async publishArtifact() {}
       }),
       onProgressEvent(event) {

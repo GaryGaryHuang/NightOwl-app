@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import {
-  appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -39,7 +38,6 @@ import {
 
 type OutputCall = "initializeRun"
   | "publishFileReview"
-  | "publishSkippedFile"
   | `publishArtifact:${ReviewArtifactKind}`;
 
 type RunLevelArtifact = "index";
@@ -129,10 +127,6 @@ test("ReviewOrchestrator treats an all-skipped run as a completed run that still
     for (const call of RUN_LEVEL_FINALIZER_CALLS) {
       assert.equal(outputSink.calls.includes(call), true, call);
     }
-    assert.equal(
-      outputSink.records.filter((entry) => entry.call === "publishSkippedFile").length,
-      harness.reviewableFiles.length
-    );
   });
 });
 
@@ -213,13 +207,6 @@ test("ReviewOrchestrator publishes run-level artifacts when getDiff failure down
       for (const call of RUN_LEVEL_FINALIZER_CALLS) {
         assert.equal(outputSink.calls.includes(call), true, call);
       }
-      assert.equal(
-        outputSink.records.some(
-          (record) =>
-            record.call === "publishSkippedFile" && record.value === failedFile
-        ),
-        true
-      );
     }
   );
 });
@@ -279,8 +266,6 @@ test("ReviewOrchestrator publishes artifacts in deterministic order after per-fi
       });
 
       assert.equal(outputSink.calls.at(-1), "publishArtifact:index");
-      assert.equal(outputSink.calls.includes("publishSkippedFile"), true);
-      assertCallAfter(outputSink.calls, "publishArtifact:index", "publishSkippedFile");
       assertCallAfter(outputSink.calls, "publishArtifact:index", "publishFileReview");
     }
   );
@@ -434,7 +419,6 @@ class RecordingOutputSink {
   async initializeRun(outputPlan: ReviewOutputPlan): Promise<RunOutputPublisher> {
     mkdirSync(outputPlan.outputTarget.basePath, { recursive: true });
     mkdirSync(outputPlan.outputTarget.filesPath, { recursive: true });
-    writeFileSync(outputPlan.outputTarget.skippedPath, "");
     this.outputTarget = outputPlan.outputTarget;
     this.notePathByFilePath = new Map(
       outputPlan.plannedNotes.map((plannedNote) => [
@@ -451,14 +435,6 @@ class RecordingOutputSink {
     writeArtifact(noteFilePath, fileResult.content);
     this.writtenFileReviews.push(noteFilePath);
     this.record("publishFileReview", noteFilePath);
-  }
-
-  async publishSkippedFile(skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]): Promise<void> {
-    appendFileSync(
-      this.outputTarget.skippedPath,
-      `- \`${skipRecord.filePath}\` — ${skipRecord.stepId} — ${skipRecord.reason}\n`
-    );
-    this.record("publishSkippedFile", skipRecord.filePath);
   }
 
   async publishArtifact(kind: ReviewArtifactKind, result: { content: string }): Promise<void> {
@@ -496,26 +472,12 @@ class RecordingOutputSink {
 }
 
 class CorruptingDiskOutputSink extends RecordingOutputSink {
-  override async initializeRun(outputPlan: ReviewOutputPlan): Promise<RunOutputPublisher> {
-    const publisher = await super.initializeRun(outputPlan);
-    writeFileSync(outputPlan.outputTarget.skippedPath, "# CORRUPTED SKIPPED LOG\n");
-    return publisher;
-  }
-
   override async publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): Promise<void> {
     const noteFilePath = this.resolveNoteFilePath(fileResult.filePath);
     writeArtifact(noteFilePath, "# CORRUPTED NOTE\n");
     writeFileSync(path.join(this.outputTarget.filesPath, "EXTRA DISK FILE.md"), "# extra\n");
     this.writtenFileReviews.push(noteFilePath);
     this.record("publishFileReview", noteFilePath);
-  }
-
-  override async publishSkippedFile(skipRecord: Parameters<RunOutputPublisher["publishSkippedFile"]>[0]): Promise<void> {
-    appendFileSync(
-      this.outputTarget.skippedPath,
-      `CORRUPTED SKIP: ${skipRecord.filePath} ${skipRecord.stepId} ${skipRecord.reason}\n`
-    );
-    this.record("publishSkippedFile", skipRecord.filePath);
   }
 }
 
@@ -583,7 +545,6 @@ function assertOutputTargetPaths(outputTarget: OutputTarget, repoRoot: string): 
     basePath,
     changesetOverviewPath: path.join(basePath, "changeset-overview.md"),
     filesPath: path.join(basePath, "files"),
-    skippedPath: path.join(basePath, "skipped.md"),
     indexPath: path.join(basePath, "index.md"),
     toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   });

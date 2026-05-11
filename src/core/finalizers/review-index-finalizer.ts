@@ -81,7 +81,6 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
       "",
       "## Run Artifacts",
       `- [changeset-overview.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.changesetOverviewPath)})`,
-      `- [skipped.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.skippedPath)})`,
       "",
       renderRunSummarySection({
         resolvedOutcomes: input.resolvedOutcomes,

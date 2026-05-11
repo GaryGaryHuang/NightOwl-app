@@ -82,7 +82,6 @@ function createSignalTestApp(options: {
         return this;
       },
       async publishFileReview() {},
-      async publishSkippedFile() {},
       async publishArtifact() {}
     }),
     changesetOverviewRunner: {
@@ -331,12 +330,10 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when cha
         async initializeRun(outputPlan) {
           mkdirSync(outputPlan.outputTarget.basePath, { recursive: true });
           mkdirSync(outputPlan.outputTarget.filesPath, { recursive: true });
-          writeFileSync(outputPlan.outputTarget.skippedPath, "");
           writeFileSync(outputPlan.outputTarget.toolAuditPath, "");
           return this;
         },
         async publishFileReview() {},
-        async publishSkippedFile() {},
         async publishArtifact(kind) {
           if (kind === "changeset-overview") {
             throw new Error("changeset overview write failed");
