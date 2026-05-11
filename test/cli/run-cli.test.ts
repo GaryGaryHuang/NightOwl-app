@@ -306,7 +306,7 @@ test("runCli prints the completed-run summary contract from the app result", asy
   assert.doesNotMatch(summary, /Output:|Repo root:|Files:|Summary:|Index:|Manifest:|Tool Audit:|Skipped:/u);
 });
 
-test("runCli surfaces a clear runtime error when Step 0 session startup fails", async () => {
+test("runCli surfaces a clear runtime error when Changeset Overview session startup fails", async () => {
   const app = createLocalReviewRunApp({
     workingDirectory: REPO_ROOT,
     sourceProvider: {

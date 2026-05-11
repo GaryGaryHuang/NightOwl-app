@@ -110,15 +110,15 @@ describe("ReviewOrchestrator progress events", () => {
 
   test("event sequence covers all phases, per-file steps, skip, and finalize", () => {
     assert.deepEqual(events, [
-      "phase:step0",
+      "phase:changeset-overview",
       "phase:planning",
       "initialized:2:/workspace/repo/.nightowl/review/feature-branch_03131430",
       "phase:reviewing",
       "claimed:1:src/app.ts",
       "progress:src/app.ts:review-basis",
-      "progress:src/app.ts:step5-validation-interrogation",
-      "progress:src/app.ts:step6-cognitive-simulation",
-      "progress:src/app.ts:step7-summary",
+      "progress:src/app.ts:candidate-findings",
+      "progress:src/app.ts:semantic-validation",
+      "progress:src/app.ts:review-summary",
       "completed:src/app.ts",
       "claimed:2:packages/app/index.ts",
       "skipped:packages/app/index.ts:review-basis:deterministic validation failed",
@@ -127,12 +127,12 @@ describe("ReviewOrchestrator progress events", () => {
   });
 });
 
-test("ReviewOrchestrator caps semantic Step 5/6 reruns at two before continuing to Step 7", async () => {
+test("ReviewOrchestrator caps semantic Candidate Findings reruns at two before continuing to Review Summary", async () => {
   const events: string[] = [];
   const stepEvents: string[] = [];
-  let step5Attempt = 0;
-  let step7LoopAction: string | undefined;
-  let step7MissingInformationIds: string[] = [];
+  let candidateFindingsAttempt = 0;
+  let reviewSummaryLoopAction: string | undefined;
+  let reviewSummaryMissingInformationIds: string[] = [];
   const orchestrator = new ReviewOrchestrator({
     workingDirectory: "/workspace/repo",
     timestampProvider: () => "03131431",
@@ -162,16 +162,16 @@ test("ReviewOrchestrator caps semantic Step 5/6 reruns at two before continuing 
     stepRunner: {
       async run({ step, context }) {
         stepEvents.push(step.stepId);
-        if (step.stepId === "step5-validation-interrogation") {
-          step5Attempt += 1;
+        if (step.stepId === "candidate-findings") {
+          candidateFindingsAttempt += 1;
         }
-        if (step.stepId === "step7-summary") {
-          step7LoopAction = context.getValidationReportV1()?.loopControl.action;
-          step7MissingInformationIds =
+        if (step.stepId === "review-summary") {
+          reviewSummaryLoopAction = context.getValidationReportV1()?.loopControl.action;
+          reviewSummaryMissingInformationIds =
             context.getValidationReportV1()?.missingInformationItems.map((item) => item.itemId) ?? [];
         }
         return buildSemanticLoopStepResult(step.stepId, context.filePath, {
-          candidateVariant: step5Attempt
+          candidateVariant: candidateFindingsAttempt
         });
       }
     },
@@ -191,35 +191,35 @@ test("ReviewOrchestrator caps semantic Step 5/6 reruns at two before continuing 
   assert.equal(result.successfulFileCount, 1);
   assert.deepEqual(stepEvents, [
     "review-basis",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step7-summary"
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "review-summary"
   ]);
   assert.deepEqual(
     events.filter((event) => event.startsWith("progress:src/app.ts")),
     [
       "progress:src/app.ts:review-basis",
-      "progress:src/app.ts:step5-validation-interrogation",
-      "progress:src/app.ts:step6-cognitive-simulation",
-      "progress:src/app.ts:step5-validation-interrogation",
-      "progress:src/app.ts:step6-cognitive-simulation",
-      "progress:src/app.ts:step5-validation-interrogation",
-      "progress:src/app.ts:step6-cognitive-simulation",
-      "progress:src/app.ts:step7-summary"
+      "progress:src/app.ts:candidate-findings",
+      "progress:src/app.ts:semantic-validation",
+      "progress:src/app.ts:candidate-findings",
+      "progress:src/app.ts:semantic-validation",
+      "progress:src/app.ts:candidate-findings",
+      "progress:src/app.ts:semantic-validation",
+      "progress:src/app.ts:review-summary"
     ]
   );
-  assert.equal(step7LoopAction, "accept");
-  assert.deepEqual(step7MissingInformationIds, []);
+  assert.equal(reviewSummaryLoopAction, "accept");
+  assert.deepEqual(reviewSummaryMissingInformationIds, []);
 });
 
 test("ReviewOrchestrator stops repeated unsupported semantic claims without spending all reruns", async () => {
   const stepEvents: string[] = [];
-  let step7LoopAction: string | undefined;
-  let step7MissingInformationIds: string[] = [];
+  let reviewSummaryLoopAction: string | undefined;
+  let reviewSummaryMissingInformationIds: string[] = [];
   const orchestrator = new ReviewOrchestrator({
     workingDirectory: "/workspace/repo",
     timestampProvider: () => "03131432",
@@ -249,9 +249,9 @@ test("ReviewOrchestrator stops repeated unsupported semantic claims without spen
     stepRunner: {
       async run({ step, context }) {
         stepEvents.push(step.stepId);
-        if (step.stepId === "step7-summary") {
-          step7LoopAction = context.getValidationReportV1()?.loopControl.action;
-          step7MissingInformationIds =
+        if (step.stepId === "review-summary") {
+          reviewSummaryLoopAction = context.getValidationReportV1()?.loopControl.action;
+          reviewSummaryMissingInformationIds =
             context.getValidationReportV1()?.missingInformationItems.map((item) => item.itemId) ?? [];
         }
         return buildSemanticLoopStepResult(step.stepId, context.filePath, {
@@ -272,19 +272,19 @@ test("ReviewOrchestrator stops repeated unsupported semantic claims without spen
   assert.equal(result.successfulFileCount, 1);
   assert.deepEqual(stepEvents, [
     "review-basis",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step7-summary"
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "review-summary"
   ]);
-  assert.equal(step7LoopAction, "accept");
-  assert.deepEqual(step7MissingInformationIds, []);
+  assert.equal(reviewSummaryLoopAction, "accept");
+  assert.deepEqual(reviewSummaryMissingInformationIds, []);
 });
 
-test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only evidence", async () => {
+test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings changes only evidence", async () => {
   const stepEvents: string[] = [];
-  let step5Attempt = 0;
+  let candidateFindingsAttempt = 0;
   const orchestrator = new ReviewOrchestrator({
     workingDirectory: "/workspace/repo",
     timestampProvider: () => "03131434",
@@ -314,12 +314,12 @@ test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only e
     stepRunner: {
       async run({ step, context }) {
         stepEvents.push(step.stepId);
-        if (step.stepId === "step5-validation-interrogation") {
-          step5Attempt += 1;
+        if (step.stepId === "candidate-findings") {
+          candidateFindingsAttempt += 1;
         }
         return buildSemanticLoopStepResult(step.stepId, context.filePath, {
           candidateVariant: 1,
-          candidateEvidenceVariant: step5Attempt
+          candidateEvidenceVariant: candidateFindingsAttempt
         });
       }
     }
@@ -336,19 +336,19 @@ test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only e
   assert.equal(result.successfulFileCount, 1);
   assert.deepEqual(stepEvents, [
     "review-basis",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step7-summary"
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "review-summary"
   ]);
 });
 
-test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only hypothesis closure", async () => {
+test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings changes only hypothesis closure", async () => {
   const stepEvents: string[] = [];
-  let step5Attempt = 0;
+  let candidateFindingsAttempt = 0;
   const orchestrator = new ReviewOrchestrator({
     workingDirectory: "/workspace/repo",
     timestampProvider: () => "03131435",
@@ -378,13 +378,13 @@ test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only h
     stepRunner: {
       async run({ step, context }) {
         stepEvents.push(step.stepId);
-        if (step.stepId === "step5-validation-interrogation") {
-          step5Attempt += 1;
+        if (step.stepId === "candidate-findings") {
+          candidateFindingsAttempt += 1;
         }
         return buildSemanticLoopStepResult(step.stepId, context.filePath, {
           candidateVariant: 1,
           candidateEvidenceVariant: 1,
-          candidateHypothesisClosureVariant: step5Attempt
+          candidateHypothesisClosureVariant: candidateFindingsAttempt
         });
       }
     }
@@ -401,19 +401,19 @@ test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only h
   assert.equal(result.successfulFileCount, 1);
   assert.deepEqual(stepEvents, [
     "review-basis",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step7-summary"
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "review-summary"
   ]);
 });
 
-test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only critical missing information", async () => {
+test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings changes only critical missing information", async () => {
   const stepEvents: string[] = [];
-  let step5Attempt = 0;
+  let candidateFindingsAttempt = 0;
   const orchestrator = new ReviewOrchestrator({
     workingDirectory: "/workspace/repo",
     timestampProvider: () => "03131436",
@@ -443,13 +443,13 @@ test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only c
     stepRunner: {
       async run({ step, context }) {
         stepEvents.push(step.stepId);
-        if (step.stepId === "step5-validation-interrogation") {
-          step5Attempt += 1;
+        if (step.stepId === "candidate-findings") {
+          candidateFindingsAttempt += 1;
         }
         return buildSemanticLoopStepResult(step.stepId, context.filePath, {
           candidateVariant: 1,
           candidateEvidenceVariant: 1,
-          candidateCriticalMissingInformationVariant: step5Attempt
+          candidateCriticalMissingInformationVariant: candidateFindingsAttempt
         });
       }
     }
@@ -466,19 +466,19 @@ test("ReviewOrchestrator does not stop semantic rerun when Step 5 changes only c
   assert.equal(result.successfulFileCount, 1);
   assert.deepEqual(stepEvents, [
     "review-basis",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step7-summary"
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "review-summary"
   ]);
 });
 
-test("ReviewOrchestrator honors Step 6 missing-critical-contract stop without semantic rerun", async () => {
+test("ReviewOrchestrator honors Semantic Validation missing-critical-contract stop without semantic rerun", async () => {
   const stepEvents: string[] = [];
-  let step7MissingInformationIds: string[] = [];
+  let reviewSummaryMissingInformationIds: string[] = [];
   const orchestrator = new ReviewOrchestrator({
     workingDirectory: "/workspace/repo",
     timestampProvider: () => "03131433",
@@ -508,8 +508,8 @@ test("ReviewOrchestrator honors Step 6 missing-critical-contract stop without se
     stepRunner: {
       async run({ step, context }) {
         stepEvents.push(step.stepId);
-        if (step.stepId === "step7-summary") {
-          step7MissingInformationIds =
+        if (step.stepId === "review-summary") {
+          reviewSummaryMissingInformationIds =
             context.getValidationReportV1()?.missingInformationItems.map((item) => item.itemId) ?? [];
         }
         return buildSemanticLoopStepResult(step.stepId, context.filePath, {
@@ -530,11 +530,11 @@ test("ReviewOrchestrator honors Step 6 missing-critical-contract stop without se
   assert.equal(result.successfulFileCount, 1);
   assert.deepEqual(stepEvents, [
     "review-basis",
-    "step5-validation-interrogation",
-    "step6-cognitive-simulation",
-    "step7-summary"
+    "candidate-findings",
+    "semantic-validation",
+    "review-summary"
   ]);
-  assert.deepEqual(step7MissingInformationIds, ["MI1"]);
+  assert.deepEqual(reviewSummaryMissingInformationIds, ["MI1"]);
 });
 
 /**
@@ -607,7 +607,7 @@ function buildSemanticLoopStepResult(
     };
   }
 
-  if (stepId === "step5-validation-interrogation") {
+  if (stepId === "candidate-findings") {
     return {
       stepId,
       applyTo(context: FileReviewContext) {
@@ -623,7 +623,7 @@ function buildSemanticLoopStepResult(
     };
   }
 
-  if (stepId === "step6-cognitive-simulation") {
+  if (stepId === "semantic-validation") {
     return {
       stepId,
       applyTo(context: FileReviewContext) {
@@ -639,7 +639,7 @@ function buildSemanticLoopStepResult(
     };
   }
 
-  if (stepId === "step7-summary") {
+  if (stepId === "review-summary") {
     return {
       stepId,
       applyTo(context: FileReviewContext) {
@@ -714,7 +714,7 @@ function createRerunValidationReportV1() {
     missingInformationItems: [],
     loopControl: {
       action: "rerun",
-      reason: "Step 5 must repair machine-actionable evidence gaps"
+      reason: "Candidate Findings must repair machine-actionable evidence gaps"
     }
   };
 }
@@ -734,7 +734,7 @@ function createStopValidationReportV1() {
       {
         itemId: "MI1",
         description: "Need the external null-input contract before approving the candidate.",
-        whyItMatters: "Without the contract, Step 6 cannot distinguish a real defect from unsupported speculation."
+        whyItMatters: "Without the contract, Semantic Validation cannot distinguish a real defect from unsupported speculation."
       }
     ],
     loopControl: {

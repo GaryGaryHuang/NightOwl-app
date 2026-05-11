@@ -300,27 +300,27 @@ function createReviewBasis(): ReviewBasisV1 {
     roleInChangeset: "Owns review prompt harness state handoff.",
     changedBehavior: [
       {
-        before: "Step 5 consumed prose sections.",
-        after: "Step 5 consumes ReviewBasis evidence graph.",
+        before: "Candidate Findings consumed prose sections.",
+        after: "Candidate Findings consumes ReviewBasis evidence graph.",
         evidenceIds: ["E1"]
       }
     ],
     facts: [
       {
-        statement: "ReviewBasis is emitted before Step 5.",
+        statement: "ReviewBasis is emitted before Candidate Findings.",
         evidenceIds: ["E1"]
       }
     ],
     inferences: [
       {
-        statement: "Step 5 can validate source evidence IDs.",
+        statement: "Candidate Findings can validate source evidence IDs.",
         basedOnEvidenceIds: ["E1"],
         confidence: "high"
       }
     ],
     dependencyMap: {
       upstreamCallers: ["ReviewOrchestrator"],
-      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      downstreamConsumers: ["CandidateFindingsStep"],
       externalContracts: [],
       sharedStateOrSideEffects: ["FileReviewContext"]
     },
@@ -339,7 +339,7 @@ function createReviewBasis(): ReviewBasisV1 {
       {
         hypothesisId: "H1",
         statement: "Evidence refs may be missing.",
-        triggerCondition: "Step 5 cites absent evidence ID.",
+        triggerCondition: "Candidate Findings cites absent evidence ID.",
       }
     ],
     missingInformation: [],

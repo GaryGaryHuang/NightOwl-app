@@ -1,6 +1,6 @@
 import type { ReviewChangesetEntry } from "../providers/review-source-provider.ts";
 
-/** Step 0's V2 run-level contract plus host-normalized changeset descriptors. */
+/** Changeset Overview's V2 run-level contract plus host-normalized changeset descriptors. */
 
 export const CHANGE_MAP_STATUSES = ["A", "M", "D", "R"] as const;
 export type ChangeMapStatus = (typeof CHANGE_MAP_STATUSES)[number];

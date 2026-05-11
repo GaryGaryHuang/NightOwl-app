@@ -35,6 +35,7 @@ import {
   DryRunJudgeSessionFactory
 } from "../services/dry-run-judge-session-factory.ts";
 import { RunLifecycleManager } from "./run-lifecycle-manager.ts";
+import { CHANGESET_OVERVIEW_STEP_ID } from "../core/review-step-ids.ts";
 
 export interface RunDeps {
   orchestrator: ReviewOrchestrator;
@@ -205,10 +206,10 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     shared.changesetOverviewRunner ??
     new ChangesetOverviewRunner({
       reviewSessionFactory,
-      onStep0LogEvent(event) {
+      onChangesetOverviewLogEvent(event) {
         shared.onProgressEvent?.({
           type: "review-session-log",
-          stepId: "changeset-overview",
+          stepId: CHANGESET_OVERVIEW_STEP_ID,
           message: event.message
         });
       }

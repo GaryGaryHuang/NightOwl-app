@@ -94,7 +94,7 @@ test("resolveFileOutcomes handles mixed successful and skipped outcomes", () => 
   const resolved = resolveFileOutcomes(
     createPlannedNotesFromPaths(["src/ok.ts", "src/skip.ts"]),
     [createSuccessfulFile("src/ok.ts", [createFinding("nice", 85)])],
-    [createSkippedFile("src/skip.ts", "step6-cognitive-simulation", "timeout")]
+    [createSkippedFile("src/skip.ts", "semantic-validation", "timeout")]
   );
 
   assert.equal(resolved[0].status, "successful");

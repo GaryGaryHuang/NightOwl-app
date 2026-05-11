@@ -59,7 +59,7 @@ function parseJsonBlock(prompt: string, blockName: string): unknown {
   return JSON.parse(match[1]);
 }
 
-test("ChangesetOverviewRunner produces a RunContext from a valid Step 0 ChangeMapReadinessV2 response", async () => {
+test("ChangesetOverviewRunner produces a RunContext from a valid Changeset Overview ChangeMapReadinessV2 response", async () => {
   const prompts: string[] = [];
   const profiles: unknown[] = [];
   const runner = new ChangesetOverviewRunner({
@@ -145,7 +145,7 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   const prompts: string[] = [];
   const logMessages: string[] = [];
   const runner = new ChangesetOverviewRunner({
-    onStep0LogEvent(event) {
+    onChangesetOverviewLogEvent(event) {
       logMessages.push(event.message);
     },
     reviewSessionFactory: {
@@ -185,7 +185,7 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   assert.equal(retryFeedback.previousFailure.parseStage, "initial_parse");
   assert.equal(typeof retryFeedback.instruction, "string");
   assert.equal(logMessages.length, 1);
-  assert.match(logMessages[0]!, /Step 0 validation failed \(attempt 1, code=PARSE/u);
+  assert.match(logMessages[0]!, /Changeset Overview validation failed \(attempt 1, code=PARSE/u);
   assert.match(logMessages[0]!, /stage=initial_parse/u);
   assert.match(logMessages[0]!, /responseBytes=/u);
 });
@@ -194,7 +194,7 @@ test("ChangesetOverviewRunner logs parse excerpts for trailing response content"
   let createCalls = 0;
   const logMessages: string[] = [];
   const runner = new ChangesetOverviewRunner({
-    onStep0LogEvent(event) {
+    onChangesetOverviewLogEvent(event) {
       logMessages.push(event.message);
     },
     reviewSessionFactory: {
@@ -230,7 +230,7 @@ test("ChangesetOverviewRunner logs parse excerpts for trailing response content"
 test("ChangesetOverviewRunner logs successful syntax repairs", async () => {
   const logMessages: string[] = [];
   const runner = new ChangesetOverviewRunner({
-    onStep0LogEvent(event) {
+    onChangesetOverviewLogEvent(event) {
       logMessages.push(event.message);
     },
     reviewSessionFactory: {
@@ -252,13 +252,13 @@ test("ChangesetOverviewRunner logs successful syntax repairs", async () => {
   });
 
   assert.equal(logMessages.length, 1);
-  assert.match(logMessages[0]!, /Step 0 JSON syntax repair applied \(attempt 1/u);
+  assert.match(logMessages[0]!, /Changeset Overview JSON syntax repair applied \(attempt 1/u);
   assert.match(logMessages[0]!, /repair=object_extraction/u);
   assert.match(logMessages[0]!, /responseBytes=/u);
   assert.match(logMessages[0]!, /parsedBytes=/u);
 });
 
-test("ChangesetOverviewRunner normalizes invalid Step 0 confidence without retry", async () => {
+test("ChangesetOverviewRunner normalizes invalid Changeset Overview confidence without retry", async () => {
   let createCalls = 0;
   const prompts: string[] = [];
   const invalidJson = JSON.stringify({
@@ -327,7 +327,7 @@ test("ChangesetOverviewRunner aborts after two consecutive validation failures",
         changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
         userContext: []
       }),
-    /Step 0 ChangeMapReadiness validation failed \[PARSE\]/
+    /Changeset Overview ChangeMapReadiness validation failed \[PARSE\]/
   );
   assert.equal(createCalls, 2);
 });
@@ -465,7 +465,7 @@ test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
   assert.equal(runContext.changesetFiles.length, 0);
 });
 
-test("ChangesetOverviewRunner aborts an in-flight Step 0 turn without consuming the retry budget", async () => {
+test("ChangesetOverviewRunner aborts an in-flight Changeset Overview turn without consuming the retry budget", async () => {
   const controller = new AbortController();
   let createCalls = 0;
   let abortCalls = 0;

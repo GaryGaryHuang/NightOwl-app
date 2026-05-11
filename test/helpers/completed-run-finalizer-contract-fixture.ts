@@ -127,7 +127,7 @@ export function createVerifierReportArtifactEntry(
 ): VerifierReportArtifactEntry {
   return {
     filePath: overrides.filePath ?? "src/app.ts",
-    stepId: overrides.stepId ?? "step5-validation-interrogation",
+    stepId: overrides.stepId ?? "candidate-findings",
     findingId: overrides.findingId ?? "F1",
     taxonomy: overrides.taxonomy ?? "OK",
     outcome: overrides.outcome ?? "accepted",

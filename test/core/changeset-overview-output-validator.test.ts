@@ -2,22 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  Step0OutputValidationError,
-  Step0OutputValidator
-} from "../../src/core/step0-output-validator.ts";
+  ChangesetOverviewOutputValidationError,
+  ChangesetOverviewOutputValidator
+} from "../../src/core/changeset-overview-output-validator.ts";
 import {
   type ChangeMapReadinessV2,
   extractChangedPathsFromChangesetEntries
 } from "../../src/core/change-map.ts";
 
-const expectedUserContext = ["Root Cause: context loss before Step 5"];
+const expectedUserContext = ["Root Cause: context loss before Candidate Findings"];
 
 function makeValidV2(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     reviewObjective: {
       summary: "Review prompt harness redesign",
       requestedFocus: ["evidence chain"],
-      expectedBehaviorSummary: ["Step 5 uses structured ReviewBasis"]
+      expectedBehaviorSummary: ["Candidate Findings uses structured ReviewBasis"]
     },
     userBehavior: [
       {
@@ -40,7 +40,7 @@ function makeValidV2(overrides: Record<string, unknown> = {}): string {
     ].join("\n"),
     behaviorChanges: [
       {
-        description: "Step 0 records run-level behavior context",
+        description: "Changeset Overview records run-level behavior context",
         files: ["src/app.ts"]
       }
     ],
@@ -53,7 +53,7 @@ function validateV2(
   responseText: string,
   userContext: readonly string[] = expectedUserContext
 ): ChangeMapReadinessV2 {
-  return new Step0OutputValidator().validate({
+  return new ChangesetOverviewOutputValidator().validate({
     responseText,
     userContext
   });
@@ -61,26 +61,26 @@ function validateV2(
 
 function expectFailure(
   fn: () => void,
-  code: Step0OutputValidationError["code"],
+  code: ChangesetOverviewOutputValidationError["code"],
   messagePattern?: RegExp
-): Step0OutputValidationError {
+): ChangesetOverviewOutputValidationError {
   try {
     fn();
   } catch (error) {
     assert.ok(
-      error instanceof Step0OutputValidationError,
-      `expected Step0OutputValidationError, received ${(error as Error)?.constructor?.name ?? typeof error}`
+      error instanceof ChangesetOverviewOutputValidationError,
+      `expected ChangesetOverviewOutputValidationError, received ${(error as Error)?.constructor?.name ?? typeof error}`
     );
-    assert.equal((error as Step0OutputValidationError).code, code);
+    assert.equal((error as ChangesetOverviewOutputValidationError).code, code);
     if (messagePattern) {
       assert.match((error as Error).message, messagePattern);
     }
-    return error as Step0OutputValidationError;
+    return error as ChangesetOverviewOutputValidationError;
   }
   throw new Error(`expected validator to throw with code ${code}`);
 }
 
-test("Step0OutputValidator accepts valid output and injects userContext from host", () => {
+test("ChangesetOverviewOutputValidator accepts valid output and injects userContext from host", () => {
   const changeMap = validateV2(makeValidV2());
 
   assert.deepEqual(changeMap.userContext, expectedUserContext);
@@ -90,12 +90,12 @@ test("Step0OutputValidator accepts valid output and injects userContext from hos
   assert.equal(changeMap.behaviorChanges[0]?.files[0], "src/app.ts");
 });
 
-test("Step0OutputValidator ignores unknown top-level fields", () => {
+test("ChangesetOverviewOutputValidator ignores unknown top-level fields", () => {
   const changeMap = validateV2(makeValidV2({ changedFiles: [], schemaVersion: 2 }));
   assert.ok(changeMap.reviewObjective);
 });
 
-test("Step0OutputValidator accepts behaviorChanges with extra fields and any file paths", () => {
+test("ChangesetOverviewOutputValidator accepts behaviorChanges with extra fields and any file paths", () => {
   const changeMap = validateV2(
     makeValidV2({
       behaviorChanges: [
@@ -111,7 +111,7 @@ test("Step0OutputValidator accepts behaviorChanges with extra fields and any fil
   assert.equal(changeMap.behaviorChanges[0]?.files[0], "src/not-in-changeset.ts");
 });
 
-test("Step0OutputValidator accepts unresolvedUnknowns with extra fields", () => {
+test("ChangesetOverviewOutputValidator accepts unresolvedUnknowns with extra fields", () => {
   const changeMap = validateV2(
     makeValidV2({
       unresolvedUnknowns: [
@@ -127,7 +127,7 @@ test("Step0OutputValidator accepts unresolvedUnknowns with extra fields", () => 
   assert.equal(changeMap.unresolvedUnknowns[0]?.question, "API 版本？");
 });
 
-test("Step0OutputValidator returns a deeply frozen ChangeMapReadinessV2", () => {
+test("ChangesetOverviewOutputValidator returns a deeply frozen ChangeMapReadinessV2", () => {
   const changeMap = validateV2(makeValidV2());
 
   assert.ok(Object.isFrozen(changeMap));
@@ -146,10 +146,10 @@ test("Step0OutputValidator returns a deeply frozen ChangeMapReadinessV2", () => 
   }, TypeError);
 });
 
-test("Step0OutputValidator rejects invalid JSON with PARSE diagnostics", () => {
+test("ChangesetOverviewOutputValidator rejects invalid JSON with PARSE diagnostics", () => {
   expectFailure(
     () =>
-      new Step0OutputValidator().validate({
+      new ChangesetOverviewOutputValidator().validate({
         responseText: "not json",
         userContext: []
       }),
@@ -158,7 +158,7 @@ test("Step0OutputValidator rejects invalid JSON with PARSE diagnostics", () => {
 
   const error = expectFailure(
     () =>
-      new Step0OutputValidator().validate({
+      new ChangesetOverviewOutputValidator().validate({
         responseText: '"not an object" trailing assistant text',
         userContext: []
       }),
@@ -173,8 +173,8 @@ test("Step0OutputValidator rejects invalid JSON with PARSE diagnostics", () => {
   assert.match(error.diagnostic.responseExcerpt ?? "", /<<<ERROR>>>trailing assistant text/u);
 });
 
-test("Step0OutputValidator syntax-repairs code fences and harmless prose around JSON", () => {
-  const validator = new Step0OutputValidator();
+test("ChangesetOverviewOutputValidator syntax-repairs code fences and harmless prose around JSON", () => {
+  const validator = new ChangesetOverviewOutputValidator();
   const fenced = validator.validateDetailed({
     responseText: ["```json", makeValidV2(), "```"].join("\n"),
     userContext: expectedUserContext
@@ -188,8 +188,8 @@ test("Step0OutputValidator syntax-repairs code fences and harmless prose around 
   assert.equal(extracted.parseMetadata.repairKind, "object_extraction");
 });
 
-test("Step0OutputValidator rejects ambiguous or truncated JSON without repair", () => {
-  const validator = new Step0OutputValidator();
+test("ChangesetOverviewOutputValidator rejects ambiguous or truncated JSON without repair", () => {
+  const validator = new ChangesetOverviewOutputValidator();
   const multiple = expectFailure(
     () =>
       validator.validate({
@@ -212,10 +212,10 @@ test("Step0OutputValidator rejects ambiguous or truncated JSON without repair", 
   assert.equal(truncated.diagnostic.parseStage, "initial_parse");
 });
 
-test("Step0OutputValidator rejects non-object payload", () => {
+test("ChangesetOverviewOutputValidator rejects non-object payload", () => {
   expectFailure(
     () =>
-      new Step0OutputValidator().validate({
+      new ChangesetOverviewOutputValidator().validate({
         responseText: "[]",
         userContext: []
       }),
@@ -223,7 +223,7 @@ test("Step0OutputValidator rejects non-object payload", () => {
   );
 });
 
-test("Step0OutputValidator normalizes overviewMarkdown presentation drift", () => {
+test("ChangesetOverviewOutputValidator normalizes overviewMarkdown presentation drift", () => {
   const extraSpace = validateV2(makeValidV2({
     overviewMarkdown: " ## Changeset Overview\nx"
   }));
@@ -239,7 +239,7 @@ test("Step0OutputValidator normalizes overviewMarkdown presentation drift", () =
   assert.equal(missingHeader.overviewMarkdown, "## Changeset Overview\nScope: feature");
 });
 
-test("Step0OutputValidator allows empty behaviorChanges and unresolvedUnknowns", () => {
+test("ChangesetOverviewOutputValidator allows empty behaviorChanges and unresolvedUnknowns", () => {
   const changeMap = validateV2(
     makeValidV2({ behaviorChanges: [], unresolvedUnknowns: [] })
   );
@@ -248,7 +248,7 @@ test("Step0OutputValidator allows empty behaviorChanges and unresolvedUnknowns",
   assert.equal(changeMap.unresolvedUnknowns.length, 0);
 });
 
-test("Step0OutputValidator defaults invalid userBehavior confidence to inferred", () => {
+test("ChangesetOverviewOutputValidator defaults invalid userBehavior confidence to inferred", () => {
   const changeMap = validateV2(
     makeValidV2({
       userBehavior: [
@@ -263,7 +263,7 @@ test("Step0OutputValidator defaults invalid userBehavior confidence to inferred"
   assert.equal(changeMap.userBehavior[0]?.confidence, "inferred");
 });
 
-test("Step0OutputValidator defaults missing optional arrays to empty arrays", () => {
+test("ChangesetOverviewOutputValidator defaults missing optional arrays to empty arrays", () => {
   const changeMap = validateV2(
     makeValidV2({
       behaviorChanges: undefined,
@@ -284,7 +284,7 @@ test("Step0OutputValidator defaults missing optional arrays to empty arrays", ()
   assert.deepEqual(changeMap.userBehavior, []);
 });
 
-test("Step0OutputValidator drops malformed optional entries and preserves usable fields", () => {
+test("ChangesetOverviewOutputValidator drops malformed optional entries and preserves usable fields", () => {
   const changeMap = validateV2(
     makeValidV2({
       behaviorChanges: [
@@ -316,7 +316,7 @@ test("Step0OutputValidator drops malformed optional entries and preserves usable
   assert.equal(changeMap.userBehavior[0]?.confidence, "inferred");
 });
 
-test("Step0OutputValidator rejects an empty object with no usable review context", () => {
+test("ChangesetOverviewOutputValidator rejects an empty object with no usable review context", () => {
   expectFailure(
     () =>
       validateV2(

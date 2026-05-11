@@ -529,9 +529,9 @@ test("ReviewOrchestrator preserves earlier successful file snapshots when a late
     assert.match(writtenNotes.get(laterNotePath) ?? "", /^# [\s\S]*^## Summary/mu);
     assert.deepEqual(stepEvents.slice(0, 5), [
       ["review-basis", reviewableFiles[0]],
-      ["step5-validation-interrogation", reviewableFiles[0]],
-      ["step6-cognitive-simulation", reviewableFiles[0]],
-      ["step7-summary", reviewableFiles[0]],
+      ["candidate-findings", reviewableFiles[0]],
+      ["semantic-validation", reviewableFiles[0]],
+      ["review-summary", reviewableFiles[0]],
       ["review-basis", failedFile]
     ]);
     assert.ok(stepEvents.some(([, filePath]) => filePath === laterFile));

@@ -22,14 +22,14 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
       outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
       systemMessage: "step system",
-      stepId: "step7-summary"
+      stepId: "review-summary"
     });
 
     const response = await session.sendAndWait("please review");
-    assert.equal(response, getDryRunStubResponse("step7-summary"));
+    assert.equal(response, getDryRunStubResponse("review-summary"));
   });
 
-  test("falls back to generic stub for removed legacy Step 1-4 step IDs", async () => {
+  test("falls back to generic stub for retired prose module IDs", async () => {
     const factory = new DryRunReviewSessionFactory();
     const session = await factory.createSession({
       knowledgeMode: "disabled",
@@ -37,7 +37,7 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
       outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
       systemMessage: "step system",
-      stepId: "step1-overview"
+      stepId: "overview-module"
     });
 
     const response = await session.sendAndWait("please review");
@@ -94,7 +94,7 @@ describe("Dry-run stub catalog completeness", () => {
     }
   });
 
-  test("Step 0 (changeset-overview) is generated dynamically from the prompt with normalized statuses and template markdown", () => {
+  test("Changeset Overview (changeset-overview) is generated dynamically from the prompt with normalized statuses and template markdown", () => {
     const prompt = [
       "<changed_files>",
       "A\tsrc/added.ts",

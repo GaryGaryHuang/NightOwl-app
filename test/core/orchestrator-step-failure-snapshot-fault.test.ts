@@ -46,9 +46,9 @@ function createStepFailureRunner(input: {
   failedFile: string;
   failedStepId:
     | "review-basis"
-    | "step5-validation-interrogation"
-    | "step6-cognitive-simulation"
-    | "step7-summary";
+    | "candidate-findings"
+    | "semantic-validation"
+    | "review-summary";
   failureCause:
     | "judge rejected"
     | "judge timeout"
@@ -188,7 +188,7 @@ test("ReviewOrchestrator aborts with the output error when interrupted snapshot 
       stepRunner: createStepFailureRunner({
         stepEvents,
         failedFile,
-        failedStepId: "step6-cognitive-simulation",
+        failedStepId: "semantic-validation",
         failureCause: "deterministic validation failed"
       }),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),
@@ -270,7 +270,7 @@ test("ReviewOrchestrator aborts with the output error when publishSkippedFile fa
       stepRunner: createStepFailureRunner({
         stepEvents,
         failedFile,
-        failedStepId: "step7-summary",
+        failedStepId: "review-summary",
         failureCause: "judge rejected"
       }),
       changesetOverviewRunner: createDefaultChangesetOverviewRunner(),

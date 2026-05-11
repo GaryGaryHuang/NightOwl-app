@@ -1,6 +1,6 @@
 import type {
-  MCPHTTPServerConfig,
-  MCPStdioServerConfig,
+  MCPLocalServerConfig,
+  MCPRemoteServerConfig,
   MCPServerConfig
 } from "@github/copilot-sdk";
 
@@ -50,7 +50,7 @@ export class KnowledgeSvc {
       return {};
     }
 
-    const context7: MCPHTTPServerConfig = {
+    const context7: MCPRemoteServerConfig = {
       type: "http",
       url: CONTEXT7_REMOTE_URL,
       tools: ["*"]
@@ -82,7 +82,7 @@ export class KnowledgeSvc {
         merged.context7 = context7Config;
       } else if (isRemoteConfig(config)) {
         // Clone remote entries so session setup cannot mutate the parsed repo config object.
-        const remoteConfig: MCPHTTPServerConfig = {
+        const remoteConfig: MCPRemoteServerConfig = {
           type: config.type,
           url: config.url,
           tools: config.tools === undefined ? ["*"] : [...config.tools],
@@ -93,7 +93,7 @@ export class KnowledgeSvc {
       } else {
         // Validated in constructor: non-context7, non-remote entry is always local.
         const localConfig = config as ReviewLocalMcpServerConfig;
-        const resolvedConfig: MCPStdioServerConfig = {
+        const resolvedConfig: MCPLocalServerConfig = {
           type: localConfig.type,
           command: localConfig.command,
           args: localConfig.args === undefined ? [] : [...localConfig.args],
@@ -146,9 +146,9 @@ function isContext7OverrideConfig(
 }
 
 function mergeContext7Config(
-  base: MCPHTTPServerConfig,
+  base: MCPRemoteServerConfig,
   override: ReviewContext7OverrideConfig
-): MCPHTTPServerConfig {
+): MCPRemoteServerConfig {
   // tools replacement: repo-local override fully replaces the built-in wildcard default,
   // rather than appending to it. If override.tools is absent, the built-in default is kept.
   const tools =

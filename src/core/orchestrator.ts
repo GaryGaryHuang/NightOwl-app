@@ -36,13 +36,18 @@ import {
 } from "./review-path-resolver.ts";
 import { ReviewStatePromptSerializer } from "./review-state-prompt-serializer.ts";
 import {
+  CANDIDATE_FINDINGS_STEP_ID,
+  CHANGESET_OVERVIEW_STEP_ID,
+  SEMANTIC_VALIDATION_STEP_ID
+} from "./review-step-ids.ts";
+import {
   semanticCandidateFingerprint,
   type ValidationReportV1
 } from "./semantic-review.ts";
 import { ReviewBasisStep } from "./steps/review-basis-step.ts";
-import { Step5ValidationInterrogationStep } from "./steps/step5-validation-interrogation.ts";
-import { Step6CognitiveSimulationStep } from "./steps/step6-cognitive-simulation.ts";
-import { Step7SummaryStep } from "./steps/step7-summary.ts";
+import { CandidateFindingsStep } from "./steps/candidate-findings-step.ts";
+import { SemanticValidationStep } from "./steps/semantic-validation-step.ts";
+import { ReviewSummaryStep } from "./steps/review-summary-step.ts";
 import {
   type ReviewOutputPlan,
   type ReviewOutputTarget,
@@ -107,7 +112,7 @@ export interface ReviewOrchestratorOptions {
 }
 
 /**
- * Coordinate the full review run: Step 0, per-file fan-out, and final run-level artifacts.
+ * Coordinate the full review run: Changeset Overview, per-file fan-out, and final run-level artifacts.
  */
 export class ReviewOrchestrator {
   readonly #changesetOverviewRunner: Pick<ChangesetOverviewRunner, "run">;
@@ -174,20 +179,20 @@ export class ReviewOrchestrator {
   ): Promise<ReviewRunSummary> {
     this.#emitProgressEvent({
       type: "phase-changed",
-      phase: "step0"
+      phase: CHANGESET_OVERVIEW_STEP_ID
     });
 
     const startPath = path.resolve(this.#workingDirectory, request.repoPath ?? ".");
     const repoRoot = await this.#sourceProvider.resolveRepoRoot(startPath);
 
-    // Step 0 must complete first because its RunContext feeds the per-file Overview step.
-    const runContext = await this.#runStep0({
+    // Changeset Overview must complete first because its RunContext feeds the per-file Overview step.
+    const runContext = await this.#runChangesetOverview({
       repoRoot,
       request,
       signal: options?.signal
     });
 
-    // Check if the signal was aborted during Step 0 (or before run() was called).
+    // Check if the signal was aborted during Changeset Overview (or before run() was called).
     // This is the only explicit poll — all later boundaries rely on the event listener below.
     if (options?.signal?.aborted) {
       throw new ReviewRunInterruptedError(extractSignalName(options.signal.reason));
@@ -195,7 +200,7 @@ export class ReviewOrchestrator {
 
     const abortGuard = new RunAbortGuard();
 
-    // Establish continuous abort observation before any post-Step0 side effect begins.
+    // Establish continuous abort observation before any post-ChangesetOverview side effect begins.
     options?.signal?.addEventListener(
       "abort",
       () => {
@@ -236,7 +241,7 @@ export class ReviewOrchestrator {
     this.#onOutputTargetReady?.(outputTarget);
     abortGuard.throwIfAborted();
 
-    await outputPublisher.publishArtifact("changeset-overview", { content: runContext.changesetOverviewMarkdown });
+    await outputPublisher.publishArtifact(CHANGESET_OVERVIEW_STEP_ID, { content: runContext.changesetOverviewMarkdown });
     abortGuard.throwIfAborted();
 
     this.#emitProgressEvent({
@@ -324,7 +329,7 @@ export class ReviewOrchestrator {
     };
   }
 
-  async #runStep0(input: {
+  async #runChangesetOverview(input: {
     repoRoot: string;
     request: RunRequest;
     signal?: AbortSignal;
@@ -666,8 +671,8 @@ export class ReviewOrchestrator {
     let semanticRerunCount = 0;
     let semanticValidationCount = 0;
     const semanticCandidateFingerprints = new Set<string>();
-    const step5Index = input.steps.findIndex(
-      (step) => step.stepId === "step5-validation-interrogation"
+    const candidateFindingsStepIndex = input.steps.findIndex(
+      (step) => step.stepId === CANDIDATE_FINDINGS_STEP_ID
     );
 
     for (let stepIndex = 0; stepIndex < input.steps.length; stepIndex += 1) {
@@ -718,7 +723,7 @@ export class ReviewOrchestrator {
       }
 
       result.applyTo(fileContext);
-      if (step.stepId === "step6-cognitive-simulation") {
+      if (step.stepId === SEMANTIC_VALIDATION_STEP_ID) {
         semanticValidationCount += 1;
       }
 
@@ -754,15 +759,15 @@ export class ReviewOrchestrator {
       });
 
       if (
-        step.stepId === "step6-cognitive-simulation" &&
-        shouldRerunStep5(fileContext) &&
-        step5Index >= 0
+        step.stepId === SEMANTIC_VALIDATION_STEP_ID &&
+        shouldRerunCandidateFindings(fileContext) &&
+        candidateFindingsStepIndex >= 0
       ) {
         const fingerprint = buildCurrentCandidateFingerprint(fileContext);
         if (fingerprint && semanticCandidateFingerprints.has(fingerprint)) {
           const missingInformationItems = fileContext.getMissingInformationItems() ?? [];
           markSemanticLoopStopped(fileContext, {
-            reason: "Step 5 repeated an unsupported candidate without new evidence.",
+            reason: "Candidate Findings repeated an unsupported candidate without new evidence.",
             missingInformationItems
           });
           continue;
@@ -772,18 +777,18 @@ export class ReviewOrchestrator {
           semanticCandidateFingerprints.add(fingerprint);
         }
 
-        if (semanticRerunCount < MAX_SEMANTIC_STEP5_RERUNS) {
+        if (semanticRerunCount < MAX_SEMANTIC_CANDIDATE_FINDINGS_RERUNS) {
           semanticRerunCount += 1;
           fileContext.setPriorValidatorFeedback(
             buildPriorValidatorFeedbackFromValidationReport(fileContext)
           );
-          stepIndex = step5Index - 1;
+          stepIndex = candidateFindingsStepIndex - 1;
           continue;
         }
 
         const missingInformationItems = fileContext.getMissingInformationItems() ?? [];
         markSemanticLoopStopped(fileContext, {
-          reason: "Step 6 requested another Step 5 rerun after the semantic rerun budget was exhausted.",
+          reason: "Semantic Validation requested another Candidate Findings rerun after the semantic rerun budget was exhausted.",
           missingInformationItems
         });
       }
@@ -917,13 +922,13 @@ export function buildDefaultPerFileSteps(
 ): StepDefinition[] {
   return [
     new ReviewBasisStep({ runContext: input.runContext }),
-    new Step5ValidationInterrogationStep({
+    new CandidateFindingsStep({
       promptSerializer: input.promptSerializer
     }),
-    new Step6CognitiveSimulationStep({
+    new SemanticValidationStep({
       promptSerializer: input.promptSerializer
     }),
-    new Step7SummaryStep({
+    new ReviewSummaryStep({
       promptSerializer: input.promptSerializer
     })
   ];
@@ -938,9 +943,9 @@ type PlannedOutcomeSlot =
   | { kind: "successful"; outcome: SuccessfulFileOutcome }
   | { kind: "skipped"; outcome: SkippedFileOutcome };
 
-const MAX_SEMANTIC_STEP5_RERUNS = 2;
+const MAX_SEMANTIC_CANDIDATE_FINDINGS_RERUNS = 2;
 
-function shouldRerunStep5(context: FileReviewContext): boolean {
+function shouldRerunCandidateFindings(context: FileReviewContext): boolean {
   return context.getValidationReportV1()?.loopControl.action === "rerun";
 }
 
@@ -972,7 +977,7 @@ function markSemanticLoopStopped(
   context.appendVerifierReportEntries([
     {
       filePath: context.filePath,
-      stepId: "step6-cognitive-simulation",
+      stepId: SEMANTIC_VALIDATION_STEP_ID,
       findingId,
       taxonomy: "SEMANTIC",
       outcome: "rejected",

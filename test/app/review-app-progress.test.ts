@@ -253,10 +253,10 @@ test("createLocalReviewRunApp emits a progress warning when tool-audit writes fa
 function createSingleStepFactory(): ReviewPerFileStepsFactory {
   return (): StepDefinition[] => [
     {
-      stepId: "step7-summary",
+      stepId: "review-summary",
       prepare(context) {
         return {
-          stepId: "step7-summary",
+          stepId: "review-summary",
           prompt: {
             systemMessage: "custom system",
             userMessage: `review ${context.filePath}`
@@ -267,7 +267,7 @@ function createSingleStepFactory(): ReviewPerFileStepsFactory {
           },
           async resolve() {
             return (fileContext) => {
-              buildSuccessfulStepResult("step7-summary", fileContext.filePath).applyTo(fileContext);
+              buildSuccessfulStepResult("review-summary", fileContext.filePath).applyTo(fileContext);
             };
           }
         };

@@ -137,7 +137,7 @@ test("StepRunner fails after retry exhaustion on judge rejection and does not ap
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /Step step7-summary failed for src\/app\.ts: judge rejected/u
+    /Step review-summary failed for src\/app\.ts: judge rejected/u
   );
 
   assert.equal(reviewAttempts, 3);
@@ -167,10 +167,10 @@ test("StepRunner records structured validation reports without committing partia
 
   const result = await runner.run({
     step: {
-      stepId: "step5-validation-interrogation",
+      stepId: "candidate-findings",
       prepare(stepContext) {
         return {
-          stepId: "step5-validation-interrogation",
+          stepId: "candidate-findings",
           prompt: { systemMessage: "system prompt", userMessage: "user prompt" },
           reviewProfile: {
             knowledgeMode: "disabled",
@@ -178,7 +178,7 @@ test("StepRunner records structured validation reports without committing partia
             timeoutMs: REVIEW_TURN_TIMEOUT_MS
           },
           resolve: createCandidateFindingsV3Resolve({
-            stepId: "step5-validation-interrogation",
+            stepId: "candidate-findings",
             filePath: stepContext.filePath,
             diffContent: stepContext.diffContent,
             reviewBasis
@@ -393,7 +393,7 @@ test("StepRunner reports standardized review startup failure after retry exhaust
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /Step step7-summary failed for src\/app\.ts: review startup failed/u
+    /Step review-summary failed for src\/app\.ts: review startup failed/u
   );
 
   assert.equal(createAttempts, 3);
@@ -433,13 +433,13 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
       promptHash: "<stable-hash>"
     },
     {
-      stepId: "step7-summary",
+      stepId: "review-summary",
       filePath: "src/app.ts",
       attempt: 0,
       cause: "judge rejected",
       model: "gpt-5-mini",
       promptHash: "<stable-hash>",
-      schemaId: "Step7MarkdownSummary",
+      schemaId: "ReviewSummaryMarkdown",
       outputBaseDir: "/workspace/output",
       verifierReportPath: "/workspace/output/verifier-report.jsonl"
     }
@@ -522,7 +522,7 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
 
   const result = await runner.run({
     step: {
-      stepId: "step7-summary",
+      stepId: "review-summary",
       prepare() {
         prepareAttempts += 1;
 
@@ -531,7 +531,7 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
         }
 
         return {
-          stepId: "step7-summary",
+          stepId: "review-summary",
           prompt: { systemMessage: "system prompt", userMessage: "user prompt" },
           reviewProfile: {
             knowledgeMode: "disabled",
@@ -556,7 +556,7 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
   assert.equal(prepareAttempts, 2);
   assert.equal(retryInfos.length, 1);
   assert.deepEqual(retryInfos[0], {
-    stepId: "step7-summary",
+    stepId: "review-summary",
     filePath: "src/app.ts",
     attempt: 0,
     cause: "prepare exploded"
@@ -587,7 +587,7 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
   await assert.rejects(
     () =>
       runDefaultJudgeSectionStep(runner, context),
-    /Step step7-summary failed for src\/app\.ts: judge rejected/u
+    /Step review-summary failed for src\/app\.ts: judge rejected/u
   );
 
   // Called for attempts 0 and 1; NOT called for the final failure (attempt 2).
@@ -602,27 +602,27 @@ function createReviewBasis(): ReviewBasisV1 {
     roleInChangeset: "Owns review prompt harness state handoff.",
     changedBehavior: [
       {
-        before: "Step 5 consumed prose sections.",
-        after: "Step 5 consumes ReviewBasis evidence graph.",
+        before: "Candidate Findings consumed prose sections.",
+        after: "Candidate Findings consumes ReviewBasis evidence graph.",
         evidenceIds: ["E1"]
       }
     ],
     facts: [
       {
-        statement: "ReviewBasis is emitted before Step 5.",
+        statement: "ReviewBasis is emitted before Candidate Findings.",
         evidenceIds: ["E1"]
       }
     ],
     inferences: [
       {
-        statement: "Step 5 can validate source evidence IDs.",
+        statement: "Candidate Findings can validate source evidence IDs.",
         basedOnEvidenceIds: ["E1"],
         confidence: "high"
       }
     ],
     dependencyMap: {
       upstreamCallers: ["ReviewOrchestrator"],
-      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      downstreamConsumers: ["CandidateFindingsStep"],
       externalContracts: [],
       sharedStateOrSideEffects: ["FileReviewContext"]
     },
@@ -641,7 +641,7 @@ function createReviewBasis(): ReviewBasisV1 {
       {
         hypothesisId: "H1",
         statement: "Evidence refs may be missing.",
-        triggerCondition: "Step 5 cites absent evidence ID.",
+        triggerCondition: "Candidate Findings cites absent evidence ID.",
       }
     ],
     missingInformation: [],

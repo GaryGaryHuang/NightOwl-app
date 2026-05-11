@@ -8,6 +8,12 @@ import {
   StructuredValidationReportError
 } from "./structured-output-validator.ts";
 import type { ReviewBasisV1 } from "./review-basis.ts";
+import {
+  CANDIDATE_FINDINGS_STEP_ID,
+  REVIEW_BASIS_STEP_ID,
+  REVIEW_SUMMARY_STEP_ID,
+  SEMANTIC_VALIDATION_STEP_ID
+} from "./review-step-ids.ts";
 import type {
   CandidateFindingsV3,
   ValidationReportV1
@@ -231,14 +237,14 @@ export class StepRunner {
 
 function schemaIdForStep(stepId: string): string {
   switch (stepId) {
-    case "review-basis":
+    case REVIEW_BASIS_STEP_ID:
       return "ReviewBasisV1";
-    case "step5-validation-interrogation":
+    case CANDIDATE_FINDINGS_STEP_ID:
       return "CandidateFindingsV3";
-    case "step6-cognitive-simulation":
+    case SEMANTIC_VALIDATION_STEP_ID:
       return "ValidationReportV1";
-    case "step7-summary":
-      return "Step7MarkdownSummary";
+    case REVIEW_SUMMARY_STEP_ID:
+      return "ReviewSummaryMarkdown";
     default:
       return "unknown";
   }

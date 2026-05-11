@@ -12,8 +12,8 @@ import {
   LOOP_ACTIONS,
   VALIDATION_DECISIONS
 } from "../../../src/core/semantic-review.ts";
-import { Step5ValidationInterrogationStep } from "../../../src/core/steps/step5-validation-interrogation.ts";
-import { Step6CognitiveSimulationStep } from "../../../src/core/steps/step6-cognitive-simulation.ts";
+import { CandidateFindingsStep } from "../../../src/core/steps/candidate-findings-step.ts";
+import { SemanticValidationStep } from "../../../src/core/steps/semantic-validation-step.ts";
 
 function createContext(findings: Finding[] = []): FileReviewContext {
   const context = new FileReviewContext({
@@ -48,8 +48,8 @@ function parseJsonBlock(prompt: string, blockName: string): unknown {
   return JSON.parse(match[1]);
 }
 
-test("Step5ValidationInterrogationStep wires ReviewBasis and CandidateFindingsV3 harness contract", () => {
-  const step = new Step5ValidationInterrogationStep({ promptSerializer: serializer });
+test("CandidateFindingsStep wires ReviewBasis and CandidateFindingsV3 harness contract", () => {
+  const step = new CandidateFindingsStep({ promptSerializer: serializer });
   const context = createContext();
   const plan = step.prepare(context);
   const expectedReviewBasis = createReviewBasis();
@@ -104,7 +104,7 @@ test("Step5ValidationInterrogationStep wires ReviewBasis and CandidateFindingsV3
   }
 });
 
-test("Step5ValidationInterrogationStep fails before prompt construction without ReviewBasis", () => {
+test("CandidateFindingsStep fails before prompt construction without ReviewBasis", () => {
   const context = new FileReviewContext({
     filePath: "src/app.ts",
     noteFilePath: "/tmp/src__app.ts.md",
@@ -112,11 +112,11 @@ test("Step5ValidationInterrogationStep fails before prompt construction without 
     baseRef: "main",
     headRef: "feature"
   });
-  const step = new Step5ValidationInterrogationStep({ promptSerializer: serializer });
+  const step = new CandidateFindingsStep({ promptSerializer: serializer });
 
   assert.throws(
     () => step.prepare(context),
-    /ReviewBasis must exist before Step 5/u
+    /ReviewBasis must exist before Candidate Findings/u
   );
 });
 
@@ -126,27 +126,27 @@ function createReviewBasis(): ReviewBasisV1 {
     roleInChangeset: "Owns review prompt harness state handoff.",
     changedBehavior: [
       {
-        before: "Step 5 consumed prose sections.",
-        after: "Step 5 consumes ReviewBasis evidence graph.",
+        before: "Candidate Findings consumed prose sections.",
+        after: "Candidate Findings consumes ReviewBasis evidence graph.",
         evidenceIds: ["E1"]
       }
     ],
     facts: [
       {
-        statement: "ReviewBasis is emitted before Step 5.",
+        statement: "ReviewBasis is emitted before Candidate Findings.",
         evidenceIds: ["E1"]
       }
     ],
     inferences: [
       {
-        statement: "Step 5 can validate source evidence IDs.",
+        statement: "Candidate Findings can validate source evidence IDs.",
         basedOnEvidenceIds: ["E1"],
         confidence: "high"
       }
     ],
     dependencyMap: {
       upstreamCallers: ["ReviewOrchestrator"],
-      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      downstreamConsumers: ["CandidateFindingsStep"],
       externalContracts: [],
       sharedStateOrSideEffects: ["FileReviewContext"]
     },
@@ -165,7 +165,7 @@ function createReviewBasis(): ReviewBasisV1 {
       {
         hypothesisId: "H1",
         statement: "Evidence refs may be missing.",
-        triggerCondition: "Step 5 cites absent evidence ID.",
+        triggerCondition: "Candidate Findings cites absent evidence ID.",
       }
     ],
     missingInformation: [],
@@ -180,9 +180,9 @@ function createReviewBasis(): ReviewBasisV1 {
   };
 }
 
-test("Step6CognitiveSimulationStep wires candidate state and ValidationReport harness contract", () => {
+test("SemanticValidationStep wires candidate state and ValidationReport harness contract", () => {
   const candidatePayload = createCandidateFindingsV3();
-  const step = new Step6CognitiveSimulationStep({ promptSerializer: serializer });
+  const step = new SemanticValidationStep({ promptSerializer: serializer });
   const context = createContext() as SemanticFileReviewContext;
   context.setCandidateFindingsV3(candidatePayload);
   const plan = step.prepare(context);

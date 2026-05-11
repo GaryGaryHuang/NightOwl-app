@@ -9,7 +9,7 @@ const REPO_ROOT = "/workspace/repo";
 const REVIEW_BASE_PATH =
   "/workspace/repo/.nightowl/review/feature-branch_03131430";
 const REVIEW_BASIS_STEP = "review-basis";
-const STEP6 = "step6-cognitive-simulation";
+const SEMANTIC_VALIDATION = "semantic-validation";
 
 type FakeStdout = ReturnType<typeof createFakeStdout>;
 
@@ -48,7 +48,7 @@ test("CliProgressReporter does not render a pre-planning live line before initia
   const stdout = createFakeStdout({ isTTY: true });
   const reporter = new CliProgressReporter({ stdout });
 
-  reporter.handleEvent({ type: "phase-changed", phase: "step0" });
+  reporter.handleEvent({ type: "phase-changed", phase: "changeset-overview" });
   reporter.handleEvent({ type: "phase-changed", phase: "planning" });
 
   assert.deepEqual(stdout.logs, []);
@@ -72,7 +72,7 @@ test("CliProgressReporter keeps only three most-recent active files and counts s
   reporter.handleEvent({
     type: "file-skipped",
     filePath: "src/b.ts",
-    stepId: STEP6,
+    stepId: SEMANTIC_VALIDATION,
     reason: "deterministic validation failed"
   });
 
@@ -132,13 +132,13 @@ test("CliProgressReporter pins skipped-file events above the TTY live line and k
   reporter.handleEvent({
     type: "file-skipped",
     filePath: "src/app.ts",
-    stepId: STEP6,
+    stepId: SEMANTIC_VALIDATION,
     reason: "judge rejected"
   });
 
   assert.match(
     stdout.logs.at(-1) ?? "",
-    /Skipped: src\/app\.ts \| step6-cognitive-simulation \| judge rejected/u
+    /Skipped: src\/app\.ts \| semantic-validation \| judge rejected/u
   );
   assert.match(stdout.writes.at(-1) ?? "", /1\/2/u);
   assert.match(stdout.writes.at(-1) ?? "", /src\/lib\.ts/u);
@@ -203,14 +203,14 @@ test("CliProgressReporter falls back to append-only snapshots when stdout is not
   reporter.handleEvent({
     type: "file-skipped",
     filePath: "src/app.ts",
-    stepId: STEP6,
+    stepId: SEMANTIC_VALIDATION,
     reason: "judge rejected"
   });
 
   assert.deepEqual(stdout.writes, []);
   assert.equal(
     stdout.logs.at(-2),
-    "Skipped: src/app.ts | step6-cognitive-simulation | judge rejected"
+    "Skipped: src/app.ts | semantic-validation | judge rejected"
   );
   assert.ok(stdout.logs.every((entry) => !entry.includes("\r")));
   assert.equal(stdout.logs.at(-1), "Progress 1/2 | active 0");
@@ -285,13 +285,13 @@ test("CliProgressReporter appends review diagnostics while preserving progress s
   reporter.handleEvent({
     type: "review-session-log",
     stepId: "changeset-overview",
-    message: "Step 0 validation failed (attempt 1, code=SCHEMA)"
+    message: "Changeset Overview validation failed (attempt 1, code=SCHEMA)"
   });
 
   assert.deepEqual(stdout.writes, []);
   assert.equal(
     stdout.logs.at(-1),
-    "Review diagnostic: changeset-overview | Step 0 validation failed (attempt 1, code=SCHEMA)"
+    "Review diagnostic: changeset-overview | Changeset Overview validation failed (attempt 1, code=SCHEMA)"
   );
   assert.equal(stdout.logs.at(-2), "Progress 0/2 | active 0");
 });
@@ -339,7 +339,7 @@ function createInitializedReporter(options: {
   const stdout = createFakeStdout(options);
   const reporter = new CliProgressReporter({ stdout });
 
-  reporter.handleEvent({ type: "phase-changed", phase: "step0" });
+  reporter.handleEvent({ type: "phase-changed", phase: "changeset-overview" });
   reporter.handleEvent({ type: "phase-changed", phase: "planning" });
   reporter.handleEvent({
     type: "run-initialized",

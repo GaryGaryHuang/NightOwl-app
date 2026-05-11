@@ -80,7 +80,7 @@ describe("ReviewOrchestrator bounded concurrency with mixed completion order", (
           [slowSuccessfulFile, 220]
         ]),
         failedFile: skippedFile,
-        failedStepId: "step5-validation-interrogation",
+        failedStepId: "candidate-findings",
         failureCause: "deterministic validation failed"
       })
     });
@@ -241,7 +241,7 @@ function createConcurrentRunner(input: {
   completionDelayByFile: Map<string, number>;
   failedFiles?: Set<string>;
   failedFile?: string;
-  failedStepId?: "review-basis" | "step5-validation-interrogation";
+  failedStepId?: "review-basis" | "candidate-findings";
   failureCause?: "judge rejected" | "deterministic validation failed";
 }): StepRunnerDouble {
   const activeFiles = new Set<string>();
@@ -276,13 +276,13 @@ function createConcurrentRunner(input: {
         });
       }
 
-      if (step.stepId === "step7-summary") {
+      if (step.stepId === "review-summary") {
         await sleep(input.completionDelayByFile.get(context.filePath) ?? 0);
       }
 
       return buildSuccessfulStepResult(step.stepId, context.filePath, {
         onTerminalApply() {
-          if (step.stepId === "step7-summary") {
+          if (step.stepId === "review-summary") {
             activeFiles.delete(context.filePath);
             input.metrics.completionOrder.push(context.filePath);
           }

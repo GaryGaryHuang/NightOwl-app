@@ -106,7 +106,7 @@ async function runCliWithLiveProgress(
 }
 
 function emitReviewingProgress(progressReporter: CliProgressReporter): void {
-  progressReporter.handleEvent({ type: "phase-changed", phase: "step0" });
+  progressReporter.handleEvent({ type: "phase-changed", phase: "changeset-overview" });
   progressReporter.handleEvent({
     type: "run-initialized",
     repoRoot: REPO_ROOT,

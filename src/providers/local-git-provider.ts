@@ -161,7 +161,7 @@ export class LocalGitProvider implements ReviewSourceProvider {
     baseRef: string,
     headRef: string
   ): Promise<ReviewChangesetEntry[]> {
-    // Step 0 needs name-status output so it can see deleted files as part of the full changeset.
+    // Changeset Overview needs name-status output so it can see deleted files as part of the full changeset.
     return wrapBoundaryError(
       async () => {
         const output = await this.#runGit(

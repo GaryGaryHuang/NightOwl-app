@@ -2,6 +2,10 @@ import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewBasisV1 } from "../review-basis.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { RiskLevel } from "../risk-level.ts";
+import {
+  CANDIDATE_FINDINGS_STEP_ID,
+  SEMANTIC_VALIDATION_STEP_ID
+} from "../review-step-ids.ts";
 import type {
   CandidateFindingsV3,
   ValidationReportV1
@@ -30,7 +34,7 @@ export function createCandidateFindingsV3Resolve(input: {
     });
     const reportEntries = toVerifierArtifactEntries({
       filePath: input.filePath,
-      stepId: input.stepId ?? "step5-validation-interrogation",
+      stepId: input.stepId ?? CANDIDATE_FINDINGS_STEP_ID,
       report: validated.report
     });
 
@@ -60,7 +64,7 @@ export function createValidationReportV1Resolve(input: {
     });
     const reportEntries = toVerifierArtifactEntries({
       filePath: input.filePath,
-      stepId: input.stepId ?? "step6-cognitive-simulation",
+      stepId: input.stepId ?? SEMANTIC_VALIDATION_STEP_ID,
       report: validated.report
     });
 
@@ -104,7 +108,7 @@ const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(["High", "Low", "None"]);
 const RISK_LEVEL_PATTERN = /(?:整體風險等級|Overall risk level)[：:]\s*([\w]+)/i;
 
 /**
- * Parse the `整體風險等級` value from a Step 7 summary response.
+ * Parse the `整體風險等級` value from a Review Summary summary response.
  * Returns `undefined` when the line is missing or the value is not a canonical risk level.
  */
 export function parseRiskLevelFromResponse(response: string): RiskLevel | undefined {
@@ -115,13 +119,13 @@ export function parseRiskLevelFromResponse(response: string): RiskLevel | undefi
 }
 
 /**
- * Factory for the resolve() closure used by Step 7.
+ * Factory for the resolve() closure used by Review Summary.
  *
- * Step 7 is user-facing packaging, not a semantic review step. Keep validation
+ * Review Summary is user-facing packaging, not a semantic review step. Keep validation
  * lightweight and deterministic: reject only broken packaging and host-owned
  * fields before writing the composed Summary.
  */
-export function createStep7Resolve(input: {
+export function createReviewSummaryResolve(input: {
   stepId: string;
   filePath: string;
   sectionKey: ReviewSectionKey;
@@ -130,8 +134,8 @@ export function createStep7Resolve(input: {
   composeReport?: (response: string) => string;
 }): StepExecutionPlan["resolve"] {
   return async (response) => {
-    rejectMalformedStep7Narrative(response);
-    rejectForbiddenStep7ResponsePatterns(response, input.forbiddenResponsePatterns ?? []);
+    rejectMalformedReviewSummaryNarrative(response);
+    rejectForbiddenReviewSummaryResponsePatterns(response, input.forbiddenResponsePatterns ?? []);
     const sectionContent = input.composeReport?.(response) ?? response;
 
     // Deterministic pre-check: risk level must match snapshot
@@ -148,7 +152,7 @@ export function createStep7Resolve(input: {
   };
 }
 
-const STEP7_NARRATIVE_SECTION_PATTERNS: readonly {
+const REVIEW_SUMMARY_NARRATIVE_SECTION_PATTERNS: readonly {
   label: string;
   pattern: RegExp;
 }[] = [
@@ -157,21 +161,21 @@ const STEP7_NARRATIVE_SECTION_PATTERNS: readonly {
   { label: "風險判定理由", pattern: /^#{2,4}\s+風險判定理由(?:[：:]|\s|$)/mu }
 ];
 
-function rejectMalformedStep7Narrative(response: string): void {
+function rejectMalformedReviewSummaryNarrative(response: string): void {
   if (response.trim().length === 0) {
-    throw new Error("Step 7 narrative response is empty");
+    throw new Error("Review Summary narrative response is empty");
   }
 
-  for (const section of STEP7_NARRATIVE_SECTION_PATTERNS) {
+  for (const section of REVIEW_SUMMARY_NARRATIVE_SECTION_PATTERNS) {
     if (!section.pattern.test(response)) {
       throw new Error(
-        `Step 7 narrative is missing required section: ${section.label}`
+        `Review Summary narrative is missing required section: ${section.label}`
       );
     }
   }
 }
 
-function rejectForbiddenStep7ResponsePatterns(
+function rejectForbiddenReviewSummaryResponsePatterns(
   response: string,
   patterns: readonly RegExp[]
 ): void {
@@ -179,7 +183,7 @@ function rejectForbiddenStep7ResponsePatterns(
     const match = pattern.exec(response);
     if (match) {
       throw new Error(
-        `Step 7 narrative attempted to own a host-computed report field: ${match[0]}`
+        `Review Summary narrative attempted to own a host-computed report field: ${match[0]}`
       );
     }
   }

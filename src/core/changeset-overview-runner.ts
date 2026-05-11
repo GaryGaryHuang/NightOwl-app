@@ -7,16 +7,17 @@ import { retryWithLimit } from "./session-retry.ts";
 import type { ReviewChangesetEntry } from "../providers/review-source-provider.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
 import {
-  Step0OutputValidationError,
-  type Step0ValidationDiagnostic,
-  Step0OutputValidator
-} from "./step0-output-validator.ts";
+  ChangesetOverviewOutputValidationError,
+  type ChangesetOverviewValidationDiagnostic,
+  ChangesetOverviewOutputValidator
+} from "./changeset-overview-output-validator.ts";
 import {
-  STEP0_REVIEW_PROFILE,
-  STEP0_SYSTEM_MESSAGE,
-  buildStep0Prompt,
-  buildStep0RetryRepairPrompt
-} from "./steps/step0-changeset-overview.ts";
+  CHANGESET_OVERVIEW_REVIEW_PROFILE,
+  CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
+  buildChangesetOverviewPrompt,
+  buildChangesetOverviewRetryRepairPrompt
+} from "./steps/changeset-overview-step.ts";
+import { CHANGESET_OVERVIEW_STEP_ID } from "./review-step-ids.ts";
 
 export interface ChangesetOverviewRunnerInput {
   changesetEntries: ReviewChangesetEntry[];
@@ -29,52 +30,52 @@ export interface ChangesetOverviewRunnerInput {
 
 export interface ChangesetOverviewRunnerOptions {
   reviewSessionFactory: ReviewSessionFactoryLike;
-  /** Optional injection point; defaults to a fresh `Step0OutputValidator`. */
-  step0OutputValidator?: Step0OutputValidator;
-  onStep0LogEvent?: (event: Step0LogEvent) => void;
+  /** Optional injection point; defaults to a fresh `ChangesetOverviewOutputValidator`. */
+  changesetOverviewOutputValidator?: ChangesetOverviewOutputValidator;
+  onChangesetOverviewLogEvent?: (event: ChangesetOverviewLogEvent) => void;
 }
 
-export interface Step0LogEvent {
+export interface ChangesetOverviewLogEvent {
   readonly message: string;
 }
 
 /**
- * Run the run-level Step 0 review once, retrying only if the response is blank or the session fails.
+ * Run the run-level Changeset Overview review once, retrying only if the response is blank or the session fails.
  */
 export class ChangesetOverviewRunner {
   readonly #reviewSessionFactory: ReviewSessionFactoryLike;
-  readonly #validator: Step0OutputValidator;
-  readonly #onStep0LogEvent?: (event: Step0LogEvent) => void;
+  readonly #validator: ChangesetOverviewOutputValidator;
+  readonly #onChangesetOverviewLogEvent?: (event: ChangesetOverviewLogEvent) => void;
 
   constructor(options: ChangesetOverviewRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
-    this.#validator = options.step0OutputValidator ?? new Step0OutputValidator();
-    this.#onStep0LogEvent = options.onStep0LogEvent;
+    this.#validator = options.changesetOverviewOutputValidator ?? new ChangesetOverviewOutputValidator();
+    this.#onChangesetOverviewLogEvent = options.onChangesetOverviewLogEvent;
   }
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
     const changesetFiles = normalizeChangesetEntriesForChangeMap(
       input.changesetEntries
     );
-    let retryRepairFailure: Step0ValidationDiagnostic | undefined;
+    let retryRepairFailure: ChangesetOverviewValidationDiagnostic | undefined;
 
     return retryWithLimit({
       execute: async (attempt) => {
         const session = await this.#reviewSessionFactory.createSession({
-          stepId: "changeset-overview",
-          knowledgeMode: STEP0_REVIEW_PROFILE.knowledgeMode,
-          model: STEP0_REVIEW_PROFILE.model,
+          stepId: CHANGESET_OVERVIEW_STEP_ID,
+          knowledgeMode: CHANGESET_OVERVIEW_REVIEW_PROFILE.knowledgeMode,
+          model: CHANGESET_OVERVIEW_REVIEW_PROFILE.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,
-          systemMessage: STEP0_SYSTEM_MESSAGE,
+          systemMessage: CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
           workingDirectory: input.workingDirectory
         });
         const prompt = retryRepairFailure
-          ? buildStep0RetryRepairPrompt(input, retryRepairFailure)
-          : buildStep0Prompt(input);
+          ? buildChangesetOverviewRetryRepairPrompt(input, retryRepairFailure)
+          : buildChangesetOverviewPrompt(input);
         const response = await session.sendAndWait(
             prompt,
-            STEP0_REVIEW_PROFILE.timeoutMs,
+            CHANGESET_OVERVIEW_REVIEW_PROFILE.timeoutMs,
             input.signal
           );
 
@@ -82,14 +83,14 @@ export class ChangesetOverviewRunner {
           retryRepairFailure = {
             code: "PARSE",
             message:
-              "Step 0 changeset overview did not produce a non-empty response.",
+              "Changeset Overview changeset overview did not produce a non-empty response.",
             actualSummary: "empty_response",
             repairHint:
               "Return exactly one JSON object with no surrounding text."
           };
-          throw new Step0OutputValidationError(
+          throw new ChangesetOverviewOutputValidationError(
             "PARSE",
-            "Step 0 changeset overview did not produce a non-empty response."
+            "Changeset Overview changeset overview did not produce a non-empty response."
           );
         }
 
@@ -103,7 +104,7 @@ export class ChangesetOverviewRunner {
           changeMap = validationResult.changeMap;
           retryRepairFailure = undefined;
         } catch (error) {
-          if (error instanceof Step0OutputValidationError) {
+          if (error instanceof ChangesetOverviewOutputValidationError) {
             retryRepairFailure = error.diagnostic;
             this.#emitValidationFailureLog(attempt, error.diagnostic);
           }
@@ -131,13 +132,13 @@ export class ChangesetOverviewRunner {
     }
 
     this.#emitLog(
-      `Step 0 JSON syntax repair applied (attempt ${attempt + 1}, repair=${metadata.repairKind}, responseBytes=${metadata.responseByteLength}, parsedBytes=${metadata.parsedByteLength})`
+      `Changeset Overview JSON syntax repair applied (attempt ${attempt + 1}, repair=${metadata.repairKind}, responseBytes=${metadata.responseByteLength}, parsedBytes=${metadata.parsedByteLength})`
     );
   }
 
   #emitValidationFailureLog(
     attempt: number,
-    diagnostic: Step0ValidationDiagnostic
+    diagnostic: ChangesetOverviewValidationDiagnostic
   ): void {
     const fields = [
       `attempt ${attempt + 1}`,
@@ -163,10 +164,10 @@ export class ChangesetOverviewRunner {
       `message=${JSON.stringify(diagnostic.message)}`
     ].filter((field): field is string => field !== undefined);
 
-    this.#emitLog(`Step 0 validation failed (${fields.join(", ")})`);
+    this.#emitLog(`Changeset Overview validation failed (${fields.join(", ")})`);
   }
 
   #emitLog(message: string): void {
-    this.#onStep0LogEvent?.({ message });
+    this.#onChangesetOverviewLogEvent?.({ message });
   }
 }

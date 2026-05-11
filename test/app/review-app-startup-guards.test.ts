@@ -7,7 +7,7 @@ import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { isChangesetOverviewSystemMessage } from "../helpers/review-app-fixture.ts";
 
-test("createLocalReviewRunApp fails before client startup, Step 0, and output initialization when review config is invalid", async () => {
+test("createLocalReviewRunApp fails before client startup, Changeset Overview, and output initialization when review config is invalid", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -15,7 +15,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
 
     let startCalls = 0;
     let stopCalls = 0;
-    let step0Calls = 0;
+    let changesetOverviewCalls = 0;
     let initializeRunCalls = 0;
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
@@ -33,8 +33,8 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
       },
       changesetOverviewRunner: {
         async run() {
-          step0Calls += 1;
-          throw new Error("should not start step0");
+          changesetOverviewCalls += 1;
+          throw new Error("should not start changesetOverview");
         }
       },
       outputSink: defineOutputSinkDouble({
@@ -62,7 +62,7 @@ test("createLocalReviewRunApp fails before client startup, Step 0, and output in
 
     assert.equal(startCalls, 0);
     assert.equal(stopCalls, 0);
-    assert.equal(step0Calls, 0);
+    assert.equal(changesetOverviewCalls, 0);
     assert.equal(initializeRunCalls, 0);
   } finally {
     fixture.cleanup();
@@ -119,11 +119,11 @@ test("createLocalReviewRunApp passes context7ApiKey option to the session config
 
     assert.ok(sessionConfigs.length >= 1, "at least one session must have been attempted");
 
-    // The Step 0 (Changeset Overview) session config should contain the injected API key.
-    const step0Config = sessionConfigs.find((c) => isChangesetOverviewSystemMessage(c.systemMessage));
-    assert.ok(step0Config, "a Step 0 session config must be present");
+    // The Changeset Overview (Changeset Overview) session config should contain the injected API key.
+    const changesetOverviewConfig = sessionConfigs.find((c) => isChangesetOverviewSystemMessage(c.systemMessage));
+    assert.ok(changesetOverviewConfig, "a Changeset Overview session config must be present");
     assert.equal(
-      (step0Config.mcpServers?.context7 as { headers?: Record<string, string> } | undefined)
+      (changesetOverviewConfig.mcpServers?.context7 as { headers?: Record<string, string> } | undefined)
         ?.headers?.CONTEXT7_API_KEY,
       "injected-test-key",
       "injected context7ApiKey must appear in session config headers"

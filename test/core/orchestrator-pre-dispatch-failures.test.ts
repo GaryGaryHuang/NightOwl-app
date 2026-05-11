@@ -44,7 +44,7 @@ function requireNotePath(
   return noteFilePath;
 }
 
-test("ReviewOrchestrator aborts when Step 0 fails before initializing local output and dispatching any per-file step", async () => {
+test("ReviewOrchestrator aborts when Changeset Overview fails before initializing local output and dispatching any per-file step", async () => {
   const calls: string[] = [];
   const fixture = createReviewRepoFixture();
 
@@ -73,7 +73,7 @@ test("ReviewOrchestrator aborts when Step 0 fails before initializing local outp
       },
       changesetOverviewRunner: {
         async run() {
-          throw new Error("Step 0 failed");
+          throw new Error("Changeset Overview failed");
         }
       },
       workingDirectory: fixture.repoDir,
@@ -89,7 +89,7 @@ test("ReviewOrchestrator aborts when Step 0 fails before initializing local outp
           userContext: [],
           dryRun: false
         }),
-      /Step 0 failed/u
+      /Changeset Overview failed/u
     );
 
     assert.deepEqual(calls, []);

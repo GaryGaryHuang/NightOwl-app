@@ -8,19 +8,19 @@ import {
   type ReviewChangesetEntry
 } from "../../providers/review-source-provider.ts";
 
-export const STEP0_TIMEOUT_MS = REVIEW_TURN_TIMEOUT_MS;
+export const CHANGESET_OVERVIEW_TIMEOUT_MS = REVIEW_TURN_TIMEOUT_MS;
 
-export const STEP0_REVIEW_PROFILE = {
+export const CHANGESET_OVERVIEW_REVIEW_PROFILE = {
   knowledgeMode: "built-in-context7",
   model: "gpt-5.4-mini",
-  timeoutMs: STEP0_TIMEOUT_MS
+  timeoutMs: CHANGESET_OVERVIEW_TIMEOUT_MS
 } as const satisfies {
   knowledgeMode: ReviewKnowledgeMode;
   model: string;
   timeoutMs: number;
 };
 
-export const STEP0_SYSTEM_MESSAGE = [
+export const CHANGESET_OVERVIEW_SYSTEM_MESSAGE = [
   JSON_STEP_SYSTEM_MESSAGE,
   "",
   "## Current Step: Changeset Overview",
@@ -33,7 +33,7 @@ export const STEP0_SYSTEM_MESSAGE = [
   "- If referenced external content cannot be retrieved and the missing content materially affects subsequent per-file review, record the limitation in the current step's output."
 ].join("\n");
 
-const STEP0_INSTRUCTION = [
+const CHANGESET_OVERVIEW_INSTRUCTION = [
   "Analyze the changeset across all entries in <changed_files_json> and produce a high-level overview for subsequent per-file review. The JSON block is the canonical changeset input; <changed_files> is diagnostic raw name-status context only.",
   "",
   "Use <changed_files_json> and <user_context> as primary inputs. If <user_context> is provided, read every entry and represent its stated requirements, expected behavior, Root Cause, business decisions, and first-party review background in `reviewObjective`, `userBehavior`, `missingInformation`, and related output fields with enough specificity for subsequent per-file review. Preserve concrete reviewer-relevant facts; do not collapse them into vague phrases such as \"updates logic\" or \"changes files\".",
@@ -82,13 +82,13 @@ const STEP0_INSTRUCTION = [
   `{"reviewObjective": {"summary": "Review the changeset with evidence-backed per-file basis", "requestedFocus": ["review-flow"], "expectedBehaviorSummary": ["CLI review flow emits structured run context"]}, "userBehavior": [{"statement": "CLI review flow emits structured run context", "confidence": "inferred"}], "missingInformation": [], "overviewMarkdown": "## Changeset Overview\\n- Scope: feature\\n- Cross-file boundaries: none\\n- Behavior changes: adds a review CLI entry point\\n- Test coverage observations: no corresponding test changes observed", "behaviorChanges": [{"description": "adds a review CLI entry parameter", "files": ["src/app.ts"]}], "unresolvedUnknowns": []}`
 ].join("\n");
 
-export interface Step0PromptInput {
+export interface ChangesetOverviewPromptInput {
   changesetEntries: ReviewChangesetEntry[];
   userContext: string[];
 }
 
-export function buildStep0Prompt(
-  input: Step0PromptInput,
+export function buildChangesetOverviewPrompt(
+  input: ChangesetOverviewPromptInput,
   validatorFeedback: unknown = null
 ): string {
   const promptLines = [
@@ -97,7 +97,7 @@ export function buildStep0Prompt(
     }),
     "",
     "<changed_files>",
-    input.changesetEntries.map(formatStep0ChangedFileEntry).join("\n"),
+    input.changesetEntries.map(formatChangesetOverviewChangedFileEntry).join("\n"),
     "</changed_files>"
   ];
 
@@ -112,17 +112,17 @@ export function buildStep0Prompt(
     "",
     ...buildXmlishJsonBlock("validator_feedback", validatorFeedback),
     "",
-    STEP0_INSTRUCTION
+    CHANGESET_OVERVIEW_INSTRUCTION
   );
 
   return promptLines.join("\n");
 }
 
-export function buildStep0RetryRepairPrompt(
-  input: Step0PromptInput,
+export function buildChangesetOverviewRetryRepairPrompt(
+  input: ChangesetOverviewPromptInput,
   previousFailure: unknown
 ): string {
-  return buildStep0Prompt(
+  return buildChangesetOverviewPrompt(
     input,
     {
       previousFailure,
@@ -132,7 +132,7 @@ export function buildStep0RetryRepairPrompt(
   );
 }
 
-function formatStep0ChangedFileEntry(entry: ReviewChangesetEntry): string {
+function formatChangesetOverviewChangedFileEntry(entry: ReviewChangesetEntry): string {
   if (entry.status === "C") {
     return `A\t${entry.path}`;
   }

@@ -39,7 +39,7 @@ export function createSectionTestStep(input: {
   reviewProfile?: StepExecutionPlan["reviewProfile"];
   resolve?: StepExecutionPlan["resolve"];
 }) {
-  const stepId = input.stepId ?? "step7-summary";
+  const stepId = input.stepId ?? "review-summary";
   const sectionKey = input.sectionKey ?? "summary";
 
   return {
@@ -101,7 +101,7 @@ export function createStructuredTestStep(input: {
   reviewProfile?: StepExecutionPlan["reviewProfile"];
   resolve?: StepExecutionPlan["resolve"];
 }) {
-  const stepId = input.stepId ?? "step5-validation-interrogation";
+  const stepId = input.stepId ?? "candidate-findings";
 
   return {
     stepId,
@@ -133,7 +133,7 @@ export function createStructuredTestStep(input: {
 }
 
 export const DEFAULT_JUDGE_RESOLVE = makeSectionResolveWithJudge(
-  "step7-summary", "src/app.ts", "summary", "must contain summary fields"
+  "review-summary", "src/app.ts", "summary", "must contain summary fields"
 );
 
 export function runDefaultSectionStep(

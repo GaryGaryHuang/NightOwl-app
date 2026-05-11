@@ -58,20 +58,20 @@ test("LocalRunOutputPublisher preserves intact skipped.md records across concurr
     await Promise.all([
       publisher.publishSkippedFile({
         filePath: "src/app.ts",
-        stepId: "step5-validation-interrogation",
+        stepId: "candidate-findings",
         reason: "deterministic validation failed"
       }),
       publisher.publishSkippedFile({
         filePath: "src/other.ts",
-        stepId: "step7-summary",
+        stepId: "review-summary",
         reason: "judge rejected"
       })
     ]);
 
     const lines = fixture.readFile(fixture.outputTarget.skippedPath).trimEnd().split("\n");
     assert.deepEqual(lines.sort(), [
-      "- `src/app.ts` — step5-validation-interrogation — deterministic validation failed",
-      "- `src/other.ts` — step7-summary — judge rejected"
+      "- `src/app.ts` — candidate-findings — deterministic validation failed",
+      "- `src/other.ts` — review-summary — judge rejected"
     ]);
   } finally {
     fixture.cleanup();

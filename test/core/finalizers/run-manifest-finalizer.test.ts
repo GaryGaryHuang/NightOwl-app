@@ -65,7 +65,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
     skippedFiles: [
       createSkippedFile(
         "src/b.ts",
-        "step5-validation-interrogation",
+        "candidate-findings",
         "review timeout after retry"
       )
     ]
@@ -140,7 +140,7 @@ test("RunManifestFinalizer renders the exact deterministic manifest contract for
       filePath: "src/b.ts",
       notePath: "/workspace/.nightowl/review/feature-branch_03131430/files/src__b.ts.md",
       status: "skipped",
-      failedStepId: "step5-validation-interrogation",
+      failedStepId: "candidate-findings",
       reason: "review timeout after retry",
       semanticReview: {
         status: "not_run",

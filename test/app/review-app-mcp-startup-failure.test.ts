@@ -14,14 +14,14 @@ import {
   isReviewBasisSystemMessage
 } from "../helpers/review-app-fixture.ts";
 
-test("createLocalReviewRunApp aborts Step 0 MCP startup failure after retry without initializing output", async () => {
+test("createLocalReviewRunApp aborts Changeset Overview MCP startup failure after retry without initializing output", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
     let startCalls = 0;
     let stopCalls = 0;
     let initializeRunCalls = 0;
-    let step0Context7Failures = 0;
+    let changesetOverviewContext7Failures = 0;
     const sessionConfigs: SessionConfig[] = [];
     const app = createLocalReviewRunApp({
       workingDirectory: fixture.repoDir,
@@ -45,7 +45,7 @@ test("createLocalReviewRunApp aborts Step 0 MCP startup failure after retry with
                 config.mcpServers?.context7 &&
                 isChangesetOverviewSystemMessage(config.systemMessage)
               ) {
-                step0Context7Failures += 1;
+                changesetOverviewContext7Failures += 1;
                 throw new Error("context7 startup failed");
               }
 
@@ -86,7 +86,7 @@ test("createLocalReviewRunApp aborts Step 0 MCP startup failure after retry with
       /context7 startup failed/u
     );
 
-    assert.ok(step0Context7Failures >= 2);
+    assert.ok(changesetOverviewContext7Failures >= 2);
     assert.equal(startCalls, 1);
     assert.equal(stopCalls, 1);
     assert.equal(initializeRunCalls, 0);

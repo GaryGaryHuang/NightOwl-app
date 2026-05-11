@@ -174,7 +174,7 @@ test("ReviewOrchestrator does not publish run-level artifacts when applyTo fails
   });
 });
 
-test("ReviewOrchestrator does not initialize output when Step 0 fails", async () => {
+test("ReviewOrchestrator does not initialize output when Changeset Overview fails", async () => {
   await withReviewHarness({}, async (harness) => {
     const outputSink = new RecordingOutputSink();
 
@@ -185,11 +185,11 @@ test("ReviewOrchestrator does not initialize output when Step 0 fails", async ()
           stepRunner: createFailingIfStartedRunner(),
           changesetOverviewRunner: {
             async run() {
-              throw new Error("Step 0 failed");
+              throw new Error("Changeset Overview failed");
             }
           }
         }),
-      /Step 0 failed/u
+      /Changeset Overview failed/u
     );
 
     assert.deepEqual(outputSink.calls, []);
@@ -421,7 +421,7 @@ function createMixedResultRunner(
     async run({ context, step }: RunStepInput): Promise<StepResult> {
       if (
         context.filePath === skippedFile &&
-        step.stepId === "step5-validation-interrogation"
+        step.stepId === "candidate-findings"
       ) {
         throw new StepExecutionError({
           stepId: step.stepId,

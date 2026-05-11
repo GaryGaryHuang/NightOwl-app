@@ -414,15 +414,15 @@ export class ToolPolicyGuard {
       shell: (request) => this.#evaluateShell(request, profile),
       url: (request) => this.#evaluateUrl(request),
       mcp: (request) => this.#evaluateMcp(request),
-      "custom-tool": (request) => this.#evaluateCustomTool(request),
-      memory: (request) => this.#evaluateMemory(request),
-      hook: (request) => this.#evaluateHook(request)
+      "custom-tool": (request) => this.#evaluateCustomTool(request)
     } satisfies Record<PermissionRequest["kind"], PermissionEvaluator>;
 
     // Keep lookup string-indexed so unknown future runtime kinds fail closed
     // before the SDK type union catches up.
     const evaluators: { [kind: string]: PermissionEvaluator | undefined } = {
-      ...sdkEvaluators
+      ...sdkEvaluators,
+      memory: (request) => this.#evaluateMemory(request),
+      hook: (request) => this.#evaluateHook(request)
     };
 
     return async (request) => {
@@ -443,8 +443,8 @@ export class ToolPolicyGuard {
       auditWriter?.append(this.#buildAuditEntry(record));
 
       return record.decision === "allow"
-        ? { kind: "approve-once" }
-        : { kind: "user-not-available" };
+        ? { kind: "approved" }
+        : { kind: "denied-no-approval-rule-and-could-not-request-from-user" };
     };
   }
 

@@ -11,9 +11,9 @@ import { ReviewStatePromptSerializer } from "../src/core/review-state-prompt-ser
 import { StepRunner } from "../src/core/step-runner.ts";
 import { StructuredOutputValidator } from "../src/core/structured-output-validator.ts";
 import { ReviewBasisStep } from "../src/core/steps/review-basis-step.ts";
-import { Step5ValidationInterrogationStep } from "../src/core/steps/step5-validation-interrogation.ts";
-import { Step6CognitiveSimulationStep } from "../src/core/steps/step6-cognitive-simulation.ts";
-import { Step7SummaryStep } from "../src/core/steps/step7-summary.ts";
+import { CandidateFindingsStep } from "../src/core/steps/candidate-findings-step.ts";
+import { SemanticValidationStep } from "../src/core/steps/semantic-validation-step.ts";
+import { ReviewSummaryStep } from "../src/core/steps/review-summary-step.ts";
 import { LocalGitProvider } from "../src/providers/local-git-provider.ts";
 import { KnowledgeSvc } from "../src/services/knowledge.ts";
 import { CopilotClientManager } from "../src/services/copilot-client-manager.ts";
@@ -44,7 +44,7 @@ interface ScriptConfig {
   runs: number;
 }
 
-interface Step0RunSummary {
+interface ChangesetOverviewRunSummary {
   run: number;
   behaviorChangeCount: number;
   unresolvedUnknownCount: number;
@@ -92,7 +92,7 @@ interface ValidationSummary {
   selectedBasisFiles: string[];
   semanticFile: string;
   runs: number;
-  step0: Step0RunSummary[];
+  changesetOverview: ChangesetOverviewRunSummary[];
   basisStep: BasisRunSummary[];
   semanticPipeline: SemanticRunSummary[];
   retryEvents: string[];
@@ -129,9 +129,9 @@ async function main(input: ScriptConfig): Promise<void> {
     });
     const changesetOverviewRunner = new ChangesetOverviewRunner({
       reviewSessionFactory,
-      onStep0LogEvent(event) {
-        retryEvents.push(`step0: ${event.message}`);
-        console.error(`[step0] ${event.message}`);
+      onChangesetOverviewLogEvent(event) {
+        retryEvents.push(`changeset-overview: ${event.message}`);
+        console.error(`[changeset-overview] ${event.message}`);
       }
     });
     const judgeService = new JudgeService({
@@ -158,10 +158,10 @@ async function main(input: ScriptConfig): Promise<void> {
     const promptSerializer = new ReviewStatePromptSerializer();
 
     const runContexts: RunContext[] = [];
-    const step0Runs: Step0RunSummary[] = [];
+    const changesetOverviewRuns: ChangesetOverviewRunSummary[] = [];
 
     for (let run = 1; run <= input.runs; run += 1) {
-      console.error(`[validate] step0 run ${run}/${input.runs}`);
+      console.error(`[validate] changeset overview run ${run}/${input.runs}`);
       const runContext = await changesetOverviewRunner.run({
         changesetEntries,
         outputBaseDir,
@@ -170,13 +170,13 @@ async function main(input: ScriptConfig): Promise<void> {
         workingDirectory: repoRoot
       });
       runContexts.push(runContext);
-      step0Runs.push(summarizeStep0(run, runContext));
+      changesetOverviewRuns.push(summarizeChangesetOverview(run, runContext));
     }
 
     const basisRuns: BasisRunSummary[] = [];
     const runContext = runContexts[0];
     if (!runContext) {
-      throw new Error("Step 0 did not produce a RunContext.");
+      throw new Error("Changeset Overview did not produce a RunContext.");
     }
 
     for (const filePath of input.basisFiles) {
@@ -204,7 +204,7 @@ async function main(input: ScriptConfig): Promise<void> {
     const semanticRuns: SemanticRunSummary[] = [];
     for (let run = 1; run <= input.runs; run += 1) {
       console.error(
-        `[validate] step5 -> step6 -> step7 run ${run}/${input.runs} ${input.semanticFile}`
+        `[validate] candidate findings -> semantic validation -> review summary run ${run}/${input.runs} ${input.semanticFile}`
       );
       const context = await createFileReviewContext({
         git,
@@ -223,14 +223,14 @@ async function main(input: ScriptConfig): Promise<void> {
       });
       await runAndApply({
         stepRunner,
-        step: new Step5ValidationInterrogationStep({ promptSerializer }),
+        step: new CandidateFindingsStep({ promptSerializer }),
         context,
         outputBaseDir,
         repoRoot
       });
       await runAndApply({
         stepRunner,
-        step: new Step6CognitiveSimulationStep({ promptSerializer }),
+        step: new SemanticValidationStep({ promptSerializer }),
         context,
         outputBaseDir,
         repoRoot
@@ -239,13 +239,13 @@ async function main(input: ScriptConfig): Promise<void> {
       const validationReport = context.getValidationReportV1();
       if (validationReport?.loopControl.action === "rerun") {
         throw new Error(
-          `Semantic validation requested a Step 5 rerun for ${input.semanticFile}; choose a narrower stable semantic file or investigate the candidate.`
+          `Semantic validation requested a Candidate Findings rerun for ${input.semanticFile}; choose a narrower stable semantic file or investigate the candidate.`
         );
       }
 
       await runAndApply({
         stepRunner,
-        step: new Step7SummaryStep({ promptSerializer }),
+        step: new ReviewSummaryStep({ promptSerializer }),
         context,
         outputBaseDir,
         repoRoot
@@ -263,7 +263,7 @@ async function main(input: ScriptConfig): Promise<void> {
       selectedBasisFiles: input.basisFiles,
       semanticFile: input.semanticFile,
       runs: input.runs,
-      step0: step0Runs,
+      changesetOverview: changesetOverviewRuns,
       basisStep: basisRuns,
       semanticPipeline: semanticRuns,
       retryEvents
@@ -306,7 +306,7 @@ async function createFileReviewContext(input: {
 
 async function runAndApply(input: {
   stepRunner: StepRunner;
-  step: ReviewBasisStep | Step5ValidationInterrogationStep | Step6CognitiveSimulationStep | Step7SummaryStep;
+  step: ReviewBasisStep | CandidateFindingsStep | SemanticValidationStep | ReviewSummaryStep;
   context: FileReviewContext;
   outputBaseDir: string;
   repoRoot: string;
@@ -321,7 +321,7 @@ async function runAndApply(input: {
   result.applyTo(input.context);
 }
 
-function summarizeStep0(run: number, runContext: RunContext): Step0RunSummary {
+function summarizeChangesetOverview(run: number, runContext: RunContext): ChangesetOverviewRunSummary {
   const overview = runContext.changesetOverview;
   return {
     run,
@@ -367,7 +367,7 @@ function summarizeSemantic(
     throw new Error(`ValidationReportV1 missing for ${context.filePath}`);
   }
   if (!summary) {
-    throw new Error(`Step 7 summary missing for ${context.filePath}`);
+    throw new Error(`Review Summary summary missing for ${context.filePath}`);
   }
 
   return {

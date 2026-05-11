@@ -1,4 +1,9 @@
 import type { FileReviewContext } from "../file-review-context.ts";
+import {
+  CANDIDATE_FINDINGS_STEP_ID,
+  REVIEW_BASIS_STEP_ID,
+  SEMANTIC_VALIDATION_STEP_ID
+} from "../review-step-ids.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { ReviewStatePromptSerializer } from "../review-state-prompt-serializer.ts";
 import {
@@ -14,14 +19,14 @@ import {
 } from "./shared-step-system-blocks.ts";
 import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
-const STEP6_SYSTEM_ADDITION = [
+const SEMANTIC_VALIDATION_SYSTEM_ADDITION = [
   "## Current Step: Semantic Validation",
   "- Validate `<review_state>.candidateFindings` against the diff, `<review_state>.reviewBasis`, candidate finding fields, the semantic gates listed in this step instruction, and `<review_state>.validationFeedback`.",
   "- This step is a validator, not a bug hunt. Do not search for or create new findings; only approve, require rewrite, drop, or report blocking missing information for the existing candidate set.",
   "- If a concern is not already represented in `<review_state>.candidateFindings.findings[]`, record it as missing information only when it is a specific user-actionable fact that blocks reliable validation of the current candidate findings."
 ].join("\n");
 
-const STEP6_INSTRUCTION = [
+const SEMANTIC_VALIDATION_INSTRUCTION = [
   "Validate this file's `<review_state>.candidateFindings` payload and return the validation report JSON object.",
   "",
   "Required output top-level fields:",
@@ -102,18 +107,18 @@ const STEP6_INSTRUCTION = [
   "If there are no candidates but `<review_state>.candidateFindings.criticalMissingInformation` contains user-actionable blockers, return: {\"perFindingResults\": [], \"missingInformationItems\": [{\"description\": \"Need the binary SDK API/version information for the local AAR.\", \"whyItMatters\": \"Without it the review cannot verify runtime compatibility with the changed call sites.\"}], \"loopControl\": {\"action\": \"accept\", \"reason\": \"no candidate findings to rewrite; preserve blocking missing information\"}}"
 ].join("\n");
 
-export interface Step6CognitiveSimulationStepOptions {
+export interface SemanticValidationStepOptions {
   promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
  * Reconcile the first-pass findings through end-to-end simulation before they become the final findings set.
  */
-export class Step6CognitiveSimulationStep implements StepDefinition {
-  readonly stepId = "step6-cognitive-simulation";
+export class SemanticValidationStep implements StepDefinition {
+  readonly stepId = SEMANTIC_VALIDATION_STEP_ID;
   readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
-  constructor(options: Step6CognitiveSimulationStepOptions) {
+  constructor(options: SemanticValidationStepOptions) {
     this.#promptSerializer = options.promptSerializer;
   }
 
@@ -126,15 +131,15 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
         systemMessage: [
           JSON_STEP_SYSTEM_MESSAGE,
           MISSING_INFORMATION_DISCIPLINE_BLOCK.content,
-          STEP6_SYSTEM_ADDITION
+          SEMANTIC_VALIDATION_SYSTEM_ADDITION
         ].join("\n\n"),
-        userMessage: buildStep6UserMessage(
+        userMessage: buildSemanticValidationUserMessage(
           context,
           this.#promptSerializer.serialize({
             context,
             include: [
-              "review-basis",
-              "candidate-findings",
+              REVIEW_BASIS_STEP_ID,
+              CANDIDATE_FINDINGS_STEP_ID,
               "validation-feedback"
             ]
           }),
@@ -157,7 +162,7 @@ export class Step6CognitiveSimulationStep implements StepDefinition {
   }
 }
 
-function buildStep6UserMessage(
+function buildSemanticValidationUserMessage(
   context: FileReviewContext,
   reviewState: string,
   candidatePayload: CandidateFindingsV3
@@ -173,7 +178,7 @@ function buildStep6UserMessage(
     JSON.stringify(candidatePayload.findings.map((finding) => finding.findingId)),
     "</candidate_ids>",
     "",
-    STEP6_INSTRUCTION
+    SEMANTIC_VALIDATION_INSTRUCTION
   ].join("\n");
 }
 
@@ -181,7 +186,7 @@ function requireCandidatePayload(context: FileReviewContext): CandidateFindingsV
   const candidatePayload = context.getCandidateFindingsV3();
   if (!candidatePayload) {
     throw new Error(
-      `CandidateFindingsV3 must exist before Step 6 for "${context.filePath}"`
+      `CandidateFindingsV3 must exist before Semantic Validation for "${context.filePath}"`
     );
   }
   return candidatePayload;

@@ -50,7 +50,7 @@ review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
 | Flag | Description |
 |------|-------------|
 | `--repo <path>` | Path to the Git repository (default: current working directory) |
-| `--context <value>` | Requirement or background context passed to Step 0 (e.g. PR description, root cause, expected behavior, spec links). Repeatable |
+| `--context <value>` | Requirement or background context passed to Changeset Overview (e.g. PR description, root cause, expected behavior, spec links). Repeatable |
 | `--dry-run` | Run the full pipeline with deterministic stubs instead of calling the Copilot API |
 
 **Examples:**
@@ -84,7 +84,7 @@ Each run produces output under `<repo_root>/.nightowl/review/<session_id>/`:
 | File | Description |
 |------|-------------|
 | `files/*.md` | Structured review notes for each changed file |
-| `changeset-overview.md` | Run-level changeset overview produced by Step 0 |
+| `changeset-overview.md` | Run-level changeset overview produced by Changeset Overview |
 | `summary.md` | Risk distribution, findings statistics, per-file risk ranking |
 | `index.md` | Landing page linking all per-file notes, overview, and summary |
 | `verifier-report.jsonl` | Machine-readable verifier decisions for accepted and rejected findings |
@@ -118,8 +118,8 @@ File filtering uses `<repo_root>/.nightowl/reviewignore` (`.gitignore` syntax).
 
 NightOwl runs a two-phase review pipeline:
 
-1. **Step 0 — Changeset Overview**: scans the entire changeset once to build global context (scope of changes, cross-file relationships, user-provided context).
-2. **Steps 1–7 — Per-file review**: each changed file goes through 7 sequential steps — from building file-level understanding, through dependency analysis and risk scenario generation, to validation, cognitive simulation, and a final summary. Files are processed in parallel (bounded concurrency, default 5).
+1. **Changeset Overview**: scans the entire changeset once to build global context (scope of changes, cross-file relationships, user-provided context).
+2. **Per-file semantic review**: each changed file runs `ReviewBasis -> Candidate Findings -> Semantic Validation -> Review Summary`. Files are processed in parallel across files (bounded concurrency, default 5) and strictly sequential within each file.
 
 Each per-file step runs in its own Copilot SDK session with a completion check (Agent Judge or deterministic validation). A failed step retries once; if it fails again, the file is skipped.
 

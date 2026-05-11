@@ -113,7 +113,7 @@ export class FileReviewContext {
     return [...this.#sections.entries()];
   }
 
-  // Findings are replaced wholesale, not merged, because Step 6 produces the complete final set.
+  // Findings are replaced wholesale, not merged, because Semantic Validation produces the complete final set.
   setFindings(findings: Finding[]): void {
     this.#findings = findings.map(cloneFinding);
     this.#findingsInsertionIndex ??= this.#sections.size;

@@ -1,6 +1,8 @@
 import type { OutputTarget } from "./review-path-resolver.ts";
 
-export type ReviewRunPhase = "step0" | "planning" | "reviewing";
+import { CHANGESET_OVERVIEW_STEP_ID } from "./review-step-ids.ts";
+
+export type ReviewRunPhase = typeof CHANGESET_OVERVIEW_STEP_ID | "planning" | "reviewing";
 
 export type RunProgressEvent =
   | {

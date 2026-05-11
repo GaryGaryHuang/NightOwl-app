@@ -6,21 +6,21 @@ import {
   type ReadinessUnresolvedUnknownEntry
 } from "./change-map.ts";
 
-export type Step0ValidationCode =
+export type ChangesetOverviewValidationCode =
   | "PARSE"
   | "SCHEMA";
 
-export class Step0OutputValidationError extends Error {
-  readonly code: Step0ValidationCode;
-  readonly diagnostic: Step0ValidationDiagnostic;
+export class ChangesetOverviewOutputValidationError extends Error {
+  readonly code: ChangesetOverviewValidationCode;
+  readonly diagnostic: ChangesetOverviewValidationDiagnostic;
 
   constructor(
-    code: Step0ValidationCode,
+    code: ChangesetOverviewValidationCode,
     message: string,
-    diagnostic: Partial<Omit<Step0ValidationDiagnostic, "code" | "message">> = {}
+    diagnostic: Partial<Omit<ChangesetOverviewValidationDiagnostic, "code" | "message">> = {}
   ) {
-    super(`Step 0 ChangeMapReadiness validation failed [${code}]: ${message}`);
-    this.name = "Step0OutputValidationError";
+    super(`Changeset Overview ChangeMapReadiness validation failed [${code}]: ${message}`);
+    this.name = "ChangesetOverviewOutputValidationError";
     this.code = code;
     this.diagnostic = {
       code,
@@ -30,15 +30,15 @@ export class Step0OutputValidationError extends Error {
   }
 }
 
-export interface Step0ValidationDiagnostic {
-  readonly code: Step0ValidationCode;
+export interface ChangesetOverviewValidationDiagnostic {
+  readonly code: ChangesetOverviewValidationCode;
   readonly message: string;
   readonly offendingPath?: string;
   readonly allowedValues?: readonly string[];
   readonly actualSummary?: string;
   readonly repairHint?: string;
   readonly parseStage?: string;
-  readonly repairKind?: Step0JsonRepairKind;
+  readonly repairKind?: ChangesetOverviewJsonRepairKind;
   readonly responseByteLength?: number;
   readonly errorPosition?: number;
   readonly errorLine?: number;
@@ -46,26 +46,26 @@ export interface Step0ValidationDiagnostic {
   readonly responseExcerpt?: string;
 }
 
-export interface Step0OutputValidatorInput {
+export interface ChangesetOverviewOutputValidatorInput {
   readonly responseText: string;
   readonly userContext: readonly string[];
 }
 
-export type Step0JsonRepairKind =
+export type ChangesetOverviewJsonRepairKind =
   | "none"
   | "trimmed"
   | "code_fence"
   | "object_extraction";
 
-export interface Step0JsonParseMetadata {
-  readonly repairKind: Step0JsonRepairKind;
+export interface ChangesetOverviewJsonParseMetadata {
+  readonly repairKind: ChangesetOverviewJsonRepairKind;
   readonly responseByteLength: number;
   readonly parsedByteLength: number;
 }
 
-export interface Step0OutputValidationResult {
+export interface ChangesetOverviewOutputValidationResult {
   readonly changeMap: ChangeMapReadinessV2;
-  readonly parseMetadata: Step0JsonParseMetadata;
+  readonly parseMetadata: ChangesetOverviewJsonParseMetadata;
 }
 
 const ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES: ReadonlySet<string> = new Set(
@@ -75,18 +75,18 @@ const ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES: ReadonlySet<string> = new Set(
 const OVERVIEW_MARKDOWN_PREFIX = "## Changeset Overview";
 
 /**
- * Deterministic structural validator for Step 0's `ChangeMapReadinessV2` output.
+ * Deterministic structural validator for Changeset Overview's `ChangeMapReadinessV2` output.
  *
- * Pure function (no I/O, no LLM). Throws `Step0OutputValidationError` with a
+ * Pure function (no I/O, no LLM). Throws `ChangesetOverviewOutputValidationError` with a
  * taxonomy code on any failure so the runner's existing retry path can react
  * uniformly to blank, parse, and schema failures.
  */
-export class Step0OutputValidator {
-  validate(input: Step0OutputValidatorInput): ChangeMapReadinessV2 {
+export class ChangesetOverviewOutputValidator {
+  validate(input: ChangesetOverviewOutputValidatorInput): ChangeMapReadinessV2 {
     return this.validateDetailed(input).changeMap;
   }
 
-  validateDetailed(input: Step0OutputValidatorInput): Step0OutputValidationResult {
+  validateDetailed(input: ChangesetOverviewOutputValidatorInput): ChangesetOverviewOutputValidationResult {
     const { value: parsed, metadata: parseMetadata } = parseJson(input.responseText);
     const obj = ensurePlainObject(parsed, "top-level payload");
 
@@ -98,7 +98,7 @@ export class Step0OutputValidator {
 
 function validateChangeMapReadinessV2(
   obj: Record<string, unknown>,
-  input: Step0OutputValidatorInput
+  input: ChangesetOverviewOutputValidatorInput
 ): ChangeMapReadinessV2 {
   const userBehavior = validateUserBehavior(obj.userBehavior);
   const missingInformation = validateMissingInformation(obj.missingInformation);
@@ -132,10 +132,10 @@ function validateChangeMapReadinessV2(
 
 function parseJson(
   responseText: string
-): { readonly value: unknown; readonly metadata: Step0JsonParseMetadata } {
+): { readonly value: unknown; readonly metadata: ChangesetOverviewJsonParseMetadata } {
   const responseByteLength = Buffer.byteLength(responseText, "utf8");
   const trimmed = responseText.replace(/^\uFEFF/u, "").trim();
-  const directRepairKind: Step0JsonRepairKind =
+  const directRepairKind: ChangesetOverviewJsonRepairKind =
     trimmed === responseText ? "none" : "trimmed";
 
   try {
@@ -166,7 +166,7 @@ function parseJson(
 
     const extracted = extractSingleRootObject(trimmed);
     if (extracted.status === "multiple") {
-      throw new Step0OutputValidationError(
+      throw new ChangesetOverviewOutputValidationError(
         "PARSE",
         "response contains multiple root JSON objects",
         {
@@ -205,7 +205,7 @@ function throwParseFailure(
   const causeMessage = cause instanceof Error && cause.message
     ? cause.message
     : "unknown error";
-  throw new Step0OutputValidationError(
+  throw new ChangesetOverviewOutputValidationError(
     "PARSE",
     `response is not valid JSON (${causeMessage})`,
     {
@@ -221,7 +221,7 @@ function throwParseFailure(
 function buildParseFailureContext(
   responseText: string,
   causeMessage: string
-): Partial<Step0ValidationDiagnostic> {
+): Partial<ChangesetOverviewValidationDiagnostic> {
   const errorPosition = extractJsonParseErrorPosition(causeMessage);
   if (errorPosition === undefined) {
     return {};
@@ -347,7 +347,7 @@ function summarizeResponse(value: string): string {
 
 function ensurePlainObject(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Step0OutputValidationError(
+    throw new ChangesetOverviewOutputValidationError(
       "SCHEMA",
       `${label} must be a JSON object (received ${describe(value)})`
     );
@@ -439,7 +439,7 @@ function validateReviewObjective(
     fallback.missingInformation[0]?.description ??
     fallback.unresolvedUnknowns[0]?.question;
   if (!summary) {
-    throw new Step0OutputValidationError(
+    throw new ChangesetOverviewOutputValidationError(
       "SCHEMA",
       "reviewObjective.summary or overviewMarkdown must provide non-empty review context"
     );

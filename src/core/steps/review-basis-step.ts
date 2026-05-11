@@ -7,6 +7,7 @@ import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import type { RunContext } from "../run-context.ts";
 import type { StepDefinition, StepExecutionPlan } from "../step-runner.ts";
 import { buildXmlishJsonBlock } from "../prompt-serialization.ts";
+import { REVIEW_BASIS_STEP_ID } from "../review-step-ids.ts";
 import {
   JSON_STEP_SYSTEM_MESSAGE,
   MISSING_INFORMATION_DISCIPLINE_BLOCK
@@ -81,7 +82,7 @@ export interface ReviewBasisStepOptions {
 }
 
 export class ReviewBasisStep implements StepDefinition {
-  readonly stepId = "review-basis";
+  readonly stepId = REVIEW_BASIS_STEP_ID;
   readonly #runContext: RunContext;
   readonly #validator: Pick<ReviewBasisValidator, "validate">;
 

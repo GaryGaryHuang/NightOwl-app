@@ -8,28 +8,28 @@ import {
   getDryRunStubResponse
 } from "../../src/services/dry-run-stub-catalog.ts";
 
-const REMOVED_STEP_IDS = [
-  "step1-overview",
-  "step2-dependencies-boundaries",
-  "step3-knowledge-source-of-truth",
-  "step4-strategy-what-if-scenarios"
+const RETIRED_PROSE_MODULE_IDS = [
+  "overview-module",
+  "dependencies-boundaries-module",
+  "knowledge-source-of-truth-module",
+  "strategy-what-if-scenarios-module"
 ] as const;
 
-const REMOVED_STEP_FILES = [
-  "step1-overview.ts",
-  "step2-dependencies-boundaries.ts",
-  "step3-knowledge-source-of-truth.ts",
-  "step4-strategy-what-if-scenarios.ts"
+const RETIRED_PROSE_MODULE_FILES = [
+  "overview-module.ts",
+  "dependencies-boundaries-module.ts",
+  "knowledge-source-of-truth-module.ts",
+  "strategy-what-if-scenarios-module.ts"
 ] as const;
 
-test("built-in legacy Step 1-4 implementation files are absent", () => {
-  for (const fileName of REMOVED_STEP_FILES) {
+test("built-in retired prose module implementation files are absent", () => {
+  for (const fileName of RETIRED_PROSE_MODULE_FILES) {
     const filePath = new URL(`../../src/core/steps/${fileName}`, import.meta.url);
     assert.equal(existsSync(filePath), false, `${fileName} should not exist`);
   }
 });
 
-test("legacy Step 1-4 section constants are not exported", () => {
+test("retired prose module section constants are not exported", () => {
   for (const constantName of [
     "OVERVIEW_SECTION_KEY",
     "DEPENDENCIES_BOUNDARIES_SECTION_KEY",
@@ -42,8 +42,8 @@ test("legacy Step 1-4 section constants are not exported", () => {
   assert.equal(sectionContract.SUMMARY_SECTION_KEY, "summary");
 });
 
-test("dry-run catalog excludes legacy Step 1-4 built-in stubs", () => {
-  for (const stepId of REMOVED_STEP_IDS) {
+test("dry-run catalog excludes retired prose module built-in stubs", () => {
+  for (const stepId of RETIRED_PROSE_MODULE_IDS) {
     assert.equal((BUILT_IN_DRY_RUN_STEP_IDS as readonly string[]).includes(stepId), false);
     assert.equal(getDryRunStubResponse(stepId), undefined);
   }

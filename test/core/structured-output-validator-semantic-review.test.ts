@@ -52,27 +52,27 @@ function createReviewBasis(overrides: Partial<ReviewBasisV1> = {}): ReviewBasisV
     roleInChangeset: "Owns review prompt harness state handoff.",
     changedBehavior: [
       {
-        before: "Step 5 consumed prose sections.",
-        after: "Step 5 consumes ReviewBasis evidence graph.",
+        before: "Candidate Findings consumed prose sections.",
+        after: "Candidate Findings consumes ReviewBasis evidence graph.",
         evidenceIds: ["E1"]
       }
     ],
     facts: [
       {
-        statement: "ReviewBasis is emitted before Step 5.",
+        statement: "ReviewBasis is emitted before Candidate Findings.",
         evidenceIds: ["E1"]
       }
     ],
     inferences: [
       {
-        statement: "Step 5 can validate source evidence IDs.",
+        statement: "Candidate Findings can validate source evidence IDs.",
         basedOnEvidenceIds: ["E1"],
         confidence: "high"
       }
     ],
     dependencyMap: {
       upstreamCallers: ["ReviewOrchestrator"],
-      downstreamConsumers: ["Step5ValidationInterrogationStep"],
+      downstreamConsumers: ["CandidateFindingsStep"],
       externalContracts: [],
       sharedStateOrSideEffects: ["FileReviewContext"]
     },
@@ -458,7 +458,7 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
   }
 });
 
-test("validateValidationReportV1WithReport accepts reports that approve only Step 5 candidates", () => {
+test("validateValidationReportV1WithReport accepts reports that approve only Candidate Findings candidates", () => {
   const result = validateValidationReport();
 
   assert.deepEqual(
@@ -660,7 +660,7 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
       payload: validationReportV1({
         loopControl: {
           action: "rerun",
-          reason: "Step 5 must repair evidence gaps"
+          reason: "Candidate Findings must repair evidence gaps"
         }
       }),
       reason: /rerun.*approve findings/u

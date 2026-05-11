@@ -203,7 +203,7 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
   }
 });
 
-test("createLocalReviewRunApp persists Step 0 audit records when Step 0 fails before output initialization", async () => {
+test("createLocalReviewRunApp persists Changeset Overview audit records when Changeset Overview fails before output initialization", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -259,7 +259,7 @@ test("createLocalReviewRunApp persists Step 0 audit records when Step 0 fails be
           userContext: [],
           dryRun: false
         }),
-      /Step 0 ChangeMapReadiness validation failed/u
+      /Changeset Overview ChangeMapReadiness validation failed/u
     );
 
     const auditRecords = readFileSync(expectedAuditPath, "utf8")
@@ -282,7 +282,7 @@ test("createLocalReviewRunApp persists Step 0 audit records when Step 0 fails be
   }
 });
 
-test("createLocalReviewRunApp persists Step 0 audit records when changeset overview publish fails after output initialization", async () => {
+test("createLocalReviewRunApp persists Changeset Overview audit records when changeset overview publish fails after output initialization", async () => {
   const fixture = createReviewRepoFixture();
 
   try {
@@ -319,7 +319,7 @@ test("createLocalReviewRunApp persists Step 0 audit records when changeset overv
 
               return {
                 async sendAndWait() {
-                  return { data: { content: buildValidStep0ChangeMapJson() } };
+                  return { data: { content: buildValidChangesetOverviewChangeMapJson() } };
                 },
                 async disconnect() {}
               };
@@ -377,7 +377,7 @@ test("createLocalReviewRunApp persists Step 0 audit records when changeset overv
   }
 });
 
-function buildValidStep0ChangeMapJson(): string {
+function buildValidChangesetOverviewChangeMapJson(): string {
   const paths = [
     "dist/app.js",
     "obsolete.txt",

@@ -74,11 +74,11 @@ export function lineRangeTraceability(lineStart: number, lineEnd: number) {
   };
 }
 
-export type Step7NarrativeRiskLevel = "High" | "Low" | "None";
+export type ReviewSummaryNarrativeRiskLevel = "High" | "Low" | "None";
 
 export function buildSummaryResponse(
   filePath: string,
-  options: { label?: string; riskLevel?: Step7NarrativeRiskLevel } = {}
+  options: { label?: string; riskLevel?: ReviewSummaryNarrativeRiskLevel } = {}
 ): string {
   const label = options.label ?? filePath;
   const riskLevel = options.riskLevel ?? "High";
@@ -138,7 +138,7 @@ export function buildFindingsForFile(filePath: string): Finding[] {
 export interface SuccessfulStepResultOptions {
   onTerminalApply?: () => void;
   findingsByFile?: ReadonlyMap<string, Finding[]>;
-  narrativeRiskByFile?: ReadonlyMap<string, Step7NarrativeRiskLevel>;
+  narrativeRiskByFile?: ReadonlyMap<string, ReviewSummaryNarrativeRiskLevel>;
 }
 
 /**
@@ -147,7 +147,7 @@ export interface SuccessfulStepResultOptions {
  * tests can verify state propagation without running an actual Copilot session.
  *
  * The optional `narrativeRiskByFile` map lets tests override the risk level
- * written in the Step 7 summary, enabling assertions on risk-level derivation.
+ * written in the Review Summary summary, enabling assertions on risk-level derivation.
  */
 export function buildSuccessfulStepResult(
   stepId: string,
@@ -163,7 +163,7 @@ export function buildSuccessfulStepResult(
     };
   }
 
-  if (stepId === "step5-validation-interrogation") {
+  if (stepId === "candidate-findings") {
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {
@@ -172,7 +172,7 @@ export function buildSuccessfulStepResult(
     };
   }
 
-  if (stepId === "step6-cognitive-simulation") {
+  if (stepId === "semantic-validation") {
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {
@@ -184,7 +184,7 @@ export function buildSuccessfulStepResult(
     };
   }
 
-  if (stepId === "step7-summary") {
+  if (stepId === "review-summary") {
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {

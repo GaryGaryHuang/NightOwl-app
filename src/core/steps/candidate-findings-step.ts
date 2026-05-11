@@ -1,4 +1,8 @@
 import type { FileReviewContext } from "../file-review-context.ts";
+import {
+  CANDIDATE_FINDINGS_STEP_ID,
+  REVIEW_BASIS_STEP_ID
+} from "../review-step-ids.ts";
 import type { ReviewBasisV1 } from "../review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import {
@@ -15,8 +19,8 @@ import {
 } from "./shared-step-system-blocks.ts";
 import { createCandidateFindingsV3Resolve } from "./step-resolve-helpers.ts";
 
-const STEP5_SYSTEM_ADDITION = [
-  "## Current Step: Validation & Interrogation",
+const CANDIDATE_FINDINGS_SYSTEM_ADDITION = [
+  "## Current Step: Candidate Findings",
   "- Use `<review_basis>.hypothesisLedger` as the planned validation queue for this step. It may be empty; do not invent hypotheses or findings when the basis contains no evidence-backed validation target.",
   "- Treat each hypothesis as testable review work, not as an assumed defect.",
   "- Validate each hypothesis against the reviewed diff and the supporting review basis fields: changedBehavior, facts, inferences, dependencyMap, flowMap, testCoverage, missingInformation, and evidenceRefs.",
@@ -29,7 +33,7 @@ const STEP5_SYSTEM_ADDITION = [
   "- Do not downgrade observable behavior changes to missing information solely because the product requirement is implicit. A concrete silent failure, data loss, wrong event, wrong timeout, or missing signal can be a low-severity `reasonable_risk` when the code path and impact are evidence-backed."
 ].join("\n");
 
-const STEP5_INSTRUCTION = [
+const CANDIDATE_FINDINGS_INSTRUCTION = [
   "Based on `<review_basis>.hypothesisLedger`, validate each hypothesis in sequence and produce candidate findings for this file.",
   "",
   "Required output top-level fields:",
@@ -100,18 +104,18 @@ const STEP5_INSTRUCTION = [
   `{"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "insufficient_information", "rationale": "specific missing contract blocks validation"}], "criticalMissingInformation": [{"description": "Need null contract.", "whyItMatters": "Expected behavior is unclear."}]}`
 ].join("\n");
 
-export interface Step5ValidationInterrogationStepOptions {
+export interface CandidateFindingsStepOptions {
   promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
 /**
  * Run the first-pass scenario validation and emit only evidence-backed structured findings.
  */
-export class Step5ValidationInterrogationStep implements StepDefinition {
-  readonly stepId = "step5-validation-interrogation";
+export class CandidateFindingsStep implements StepDefinition {
+  readonly stepId = CANDIDATE_FINDINGS_STEP_ID;
   readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
-  constructor(options: Step5ValidationInterrogationStepOptions) {
+  constructor(options: CandidateFindingsStepOptions) {
     this.#promptSerializer = options.promptSerializer;
   }
 
@@ -124,14 +128,14 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
         systemMessage: [
           JSON_FINDING_STEP_SYSTEM_MESSAGE,
           MISSING_INFORMATION_DISCIPLINE_BLOCK.content,
-          STEP5_SYSTEM_ADDITION
+          CANDIDATE_FINDINGS_SYSTEM_ADDITION
         ].join("\n\n"),
-        userMessage: buildStep5UserMessage(
+        userMessage: buildCandidateFindingsUserMessage(
           context,
           reviewBasis,
           this.#promptSerializer.serialize({
             context,
-            include: ["review-basis", "validation-feedback"]
+            include: [REVIEW_BASIS_STEP_ID, "validation-feedback"]
           })
         )
       },
@@ -150,7 +154,7 @@ export class Step5ValidationInterrogationStep implements StepDefinition {
   }
 }
 
-function buildStep5UserMessage(
+function buildCandidateFindingsUserMessage(
   context: FileReviewContext,
   reviewBasis: unknown,
   reviewState: string
@@ -164,7 +168,7 @@ function buildStep5UserMessage(
     "",
     reviewState,
     "",
-    STEP5_INSTRUCTION
+    CANDIDATE_FINDINGS_INSTRUCTION
   ].join("\n");
 }
 
@@ -172,7 +176,7 @@ function requireReviewBasis(context: FileReviewContext): ReviewBasisV1 {
   const reviewBasis = context.getReviewBasis();
   if (!reviewBasis) {
     throw new Error(
-      `ReviewBasis must exist before Step 5 for "${context.filePath}"`
+      `ReviewBasis must exist before Candidate Findings for "${context.filePath}"`
     );
   }
   return reviewBasis;

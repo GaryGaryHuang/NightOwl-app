@@ -43,12 +43,12 @@ test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links"
     skippedFiles: [
       createSkippedFile(
         "src/app.ts",
-        "step4-findings-interrogation",
+        "candidate-findings",
         "deterministic validation failed"
       ),
       createSkippedFile(
         "packages/app/index.ts",
-        "step4-findings-interrogation",
+        "candidate-findings",
         "deterministic validation failed"
       )
     ]
@@ -173,7 +173,7 @@ test("ReviewIndexFinalizer sorts file notes by High to Low to None with skipped 
     skippedFiles: [
       createSkippedFile(
         "skipped.ts",
-        "step4-findings-interrogation",
+        "candidate-findings",
         "deterministic validation failed"
       )
     ]

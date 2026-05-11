@@ -50,7 +50,7 @@ test("RunSummaryFinalizer renders the exact aggregate summary contract with reba
     ],
     skippedFiles: [createSkippedFile(
       "src/b.ts",
-      "step5-validation-interrogation",
+      "candidate-findings",
       "deterministic validation failed"
     )]
   });
@@ -73,7 +73,7 @@ test("RunSummaryFinalizer renders the exact aggregate summary contract with reba
   );
   assert.match(
     rendered,
-    /## Skipped Files[\s\S]*- `src\/b\.ts` — step5-validation-interrogation — deterministic validation failed/u
+    /## Skipped Files[\s\S]*- `src\/b\.ts` — candidate-findings — deterministic validation failed/u
   );
   assertTextContainsInOrder(rendered, [
     "- Repo root: `/workspace/repo`",
@@ -107,7 +107,7 @@ test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate outpu
       createSkippedFile("src/a.ts", "review-basis", "deterministic validation failed"),
       createSkippedFile(
         "src/b.ts",
-        "step5-validation-interrogation",
+        "candidate-findings",
         "deterministic validation failed"
       )
     ]
@@ -123,7 +123,7 @@ test("RunSummaryFinalizer treats an all-skipped run as zero-risk aggregate outpu
   assert.match(rendered, /- `src\/a\.ts` — review-basis — deterministic validation failed/u);
   assert.match(
     rendered,
-    /- `src\/b\.ts` — step5-validation-interrogation — deterministic validation failed/u
+    /- `src\/b\.ts` — candidate-findings — deterministic validation failed/u
   );
 });
 
@@ -133,7 +133,7 @@ test("RunSummaryFinalizer excludes skipped files from final findings totals", ()
     successfulFiles: [createSuccessfulFile("src/a.ts", [createFinding("nice", 91)])],
     skippedFiles: [createSkippedFile(
       "src/b.ts",
-      "step6-cognitive-simulation",
+      "semantic-validation",
       "deterministic validation failed"
     )]
   });

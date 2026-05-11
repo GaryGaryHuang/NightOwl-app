@@ -1,3 +1,11 @@
+import {
+  CANDIDATE_FINDINGS_STEP_ID,
+  CHANGESET_OVERVIEW_STEP_ID,
+  REVIEW_BASIS_STEP_ID,
+  REVIEW_SUMMARY_STEP_ID,
+  SEMANTIC_VALIDATION_STEP_ID
+} from "../core/review-step-ids.ts";
+
 export const GENERIC_DRY_RUN_STUB =
   "[dry-run] No built-in stub template for this step.";
 
@@ -17,7 +25,7 @@ interface DryRunChangedFileEntry {
 }
 
 /**
- * Build a deterministic ChangeMap JSON for dry-run Step 0 by parsing the
+ * Build a deterministic ChangeMap JSON for dry-run Changeset Overview by parsing the
  * `<changed_files>` block out of the prompt. Uses the head-side path field
  * for rename/copy entries (last tab-separated field).
  */
@@ -90,7 +98,7 @@ export function buildDryRunReviewBasisResponse(prompt: string): string {
     hypothesisLedger: [
       {
         hypothesisId: "H1",
-        statement: "Dry-run hypothesis for exercising Step 5.",
+        statement: "Dry-run hypothesis for exercising Candidate Findings.",
         triggerCondition: "Dry-run pipeline reaches validation."
       }
     ],
@@ -196,9 +204,9 @@ const STUB_REVIEW_BASIS = buildDryRunReviewBasisResponse(
   '<diff path="dry-run.ts" base="main" head="HEAD">\n</diff>'
 );
 
-const STUB_VALIDATION_INTERROGATION = '{"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "dry-run stub has no findings"}], "criticalMissingInformation": []}';
+const STUB_CANDIDATE_FINDINGS = '{"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "dry-run stub has no findings"}], "criticalMissingInformation": []}';
 
-const STUB_COGNITIVE_SIMULATION = '{"perFindingResults": [], "missingInformationItems": [], "loopControl": {"action": "accept", "reason": "dry-run stub has no candidates"}}';
+const STUB_SEMANTIC_VALIDATION = '{"perFindingResults": [], "missingInformationItems": [], "loopControl": {"action": "accept", "reason": "dry-run stub has no candidates"}}';
 
 const STUB_SUMMARY = [
   "### 審查依據",
@@ -214,10 +222,10 @@ const STUB_SUMMARY = [
 export type DryRunResponseProvider = (prompt: string) => string;
 
 const DRY_RUN_STUB_RESPONSES = {
-  "review-basis": STUB_REVIEW_BASIS,
-  "step5-validation-interrogation": STUB_VALIDATION_INTERROGATION,
-  "step6-cognitive-simulation": STUB_COGNITIVE_SIMULATION,
-  "step7-summary": STUB_SUMMARY
+  [REVIEW_BASIS_STEP_ID]: STUB_REVIEW_BASIS,
+  [CANDIDATE_FINDINGS_STEP_ID]: STUB_CANDIDATE_FINDINGS,
+  [SEMANTIC_VALIDATION_STEP_ID]: STUB_SEMANTIC_VALIDATION,
+  [REVIEW_SUMMARY_STEP_ID]: STUB_SUMMARY
 } as const;
 
 type BuiltInDryRunStepId = keyof typeof DRY_RUN_STUB_RESPONSES;
@@ -237,10 +245,10 @@ export function getDryRunStubResponse(
 export function getDryRunResponseProvider(
   stepId?: string
 ): DryRunResponseProvider {
-  if (stepId === "changeset-overview") {
+  if (stepId === CHANGESET_OVERVIEW_STEP_ID) {
     return buildDryRunChangesetOverviewResponse;
   }
-  if (stepId === "review-basis") {
+  if (stepId === REVIEW_BASIS_STEP_ID) {
     return buildDryRunReviewBasisResponse;
   }
 

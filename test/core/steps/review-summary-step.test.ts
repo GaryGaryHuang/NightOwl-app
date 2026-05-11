@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
-import { Step7SummaryStep } from "../../../src/core/steps/step7-summary.ts";
+import { ReviewSummaryStep } from "../../../src/core/steps/review-summary-step.ts";
 import {
   parseRiskLevelFromResponse,
-  createStep7Resolve
+  createReviewSummaryResolve
 } from "../../../src/core/steps/step-resolve-helpers.ts";
 import type { StepResolveServices } from "../../../src/core/step-runner.ts";
 import { StructuredOutputValidator } from "../../../src/core/structured-output-validator.ts";
@@ -110,11 +110,11 @@ test("parseRiskLevelFromResponse extracts valid risk levels", async (t) => {
   });
 });
 
-// --- createStep7Resolve tests ---
+// --- createReviewSummaryResolve tests ---
 
-test("createStep7Resolve rejects when risk level mismatches snapshot", async () => {
-  const resolve = createStep7Resolve({
-    stepId: "step7-summary",
+test("createReviewSummaryResolve rejects when risk level mismatches snapshot", async () => {
+  const resolve = createReviewSummaryResolve({
+    stepId: "review-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
     expectedRiskLevel: "High"
@@ -128,9 +128,9 @@ test("createStep7Resolve rejects when risk level mismatches snapshot", async () 
   );
 });
 
-test("createStep7Resolve rejects when risk level is unparseable", async () => {
-  const resolve = createStep7Resolve({
-    stepId: "step7-summary",
+test("createReviewSummaryResolve rejects when risk level is unparseable", async () => {
+  const resolve = createReviewSummaryResolve({
+    stepId: "review-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
     expectedRiskLevel: "None"
@@ -147,10 +147,10 @@ test("createStep7Resolve rejects when risk level is unparseable", async () => {
   );
 });
 
-test("createStep7Resolve accepts matching risk without a judge service", async () => {
+test("createReviewSummaryResolve accepts matching risk without a judge service", async () => {
   const context = createContext();
-  const resolve = createStep7Resolve({
-    stepId: "step7-summary",
+  const resolve = createReviewSummaryResolve({
+    stepId: "review-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
     expectedRiskLevel: "None"
@@ -163,9 +163,9 @@ test("createStep7Resolve accepts matching risk without a judge service", async (
   assert.equal(context.getSection("summary"), response);
 });
 
-test("createStep7Resolve rejects empty narrative packaging", async () => {
-  const resolve = createStep7Resolve({
-    stepId: "step7-summary",
+test("createReviewSummaryResolve rejects empty narrative packaging", async () => {
+  const resolve = createReviewSummaryResolve({
+    stepId: "review-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
     expectedRiskLevel: "None"
@@ -177,9 +177,9 @@ test("createStep7Resolve rejects empty narrative packaging", async () => {
   );
 });
 
-test("createStep7Resolve rejects narrative missing required sections", async () => {
-  const resolve = createStep7Resolve({
-    stepId: "step7-summary",
+test("createReviewSummaryResolve rejects narrative missing required sections", async () => {
+  const resolve = createReviewSummaryResolve({
+    stepId: "review-summary",
     filePath: "src/app.ts",
     sectionKey: "summary",
     expectedRiskLevel: "None"
@@ -191,10 +191,10 @@ test("createStep7Resolve rejects narrative missing required sections", async () 
   );
 });
 
-// --- Step 7 prepare() harness contract tests ---
+// --- Review Summary prepare() harness contract tests ---
 
-test("Step7SummaryStep.prepare() does not expose host-owned summary data blocks", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+test("ReviewSummaryStep.prepare() does not expose host-owned summary data blocks", () => {
+  const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("must", "F1"), createFinding("nice", "F2")]);
   const plan = step.prepare(context);
 
@@ -202,10 +202,10 @@ test("Step7SummaryStep.prepare() does not expose host-owned summary data blocks"
   assert.doesNotMatch(plan.prompt.userMessage, /<summary_status>/u);
 });
 
-test("Step7SummaryStep.prepare() frames internal review state as source material for reader-facing prose", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+test("ReviewSummaryStep.prepare() frames internal review state as source material for reader-facing prose", () => {
+  const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const plan = step.prepare(createContext([]));
-  const instruction = getStep7InstructionText(plan.prompt.userMessage);
+  const instruction = getReviewSummaryInstructionText(plan.prompt.userMessage);
 
   assert.match(
     plan.prompt.systemMessage,
@@ -223,7 +223,7 @@ test("Step7SummaryStep.prepare() frames internal review state as source material
   );
   assert.match(
     instruction,
-    /Internal source labels are never report wording[\s\S]*Use them only to locate source data[\s\S]*reviewBasis[\s\S]*approvedFindings[\s\S]*validationReport[\s\S]*missingInformationItems[\s\S]*Step 5[\s\S]*Step 6/u
+    /Internal source labels are never report wording[\s\S]*Use them only to locate source data[\s\S]*reviewBasis[\s\S]*approvedFindings[\s\S]*validationReport[\s\S]*missingInformationItems[\s\S]*Candidate Findings[\s\S]*Semantic Validation/u
   );
   assert.match(
     instruction,
@@ -255,7 +255,7 @@ test("Step7SummaryStep.prepare() frames internal review state as source material
   );
 });
 
-test("Step7SummaryStep.resolve composes host-owned status data", async (t) => {
+test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
   const cases = [
     {
       name: "clean",
@@ -306,7 +306,7 @@ test("Step7SummaryStep.resolve composes host-owned status data", async (t) => {
 
   for (const testCase of cases) {
     await t.test(testCase.name, async () => {
-      const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+      const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
       const context = testCase.setup();
       const plan = step.prepare(context);
       const mutation = await plan.resolve(
@@ -339,8 +339,8 @@ test("Step7SummaryStep.resolve composes host-owned status data", async (t) => {
   }
 });
 
-test("Step7SummaryStep.prepare() consumes approved findings and missing-information state", () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+test("ReviewSummaryStep.prepare() consumes approved findings and missing-information state", () => {
+  const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("nice", "F1")]) as SemanticFileReviewContext;
   context.setCandidateFindingsV3(createCandidateFindingsV3("must"));
   const validationReport = createValidationReportV1();
@@ -364,8 +364,8 @@ test("Step7SummaryStep.prepare() consumes approved findings and missing-informat
   ]);
 });
 
-test("Step7SummaryStep.resolve composes host-owned report shell around narrative response", async () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+test("ReviewSummaryStep.resolve composes host-owned report shell around narrative response", async () => {
+  const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([
     createFinding("must", "F1"),
     createFinding("nice", "F2")
@@ -391,8 +391,8 @@ test("Step7SummaryStep.resolve composes host-owned report shell around narrative
   assert.notEqual(afterNarrative.trim(), "");
 });
 
-test("Step7SummaryStep.resolve rejects narrative that tries to own host-computed report fields", async () => {
-  const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+test("ReviewSummaryStep.resolve rejects narrative that tries to own host-computed report fields", async () => {
+  const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([]);
   const plan = step.prepare(context);
 
@@ -409,12 +409,12 @@ test("Step7SummaryStep.resolve rejects narrative that tries to own host-computed
   );
 });
 
-test("Step7SummaryStep.resolve rejects narrative that tries to own host-composed sections", async (t) => {
+test("ReviewSummaryStep.resolve rejects narrative that tries to own host-composed sections", async (t) => {
   const cases = ["### 審查結論", "### 後續行動"];
 
   for (const heading of cases) {
     await t.test(heading, async () => {
-      const step = new Step7SummaryStep({ promptSerializer: FAKE_SERIALIZER });
+      const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
       const context = createContext([]);
       const plan = step.prepare(context);
 
@@ -495,7 +495,7 @@ function parseReviewStateFromPrompt(prompt: string): {
   return JSON.parse(match[1]);
 }
 
-function getStep7InstructionText(prompt: string): string {
+function getReviewSummaryInstructionText(prompt: string): string {
   const reviewStateEnd = prompt.indexOf("</review_state>");
   assert.notEqual(reviewStateEnd, -1, "review_state block should be present");
   return prompt.slice(reviewStateEnd + "</review_state>".length);
@@ -509,7 +509,7 @@ function createCandidateFindingsV3(_type: "must" | "nice") {
         findingId: "F-raw-candidate",
         classification: "confirmed_problem",
         severity: "high",
-        title: "raw candidate must not shape Step 7",
+        title: "raw candidate must not shape Review Summary",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
         evidence: "candidate evidence",
         triggerCondition: "candidate trigger",

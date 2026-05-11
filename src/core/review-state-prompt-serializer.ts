@@ -12,15 +12,19 @@ import type {
   ValidationReportV1
 } from "./semantic-review.ts";
 import { buildXmlishJsonBlock } from "./prompt-serialization.ts";
+import {
+  CANDIDATE_FINDINGS_STEP_ID,
+  REVIEW_BASIS_STEP_ID
+} from "./review-step-ids.ts";
 
 export type FindingsBlockKind =
-  | "candidate-findings"
+  | typeof CANDIDATE_FINDINGS_STEP_ID
   | "approved-findings"
   | "missing-information";
 
 export type ReviewStateBlock =
   | "sections"
-  | "review-basis"
+  | typeof REVIEW_BASIS_STEP_ID
   | "validation-feedback"
   | "validation-report"
   | FindingsBlockKind;
@@ -97,7 +101,7 @@ export class ReviewStatePromptSerializer {
       input.context.getValidationReportV1?.()?.missingInformationItems ??
       [];
     const reviewBasis = input.context.getReviewBasis?.();
-    const includeReviewBasis = input.include.includes("review-basis");
+    const includeReviewBasis = input.include.includes(REVIEW_BASIS_STEP_ID);
 
     return {
       filePath: input.context.filePath,
@@ -114,7 +118,7 @@ export class ReviewStatePromptSerializer {
       sections: input.include.includes("sections")
         ? this.buildSections(input.context)
         : emptySections(),
-      candidateFindings: input.include.includes("candidate-findings")
+      candidateFindings: input.include.includes(CANDIDATE_FINDINGS_STEP_ID)
         ? candidateFindings
         : null,
       approvedFindings: input.include.includes("approved-findings")

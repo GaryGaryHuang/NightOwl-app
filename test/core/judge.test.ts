@@ -11,7 +11,7 @@ type JudgeObservedEvent =
   | ["disconnect"];
 
 const DEFAULT_EVALUATION_INPUT = {
-  stepId: "step7-summary",
+  stepId: "review-summary",
   filePath: "src/app.ts",
   criteria: "段落 `## Summary` 必須存在",
   sectionContent: "## Summary\n- 整體理解：測試"

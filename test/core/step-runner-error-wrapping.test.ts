@@ -49,7 +49,7 @@ test("StepRunner returns an apply-able result without mutating state or writing 
     [
       "createSession",
       {
-        stepId: "step7-summary",
+        stepId: "review-summary",
         knowledgeMode: "disabled",
         model: "gpt-5-mini",
         outputBaseDir: "/workspace/output",
@@ -137,7 +137,7 @@ test("StepRunner fails on blank responses and does not apply any state", async (
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /step7-summary/u
+    /review-summary/u
   );
   assert.equal(context.getSection("summary"), undefined);
 });
@@ -156,7 +156,7 @@ test("StepRunner wraps prepare failures with step and file context", async () =>
     () =>
       runner.run({
         step: {
-          stepId: "step7-summary",
+          stepId: "review-summary",
           prepare() {
             throw new Error("prepare exploded");
           }
@@ -165,7 +165,7 @@ test("StepRunner wraps prepare failures with step and file context", async () =>
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /Step step7-summary failed for src\/app\.ts: prepare exploded/u
+    /Step review-summary failed for src\/app\.ts: prepare exploded/u
   );
 });
 
@@ -194,6 +194,6 @@ test("StepRunner does not duplicate contextual prefixes for judge failures", asy
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /^StepExecutionError: Step step7-summary failed for src\/app\.ts: judge timeout$/u
+    /^StepExecutionError: Step review-summary failed for src\/app\.ts: judge timeout$/u
   );
 });

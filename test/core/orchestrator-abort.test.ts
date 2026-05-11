@@ -211,7 +211,7 @@ test("ReviewOrchestrator throws ReviewRunInterruptedError when signal is already
   assert.deepEqual(reviewBasisCalls, []);
 });
 
-test("ReviewOrchestrator maps an aborted Step 0 review turn to ReviewRunInterruptedError", async () => {
+test("ReviewOrchestrator maps an aborted Changeset Overview review turn to ReviewRunInterruptedError", async () => {
   const controller = new AbortController();
   const reviewBasisCalls: string[] = [];
   const orchestrator = createBaseOrchestrator({
@@ -231,7 +231,7 @@ test("ReviewOrchestrator maps an aborted Step 0 review turn to ReviewRunInterrup
   assert.deepEqual(reviewBasisCalls, []);
 });
 
-test("ReviewOrchestrator stops before per-file dispatch when signal aborts during post-Step0 planning", async () => {
+test("ReviewOrchestrator stops before per-file dispatch when signal aborts during post-ChangesetOverview planning", async () => {
   const controller = new AbortController();
   const sink = createTrackingOutputSink();
   const reviewBasisCalls: string[] = [];
@@ -330,7 +330,7 @@ test("ReviewOrchestrator worker stops at the next safe boundary and does not sta
     undefined
   );
   assert.equal(stepsExecuted.includes("review-basis"), true);
-  assert.equal(stepsExecuted.includes("step5-validation-interrogation"), false);
+  assert.equal(stepsExecuted.includes("candidate-findings"), false);
 });
 
 test("ReviewOrchestrator does not publish a new per-file snapshot after abort signal", async () => {

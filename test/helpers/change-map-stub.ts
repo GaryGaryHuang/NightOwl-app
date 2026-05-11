@@ -1,7 +1,7 @@
 import type { ChangeMapReadinessV2 } from "../../src/core/change-map.ts";
 
 /**
- * Build a minimal `ChangeMapReadinessV2` for tests that stub Step 0 with
+ * Build a minimal `ChangeMapReadinessV2` for tests that stub Changeset Overview with
  * a Markdown string only. Defaults to empty structured arrays; callers can
  * override per test.
  */

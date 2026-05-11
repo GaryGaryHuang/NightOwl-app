@@ -10,8 +10,8 @@ export const CANDIDATE_SEVERITIES = ["high", "low"] as const;
 export type CandidateSeverity = (typeof CANDIDATE_SEVERITIES)[number];
 
 /**
- * A Step 5 candidate finding. Structurally identical to `Finding` (minus optional fields).
- * When approved by Step 6, a candidate becomes the final `Finding` directly.
+ * A Candidate Findings candidate finding. Structurally identical to `Finding` (minus optional fields).
+ * When approved by Semantic Validation, a candidate becomes the final `Finding` directly.
  */
 export type CandidateFindingV3 = Finding;
 

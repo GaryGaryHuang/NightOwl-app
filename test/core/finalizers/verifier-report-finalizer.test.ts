@@ -30,7 +30,7 @@ test("VerifierReportFinalizer renders the exact JSONL contract for mixed-result 
       createSuccessfulFile("src/a.ts", [], [
         createVerifierReportArtifactEntry({
           filePath: "src/a.ts",
-          stepId: "step5-validation-interrogation",
+          stepId: "candidate-findings",
           findingId: "F1",
           taxonomy: "OK",
           outcome: "accepted",
@@ -40,10 +40,10 @@ test("VerifierReportFinalizer renders the exact JSONL contract for mixed-result 
       ])
     ],
     skippedFiles: [
-      createSkippedFile("src/b.ts", "step6-cognitive-simulation", "review timeout", [
+      createSkippedFile("src/b.ts", "semantic-validation", "review timeout", [
         createVerifierReportArtifactEntry({
           filePath: "src/b.ts",
-          stepId: "step5-validation-interrogation",
+          stepId: "candidate-findings",
           findingId: "F2",
           taxonomy: "SCHEMA",
           outcome: "rejected",
@@ -62,7 +62,7 @@ test("VerifierReportFinalizer renders the exact JSONL contract for mixed-result 
   );
   assert.deepEqual(JSON.parse(lines[1]!), {
     filePath: "src/b.ts",
-    stepId: "step5-validation-interrogation",
+    stepId: "candidate-findings",
     findingId: "F2",
     taxonomy: "SCHEMA",
     outcome: "rejected",
@@ -79,11 +79,11 @@ test("VerifierReportFinalizer preserves planned file order and per-file step ord
     ]),
     successfulFiles: [
       createSuccessfulFile("src/b.ts", [], [
-        createVerifierReportArtifactEntry({ filePath: "src/b.ts", stepId: "step6-cognitive-simulation", findingId: "FB" })
+        createVerifierReportArtifactEntry({ filePath: "src/b.ts", stepId: "semantic-validation", findingId: "FB" })
       ]),
       createSuccessfulFile("src/a.ts", [], [
-        createVerifierReportArtifactEntry({ filePath: "src/a.ts", stepId: "step5-validation-interrogation", findingId: "FA1" }),
-        createVerifierReportArtifactEntry({ filePath: "src/a.ts", stepId: "step6-cognitive-simulation", findingId: "FA2" })
+        createVerifierReportArtifactEntry({ filePath: "src/a.ts", stepId: "candidate-findings", findingId: "FA1" }),
+        createVerifierReportArtifactEntry({ filePath: "src/a.ts", stepId: "semantic-validation", findingId: "FA2" })
       ])
     ],
     skippedFiles: []
@@ -104,7 +104,7 @@ test("VerifierReportFinalizer preserves optional semantic loop metadata", () => 
       createSuccessfulFile("src/a.ts", [], [
         createVerifierReportArtifactEntry({
           filePath: "src/a.ts",
-          stepId: "step6-cognitive-simulation",
+          stepId: "semantic-validation",
           findingId: "F1",
           taxonomy: "SEMANTIC",
           outcome: "rejected",
@@ -122,7 +122,7 @@ test("VerifierReportFinalizer preserves optional semantic loop metadata", () => 
 
   assert.deepEqual(JSON.parse(rendered), {
     filePath: "src/a.ts",
-    stepId: "step6-cognitive-simulation",
+    stepId: "semantic-validation",
     findingId: "F1",
     taxonomy: "SEMANTIC",
     outcome: "rejected",

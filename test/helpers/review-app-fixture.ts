@@ -8,7 +8,7 @@ import {
  *
  * Judge sessions (no availableTools) receive a plain "Y" so the completion
  * check passes without needing real AI output.
- * Steps 5–6 return compact JSON findings; Step 7 returns Markdown in the
+ * Candidate Findings and Semantic Validation return compact JSON; Review Summary returns Markdown in the
  * format expected by the finalizer.
  */
 export function buildSessionResponse(
@@ -82,7 +82,7 @@ export function buildSessionResponse(
     });
   }
 
-  if (/## Current Step: Validation & Interrogation/u.test(systemMessage)) {
+  if (/## Current Step: Candidate Findings/u.test(systemMessage)) {
     return JSON.stringify({
       findings: [
         {
@@ -107,7 +107,7 @@ export function buildSessionResponse(
     });
   }
 
-  if (/## Current Step: (?:Cognitive Simulation|Semantic Validation)/u.test(systemMessage)) {
+  if (/## Current Step: Semantic Validation/u.test(systemMessage)) {
     return JSON.stringify({
       perFindingResults: [
         {
@@ -123,7 +123,7 @@ export function buildSessionResponse(
     });
   }
 
-  if (/## Current Step: Summary/u.test(systemMessage)) {
+  if (/## Current Step: Review Summary/u.test(systemMessage)) {
     return [
       "### 審查依據",
       "- 異動概要：這次改動主要調整執行流程。",

@@ -188,14 +188,14 @@ test("Finalizer renders bootstrap snapshot when empty", () => {
 test("Finalizer renders bootstrap with interruption warning", () => {
   const context = createContext();
 
-  context.markInterrupted("step7-summary", "model-timeout");
+  context.markInterrupted("review-summary", "model-timeout");
 
   const result = finalizer(context);
 
   assertBootstrapShape(result, FILE_PATH);
   assert.match(result, /Review not yet generated/u);
-  assertWarningBlock(result, { stepId: "step7-summary", reason: "model-timeout" });
-  assertWarningBlockAtEnd(result, { stepId: "step7-summary", reason: "model-timeout" });
+  assertWarningBlock(result, { stepId: "review-summary", reason: "model-timeout" });
+  assertWarningBlockAtEnd(result, { stepId: "review-summary", reason: "model-timeout" });
 });
 
 // 5.9: partial state (only some sections written)
@@ -232,7 +232,7 @@ test("Finalizer renders interruption warning after all content", () => {
   context.setSection("overview", "## Overview\nOverview content");
   context.setFindings([makeMustFinding("issue-1")]);
   context.setSection("summary", "## Summary\nSummary content");
-  context.markInterrupted("step-7-summary", "context-length");
+  context.markInterrupted("review-summary", "context-length");
 
   const result = finalizer(context);
 
@@ -242,7 +242,7 @@ test("Finalizer renders interruption warning after all content", () => {
     "## Summary",
     "> [!WARNING] Review Interrupted"
   ]);
-  assertWarningBlockAtEnd(result, { stepId: "step-7-summary", reason: "context-length" });
+  assertWarningBlockAtEnd(result, { stepId: "review-summary", reason: "context-length" });
 });
 
 // 5.12: findings rendering details

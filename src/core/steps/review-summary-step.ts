@@ -1,39 +1,40 @@
 import type {FileReviewContext} from "../file-review-context.ts";
+import {REVIEW_BASIS_STEP_ID, REVIEW_SUMMARY_STEP_ID} from "../review-step-ids.ts";
 import {SUMMARY_SECTION_KEY} from "../review-section-contract.ts";
 import {REVIEW_TURN_TIMEOUT_MS} from "../review-runtime-contract.ts";
 import type {ReviewStatePromptSerializer} from "../review-state-prompt-serializer.ts";
 import {buildRiskSnapshot, type RiskSnapshot} from "../risk-level.ts";
 import type {StepExecutionPlan, StepDefinition} from "../step-runner.ts";
 import {MARKDOWN_STEP_SYSTEM_MESSAGE} from "./shared-step-system-blocks.ts";
-import {createStep7Resolve} from "./step-resolve-helpers.ts";
+import {createReviewSummaryResolve} from "./step-resolve-helpers.ts";
 
-const STEP7_SYSTEM_ADDITION = [
-    "## Current Step: Summary",
+const REVIEW_SUMMARY_SYSTEM_ADDITION = [
+    "## Current Step: Review Summary",
     "- Produce the reader-facing narrative portion of the final per-file review summary.",
     "- Use the provided review state as the evidence source; internal record names, validator objects, and bookkeeping are private source material, not report text.",
     "- This step contributes only the requested narrative sections; the final report shell and deterministic summary fields are assembled outside this response.",
     "- Language: 正體中文. Preserve code identifiers, file paths, function/class/property names, commands, error messages, API names, enum values, and literal values exactly as they appear in the review state."
 ].join("\n");
 
-export interface Step7SummaryStepOptions {
+export interface ReviewSummaryStepOptions {
     promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 }
 
-type Step7Verdict =
+type ReviewSummaryVerdict =
     | "未發現需處理事項"
     | "未發現需處理事項，但有審查限制"
     | "僅有非阻斷性建議"
     | "必須優先修正";
 
-type Step7ReviewConfidenceState = "complete" | "limited";
+type ReviewSummaryConfidenceState = "complete" | "limited";
 
-interface Step7SummaryStatus {
-    readonly verdict: Step7Verdict;
+interface ReviewSummaryStatus {
+    readonly verdict: ReviewSummaryVerdict;
     readonly riskLevel: RiskSnapshot["derivedRiskLevel"];
     readonly mustFixFindingCount: number;
     readonly niceToHaveFindingCount: number;
     readonly missingInformationCount: number;
-    readonly reviewConfidenceState: Step7ReviewConfidenceState;
+    readonly reviewConfidenceState: ReviewSummaryConfidenceState;
     readonly limitationSummary: string;
     readonly actionGuidance: readonly string[];
 }
@@ -41,11 +42,11 @@ interface Step7SummaryStatus {
 /**
  * Final section step: turn the completed note into a reader-facing summary without duplicating the detailed findings.
  */
-export class Step7SummaryStep implements StepDefinition {
-    readonly stepId = "step7-summary";
+export class ReviewSummaryStep implements StepDefinition {
+    readonly stepId = REVIEW_SUMMARY_STEP_ID;
     readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
 
-    constructor(options: Step7SummaryStepOptions) {
+    constructor(options: ReviewSummaryStepOptions) {
         this.#promptSerializer = options.promptSerializer;
     }
 
@@ -53,19 +54,19 @@ export class Step7SummaryStep implements StepDefinition {
         const {stepId} = this;
         const snapshot = buildRiskSnapshot(context.getFindings());
         const missingInformationItems = context.getMissingInformationItems() ?? [];
-        const summaryStatus = buildStep7SummaryStatus(
+        const summaryStatus = buildReviewSummaryStatus(
             snapshot,
             missingInformationItems.length
         );
         return {
             stepId,
             prompt: {
-                systemMessage: [MARKDOWN_STEP_SYSTEM_MESSAGE, STEP7_SYSTEM_ADDITION].join("\n\n"),
-                userMessage: buildStep7UserMessage(
+                systemMessage: [MARKDOWN_STEP_SYSTEM_MESSAGE, REVIEW_SUMMARY_SYSTEM_ADDITION].join("\n\n"),
+                userMessage: buildReviewSummaryUserMessage(
                     this.#promptSerializer.serialize({
                         context,
                         include: [
-                            "review-basis",
+                            REVIEW_BASIS_STEP_ID,
                             "approved-findings",
                             "missing-information",
                             "validation-report"
@@ -78,7 +79,7 @@ export class Step7SummaryStep implements StepDefinition {
                 model: "gpt-5.4-mini",
                 timeoutMs: REVIEW_TURN_TIMEOUT_MS
             },
-            resolve: createStep7Resolve({
+            resolve: createReviewSummaryResolve({
                 stepId,
                 filePath: context.filePath,
                 sectionKey: SUMMARY_SECTION_KEY,
@@ -89,23 +90,23 @@ export class Step7SummaryStep implements StepDefinition {
                     /^###\s+後續行動(?:\s|$)/mu,
                     /(?:整體風險等級|Overall risk level)[：:]/iu
                 ],
-                composeReport: (response) => composeStep7Report(response, summaryStatus)
+                composeReport: (response) => composeReviewSummaryReport(response, summaryStatus)
             })
         };
     }
 }
 
-function buildStep7UserMessage(reviewState: string): string {
+function buildReviewSummaryUserMessage(reviewState: string): string {
     return [
         reviewState,
         "",
-        buildStep7Instruction()
+        buildReviewSummaryInstruction()
     ].join("\n");
 }
 
-function buildStep7Instruction(): string {
+function buildReviewSummaryInstruction(): string {
     return [
-        "Use the `<review_state>` block above as private source material for this Step 7 summary. It is not printed verbatim in the final review output.",
+        "Use the `<review_state>` block above as private source material for this Review Summary summary. It is not printed verbatim in the final review output.",
         "",
         "Required output sections, in this order; begin with `### 審查依據`:",
         "- `### 審查依據`",
@@ -121,7 +122,7 @@ function buildStep7Instruction(): string {
         "- `### 風險判定理由` must contain one or more bullets explaining how the review outcome follows from the evidence and limitations.",
         "",
         "Source-material translation rules:",
-        "- Internal source labels are never report wording. Use them only to locate source data; do not print labels such as `reviewBasis`, `approvedFindings`, `validationReport`, `missingInformationItems`, Step 5, Step 6, or synthetic IDs such as `E1`, `F1`, `H1` in the narrative.",
+        "- Internal source labels are never report wording. Use them only to locate source data; do not print labels such as `reviewBasis`, `approvedFindings`, `validationReport`, `missingInformationItems`, Candidate Findings, Semantic Validation, or synthetic IDs such as `E1`, `F1`, `H1` in the narrative.",
         "- Translate internal source material into reader-facing statements about evidence, finding outcomes, missing-information limits, code paths, and behavior.",
         "- 審查依據: use the review basis and validated state for the file role, behavior changes, confirmed evidence, source-of-truth references, tool-backed facts, and code paths.",
         "- 待確認資訊: use only the final `<review_state>.missingInformationItems` array as the final missing-information list. If that final list is empty, write exactly `無` even if review basis, broader changeset context, adjacent-file absence, missing collaborators, test gaps, external contracts, or intermediate review notes mention uncertainty.",
@@ -149,14 +150,14 @@ function buildStep7Instruction(): string {
     ].join("\n");
 }
 
-function buildStep7SummaryStatus(
+function buildReviewSummaryStatus(
     snapshot: RiskSnapshot,
     missingInformationCount: number
-): Step7SummaryStatus {
-    const reviewConfidenceState: Step7ReviewConfidenceState =
+): ReviewSummaryStatus {
+    const reviewConfidenceState: ReviewSummaryConfidenceState =
         missingInformationCount > 0 ? "limited" : "complete";
     return {
-        verdict: deriveStep7Verdict(snapshot, missingInformationCount),
+        verdict: deriveReviewSummaryVerdict(snapshot, missingInformationCount),
         riskLevel: snapshot.derivedRiskLevel,
         mustFixFindingCount: snapshot.mustCount,
         niceToHaveFindingCount: snapshot.niceCount,
@@ -165,7 +166,7 @@ function buildStep7SummaryStatus(
         limitationSummary: missingInformationCount === 0
             ? "無"
             : `${missingInformationCount} 項 missing information`,
-        actionGuidance: buildStep7ActionGuidance(
+        actionGuidance: buildReviewSummaryActionGuidance(
             snapshot,
             reviewConfidenceState,
             missingInformationCount
@@ -173,10 +174,10 @@ function buildStep7SummaryStatus(
     };
 }
 
-function deriveStep7Verdict(
+function deriveReviewSummaryVerdict(
     snapshot: RiskSnapshot,
     missingInformationCount: number
-): Step7Verdict {
+): ReviewSummaryVerdict {
     if (snapshot.mustCount > 0) {
         return "必須優先修正";
     }
@@ -189,9 +190,9 @@ function deriveStep7Verdict(
     return "未發現需處理事項";
 }
 
-function buildStep7ActionGuidance(
+function buildReviewSummaryActionGuidance(
     snapshot: RiskSnapshot,
-    reviewConfidenceState: Step7ReviewConfidenceState,
+    reviewConfidenceState: ReviewSummaryConfidenceState,
     missingInformationCount: number
 ): string[] {
     const limitationGuidance = reviewConfidenceState === "limited"
@@ -227,7 +228,7 @@ function buildStep7ActionGuidance(
     ];
 }
 
-function composeStep7Report(response: string, status: Step7SummaryStatus): string {
+function composeReviewSummaryReport(response: string, status: ReviewSummaryStatus): string {
     const narrative = response.trim();
     return [
         "## Summary",
