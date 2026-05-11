@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildActiveFileSummary,
+  createInitialProgressState,
   reduceProgressEvent
 } from "../../src/cli/progress-state.ts";
 
@@ -52,7 +53,7 @@ test("buildActiveFileSummary formats and orders active file paths", () => {
 });
 
 test("reduceProgressEvent warns on duplicate file claims for the same file", () => {
-  const claimedState = reduceProgressEvent(createProgressState(), {
+  const claimedState = reduceProgressEvent(createInitialProgressState(), {
     type: "file-claimed",
     filePath: "src/app.ts",
     claimOrder: 1
@@ -71,7 +72,7 @@ test("reduceProgressEvent warns on duplicate file claims for the same file", () 
 });
 
 test("reduceProgressEvent warns when file progress arrives before claim", () => {
-  const outOfOrderProgress = reduceProgressEvent(createProgressState(), {
+  const outOfOrderProgress = reduceProgressEvent(createInitialProgressState(), {
     type: "file-progressed",
     filePath: "src/app.ts",
     stepId: "review-basis"
@@ -85,7 +86,7 @@ test("reduceProgressEvent warns when file progress arrives before claim", () => 
 });
 
 test("reduceProgressEvent warns when file completion arrives before claim", () => {
-  const outOfOrderCompletion = reduceProgressEvent(createProgressState(), {
+  const outOfOrderCompletion = reduceProgressEvent(createInitialProgressState(), {
     type: "file-completed",
     filePath: "src/app.ts"
   });
@@ -96,17 +97,3 @@ test("reduceProgressEvent warns when file completion arrives before claim", () =
     /warning: cliprogressreporter ignored completed for non-active file/iu
   );
 });
-
-function createProgressState(options?: { plannedFileCount?: number }) {
-  return {
-    activeFiles: new Map<
-      string,
-      { claimOrder: number; lastProgressSeq: number }
-    >(),
-    eventSeq: 0,
-    plannedFileCount: options?.plannedFileCount,
-    resolvedFiles: new Set<string>(),
-    skippedFileCount: 0,
-    successfulFileCount: 0
-  };
-}

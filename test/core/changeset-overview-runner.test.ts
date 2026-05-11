@@ -156,7 +156,7 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
           async sendAndWait(prompt) {
             prompts.push(prompt);
             return createCalls === 1
-              ? "## Changeset Overview\n- not JSON" // legacy Markdown
+              ? "## Changeset Overview\n- not JSON" // non-JSON response
               : buildChangeMapJson();
           }
         };

@@ -4,6 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import {
+  loadVerifiedTestTierManifest
+} from "../../scripts/verify-test-tier-manifest.mjs";
+
 const repoRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -35,4 +39,20 @@ test("test-tier-runner.mjs exits 1 with usage on stderr when invoked as a subpro
     result.stderr,
     /Usage: node \.\/scripts\/test-tier-runner\.mjs <unit\|integration\|e2e\|all>/
   );
+});
+
+test("loadVerifiedTestTierManifest routes all output through the injected logger for the real manifest", () => {
+  const logged: string[] = [];
+  const errors: string[] = [];
+
+  loadVerifiedTestTierManifest({
+    logger: {
+      log(message) { logged.push(message); },
+      error(message) { errors.push(message); }
+    }
+  });
+
+  assert.equal(logged.length, 1);
+  assert.match(logged[0], /✔ test-tier-manifest verified/);
+  assert.deepEqual(errors, []);
 });

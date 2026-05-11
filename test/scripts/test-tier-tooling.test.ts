@@ -3,8 +3,7 @@ import test from "node:test";
 
 import {
   ManifestVerificationError,
-  evaluateTestTierManifest,
-  loadVerifiedTestTierManifest
+  evaluateTestTierManifest
 } from "../../scripts/verify-test-tier-manifest.mjs";
 import { runTestTierCommand } from "../../scripts/test-tier-runner.mjs";
 
@@ -108,7 +107,7 @@ test("runTestTierCommand spawns the manifest-defined files for a tier and concat
   const singleTierExit = runTestTierCommand({
     args: ["integration"],
     loadManifest: () => createManifest({
-      integration: ["test/app/review-app.test.ts"]
+      integration: ["test/app/review-app-progress.test.ts"]
     }),
     spawn: (command, args, options) => {
       receivedCommand = command;
@@ -123,7 +122,7 @@ test("runTestTierCommand spawns the manifest-defined files for a tier and concat
 
   assert.equal(singleTierExit, 0);
   assert.equal(receivedCommand, "node");
-  assert.deepEqual(receivedArgs, ["--test", "test/app/review-app.test.ts"]);
+  assert.deepEqual(receivedArgs, ["--test", "test/app/review-app-progress.test.ts"]);
   // stdio: "inherit" forwards test runner output directly to the terminal
   // without buffering so progress and failures are visible in real time.
   assert.deepEqual(receivedOptions, {
@@ -156,24 +155,4 @@ test("runTestTierCommand spawns the manifest-defined files for a tier and concat
     "test/app/beta.test.ts",
     "test/cli/gamma.test.ts"
   ]);
-});
-
-test("loadVerifiedTestTierManifest routes all output through the injected logger", () => {
-  const logged: string[] = [];
-  const errors: string[] = [];
-
-  // The on-disk manifest must be valid for the test suite to run at all, so
-  // this call should always succeed and emit exactly one success log line.
-  loadVerifiedTestTierManifest({
-    logger: {
-      log(message) { logged.push(message); },
-      error(message) { errors.push(message); }
-    }
-  });
-
-  // The success confirmation must reach the injected logger, not console.
-  assert.equal(logged.length, 1);
-  assert.match(logged[0], /✔ test-tier-manifest verified/);
-  // No errors should have been emitted on a healthy manifest.
-  assert.deepEqual(errors, []);
 });

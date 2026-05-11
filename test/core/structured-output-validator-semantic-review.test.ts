@@ -310,9 +310,9 @@ test("validateCandidateFindingsV3WithReport ignores non-contract extra fields", 
           priority: "must",
           traceability: {
             ...lineRangeTraceability(21, 22),
-            legacyAnchorHint: "ignored"
+            extraAnchorHint: "ignored"
           },
-          legacyFindingMetadata: {
+          extraFindingMetadata: {
             confidence: "high"
           }
         })
@@ -365,7 +365,7 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
     {
       label: "invalid classification",
       payload: candidateFindingsV3({
-        findings: [candidateFinding({ classification: "legacy_bug" })]
+        findings: [candidateFinding({ classification: "unsupported_bug" })]
       }),
       reason: /classification.*confirmed_problem.*reasonable_risk/u
     },

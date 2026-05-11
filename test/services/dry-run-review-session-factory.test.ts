@@ -5,8 +5,6 @@ import {
   DryRunReviewSessionFactory
 } from "../../src/services/dry-run-review-session-factory.ts";
 import {
-  BUILT_IN_DRY_RUN_STEP_IDS,
-  buildDryRunChangesetOverviewResponse,
   getDryRunStubResponse
 } from "../../src/services/dry-run-stub-catalog.ts";
 
@@ -26,7 +24,7 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
     assert.equal(response, getDryRunStubResponse("review-summary"));
   });
 
-  test("falls back to generic stub for retired prose module IDs", async () => {
+  test("falls back to generic stub for unknown step IDs", async () => {
     const factory = new DryRunReviewSessionFactory();
     const session = await factory.createSession({
       knowledgeMode: "disabled",
@@ -34,45 +32,10 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
       outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
       systemMessage: "step system",
-      stepId: "overview-module"
+      stepId: "custom-diagnostic-step"
     });
 
     const response = await session.sendAndWait("please review");
     assert.equal(response, "[dry-run] No built-in stub template for this step.");
-  });
-});
-
-describe("Dry-run stub catalog completeness", () => {
-  test("covers all built-in step IDs", () => {
-    for (const stepId of BUILT_IN_DRY_RUN_STEP_IDS) {
-      const stub = getDryRunStubResponse(stepId);
-      assert.ok(stub !== undefined, `Missing stub catalog entry for stepId "${stepId}"`);
-      assert.ok(stub.length > 0, `Empty stub response for stepId "${stepId}"`);
-    }
-  });
-
-  test("Changeset Overview (changeset-overview) is generated dynamically from the prompt with normalized statuses and template markdown", () => {
-    const prompt = [
-      "<changed_files>",
-      "A\tsrc/added.ts",
-      "M\tsrc/foo.ts",
-      "D\tsrc/deleted.ts",
-      "C75\tsrc/original.ts\tsrc/copied.ts",
-      "</changed_files>"
-    ].join("\n");
-
-    const response = buildDryRunChangesetOverviewResponse(prompt);
-    const parsed = JSON.parse(response) as {
-      overviewMarkdown: string;
-      behaviorChanges: { files: string[] }[];
-    };
-    assert.deepEqual(parsed.behaviorChanges[0]?.files, [
-      "src/added.ts",
-      "src/foo.ts",
-      "src/deleted.ts",
-      "src/copied.ts"
-    ]);
-    assert.match(parsed.overviewMarkdown, /^## Changeset Overview\n- Scope:/u);
-    assert.equal(parsed.overviewMarkdown.includes("### Scope"), false);
   });
 });

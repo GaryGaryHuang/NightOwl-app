@@ -27,7 +27,7 @@ function makeValidV2(overrides: Record<string, unknown> = {}): string {
     ],
     missingInformation: [
       {
-        description: "No live KKBOX SDK callback contract",
+        description: "No live media SDK callback contract",
         whyItMatters: "severity classification would be blocked"
       }
     ],

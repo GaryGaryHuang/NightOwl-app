@@ -97,13 +97,13 @@ test("CliProgressReporter keeps the TTY live line within one terminal row", () =
   claimFiles(reporter, [
     [
       1,
-      "Service/src/main/java/com/kkbox/library/network/NetworkStateManager.kt"
+      "Service/src/main/java/com/example/library/network/NetworkStateManager.kt"
     ],
-    [2, "Service/src/main/java/com/kkbox/library/media/util/AudioUtils.kt"],
-    [3, "Service/src/main/java/com/kkbox/library/media/UnderrunTracker.kt"],
+    [2, "Service/src/main/java/com/example/library/media/util/AudioUtils.kt"],
+    [3, "Service/src/main/java/com/example/library/media/UnderrunTracker.kt"],
     [
       4,
-      "Service/src/main/java/com/kkbox/library/media/quality/factor/datasaver/DataSaverFactor.kt"
+      "Service/src/main/java/com/example/library/media/quality/factor/datasaver/DataSaverFactor.kt"
     ]
   ]);
 

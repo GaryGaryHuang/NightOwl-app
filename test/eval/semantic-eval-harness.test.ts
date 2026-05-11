@@ -23,7 +23,6 @@ type SemanticScenario =
 
 interface SemanticCorpusCase {
   caseId: string;
-  caseType: string;
   scenario: SemanticScenario;
   description: string;
   expected: {
@@ -36,7 +35,7 @@ interface SemanticCorpusCase {
   };
 }
 
-test("semantic eval corpus covers Phase 3 KKBOX-derived release gates", () => {
+test("semantic eval corpus covers semantic review regression guardrails", () => {
   const corpus = loadSemanticCorpus();
   assert.deepEqual(
     new Set(corpus.map((item) => item.scenario)),
@@ -163,38 +162,38 @@ function extractCoverageCount(summary: string, label: string): number {
 const DEFAULT_DIFF = [
   "@@ -20,3 +20,5 @@",
   " context",
-  "+request.searchRequestId = currentRequestId",
+  "+request.requestToken = currentRequestToken",
   "+callback.onSearchResult(result)",
   " context"
 ].join("\n");
 
 function createReviewBasis(): ReviewBasisV1 {
   return {
-    filePath: "SearchFragment.kt",
+    filePath: "AsyncResultController.kt",
     roleInChangeset: "Reviews search callback state propagation.",
     changedBehavior: [
       {
         before: "Search callback used previous request state.",
-        after: "Search callback records searchRequestId before dispatch.",
+        after: "Search callback records requestToken before dispatch.",
         evidenceIds: ["E1"]
       }
     ],
     facts: [
       {
-        statement: "The diff writes searchRequestId before callback dispatch.",
+        statement: "The diff writes requestToken before callback dispatch.",
         evidenceIds: ["E1"]
       }
     ],
     inferences: [],
     dependencyMap: {
-      upstreamCallers: ["SearchFragment"],
+      upstreamCallers: ["AsyncResultController"],
       downstreamConsumers: ["Search callback"],
       externalContracts: [],
-      sharedStateOrSideEffects: ["searchRequestId"]
+      sharedStateOrSideEffects: ["requestToken"]
     },
     flowMap: {
       entryPoints: ["onSearchResult"],
-      stateTransitions: ["searchRequestId updated"],
+      stateTransitions: ["requestToken updated"],
       asyncBoundaries: ["callback dispatch"],
       errorPaths: []
     },
@@ -220,13 +219,13 @@ function createReviewBasis(): ReviewBasisV1 {
       {
         evidenceId: "E1",
         sourceType: "diff",
-        location: "SearchFragment.kt:21",
-        summary: "searchRequestId is updated before callback dispatch"
+        location: "AsyncResultController.kt:21",
+        summary: "requestToken is updated before callback dispatch"
       },
       {
         evidenceId: "E2",
         sourceType: "file",
-        location: "SearchFragment.kt:24",
+        location: "AsyncResultController.kt:24",
         summary: "callback dispatch happens after state update"
       }
     ]
@@ -248,9 +247,9 @@ function createCandidatePayload(scenario: SemanticScenario) {
       {
         classification: "confirmed_problem",
         severity: "high",
-        title: "searchRequestId concurrency overclaim",
+        title: "requestToken concurrency overclaim",
         traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 },
-        evidence: "searchRequestId changes before callback at SearchFragment.kt:21",
+        evidence: "requestToken changes before callback at AsyncResultController.kt:21",
         triggerCondition: "two search callbacks complete out of order",
         impact: "high severity search result corruption is alleged",
         counterEvidence: ["request ID guard not proven"]

@@ -398,7 +398,7 @@ test("Finalizer renders missing-information details after Findings", () => {
   context.setMissingInformationItems([
     {
       itemId: "MI1",
-      description: "Need the ShazamKit callback contract.",
+      description: "Need the recognition SDK callback contract.",
       whyItMatters: "Without it the review cannot prove timeout behavior."
     }
   ]);
@@ -409,7 +409,7 @@ test("Finalizer renders missing-information details after Findings", () => {
   assertTextContainsInOrder(result, [
     "## Findings",
     "## Missing Information",
-    "- [MI1] Need the ShazamKit callback contract.",
+    "- [MI1] Need the recognition SDK callback contract.",
     "Why it matters: Without it the review cannot prove timeout behavior.",
     "## Summary"
   ]);

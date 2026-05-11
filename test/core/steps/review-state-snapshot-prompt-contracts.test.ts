@@ -297,7 +297,7 @@ test("ReviewBasisStep wires ChangeMapReadiness data, diff, and ReviewBasis harne
   assertReviewBasisOutputContract(userMessage);
 });
 
-test("default per-file pipeline starts with ReviewBasis and omits retired prose modules", () => {
+test("default per-file pipeline is the four-step semantic pipeline", () => {
   const steps = buildDefaultPerFileSteps({
     runContext: createRunContext({
       changesetOverview: createChangeMap(),
@@ -348,10 +348,10 @@ test("Candidate Findings, Semantic Validation, and Review Summary receive parsea
     ["gpt-5.4-mini", "gpt-5.4-mini", "gpt-5.4-mini"]
   );
 
-  snapshots.forEach((snapshot, index) => {
+  snapshots.forEach((snapshot) => {
     assertBaseSnapshot(snapshot, {
       expectedSections: {},
-      expectEvidenceRefs: index >= 0
+      expectEvidenceRefs: true
     });
   });
 

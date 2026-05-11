@@ -7,7 +7,7 @@ import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 
 /**
- * End-to-end dry-run integration tests.
+ * Dry-run integration tests.
  *
  * These tests run the full review pipeline with dryRun: true on a real
  * git repo fixture, using the production dry-run session factory path.

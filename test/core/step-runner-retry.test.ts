@@ -193,7 +193,7 @@ test("StepRunner records structured validation reports without committing partia
 test("StepRunner fails ReviewBasisStep after three parse failures without fallback", async () => {
   const prompts: string[] = [];
   const context = createStepRunnerContext({
-    filePath: "KKBOX/src/main/java/com/kkbox/recognition/viewmodel/MusicRecognitionViewModel.kt",
+    filePath: "ExampleApp/src/main/java/com/example/recognition/viewmodel/MusicRecognitionViewModel.kt",
     diffContent: "@@ -10,2 +10,2 @@\n-oldUi()\n+newUi()\n"
   });
   const runContext = createRunContext({
@@ -212,7 +212,7 @@ test("StepRunner fails ReviewBasisStep after three parse failures without fallba
         {
           description: "Update MusicRecognitionViewModel to use the new UseCase flow.",
           files: [
-            "KKBOX/src/main/java/com/kkbox/recognition/viewmodel/MusicRecognitionViewModel.kt"
+            "ExampleApp/src/main/java/com/example/recognition/viewmodel/MusicRecognitionViewModel.kt"
           ]
         }
       ],
@@ -236,7 +236,7 @@ test("StepRunner fails ReviewBasisStep after three parse failures without fallba
         outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
-    /Step review-basis failed for KKBOX\/src\/main\/java\/com\/kkbox\/recognition\/viewmodel\/MusicRecognitionViewModel\.kt: ReviewBasis validation failed: response is not valid JSON/u
+    /Step review-basis failed for ExampleApp\/src\/main\/java\/com\/example\/recognition\/viewmodel\/MusicRecognitionViewModel\.kt: ReviewBasis validation failed: response is not valid JSON/u
   );
 
   assert.equal(prompts.length, 3);

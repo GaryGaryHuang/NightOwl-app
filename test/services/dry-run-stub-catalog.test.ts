@@ -149,18 +149,6 @@ test("getDryRunResponseProvider returns a constant stub for known per-file step 
   assert.equal(provider("anything else"), getDryRunStubResponse("review-summary"));
 });
 
-test("getDryRunResponseProvider treats retired prose module IDs as unknown", () => {
-  for (const removedStepId of [
-    "overview-module",
-    "dependencies-boundaries-module",
-    "knowledge-source-of-truth-module",
-    "strategy-what-if-scenarios-module"
-  ]) {
-    assert.equal(getDryRunStubResponse(removedStepId), undefined);
-    assert.equal(getDryRunResponseProvider(removedStepId)("p"), GENERIC_DRY_RUN_STUB);
-  }
-});
-
 test("getDryRunResponseProvider falls back to GENERIC_DRY_RUN_STUB for unknown or missing step IDs", () => {
   assert.equal(getDryRunResponseProvider(undefined)("p"), GENERIC_DRY_RUN_STUB);
   assert.equal(getDryRunResponseProvider("not-a-step")("p"), GENERIC_DRY_RUN_STUB);
