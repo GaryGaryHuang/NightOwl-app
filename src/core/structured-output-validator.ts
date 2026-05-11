@@ -28,12 +28,12 @@ import {
   SEMANTIC_GATE_IDS as RUNTIME_SEMANTIC_GATE_IDS,
   VALIDATION_DECISIONS as RUNTIME_VALIDATION_DECISIONS
 } from "./semantic-review.ts";
-import type { VerifierReportEntry } from "./verifier-report.ts";
+import type { StructuredValidationReportEntry } from "./validation-report.ts";
 
 export class StructuredValidationReportError extends Error {
-  readonly report: readonly VerifierReportEntry[];
+  readonly report: readonly StructuredValidationReportEntry[];
 
-  constructor(message: string, report: readonly VerifierReportEntry[]) {
+  constructor(message: string, report: readonly StructuredValidationReportEntry[]) {
     super(message);
     this.name = "StructuredValidationReportError";
     this.report = report.map((entry) => ({ ...entry }));
@@ -50,8 +50,8 @@ export class StructuredOutputValidator {
     reviewBasis: ReviewBasisV1;
     diffContent?: string;
     filePath?: string;
-  }): { payload: CandidateFindingsV3; report: VerifierReportEntry[] } {
-    const report: VerifierReportEntry[] = [];
+  }): { payload: CandidateFindingsV3; report: StructuredValidationReportEntry[] } {
+    const report: StructuredValidationReportEntry[] = [];
 
     try {
       const record = parseTopLevelObject(
@@ -105,8 +105,8 @@ export class StructuredOutputValidator {
     reviewBasis?: ReviewBasisV1;
     diffContent?: string;
     filePath?: string;
-  }): { payload: ValidationReportV1; report: VerifierReportEntry[] } {
-    const report: VerifierReportEntry[] = [];
+  }): { payload: ValidationReportV1; report: StructuredValidationReportEntry[] } {
+    const report: StructuredValidationReportEntry[] = [];
 
     try {
       const record = parseTopLevelObject(
@@ -157,7 +157,7 @@ export class StructuredOutputValidator {
 function buildValidationReportSemanticFields(
   result: PerFindingValidationResult | undefined,
   payload: ValidationReportV1
-): Partial<VerifierReportEntry> {
+): Partial<StructuredValidationReportEntry> {
   return {
     ...(result?.decision === undefined
       ? {}

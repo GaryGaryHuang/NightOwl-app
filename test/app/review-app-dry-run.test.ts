@@ -79,7 +79,6 @@ describe("dry-run integration", () => {
     assert.ok(existsSync(outputTarget.changesetOverviewPath), "changeset-overview.md must exist");
     assert.ok(existsSync(outputTarget.summaryPath), "summary.md must exist");
     assert.ok(existsSync(outputTarget.indexPath), "index.md must exist");
-    assert.ok(existsSync(outputTarget.manifestPath), "manifest.json must exist");
     assert.ok(existsSync(outputTarget.toolAuditPath), "tool-audit.jsonl must exist");
     assert.ok(existsSync(outputTarget.skippedPath), "skipped.md must exist");
   });

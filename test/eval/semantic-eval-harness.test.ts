@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { renderRunManifest } from "../../src/core/finalizers/run-manifest-finalizer.ts";
+import { renderRunSummary } from "../../src/core/finalizers/run-summary-finalizer.ts";
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
 import { StructuredOutputValidator, StructuredValidationReportError } from "../../src/core/structured-output-validator.ts";
 import {
@@ -71,22 +71,10 @@ function runSemanticCase(
 ): SemanticCorpusCase["expected"] {
   if (corpusCase.scenario === "coverage-ambiguity") {
     const plannedNotes = createPlannedNotesFromPaths(["src/a.ts", "src/b.ts"]);
-    const rendered = renderRunManifest({
+    const rendered = renderRunSummary({
       repoRoot: "/workspace/repo",
       baseRef: "main",
       headRef: "feature",
-      outputTarget: {
-        basePath: "/workspace/.nightowl/review/feature_03131430",
-        changesetOverviewPath: "/workspace/.nightowl/review/feature_03131430/changeset-overview.md",
-        filesPath: "/workspace/.nightowl/review/feature_03131430/files",
-        summaryPath: "/workspace/.nightowl/review/feature_03131430/summary.md",
-        indexPath: "/workspace/.nightowl/review/feature_03131430/index.md",
-        skippedPath: "/workspace/.nightowl/review/feature_03131430/skipped.md",
-        verifierReportPath: "/workspace/.nightowl/review/feature_03131430/verifier-report.jsonl",
-        manifestPath: "/workspace/.nightowl/review/feature_03131430/manifest.json",
-        toolAuditPath: "/workspace/.nightowl/review/feature_03131430/tool-audit.jsonl"
-      },
-      plannedNotes,
       resolvedOutcomes: createResolvedOutcomes(
         plannedNotes,
         [
@@ -105,17 +93,14 @@ function runSemanticCase(
         skippedPlannedFiles: 0,
         changedTests: []
       })
-    } as Parameters<typeof renderRunManifest>[0]);
-    const parsed = JSON.parse(rendered) as {
-      coverage: Record<string, number>;
-    };
+    });
     return {
       coverage: {
-        totalChangedPaths: parsed.coverage.totalChangedPaths,
-        plannedReviewableNotePaths: parsed.coverage.plannedReviewableNotePaths,
-        deletedPaths: parsed.coverage.deletedPaths,
-        binaryOrNonReviewablePaths: parsed.coverage.binaryOrNonReviewablePaths,
-        skippedPlannedFiles: parsed.coverage.skippedPlannedFiles
+        totalChangedPaths: extractCoverageCount(rendered, "Total changed paths"),
+        plannedReviewableNotePaths: extractCoverageCount(rendered, "Planned reviewable notes"),
+        deletedPaths: extractCoverageCount(rendered, "Deleted paths"),
+        binaryOrNonReviewablePaths: extractCoverageCount(rendered, "Binary/non-reviewable paths"),
+        skippedPlannedFiles: extractCoverageCount(rendered, "Skipped planned files")
       }
     };
   }
@@ -170,6 +155,12 @@ function runSemanticCase(
       ? { mustNotApproveHighSeverityConfirmedProblem: !highSeverityApproved }
       : {})
   };
+}
+
+function extractCoverageCount(summary: string, label: string): number {
+  const match = new RegExp(`^- ${label}: (\\d+)$`, "mu").exec(summary);
+  assert.ok(match, `expected coverage line for ${label}`);
+  return Number(match[1]);
 }
 
 const DEFAULT_DIFF = [

@@ -304,7 +304,7 @@ The following suites are already focused, well-owned examples of their layer's c
 - [test/core/file-review-context.test.ts](test/core/file-review-context.test.ts)
 - [test/core/review-path-resolver.test.ts](test/core/review-path-resolver.test.ts)
 - [test/core/run-outcome-resolver.test.ts](test/core/run-outcome-resolver.test.ts)
-- [test/core/finalizers/run-manifest-finalizer.test.ts](test/core/finalizers/run-manifest-finalizer.test.ts)
+- [test/core/finalizers/run-summary-finalizer.test.ts](test/core/finalizers/run-summary-finalizer.test.ts)
 - [test/providers/local-git-provider.test.ts](test/providers/local-git-provider.test.ts)
 - [test/providers/local-review-file-filter.test.ts](test/providers/local-review-file-filter.test.ts)
 - [test/services/copilot-availability-checker.test.ts](test/services/copilot-availability-checker.test.ts)

@@ -106,7 +106,6 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
       skippedPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\skipped.md`,
       summaryPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\summary.md`,
       indexPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\index.md`,
-      manifestPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\manifest.json`,
       toolAuditPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\tool-audit.jsonl`
     }),
     plannedNotes: createPlannedNotes([
@@ -225,7 +224,7 @@ test("ReviewIndexFinalizer distinguishes missing-information semantic stops from
       plannedNote("src/blocked.ts")
     ]),
     successfulFiles: [
-      createSuccessfulFile("src/clean.ts", [], [], {
+      createSuccessfulFile("src/clean.ts", [], {
         status: "passed",
         semanticIterationCount: 1,
         candidateFindingCount: 0,
@@ -233,7 +232,7 @@ test("ReviewIndexFinalizer distinguishes missing-information semantic stops from
         missingInformationCount: 0,
         decisionCounts: {}
       }),
-      createSuccessfulFile("src/blocked.ts", [], [], {
+      createSuccessfulFile("src/blocked.ts", [], {
         status: "passed_with_limitations",
         loopAction: "accept",
         semanticIterationCount: 1,
@@ -276,9 +275,7 @@ function assertRunArtifacts(rendered: string): void {
     "## Run Artifacts",
     "- [changeset-overview.md](./changeset-overview.md)",
     "- [summary.md](./summary.md)",
-    "- [skipped.md](./skipped.md)",
-    "- [verifier-report.jsonl](./verifier-report.jsonl)",
-    "- [manifest.json](./manifest.json)"
+    "- [skipped.md](./skipped.md)"
   ]);
 }
 

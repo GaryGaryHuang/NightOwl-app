@@ -11,11 +11,6 @@ import type {
   ValidationReportV1
 } from "../semantic-review.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
-import type {
-  VerifierReportArtifactEntry,
-  VerifierReportEntry
-} from "../verifier-report.ts";
-import { pickSemanticFields } from "../verifier-report.ts";
 
 export function createCandidateFindingsV3Resolve(input: {
   stepId?: string;
@@ -32,15 +27,8 @@ export function createCandidateFindingsV3Resolve(input: {
         ? {}
         : { diffContent: input.diffContent })
     });
-    const reportEntries = toVerifierArtifactEntries({
-      filePath: input.filePath,
-      stepId: input.stepId ?? CANDIDATE_FINDINGS_STEP_ID,
-      report: validated.report
-    });
-
     return (targetContext: FileReviewContext) => {
       targetContext.setCandidateFindingsV3(validated.payload);
-      targetContext.appendVerifierReportEntries(reportEntries);
     };
   };
 }
@@ -62,12 +50,6 @@ export function createValidationReportV1Resolve(input: {
         ? {}
         : { diffContent: input.diffContent })
     });
-    const reportEntries = toVerifierArtifactEntries({
-      filePath: input.filePath,
-      stepId: input.stepId ?? SEMANTIC_VALIDATION_STEP_ID,
-      report: validated.report
-    });
-
     return (targetContext: FileReviewContext) => {
       targetContext.setValidationReportV1(validated.payload);
       targetContext.setMissingInformationItems(validated.payload.missingInformationItems);
@@ -82,26 +64,8 @@ export function createValidationReportV1Resolve(input: {
       targetContext.setFindings(
         candidates.filter((f) => approvedIds.has(f.findingId))
       );
-      targetContext.appendVerifierReportEntries(reportEntries);
     };
   };
-}
-
-function toVerifierArtifactEntries(input: {
-  filePath: string;
-  stepId: string;
-  report: VerifierReportEntry[];
-}): VerifierReportArtifactEntry[] {
-  return input.report.map((entry) => ({
-    filePath: input.filePath,
-    stepId: input.stepId,
-    findingId: entry.findingId,
-    taxonomy: entry.taxonomy,
-    outcome: entry.outcome,
-    gate: entry.gate,
-    reason: entry.reason,
-    ...pickSemanticFields(entry)
-  }));
 }
 
 const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(["High", "Low", "None"]);

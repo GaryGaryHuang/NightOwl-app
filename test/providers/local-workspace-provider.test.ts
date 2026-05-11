@@ -19,8 +19,6 @@ test("LocalWorkspaceProvider bootstraps run directories and truncates append-onl
     assert.equal(fixture.readFile(fixture.outputTarget.toolAuditPath), "");
     assert.equal(existsSync(fixture.outputTarget.summaryPath), false);
     assert.equal(existsSync(fixture.outputTarget.indexPath), false);
-    assert.equal(existsSync(fixture.outputTarget.verifierReportPath), false);
-    assert.equal(existsSync(fixture.outputTarget.manifestPath), false);
     assert.equal(existsSync(fixture.outputTarget.changesetOverviewPath), false);
 
     writeFileSync(fixture.outputTarget.skippedPath, "stale skip line\n");

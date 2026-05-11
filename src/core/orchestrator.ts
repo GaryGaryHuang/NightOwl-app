@@ -18,8 +18,6 @@ import { renderReviewNote, type ReviewNoteRenderer } from "./finalizers/review-n
 import { renderRunSummary, type RunSummaryRenderer } from "./finalizers/run-summary-finalizer.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
 import { renderReviewIndex, type ReviewIndexRenderer } from "./finalizers/review-index-finalizer.ts";
-import { renderRunManifest, type RunManifestRenderer } from "./finalizers/run-manifest-finalizer.ts";
-import { renderVerifierReport, type VerifierReportRenderer } from "./finalizers/verifier-report-finalizer.ts";
 import { resolveFileOutcomes, type ResolvedFileOutcome } from "./run-outcome-resolver.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
@@ -65,7 +63,7 @@ import type { ReviewSourceProvider } from "../providers/review-source-provider.t
 import { SessionTurnAbortedError } from "./session-turn-aborted-error.ts";
 
 export interface FinalizerFailure {
-  artifact: "summary" | "index" | "verifier-report" | "manifest";
+  artifact: "summary" | "index";
   message: string;
 }
 
@@ -100,9 +98,7 @@ export interface ReviewOrchestratorOptions {
   reviewFileFilter: ReviewFileFilter;
   renderReviewNote?: ReviewNoteRenderer;
   renderReviewIndex?: ReviewIndexRenderer;
-  renderRunManifest?: RunManifestRenderer;
   renderRunSummary?: RunSummaryRenderer;
-  renderVerifierReport?: VerifierReportRenderer;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor?: OutputWriteHealthAssessor;
@@ -126,8 +122,6 @@ export class ReviewOrchestrator {
   readonly #renderReviewNote: ReviewNoteRenderer;
   readonly #renderRunSummary: RunSummaryRenderer;
   readonly #renderReviewIndex: ReviewIndexRenderer;
-  readonly #renderVerifierReport: VerifierReportRenderer;
-  readonly #renderRunManifest: RunManifestRenderer;
   readonly #maxConcurrentFiles: number;
   readonly #onProgressEvent?: RunProgressEventHandler;
   readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
@@ -160,8 +154,6 @@ export class ReviewOrchestrator {
     this.#renderReviewNote = options.renderReviewNote ?? renderReviewNote;
     this.#renderRunSummary = options.renderRunSummary ?? renderRunSummary;
     this.#renderReviewIndex = options.renderReviewIndex ?? renderReviewIndex;
-    this.#renderVerifierReport = options.renderVerifierReport ?? renderVerifierReport;
-    this.#renderRunManifest = options.renderRunManifest ?? renderRunManifest;
     this.#maxConcurrentFiles =
       options.maxConcurrentFiles ?? DEFAULT_MAX_CONCURRENT_FILES;
     this.#onProgressEvent = options.onProgressEvent;
@@ -437,31 +429,6 @@ export class ReviewOrchestrator {
     if (!indexPublished) {
       return failures;
     }
-
-    const verifierReportPublished = await this.#tryPublishFinalizer("verifier-report", failures, () =>
-      input.outputPublisher.publishArtifact("verifier-report", {
-        content: this.#renderVerifierReport({
-          resolvedOutcomes: input.resolvedOutcomes
-        })
-      })
-    );
-    if (!verifierReportPublished) {
-      return failures;
-    }
-
-    await this.#tryPublishFinalizer("manifest", failures, () =>
-      input.outputPublisher.publishArtifact("manifest", {
-        content: this.#renderRunManifest({
-          repoRoot: input.repoRoot,
-          baseRef: input.request.baseRef,
-          headRef: input.request.headRef,
-          resolvedOutcomes: input.resolvedOutcomes,
-          outputTarget: input.outputTarget,
-          plannedNotes: input.plannedNoteFiles,
-          coverage
-        })
-      })
-    );
 
     return failures;
   }
@@ -803,7 +770,6 @@ export class ReviewOrchestrator {
       outcome: {
         filePath: fileContext.filePath,
         findings: fileContext.getFindings() ?? [],
-        verifierReportEntries: fileContext.getVerifierReportEntries() ?? [],
         semanticReview: buildSemanticReviewStats(
           fileContext,
           semanticValidationCount
@@ -857,7 +823,6 @@ export class ReviewOrchestrator {
       filePath: input.fileContext.filePath,
       stepId: input.stepId,
       reason: input.reason,
-      verifierReportEntries: input.fileContext.getVerifierReportEntries() ?? [],
       semanticReview: buildSemanticReviewStats(
         input.fileContext,
         input.semanticValidationCount
@@ -872,7 +837,6 @@ export class ReviewOrchestrator {
     filePath: string;
     stepId: string;
     reason: string;
-    verifierReportEntries: SuccessfulFileOutcome["verifierReportEntries"];
     semanticReview: SemanticReviewStats;
     riskSnapshot: SuccessfulFileOutcome["riskSnapshot"];
   }): void {
@@ -882,7 +846,6 @@ export class ReviewOrchestrator {
         filePath: input.filePath,
         stepId: input.stepId,
         reason: input.reason,
-        verifierReportEntries: input.verifierReportEntries,
         semanticReview: input.semanticReview,
         riskSnapshot: input.riskSnapshot
       }
@@ -968,27 +931,6 @@ function markSemanticLoopStopped(
 
   context.setValidationReportV1(stoppedReport);
   context.setFindings([]);
-
-  const firstResult = stoppedReport.perFindingResults[0];
-  const firstCandidate = context.getCandidateFindingsV3()?.findings[0];
-  const findingId =
-    firstResult?.findingId ?? firstCandidate?.findingId ?? "<semantic-loop>";
-
-  context.appendVerifierReportEntries([
-    {
-      filePath: context.filePath,
-      stepId: SEMANTIC_VALIDATION_STEP_ID,
-      findingId,
-      taxonomy: "SEMANTIC",
-      outcome: "rejected",
-      gate: "semantic",
-      reason: input.reason,
-      validationDecision: firstResult?.decision ?? "drop",
-      ...(firstResult?.requiredCorrections === undefined
-        ? {}
-        : { requiredCorrections: firstResult.requiredCorrections })
-    }
-  ]);
 }
 
 function buildCurrentCandidateFingerprint(context: FileReviewContext): string | undefined {

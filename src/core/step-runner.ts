@@ -18,10 +18,7 @@ import type {
   CandidateFindingsV3,
   ValidationReportV1
 } from "./semantic-review.ts";
-import type {
-  VerifierReportArtifactEntry,
-  VerifierReportEntry
-} from "./verifier-report.ts";
+import type { StructuredValidationReportEntry } from "./validation-report.ts";
 
 export interface StructuredOutputValidatorLike {
   validateCandidateFindingsV3WithReport(input: {
@@ -29,14 +26,14 @@ export interface StructuredOutputValidatorLike {
     reviewBasis: ReviewBasisV1;
     diffContent?: string;
     filePath?: string;
-  }): { payload: CandidateFindingsV3; report: VerifierReportEntry[] };
+  }): { payload: CandidateFindingsV3; report: StructuredValidationReportEntry[] };
   validateValidationReportV1WithReport(input: {
     responseText: string;
     candidateFindings: CandidateFindingsV3 | Record<string, unknown>;
     reviewBasis?: ReviewBasisV1;
     diffContent?: string;
     filePath?: string;
-  }): { payload: ValidationReportV1; report: VerifierReportEntry[] };
+  }): { payload: ValidationReportV1; report: StructuredValidationReportEntry[] };
 }
 
 export interface StepResolveServices {
@@ -96,7 +93,6 @@ export interface StepRetryInfo {
   promptHash?: string;
   schemaId?: string;
   outputBaseDir?: string;
-  verifierReportPath?: string;
 }
 
 export interface StepRunnerOptions {
@@ -146,8 +142,7 @@ export class StepRunner {
           model: plan.reviewProfile.model,
           promptHash: hashPrompt(plan.prompt.systemMessage, plan.prompt.userMessage),
           schemaId: schemaIdForStep(plan.stepId),
-          outputBaseDir: input.outputBaseDir,
-          verifierReportPath: `${input.outputBaseDir}/verifier-report.jsonl`
+          outputBaseDir: input.outputBaseDir
         };
         const sessionProfile = {
           stepId: plan.stepId,
@@ -184,14 +179,6 @@ export class StepRunner {
             validator: this.#structuredOutputValidator
           });
         } catch (error) {
-          const validationReport = toValidationReportArtifactEntries(
-            error,
-            plan.stepId,
-            input.context.filePath
-          );
-          if (validationReport.length > 0) {
-            input.context.appendVerifierReportEntries(validationReport);
-          }
           retryFeedback = buildRetryFeedback(error);
           throw error;
         }
@@ -217,10 +204,7 @@ export class StepRunner {
           ...(retryDiagnostics?.schemaId === undefined ? {} : { schemaId: retryDiagnostics.schemaId }),
           ...(retryDiagnostics?.outputBaseDir === undefined
             ? {}
-            : { outputBaseDir: retryDiagnostics.outputBaseDir }),
-          ...(retryDiagnostics?.verifierReportPath === undefined
-            ? {}
-            : { verifierReportPath: retryDiagnostics.verifierReportPath })
+            : { outputBaseDir: retryDiagnostics.outputBaseDir })
         });
       },
       buildFinalError: (lastCause) => {
@@ -291,24 +275,4 @@ function buildRetryFeedback(error: unknown): string {
 
   const message = error instanceof Error ? error.message : String(error);
   return `Failure reason: ${message}`;
-}
-
-function toValidationReportArtifactEntries(
-  error: unknown,
-  stepId: string,
-  filePath: string
-): VerifierReportArtifactEntry[] {
-  if (!(error instanceof StructuredValidationReportError)) {
-    return [];
-  }
-
-  return error.report.map((entry) => ({
-    filePath,
-    stepId,
-    findingId: entry.findingId,
-    taxonomy: entry.taxonomy,
-    outcome: entry.outcome,
-    gate: entry.gate,
-    reason: entry.reason
-  }));
 }

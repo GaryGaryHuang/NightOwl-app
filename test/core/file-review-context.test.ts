@@ -7,7 +7,6 @@ import {
   type Finding
 } from "../../src/core/file-review-context.ts";
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
-import type { VerifierReportArtifactEntry } from "../../src/core/verifier-report.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
   filePath: "src/app.ts",
@@ -265,82 +264,6 @@ test("FileReviewContext getFindings returns defensively cloned copies", () => {
   assert.equal(second[0]!.findingId, "F1");
   assert.deepEqual(second[0]!.traceability, { kind: "line-range", lineStart: 1, lineEnd: 2 });
   assert.equal(second[0]!.dependencyPathException!.dependencyAnchor.symbol, "helper");
-});
-
-test("FileReviewContext getVerifierReportEntries returns undefined before any entries are appended", () => {
-  const context = createContext();
-
-  assert.equal(context.getVerifierReportEntries(), undefined);
-});
-
-test("FileReviewContext appends verifier report entries preserving order and deep-clones input", () => {
-  const context = createContext();
-  const first: VerifierReportArtifactEntry = {
-    filePath: "src/app.ts",
-    stepId: "candidate-findings",
-    findingId: "F1",
-    taxonomy: "OK",
-    outcome: "accepted",
-    gate: "acceptance",
-    reason: "passed all acceptance gates"
-  };
-  const second: VerifierReportArtifactEntry = {
-    filePath: "src/app.ts",
-    stepId: "semantic-validation",
-    findingId: "F2",
-    taxonomy: "REACHABILITY",
-    outcome: "rejected",
-    gate: "semantic",
-    reason: "candidate dropped: path is not reachable"
-  };
-
-  context.appendVerifierReportEntries([first]);
-  context.appendVerifierReportEntries([second]);
-
-  (first as { stepId: string }).stepId = "MUTATED";
-  (second as { reason: string }).reason = "MUTATED";
-
-  assert.deepEqual(context.getVerifierReportEntries(), [
-    {
-      filePath: "src/app.ts",
-      stepId: "candidate-findings",
-      findingId: "F1",
-      taxonomy: "OK",
-      outcome: "accepted",
-      gate: "acceptance",
-      reason: "passed all acceptance gates"
-    },
-    {
-      filePath: "src/app.ts",
-      stepId: "semantic-validation",
-      findingId: "F2",
-      taxonomy: "REACHABILITY",
-      outcome: "rejected",
-      gate: "semantic",
-      reason: "candidate dropped: path is not reachable"
-    }
-  ]);
-});
-
-test("FileReviewContext getVerifierReportEntries returns defensive snapshot copies", () => {
-  const context = createContext();
-
-  context.appendVerifierReportEntries([
-    {
-      filePath: "src/app.ts",
-      stepId: "candidate-findings",
-      findingId: "F1",
-      taxonomy: "OK",
-      outcome: "accepted",
-      gate: "acceptance",
-      reason: "passed all acceptance gates"
-    }
-  ]);
-
-  const snapshot = context.getVerifierReportEntries()!;
-  (snapshot[0] as { findingId: string }).findingId = "MUTATED";
-
-  assert.equal(context.getVerifierReportEntries()![0]!.findingId, "F1");
 });
 
 function createContext(

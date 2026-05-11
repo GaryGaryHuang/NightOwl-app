@@ -42,13 +42,11 @@ type OutputCall = "initializeRun"
   | "publishSkippedFile"
   | `publishArtifact:${ReviewArtifactKind}`;
 
-type RunLevelArtifact = "summary" | "index" | "verifier-report" | "manifest";
+type RunLevelArtifact = "summary" | "index";
 
 const RUN_LEVEL_FINALIZER_CALLS: OutputCall[] = [
   "publishArtifact:summary",
-  "publishArtifact:index",
-  "publishArtifact:verifier-report",
-  "publishArtifact:manifest"
+  "publishArtifact:index"
 ];
 
 test("ReviewOrchestrator dispatches every run-level finalizer for an all-successful run and writes their artifacts", async () => {
@@ -91,12 +89,10 @@ test("ReviewOrchestrator feeds finalizers in-memory outcomes rather than reading
 
       const summaryContent = readFileSync(result.outputTarget.summaryPath, "utf8");
       const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
-      const manifestContent = readFileSync(result.outputTarget.manifestPath, "utf8");
 
       assert.doesNotMatch(summaryContent, /CORRUPTED/u);
       assert.doesNotMatch(indexContent, /CORRUPTED/u);
       assert.doesNotMatch(indexContent, /EXTRA DISK FILE/u);
-      assert.doesNotMatch(manifestContent, /CORRUPTED/u);
     }
   );
 });
@@ -243,38 +239,13 @@ test("ReviewOrchestrator records finalizerFailure and stops dependent finalizers
       message: /summary write failed/u,
       failure: { summary: "summary write failed" },
       expectedCalls: ["publishArtifact:summary"],
-      skippedCalls: [
-        "publishArtifact:index",
-        "publishArtifact:verifier-report",
-        "publishArtifact:manifest"
-      ]
+      skippedCalls: ["publishArtifact:index"]
     },
     {
       artifact: "index",
       message: /index write failed/u,
       failure: { index: "index write failed" },
       expectedCalls: ["publishArtifact:summary", "publishArtifact:index"],
-      skippedCalls: [
-        "publishArtifact:verifier-report",
-        "publishArtifact:manifest"
-      ]
-    },
-    {
-      artifact: "verifier-report",
-      message: /verifier-report write failed/u,
-      failure: { "verifier-report": "verifier-report write failed" },
-      expectedCalls: [
-        "publishArtifact:summary",
-        "publishArtifact:index",
-        "publishArtifact:verifier-report"
-      ],
-      skippedCalls: ["publishArtifact:manifest"]
-    },
-    {
-      artifact: "manifest",
-      message: /manifest write failed/u,
-      failure: { manifest: "manifest write failed" },
-      expectedCalls: RUN_LEVEL_FINALIZER_CALLS,
       skippedCalls: []
     }
   ];
@@ -301,23 +272,7 @@ test("ReviewOrchestrator records finalizerFailure and stops dependent finalizers
   }
 });
 
-test("ReviewOrchestrator does not publish manifest after verifier-report finalizer failure", async () => {
-  await withReviewHarness({}, async (harness) => {
-    const outputSink = new FinalizerFailingOutputSink({
-      "verifier-report": "verifier-report boom"
-    });
-    const result = await runOrchestrator(harness, {
-      outputSink,
-      stepRunner: createSuccessfulSummaryRunner()
-    });
-
-    assert.equal(result.finalizerFailures.length, 1);
-    assert.equal(result.finalizerFailures[0].artifact, "verifier-report");
-    assert.equal(outputSink.calls.includes("publishArtifact:manifest"), false);
-  });
-});
-
-test("ReviewOrchestrator publishes artifacts in deterministic order and does not rewrite after manifest", async () => {
+test("ReviewOrchestrator publishes artifacts in deterministic order after per-file work", async () => {
   await withReviewHarness(
     {
       commitMessage: "add third changed file for publish ordering",
@@ -332,21 +287,13 @@ test("ReviewOrchestrator publishes artifacts in deterministic order and does not
         stepRunner: createMixedResultRunner(skippedFile)
       });
 
-      assert.equal(outputSink.calls.at(-1), "publishArtifact:manifest");
+      assert.equal(outputSink.calls.at(-1), "publishArtifact:index");
       assert.equal(outputSink.calls.includes("publishSkippedFile"), true);
       assertCallAfter(outputSink.calls, "publishArtifact:summary", "publishSkippedFile");
       assertCallAfter(outputSink.calls, "publishArtifact:summary", "publishFileReview");
       assertCallAfter(outputSink.calls, "publishArtifact:index", "publishArtifact:summary");
       assertCallAfter(outputSink.calls, "publishArtifact:index", "publishSkippedFile");
       assertCallAfter(outputSink.calls, "publishArtifact:index", "publishFileReview");
-      assertCallAfter(outputSink.calls, "publishArtifact:verifier-report", "publishArtifact:index");
-      assertCallAfter(outputSink.calls, "publishArtifact:verifier-report", "publishSkippedFile");
-      assertCallAfter(outputSink.calls, "publishArtifact:manifest", "publishArtifact:index");
-      assertCallAfter(outputSink.calls, "publishArtifact:manifest", "publishArtifact:verifier-report");
-      assert.equal(outputSink.afterManifest.publishFileReview, 0);
-      assert.equal(outputSink.afterManifest["publishArtifact:summary"], 0);
-      assert.equal(outputSink.afterManifest["publishArtifact:index"], 0);
-      assert.equal(outputSink.afterManifest["publishArtifact:verifier-report"], 0);
     }
   );
 });
@@ -495,13 +442,6 @@ class RecordingOutputSink {
   calls: OutputCall[] = [];
   records: Array<{ call: OutputCall; value: string }> = [];
   writtenFileReviews: string[] = [];
-  afterManifest: Record<string, number> = {
-    publishFileReview: 0,
-    "publishArtifact:summary": 0,
-    "publishArtifact:index": 0,
-    "publishArtifact:verifier-report": 0
-  };
-  #manifestPublished = false;
 
   async initializeRun(outputPlan: ReviewOutputPlan): Promise<RunOutputPublisher> {
     mkdirSync(outputPlan.outputTarget.basePath, { recursive: true });
@@ -519,10 +459,6 @@ class RecordingOutputSink {
   }
 
   async publishFileReview(fileResult: Parameters<RunOutputPublisher["publishFileReview"]>[0]): Promise<void> {
-    if (this.#manifestPublished) {
-      this.afterManifest.publishFileReview += 1;
-    }
-
     const noteFilePath = this.resolveNoteFilePath(fileResult.filePath);
     writeArtifact(noteFilePath, fileResult.content);
     this.writtenFileReviews.push(noteFilePath);
@@ -541,15 +477,7 @@ class RecordingOutputSink {
     const callName: OutputCall = `publishArtifact:${kind}`;
     const targetPath = this.#resolveArtifactPath(kind);
 
-    if (kind !== "manifest" && this.#manifestPublished) {
-      this.afterManifest[callName] = (this.afterManifest[callName] ?? 0) + 1;
-    }
-
     writeFileSync(targetPath, result.content);
-
-    if (kind === "manifest") {
-      this.#manifestPublished = true;
-    }
 
     this.record(callName, targetPath);
   }
@@ -558,9 +486,7 @@ class RecordingOutputSink {
     const pathMap: Record<ReviewArtifactKind, string> = {
       "changeset-overview": this.outputTarget.changesetOverviewPath,
       summary: this.outputTarget.summaryPath,
-      index: this.outputTarget.indexPath,
-      "verifier-report": this.outputTarget.verifierReportPath,
-      manifest: this.outputTarget.manifestPath
+      index: this.outputTarget.indexPath
     };
 
     return pathMap[kind];
@@ -632,9 +558,7 @@ class FinalizerFailingOutputSink extends RecordingOutputSink {
     const pathMap: Record<ReviewArtifactKind, string> = {
       "changeset-overview": this.outputTarget.changesetOverviewPath,
       summary: this.outputTarget.summaryPath,
-      index: this.outputTarget.indexPath,
-      "verifier-report": this.outputTarget.verifierReportPath,
-      manifest: this.outputTarget.manifestPath
+      index: this.outputTarget.indexPath
     };
 
     return pathMap[kind];
@@ -647,9 +571,7 @@ function resolveRunLevelFailure(
 ): string | undefined {
   if (
     kind === "summary" ||
-    kind === "index" ||
-    kind === "verifier-report" ||
-    kind === "manifest"
+    kind === "index"
   ) {
     return failures[kind];
   }
@@ -665,8 +587,6 @@ function writeArtifact(filePath: string, content: string): void {
 function assertOutputArtifactsExist(outputTarget: OutputTarget): void {
   assert.equal(existsSync(outputTarget.summaryPath), true);
   assert.equal(existsSync(outputTarget.indexPath), true);
-  assert.equal(existsSync(outputTarget.verifierReportPath), true);
-  assert.equal(existsSync(outputTarget.manifestPath), true);
 }
 
 function assertOutputTargetPaths(outputTarget: OutputTarget, repoRoot: string): void {
@@ -684,8 +604,6 @@ function assertOutputTargetPaths(outputTarget: OutputTarget, repoRoot: string): 
     skippedPath: path.join(basePath, "skipped.md"),
     summaryPath: path.join(basePath, "summary.md"),
     indexPath: path.join(basePath, "index.md"),
-    verifierReportPath: path.join(basePath, "verifier-report.jsonl"),
-    manifestPath: path.join(basePath, "manifest.json"),
     toolAuditPath: path.join(basePath, "tool-audit.jsonl")
   });
 }

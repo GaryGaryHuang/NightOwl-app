@@ -198,22 +198,6 @@ test("StepRunner records structured validation reports without committing partia
   assert.match(prompts[1] ?? "", /taxonomy=SEMANTIC/u);
   assert.match(prompts[1] ?? "", /classification/u);
   assert.equal(context.getFindings(), undefined);
-  assert.deepEqual(
-    context.getVerifierReportEntries()?.map((entry) => ({
-      findingId: entry.findingId,
-      taxonomy: entry.taxonomy,
-      outcome: entry.outcome,
-      gate: entry.gate
-    })),
-    [
-      {
-        findingId: "<payload>",
-        taxonomy: "SEMANTIC",
-        outcome: "rejected",
-        gate: "semantic"
-      }
-    ]
-  );
 
   result.applyTo(context);
 
@@ -278,7 +262,6 @@ test("StepRunner fails ReviewBasisStep after three parse failures without fallba
   assert.match(prompts[1] ?? "", /ReviewBasis validation failed: response is not valid JSON/u);
   assert.match(prompts[2] ?? "", /ReviewBasis validation failed: response is not valid JSON/u);
   assert.equal(context.getReviewBasis(), undefined);
-  assert.equal(context.getVerifierReportEntries(), undefined);
 });
 
 test("StepRunner retries the whole step on judge timeout with fresh review and judge attempts", async () => {
@@ -440,8 +423,7 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
       model: "gpt-5-mini",
       promptHash: "<stable-hash>",
       schemaId: "ReviewSummaryMarkdown",
-      outputBaseDir: "/workspace/output",
-      verifierReportPath: "/workspace/output/verifier-report.jsonl"
+      outputBaseDir: "/workspace/output"
     }
   );
   assert.match(

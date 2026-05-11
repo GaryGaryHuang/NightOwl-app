@@ -9,7 +9,6 @@ import type {
   SemanticReviewStats
 } from "../../src/core/run-outcomes.ts";
 import type { RiskSnapshot } from "../../src/core/risk-level.ts";
-import type { VerifierReportArtifactEntry } from "../../src/core/verifier-report.ts";
 import type { SkippedFileOutcome, SuccessfulFileOutcome } from "../../src/core/run-outcomes.ts";
 
 // Stable fake path used as the default base for all output target fixtures;
@@ -40,13 +39,11 @@ export function createFinding(
 export function createSuccessfulFile(
   filePath: string,
   findings: Finding[],
-  verifierReportEntries: VerifierReportArtifactEntry[] = [],
   semanticReview?: Partial<SemanticReviewStats>
 ): SuccessfulFileOutcome {
   return {
     filePath,
     findings,
-    verifierReportEntries,
     semanticReview: createSemanticReviewStats(semanticReview),
     riskSnapshot: createRiskSnapshot(findings, semanticReview)
   };
@@ -56,14 +53,12 @@ export function createSkippedFile(
   filePath: string,
   stepId: string,
   reason: string,
-  verifierReportEntries: VerifierReportArtifactEntry[] = [],
   semanticReview?: Partial<SemanticReviewStats>
 ): SkippedFileOutcome {
   return {
     filePath,
     stepId,
     reason,
-    verifierReportEntries,
     semanticReview: createSemanticReviewStats(semanticReview),
     riskSnapshot: createRiskSnapshot([], semanticReview)
   };
@@ -122,21 +117,6 @@ export function createCoverageBuckets(
   };
 }
 
-export function createVerifierReportArtifactEntry(
-  overrides: Partial<VerifierReportArtifactEntry> = {}
-): VerifierReportArtifactEntry {
-  return {
-    filePath: overrides.filePath ?? "src/app.ts",
-    stepId: overrides.stepId ?? "candidate-findings",
-    findingId: overrides.findingId ?? "F1",
-    taxonomy: overrides.taxonomy ?? "OK",
-    outcome: overrides.outcome ?? "accepted",
-    gate: overrides.gate ?? "acceptance",
-    reason: overrides.reason ?? "passed all acceptance gates",
-    ...overrides
-  } as VerifierReportArtifactEntry;
-}
-
 // Builds a complete OutputTarget from the given basePath (or DEFAULT_BASE_PATH
 // if omitted), applying per-field overrides where provided. This keeps test
 // setup concise: callers only specify the fields their assertion cares about.
@@ -153,9 +133,6 @@ export function createOutputTarget(
     skippedPath: overrides.skippedPath ?? `${basePath}/skipped.md`,
     summaryPath: overrides.summaryPath ?? `${basePath}/summary.md`,
     indexPath: overrides.indexPath ?? `${basePath}/index.md`,
-    verifierReportPath:
-      overrides.verifierReportPath ?? `${basePath}/verifier-report.jsonl`,
-    manifestPath: overrides.manifestPath ?? `${basePath}/manifest.json`,
     toolAuditPath: overrides.toolAuditPath ?? `${basePath}/tool-audit.jsonl`
   };
 }

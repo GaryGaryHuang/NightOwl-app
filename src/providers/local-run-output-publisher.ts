@@ -75,9 +75,7 @@ export class LocalRunOutputPublisher implements RunOutputPublisher {
     const pathMap: Record<ReviewArtifactKind, string> = {
       "changeset-overview": this.#outputTarget.changesetOverviewPath,
       "summary": this.#outputTarget.summaryPath,
-      "index": this.#outputTarget.indexPath,
-      "verifier-report": this.#outputTarget.verifierReportPath,
-      "manifest": this.#outputTarget.manifestPath,
+      "index": this.#outputTarget.indexPath
     };
 
     return pathMap[kind];

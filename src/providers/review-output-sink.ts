@@ -7,8 +7,6 @@ export interface ReviewOutputTarget {
   skippedPath: string;
   summaryPath: string;
   indexPath: string;
-  verifierReportPath: string;
-  manifestPath: string;
   toolAuditPath: string;
 }
 
@@ -25,9 +23,7 @@ export interface ReviewOutputPlan {
 export type ReviewArtifactKind =
   | "changeset-overview"
   | "summary"
-  | "index"
-  | "verifier-report"
-  | "manifest";
+  | "index";
 
 export type ReviewOutputBoundaryOperation =
   | "initializeRun"

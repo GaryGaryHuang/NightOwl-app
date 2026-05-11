@@ -59,9 +59,7 @@ export function createWritableOutputSink(): ReviewOutputBootstrapAndPublisher {
       const pathMap: Record<ReviewArtifactKind, string> = {
         "changeset-overview": outputPlan.outputTarget.changesetOverviewPath,
         "summary": outputPlan.outputTarget.summaryPath,
-        "index": outputPlan.outputTarget.indexPath,
-        "verifier-report": outputPlan.outputTarget.verifierReportPath,
-        "manifest": outputPlan.outputTarget.manifestPath,
+        "index": outputPlan.outputTarget.indexPath
       };
       await writeFile(pathMap[kind], result.content);
     }

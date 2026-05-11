@@ -39,31 +39,6 @@ test("createCandidateFindingsV3Resolve stores candidate state without promoting 
     context.getCandidateFindingsV3()?.findings.map((candidate) => candidate.findingId),
     ["F1"]
   );
-  assert.deepEqual(
-    context.getVerifierReportEntries()?.map((entry) => ({
-      stepId: entry.stepId,
-      findingId: entry.findingId,
-      taxonomy: entry.taxonomy,
-      outcome: entry.outcome,
-      gate: entry.gate
-    })),
-    [
-      {
-        stepId: "candidate-findings",
-        findingId: "F1",
-        taxonomy: "OK",
-        outcome: "accepted",
-        gate: "schema"
-      },
-      {
-        stepId: "candidate-findings",
-        findingId: "F1",
-        taxonomy: "OK",
-        outcome: "accepted",
-        gate: "semantic"
-      }
-    ]
-  );
 });
 
 test("createValidationReportV1Resolve writes approved findings and missing-information state", async () => {
@@ -97,24 +72,6 @@ test("createValidationReportV1Resolve writes approved findings and missing-infor
       whyItMatters: "Without it the validator cannot prove expected behavior."
     }
   ]);
-  assert.deepEqual(
-    context.getVerifierReportEntries()?.map((entry) => ({
-      stepId: entry.stepId,
-      findingId: entry.findingId,
-      taxonomy: entry.taxonomy,
-      outcome: entry.outcome,
-      gate: entry.gate
-    })),
-    [
-      {
-        stepId: "semantic-validation",
-        findingId: "F1",
-        taxonomy: "OK",
-        outcome: "accepted",
-        gate: "semantic"
-      }
-    ]
-  );
 });
 
 function createContext(): FileReviewContext {

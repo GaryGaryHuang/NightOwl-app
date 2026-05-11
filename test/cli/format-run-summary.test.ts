@@ -21,8 +21,6 @@ function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): Revi
       skippedPath: `${base}/skipped.md`,
       summaryPath: `${base}/summary.md`,
       indexPath: `${base}/index.md`,
-      verifierReportPath: `${base}/verifier-report.jsonl`,
-      manifestPath: `${base}/manifest.json`,
       toolAuditPath: `${base}/tool-audit.jsonl`
     },
     plannedFileCount: 1,
@@ -66,12 +64,12 @@ test("formatLocalReviewRunSummary appends warning line listing failed artifact n
   const result = buildMinimalRunSummary({
     finalizerFailures: [
       { artifact: "summary", message: "ENOSPC" },
-      { artifact: "manifest", message: "disk full" }
+      { artifact: "index", message: "disk full" }
     ]
   });
   const summary = formatLocalReviewRunSummary(result);
 
-  assert.match(summary, /Warning: Failed to write run-level artifacts: summary, manifest/u);
+  assert.match(summary, /Warning: Failed to write run-level artifacts: summary, index/u);
 });
 
 test("formatLocalReviewRunSummary keeps only completion counts in the final CLI summary", () => {

@@ -87,17 +87,10 @@ test("LocalRunOutputPublisher writes each run-level artifact to its configured o
     await publisher.publishArtifact("changeset-overview", { content: "overview\n" });
     await publisher.publishArtifact("summary", { content: "summary\n" });
     await publisher.publishArtifact("index", { content: "index\n" });
-    await publisher.publishArtifact("verifier-report", { content: "{\"ok\":true}\n" });
-    await publisher.publishArtifact("manifest", { content: "{\n  \"schemaVersion\": 1\n}\n" });
 
     assert.equal(fixture.readFile(fixture.outputTarget.changesetOverviewPath), "overview\n");
     assert.equal(fixture.readFile(fixture.outputTarget.summaryPath), "summary\n");
     assert.equal(fixture.readFile(fixture.outputTarget.indexPath), "index\n");
-    assert.equal(fixture.readFile(fixture.outputTarget.verifierReportPath), "{\"ok\":true}\n");
-    assert.equal(
-      fixture.readFile(fixture.outputTarget.manifestPath),
-      "{\n  \"schemaVersion\": 1\n}\n"
-    );
   } finally {
     fixture.cleanup();
   }

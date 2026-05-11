@@ -80,8 +80,6 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
       `- [changeset-overview.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.changesetOverviewPath)})`,
       `- [summary.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.summaryPath)})`,
       `- [skipped.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.skippedPath)})`,
-      `- [verifier-report.jsonl](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.verifierReportPath)})`,
-      `- [manifest.json](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.manifestPath)})`,
       "",
       "## File Notes",
       ...fileNoteLines

@@ -182,9 +182,7 @@ function recordReviewBasisCalls(reviewBasisCalls: string[]): StepRunnerDouble {
 function assertNoRunLevelArtifactsPublished(sink: TrackingOutputSink): void {
   for (const kind of [
     "summary",
-    "index",
-    "verifier-report",
-    "manifest"
+    "index"
   ]) {
     const call = `publishArtifact:${kind}`;
     assert.equal(

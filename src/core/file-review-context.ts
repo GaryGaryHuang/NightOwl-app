@@ -13,7 +13,6 @@ import {
   type MissingInformationItem,
   type ValidationReportV1
 } from "./semantic-review.ts";
-import type { VerifierReportArtifactEntry } from "./verifier-report.ts";
 
 export interface FileReviewContextInput {
   filePath: string;
@@ -84,7 +83,6 @@ export class FileReviewContext {
   readonly headRef: string;
   readonly #sections = new Map<string, string>();
   #findings?: Finding[];
-  #verifierReportEntries?: VerifierReportArtifactEntry[];
   #interruption?: ReviewInterruption;
   #findingsInsertionIndex?: number;
   #reviewBasis?: ReviewBasisV1;
@@ -175,22 +173,6 @@ export class FileReviewContext {
     return this.#findings?.map(cloneFinding);
   }
 
-  appendVerifierReportEntries(entries: VerifierReportArtifactEntry[]): void {
-    if (entries.length === 0) {
-      return;
-    }
-
-    const existing = this.#verifierReportEntries ?? [];
-    this.#verifierReportEntries = [
-      ...existing.map(cloneVerifierReportArtifactEntry),
-      ...entries.map(cloneVerifierReportArtifactEntry)
-    ];
-  }
-
-  getVerifierReportEntries(): VerifierReportArtifactEntry[] | undefined {
-    return this.#verifierReportEntries?.map(cloneVerifierReportArtifactEntry);
-  }
-
   markInterrupted(stepId: string, reason: string): void {
     this.#interruption = { stepId, reason };
   }
@@ -215,12 +197,6 @@ function cloneFinding(finding: Finding): Finding {
   }
 
   return cloned;
-}
-
-function cloneVerifierReportArtifactEntry(
-  entry: VerifierReportArtifactEntry
-): VerifierReportArtifactEntry {
-  return { ...entry };
 }
 
 function requireFindingTraceability(finding: Finding): FindingTraceability {

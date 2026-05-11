@@ -173,7 +173,7 @@ test("RunSummaryFinalizer reports coverage and semantic limitations without infl
     }),
     plannedNotes: createPlannedNotesFromPaths(["src/clean.ts", "src/blocked.ts"]),
     successfulFiles: [
-      createSuccessfulFile("src/clean.ts", [], [], {
+      createSuccessfulFile("src/clean.ts", [], {
         status: "passed",
         semanticIterationCount: 1,
         candidateFindingCount: 0,
@@ -181,7 +181,7 @@ test("RunSummaryFinalizer reports coverage and semantic limitations without infl
         missingInformationCount: 0,
         decisionCounts: {}
       }),
-      createSuccessfulFile("src/blocked.ts", [], [], {
+      createSuccessfulFile("src/blocked.ts", [], {
         status: "passed_with_limitations",
         loopAction: "accept",
         semanticIterationCount: 2,

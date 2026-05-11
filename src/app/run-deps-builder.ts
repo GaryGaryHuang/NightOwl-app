@@ -255,7 +255,6 @@ function formatStepRetryDiagnostic(info: {
   promptHash?: string;
   schemaId?: string;
   outputBaseDir?: string;
-  verifierReportPath?: string;
 }): string {
   const fields = [
     `file=${info.filePath}`,
@@ -264,7 +263,6 @@ function formatStepRetryDiagnostic(info: {
     info.promptHash === undefined ? undefined : `promptHash=${info.promptHash}`,
     info.schemaId === undefined ? undefined : `schema=${info.schemaId}`,
     info.outputBaseDir === undefined ? undefined : `outputBaseDir=${info.outputBaseDir}`,
-    info.verifierReportPath === undefined ? undefined : `verifierReport=${info.verifierReportPath}`,
     `cause=${JSON.stringify(info.cause)}`
   ].filter((field): field is string => field !== undefined);
 

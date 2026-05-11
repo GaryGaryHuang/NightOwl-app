@@ -17,8 +17,6 @@ function createInput(): OutputWriteFailureAssessmentRequest {
       skippedPath: "/tmp/review/skipped.md",
       summaryPath: "/tmp/review/summary.md",
       indexPath: "/tmp/review/index.md",
-      verifierReportPath: "/tmp/review/verifier-report.jsonl",
-      manifestPath: "/tmp/review/manifest.json",
       toolAuditPath: "/tmp/review/tool-audit.jsonl"
     },
     noteFilePath: "/tmp/review/files/src__app.ts.md",

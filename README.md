@@ -87,8 +87,6 @@ Each run produces output under `<repo_root>/.nightowl/review/<session_id>/`:
 | `changeset-overview.md` | Run-level changeset overview produced by Changeset Overview |
 | `summary.md` | Risk distribution, findings statistics, per-file risk ranking |
 | `index.md` | Landing page linking all per-file notes, overview, and summary |
-| `verifier-report.jsonl` | Machine-readable verifier decisions for accepted and rejected findings |
-| `manifest.json` | Machine-readable metadata: repo info, aggregate counts, per-file outcomes |
 | `tool-audit.jsonl` | Tool usage audit log (every allow/deny decision) |
 | `skipped.md` | Record of files skipped due to failure |
 
