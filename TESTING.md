@@ -20,16 +20,16 @@ Tier assignment is driven by **what the test verifies**, not by folder location.
 
 ### Unit
 
-Fast, deterministic, logic-owner tests. A test is unit when it exercises a single module's logic in isolation, using only in-memory fakes.
+Fast, deterministic single-module logic tests. A test is unit when it exercises a single module's logic in isolation, with collaborators absent or replaced by in-memory fakes.
 
 **Decision criteria — all must hold:**
 
 - Tests a single module's exported logic (pure functions, deterministic transformations)
 - All collaborators are absent or replaced by hand-written fakes passed via constructor injection
-- Runs entirely in-memory — no file system, network, child process, or real Git operations
+- Runs without network, child process, or real Git operations; file system use is limited to deterministic single-module path/canonicalization cases and must not exercise provider or app I/O
 - Deterministic: same input always produces the same output
 
-**Typical subjects:** CLI parser, risk derivation, config normalization, shell/web-fetch policy decision logic, Markdown finalizers, etc. See the `unit` array in `test/test-tier-manifest.json` for the full list.
+**Typical subjects:** CLI parser, risk derivation, config normalization, step runner retry, shell/web-fetch policy decision logic, Markdown finalizers, etc. See the `unit` array in `test/test-tier-manifest.json` for the full list.
 
 ### Integration
 
@@ -42,7 +42,7 @@ Boundary and collaboration tests between two or more modules, or between a modul
 - Tests lifecycle behavior that spans multiple components (startup, shutdown, signal handling)
 - Validates hook-level behavior where the system under test is a composition of real objects
 
-**Typical subjects:** app lifecycle and graceful shutdown, orchestrator coordination, step runner retry, real Git/workspace provider operations, tool-policy guard hook behavior, etc. See the `integration` array in `test/test-tier-manifest.json` for the full list.
+**Typical subjects:** app lifecycle and graceful shutdown, orchestrator coordination, real Git/workspace provider operations, tool-policy guard hook behavior, etc. See the `integration` array in `test/test-tier-manifest.json` for the full list.
 
 ### E2E
 
@@ -55,11 +55,11 @@ Thin guardrails for the published CLI surface. These tests exercise the outermos
 
 **Typical subjects:** installable `review` executable (`package-bin`), `--check` mode environment smoke test (`run-cli-check-smoke`).
 
-**E2E scope clarification.** E2E is reserved for tests that exercise the installed or published binary surface — currently `package-bin` and `run-cli-check-smoke`. Non-binary CLI tests that invoke `runCli()` in-process (and therefore share the Node.js test process with the system under test) belong to **integration**, not e2e. A test that spawns a subprocess but does not exercise the published binary (for example, spawning a script under `scripts/` to verify its CLI entrypoint) is also **integration**, not e2e. The recent test-architecture refactor moved `test/cli/run-cli.test.ts` and `test/cli/run-cli-progress.test.ts` from e2e to integration accordingly; the manifest in `test/test-tier-manifest.json` reflects this.
+**E2E scope clarification.** E2E is reserved for tests that exercise the installed or published binary surface — currently `package-bin` and `run-cli-check-smoke`. Non-binary CLI tests that invoke `runCli()` in-process (and therefore share the Node.js test process with the system under test) belong to **integration**, not e2e. A test that spawns a subprocess but does not exercise the published binary (for example, spawning a script under `scripts/` to verify its CLI entry point) is also **integration**, not e2e. Accordingly, `test/cli/run-cli.test.ts` and `test/cli/run-cli-progress.test.ts` are integration entries in `test/test-tier-manifest.json`.
 
 ### Healthy tier shape
 
-Expect an inverted pyramid: most files are **unit**, a smaller band are **integration**, and **e2e** is reserved for the installed-binary surface (currently 2 files: `package-bin` and `run-cli-check-smoke`). New e2e additions are expected to be rare; adding a third e2e file should be treated as a tier change and require the same justification described under [Hold-The-Line Rules](#hold-the-line-rules).
+Expect an inverted pyramid: most files are **unit**, fewer are **integration**, and **e2e** is reserved for the installed-binary surface (currently 2 files: `package-bin` and `run-cli-check-smoke`). New e2e additions are expected to be rare; adding a third e2e file should be treated as a tier change and require the same justification described under [Hold-The-Line Rules](#hold-the-line-rules).
 
 ---
 
@@ -70,7 +70,7 @@ Each behavior should have exactly one owner layer. Lower layers own deterministi
 | Layer | Owns | Does Not Own | Representative Suites |
 |---|---|---|---|
 | App boundary | startup guards, lifecycle wiring, dry-run published surface, minimal MCP startup failure wiring | progress event ordering, web-fetch policy matrix, report/markdown body formatting, lower-level session config shape | focused `review-app-*` suites; [test/app/run-lifecycle-manager.test.ts](test/app/run-lifecycle-manager.test.ts) for lifecycle helper logic |
-| CLI | argv grammar, top-level dispatch, exit-code mapping, binary/package smoke, pure CLI presentation helpers under `src/cli/` (e.g. risk-badge formatters) | internal reducer details, report/markdown body formatters owned by finalizers, non-binary tests labeled as e2e | [test/cli/parser.test.ts](test/cli/parser.test.ts), [test/cli/package-bin.test.ts](test/cli/package-bin.test.ts), [test/cli/run-cli-check-smoke.test.ts](test/cli/run-cli-check-smoke.test.ts) |
+| CLI | argv grammar, top-level dispatch, exit-code mapping, binary/package smoke, pure CLI presentation helpers under `src/cli/` (e.g. run-summary formatters) | internal reducer details, report/markdown body formatters owned by finalizers, non-binary tests labeled as e2e | [test/cli/parser.test.ts](test/cli/parser.test.ts), [test/cli/package-bin.test.ts](test/cli/package-bin.test.ts), [test/cli/run-cli-check-smoke.test.ts](test/cli/run-cli-check-smoke.test.ts) |
 | Orchestrator | pre-dispatch lifecycle, abort boundary, bounded concurrency, snapshot fault policy, step dispatch, finalizer dispatch, progress event emission and ordering, failure aggregation | per-step analyzer logic, summary body rendering, index/manifest content formatting, markdown wording checks that belong to finalizers | `test/core/orchestrator-*.test.ts` |
 | Steps | per-file analyzer logic, prompt assembly, structured-output validation per step | orchestration order, fan-out, abort plumbing, finalizer rendering | `test/core/steps/*.test.ts` |
 | Finalizers and pure core | artifact content, sorting, formatting, outcome resolution, deterministic value logic | orchestration lifecycle and fan-out rules | `test/core/finalizers/*.test.ts`, focused pure core unit tests |
@@ -83,10 +83,10 @@ Each behavior should have exactly one owner layer. Lower layers own deterministi
 
 When a contract plausibly fits two layers, use these rules:
 
-- **Within shell policy**, suites split by concern: `tool-policy-shell-policy-commands.test.ts` owns per-command allow/deny tables; `-composition.test.ts` owns chained / piped / sub-shell command parsing (`;`, `&&`, `|`, `$(...)`, backticks); `-paths.test.ts` owns path-argument and cwd-escape rules. Add chained-command bypass regressions (e.g. `git status; rm -rf .nightowl`) to `-composition`.
+- **Within shell policy**, suites split by concern: `tool-policy-shell-policy-commands.test.ts` owns per-command allow/deny tables; `-composition.test.ts` owns chained, piped, and subshell command parsing (`;`, `&&`, `|`, `$(...)`, backticks); `-paths.test.ts` owns path-argument and cwd-escape rules. Add chained-command bypass regressions (e.g. `git status; rm -rf .nightowl`) to `-composition`.
 - **Within web-fetch policy**, the policy decision layer (`tool-policy-web-fetch-policy.test.ts`) owns allow/deny + reason, the classifier (`web-fetch-hostname-classifier.test.ts`) owns hostname parsing/classification, and `web-fetch-public-address-policy.test.ts` owns the address-range tables. Dual-surface tests (`tool-policy-guard-permission-handler.test.ts`, `tool-policy-guard-pre-tool-hook.test.ts`) keep only 1–2 representative cases per surface.
 - **Adding a new tool surface**: a `tool-policy-<surface>.test.ts` integration suite covering allow / deny / audit MUST land before the surface is wired into app composition. App and orchestrator suites must not re-assert the policy matrix.
-- **A test that wires the app but asserts orchestrator fan-out** belongs to the orchestrator suite (lower layer wins). The app suite gets a one-line composition smoke that proves the orchestrator is wired in.
+- **A test that wires the app but asserts orchestrator fan-out** belongs to the orchestrator suite (lower layer wins). The app suite should keep one composition smoke test that proves the orchestrator is wired in.
 
 ### How to apply the "do not duplicate matrix" rule
 
@@ -100,7 +100,7 @@ The full input → output matrix for a behavior lives in exactly one suite — t
 
 ## Commands
 
-### Primary tier entrypoints
+### Primary tier entry points
 
 ```bash
 npm test                   # Build + verify manifest + run ALL test files
@@ -118,15 +118,16 @@ npm run test:e2e           # Build + verify manifest + run e2e tests only
 | `test:e2e` | Changing the published CLI surface, installability, or end-user command behavior |
 | `npm test` | Before finalizing any work (CI-equivalent gate) |
 
-### Optional CLI smoke test
+### Optional e2e smokes
 
-`review --check` has an environment-gated smoke test that talks to a real GitHub Copilot CLI environment. It is skipped by default so CI stays deterministic.
+The package/install path and `review --check` have environment-gated smoke tests. `npm run test:e2e` loads these files, but the slow package-bin assertion and real Copilot availability assertion are skipped by default so CI stays deterministic.
 
 ```bash
+npm run build && NIGHTOWL_RUN_PACKAGE_BIN=1 node --test test/cli/package-bin.test.ts
 npm run build && NIGHTOWL_RUN_CHECK_SMOKE=1 node --test test/cli/run-cli-check-smoke.test.ts
 ```
 
-Use it only on a machine where GitHub Copilot CLI is installed, authenticated, and expected to respond successfully.
+Use the package-bin smoke before release on a machine where `npm pack` and local global install are expected to work. Use the `--check` smoke only in a Copilot-authenticated environment expected to respond successfully.
 
 ### Running a single test file
 
@@ -146,11 +147,11 @@ npm run build && node --test test/<path>/<file>.test.ts
 
 The build step is required after every `src/` edit — `node --test` does not rebuild. If you are iterating purely on a test file (no `src/` changes), you may re-run `node --test` directly without rebuilding.
 
-If your test compiles individually but `npm test` reports a TypeScript error in an unrelated test file, run `npm run typecheck` — the per-tier runners do not type-check `test/`, so type errors in untouched files surface only via the full typecheck.
+If your test compiles individually but `npm test` reports a TypeScript error in an unrelated file, run `npm run typecheck` — the per-tier runners do not type-check `test/` or `scripts/**/*.mts`, so type errors in untouched files surface only via the full typecheck.
 
 ### Type checking test code
 
-`npm test` type-checks `src/` during the build step but does not type-check test files. To verify both `src/` and `test/` with the full TypeScript compiler:
+`npm test` type-checks `src/` during the build step but does not type-check test or TypeScript-checked script files. To verify `src/`, `test/`, and `scripts/**/*.mts` with the full TypeScript compiler:
 
 ```bash
 npm run typecheck
@@ -163,11 +164,11 @@ npm run test:watch         # Watch mode (outside the primary taxonomy contract)
 npm run test:coverage      # Coverage run (outside the primary taxonomy contract)
 ```
 
-These are developer conveniences, not the primary `unit / integration / e2e` entrypoints. They do not run `npm run build` first and do not go through the tier manifest verifier.
+These are developer conveniences, not the primary `unit / integration / e2e` entry points. They do not run `npm run build` first and do not go through the tier manifest verifier.
 
 ### Pre-push contract
 
-Before opening a PR, run `npm test` at least once. All primary tier entrypoints run the **tier manifest verifier**, but `npm test` is the CI-equivalent gate that builds once and runs every tier. Running only the convenience commands or a single file can let you ship a stale build, an unregistered or misregistered test file, or a tier-manifest sort violation. Also run `npm run typecheck` whenever you have edited any `test/` file. PRs that fail either gate in CI will be bounced.
+Before opening a PR, run `npm test` at least once. All primary tier entry points run the **tier manifest verifier**, but `npm test` is the CI-equivalent gate that builds once and runs every tier. Running only the convenience commands or a single file can allow a stale build, an unregistered or misregistered test file, or a tier-manifest sort violation to ship. Also run `npm run typecheck` whenever you have edited `test/` or `scripts/**/*.mts`. PRs that fail either gate in CI will be returned for fixes.
 
 ---
 
@@ -185,7 +186,7 @@ The project exclusively uses Node.js built-in test APIs. Do not introduce extern
 
 - Node.js ≥ 22.7.0 executes `.ts` test files directly via native type stripping
 - Import paths use `.ts` extensions (e.g., `from "../../src/core/risk-level.ts"`)
-- `tsconfig.json` includes `test/**/*.ts` — test code gets full type checking
+- `tsconfig.json` includes `test/**/*.ts` and `scripts/**/*.mts` — test code and TypeScript-checked scripts get full type checking
 
 ### File naming and structure
 
@@ -193,6 +194,7 @@ The project exclusively uses Node.js built-in test APIs. Do not introduce extern
 - Directory structure mirrors `src/`: for example, `test/core/orchestrator-bounded-concurrency.test.ts` tests `src/core/orchestrator.ts`
 - When a single source module needs multiple focused test suites, they share a prefix: `orchestrator-abort.test.ts`, `orchestrator-bounded-concurrency.test.ts`, `orchestrator-run-summary.test.ts`, etc.
 - `test/scripts/` contains tests for the build and manifest tooling itself
+- `test/eval/` contains corpus-driven semantic regression harnesses; these are integration tests and may use adjacent fixture data such as `semantic-corpus.jsonl`
 - Shared test utilities live in `test/helpers/` — these are fixture modules, not test suites
 
 ---
@@ -239,7 +241,7 @@ Fixtures follow the `create*Fixture()` / `build*Response()` naming convention. B
 
 ### When to extract a helper
 
-Extract a helper into `test/helpers/` only when **at least two** test suites consume it. Single-consumer fixtures stay inline in the suite that uses them. A helper used by exactly one suite is a refactoring debt, not a fixture — wait for the second consumer before promoting it.
+Extract a helper into `test/helpers/` only when **at least two** test suites consume it. Single-consumer fixtures stay inline in the suite that uses them. A helper used by exactly one suite is a premature extraction, not a fixture — wait for the second consumer before promoting it.
 
 ### Contract fixtures
 
@@ -253,7 +255,7 @@ The source of truth for tier assignment is `test/test-tier-manifest.json`.
 
 ### Rules
 
-- Every `.test.ts` file under `test/` appears exactly once
+- Every `.test.ts` file under `test/`, excluding `test/helpers/`, appears exactly once. Do not place runnable test suites under `test/helpers/`
 - Every entry belongs to exactly one tier: `unit`, `integration`, or `e2e`
 - Paths are repo-root-relative, forward-slash only
 - Arrays within each tier are sorted alphabetically for stable diffs
@@ -269,12 +271,12 @@ The source of truth for tier assignment is `test/test-tier-manifest.json`.
 
 ### Worked example
 
-Suppose you added a pure helper `formatRiskBadge(level)` to `src/cli/format-risk-badge.ts`:
+Suppose you added a pure helper `formatLocalReviewRunSummary(result)` to `src/cli/format-run-summary.ts`:
 
-1. Create `test/cli/format-risk-badge.test.ts` (mirror the source path; the test file name matches the source file).
-2. Add `"test/cli/format-risk-badge.test.ts"` to the `unit` array in `test/test-tier-manifest.json`, keeping the array alphabetically sorted.
-3. Inner loop: `npm run build && node --test test/cli/format-risk-badge.test.ts`.
-4. Before pushing: `npm test` (runs the manifest verifier + all tiers) and `npm run typecheck` (type-checks test files, which the tier runners skip).
+1. Create `test/cli/format-run-summary.test.ts` (mirror the source path; the test file name matches the source file).
+2. Add `"test/cli/format-run-summary.test.ts"` to the `unit` array in `test/test-tier-manifest.json`, keeping the array alphabetically sorted.
+3. Inner loop: `npm run build && node --test test/cli/format-run-summary.test.ts`.
+4. Before pushing: `npm test` (runs the manifest verifier + all tiers) and `npm run typecheck` (type-checks test files and TypeScript-checked scripts, which the tier runners skip).
 
 If you forget step 2, `npm test` fails at the manifest verifier with a clear error pointing at the missing entry. Running `node --test <file>` directly will **not** catch this.
 
@@ -282,7 +284,7 @@ If you forget step 2, `npm test` fails at the manifest verifier with a clear err
 
 ## Hold-The-Line Rules
 
-These rules exist to prevent the test architecture from regrowing the maintenance debt that the refactor paid down. Reviewers should hold new contributions to them.
+These rules exist to prevent the test architecture from reintroducing the maintenance debt removed by the refactor. Reviewers should hold new contributions to them.
 
 - **Suite size.** New test files should target ≤ 500 lines. Files between 500 and 700 lines require a justification in the PR description naming the single contract they cover and why splitting would fragment it. Files > 700 lines require explicit maintainer sign-off before merge. Splitting is the default; large suites are the exception.
 - **Identify the owner before writing.** When adding tests for a new behavior, first identify which layer in the [Ownership Model](#ownership-model) owns the contract. Add the test there. Do not duplicate the same matrix (policy table, parser case set, formatter detail) across multiple layers — see [How to apply the "do not duplicate matrix" rule](#how-to-apply-the-do-not-duplicate-matrix-rule).
