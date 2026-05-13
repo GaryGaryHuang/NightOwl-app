@@ -184,7 +184,7 @@ The project exclusively uses Node.js built-in test APIs. Do not introduce extern
 
 ### TypeScript execution
 
-- Node.js ≥ 22.7.0 executes `.ts` test files directly via native type stripping
+- Node.js ≥ 22.18.0 executes `.ts` test files directly via native type stripping
 - Import paths use `.ts` extensions (e.g., `from "../../src/core/risk-level.ts"`)
 - `tsconfig.json` includes `test/**/*.ts` and `scripts/**/*.mts` — test code and TypeScript-checked scripts get full type checking
 

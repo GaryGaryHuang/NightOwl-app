@@ -9,7 +9,7 @@ npm install        # Install dependencies
 npm test           # Build + verify manifest + run all tests (primary verification command)
 npm run build      # Produce dist/
 npm run typecheck  # Type check (tsc --noEmit)
-npm link           # Local development only: symlink the review command locally
+npm link           # Local development only: symlink the built review command locally
 ```
 
 Run locally without building:
@@ -18,7 +18,7 @@ Run locally without building:
 npm run review -- main feature-branch
 ```
 
-Node.js ≥ 22.7.0. Published artifacts are built with the repo-local TypeScript compiler via `tsconfig.build.json`; `tsconfig.json` remains the typecheck/editor config.
+Node.js ≥ 22.18.0. Published artifacts are built with the repo-local TypeScript compiler via `tsconfig.build.json`; `tsconfig.json` remains the typecheck/editor config.
 
 ## Architecture
 

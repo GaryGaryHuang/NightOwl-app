@@ -4,11 +4,13 @@
   "description": "NightOwl is a local code review CLI built with the GitHub Copilot SDK.",
   "type": "module",
   "engines": {
-    "node": ">=22.7.0"
+    "node": ">=22.18.0"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "TESTING.md",
+    "AGENTS.md"
   ],
   "bin": {
     "review": "./dist/bin/review.js"
