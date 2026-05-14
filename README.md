@@ -161,3 +161,7 @@ src/
 ```
 
 See [AGENTS.md](https://github.com/GaryGaryHuang/NightOwl-app/blob/main/AGENTS.md) for detailed architecture, layer boundaries, and design rules.
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
