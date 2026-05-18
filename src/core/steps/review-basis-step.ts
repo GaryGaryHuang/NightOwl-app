@@ -19,13 +19,17 @@ const REVIEW_BASIS_SYSTEM_ADDITION = [
   "- Keep the basis compact, selective, and high-signal.",
   "- Treat `hypothesisLedger` as the downstream validation queue, not as assumed defects.",
   "- Treat the provided `<change_map>` data as authoritative review context for this file.",
-  "- Use only the provided `<change_map>`, `<diff>`, and local repository context to support the structured basis fields."
+  "- Use the provided `<change_map>`, `<diff>`, local repository context, and allowed external retrieval only when needed to support the structured basis fields."
 ].join("\n");
 
 const REVIEW_BASIS_INSTRUCTION = [
   "Produce a single review basis JSON object for this file.",
   "",
   "Retrieve extra local repository context only when needed to fill evidence-backed basis fields for this file.",
+  "- Before using `missingInformation`, inspect the obvious local counterparts for this file when they are likely to answer the question: concrete implementations, call sites, dependency injection modules, DTO mappers, and changed or adjacent tests.",
+  "- Use `missingInformation` only when the unanswered fact would change downstream judgment about correctness, reachability, impact, or required contract and cannot be resolved from allowed repo/tool context.",
+  "- If the unanswered fact affects confidence only, keep the local facts and inferences, and leave `missingInformation` empty.",
+  "- Prefer a concrete hypothesis in `hypothesisLedger` over a missing-information entry when downstream validation can still test the behavior locally.",
   "",
   "Downstream review support rules:",
   "- `hypothesisLedger` is the downstream validation queue. Include every distinct high-signal, evidence-backed validation target that later review stages must check for this file; keep it empty only when no concrete target is supported by the diff, change map, or retrieved repo context.",

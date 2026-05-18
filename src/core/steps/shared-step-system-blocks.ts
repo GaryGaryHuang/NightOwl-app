@@ -22,9 +22,11 @@ const JSON_COMPLETION_BLOCK = createPromptBlock("json-completion", [
 
 export const MISSING_INFORMATION_DISCIPLINE_BLOCK = createPromptBlock("missing-information-discipline", [
   "## Missing Information Discipline",
-  "- Use the current step's missing-information fields only for specific facts that materially block reliable judgment for the current step.",
-  "- Missing information is not a general uncertainty bucket.",
-  "- Do not record generic test gaps, facts merely absent from the current file, internal follow-up ideas, or facts the available repo/tool context can reasonably resolve."
+  "- Treat missing information as a last-resort blocker, not a confidence note.",
+  "- Before recording missing information, try to resolve the question in this order when the current step allows it: current diff and host-provided review artifacts, obvious local repo counterparts and changed tests, obvious local implementations/call sites/contracts, allowed external retrieval, then bounded inference from established code behavior.",
+  "- Record missing information only when all of the following are true: the fact is still unresolved after allowed retrieval, the fact would change the current step's judgment about correctness, reachability, impact, or expected contract, and the current step cannot finish reliably without it.",
+  "- Do not record missing information for facts that affect confidence only, nice-to-have context, future investigation ideas, generic test gaps, or questions that stop mattering after the current analysis.",
+  "- If later analysis shows the question no longer changes the current step's result, remove it instead of carrying it forward."
 ]);
 
 const MARKDOWN_RESPONSE_FORMAT_BLOCK = createPromptBlock("markdown-response-format", [

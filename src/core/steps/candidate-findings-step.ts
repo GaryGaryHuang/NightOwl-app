@@ -28,9 +28,9 @@ const CANDIDATE_FINDINGS_SYSTEM_ADDITION = [
   "- This step produces candidate findings only. It does not write final approved findings.",
   "- Convert a validated deviation into a candidate only when the available evidence supports a concrete, actionable problem on a credibly reachable current code path.",
   "- Keep the scope centered on hypothesis-driven validation. You may include a closely related deviation only when it is directly exposed by the same validation path.",
-  "- For this step, missing-information blockers must be limited to facts that block proving trigger, impact, expected contract, or reachability.",
+  "- Reserve `criticalMissingInformation` for unresolved facts that still determine whether a candidate exists or materially change trigger, reachability, impact, or required contract after the `Missing Information Discipline` checks; do not use it as the default fallback for incomplete proof.",
   "- IMPORTANT: Do not report candidates based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a candidate for every hypothesis.",
-  "- Do not downgrade observable behavior changes to missing information solely because the product requirement is implicit. A concrete silent failure, data loss, wrong event, wrong timeout, or missing signal can be a low-severity `reasonable_risk` when the code path and impact are evidence-backed."
+  "- When local code evidence already proves trigger and impact, use `reasonable_risk` for bounded low-severity uncertainty instead of downgrading the issue to missing information solely because product intent or an external contract is incomplete."
 ].join("\n");
 
 const CANDIDATE_FINDINGS_INSTRUCTION = [
@@ -78,11 +78,11 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "   - if exact localization is not defensible, use the closest supportable reviewed-file location and make the evidence basis explicit; do not invent line numbers",
   "",
   "5. Apply the speculation and missing-information filter:",
-  "   - If evidence or reachability is weak because a specific blocking fact is missing, list that blocker in `criticalMissingInformation` instead.",
-  "   - If the code evidence shows a reachable behavior that can silently lose data, misclassify a result, or hide a failure signal, prefer a low-severity `reasonable_risk` candidate over missing information; describe uncertainty in `counterEvidence`.",
-  "   - Do not convert locally provable orchestration risks into `criticalMissingInformation` solely because an external SDK/API contract is unavailable or incomplete; validate the local behavior directly when changed code proves trigger and impact. Competing local timeouts, cancellation races, stale async result guards, null-to-empty normalization, and partial-result loss can be low-severity `reasonable_risk` candidates.",
-  "   - Do not emit candidates whose only trigger is a hypothetical future implementation, custom test double, hand-written object construction, or omitted optional argument when all current repo call sites pass the required value.",
   "   - If the claim violates declared scope, omit it.",
+  "   - Do not emit candidates whose only trigger is a hypothetical future implementation, custom test double, hand-written object construction, or omitted optional argument when all current repo call sites pass the required value.",
+  "   - Treat silent data loss, result misclassification, and hidden failure signals as observable runtime effects when current code proves trigger and impact.",
+  "   - Treat async and control-flow coordination risks, such as competing local timeouts, cancellation races, stale async result guards, null-to-empty normalization, and partial-result loss, as evidence for a candidate when local code proves the mechanism, trigger, and impact.",
+  "   - When a specific unresolved fact still blocks a reliable candidate/no-candidate decision after these checks because trigger, reachability, impact, or required contract cannot be resolved, close the related hypothesis as `insufficient_information` and record that fact in `criticalMissingInformation`.",
   "",
   "6. Before output, re-check each candidate:",
   "   - Drop any candidate that is weakly supported, not credibly reachable, redundant with another candidate, or too speculative to defend in review.",
@@ -90,7 +90,7 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "",
   "Candidate findings completion policy:",
   "- Before writing the answer, choose one of these outcomes: findings ready, no findings, or insufficient information.",
-  "- If no candidates remain after validating all hypotheses, return an empty `findings` array with complete `hypothesisClosure` and any `criticalMissingInformation`.",
+  "- If no candidates remain after validating all hypotheses, return an empty `findings` array with complete `hypothesisClosure` and only `criticalMissingInformation` that still satisfies section 5.",
   "",
   "Complete JSON output examples:",
   "Example labels are explanatory only; output only the JSON object.",
@@ -140,7 +140,7 @@ export class CandidateFindingsStep implements StepDefinition {
         )
       },
       reviewProfile: {
-        knowledgeMode: "disabled",
+        knowledgeMode: "built-in-context7",
         model: "gpt-5.4-mini",
         timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },

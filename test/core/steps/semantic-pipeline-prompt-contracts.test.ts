@@ -61,6 +61,7 @@ test("CandidateFindingsStep wires ReviewBasis and CandidateFindingsV3 harness co
     candidateFindings: unknown;
   };
 
+  assert.equal(plan.reviewProfile.knowledgeMode, "built-in-context7");
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   assert.match(

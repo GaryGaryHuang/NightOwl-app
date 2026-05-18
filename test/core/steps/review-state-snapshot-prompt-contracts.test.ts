@@ -337,7 +337,7 @@ test("Candidate Findings, Semantic Validation, and Review Summary receive parsea
 
   assert.deepEqual(
     stepPlans.map((plan) => plan.reviewProfile.knowledgeMode),
-    ["disabled", "disabled", "disabled"]
+    ["built-in-context7", "disabled", "disabled"]
   );
   assert.deepEqual(
     stepPlans.map((plan) => plan.reviewProfile.timeoutMs),
