@@ -5,7 +5,6 @@ import type {
   PlannedNoteFile
 } from "../review-path-resolver.ts";
 import { deriveFileRiskLevel, RISK_ORDER } from "../risk-level.ts";
-import type { RunCoverageBuckets } from "../run-coverage.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 import { renderRunSummarySection } from "./run-summary-section.ts";
 
@@ -19,7 +18,6 @@ interface ReviewIndexRenderInput {
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
   resolvedOutcomes: ResolvedFileOutcome[];
-  coverage?: RunCoverageBuckets;
 }
 
 /**
@@ -82,10 +80,7 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
       "## Run Artifacts",
       `- [changeset-overview.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.changesetOverviewPath)})`,
       "",
-      renderRunSummarySection({
-        resolvedOutcomes: input.resolvedOutcomes,
-        coverage: input.coverage
-      }),
+      renderRunSummarySection({ resolvedOutcomes: input.resolvedOutcomes }),
       "",
       "## File Notes",
       ...fileNoteLines

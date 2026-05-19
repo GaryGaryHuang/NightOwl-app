@@ -5,7 +5,6 @@ import {
   renderRunSummarySection
 } from "../../../src/core/finalizers/run-summary-section.ts";
 import {
-  createCoverageBuckets,
   createFinding,
   createPlannedNotesFromPaths,
   createResolvedOutcomes,
@@ -17,15 +16,13 @@ function renderSummarySection(overrides: {
   plannedNotes?: ReturnType<typeof createPlannedNotesFromPaths>;
   successfulFiles?: ReturnType<typeof createSuccessfulFile>[];
   skippedFiles?: ReturnType<typeof createSkippedFile>[];
-  coverage?: ReturnType<typeof createCoverageBuckets>;
 } = {}): string {
   const plannedNotes = overrides.plannedNotes ?? [];
   const successfulFiles = overrides.successfulFiles ?? [];
   const skippedFiles = overrides.skippedFiles ?? [];
 
   return renderRunSummarySection({
-    resolvedOutcomes: createResolvedOutcomes(plannedNotes, successfulFiles, skippedFiles),
-    ...(overrides.coverage === undefined ? {} : { coverage: overrides.coverage })
+    resolvedOutcomes: createResolvedOutcomes(plannedNotes, successfulFiles, skippedFiles)
   });
 }
 
@@ -65,7 +62,6 @@ test("RunSummarySection renders the aggregate summary section with rebased deriv
   assertTextContainsInOrder(rendered, [
     "## Run Summary",
     "- Final findings totals: must=2, nice=1",
-    "### Coverage",
     "### Risk Distribution",
     "### Successful Files",
     "### Skipped Files"
@@ -137,18 +133,8 @@ test("RunSummarySection renders Risk Distribution section with High, Low, and No
   assert.match(rendered, /- None: 1/u);
 });
 
-test("RunSummarySection reports coverage and semantic limitations without inflating risk", () => {
+test("RunSummarySection reports semantic limitations without inflating risk", () => {
   const rendered = renderSummarySection({
-    coverage: createCoverageBuckets({
-      totalChangedPaths: 5,
-      reviewableNonDeletedPaths: 4,
-      plannedReviewableNotePaths: 2,
-      deletedPaths: 1,
-      binaryOrNonReviewablePaths: 2,
-      successfulPlannedFiles: 2,
-      skippedPlannedFiles: 0,
-      changedTests: ["test/app.test.ts"]
-    }),
     plannedNotes: createPlannedNotesFromPaths(["src/clean.ts", "src/blocked.ts"]),
     successfulFiles: [
       createSuccessfulFile("src/clean.ts", [], {
@@ -172,12 +158,6 @@ test("RunSummarySection reports coverage and semantic limitations without inflat
     ]
   });
 
-  assert.match(rendered, /^### Coverage$/mu);
-  assert.match(rendered, /- Total changed paths: 5/u);
-  assert.match(rendered, /- Planned reviewable notes: 2/u);
-  assert.match(rendered, /- Deleted paths: 1/u);
-  assert.match(rendered, /- Binary\/non-reviewable paths: 2/u);
-  assert.match(rendered, /- Changed tests: `test\/app\.test\.ts`/u);
   assert.match(rendered, /^### Semantic Validation$/mu);
   assert.match(rendered, /- Passed cleanly: 1/u);
   assert.match(rendered, /- Missing-information items: 1/u);

@@ -388,7 +388,7 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
     userContext: []
   });
 
-  assert.equal(runContext.changesetFiles[0].path, "src/new.ts");
+  assert.equal(runContext.changesetOverview.behaviorChanges[0]?.files[0], "src/new.ts");
 });
 
 test("ChangesetOverviewRunner accepts copied paths as added host descriptors", async () => {
@@ -436,7 +436,7 @@ test("ChangesetOverviewRunner accepts copied paths as added host descriptors", a
   });
   assert.match(prompts[0]!, /A\tsrc\/copied\.ts/);
   assert.doesNotMatch(prompts[0]!, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
-  assert.equal(runContext.changesetFiles[0].path, "src/copied.ts");
+  assert.equal(runContext.changesetOverview.behaviorChanges[0]?.files[0], "src/copied.ts");
 });
 
 test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
@@ -462,7 +462,7 @@ test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
     userContext: []
   });
 
-  assert.equal(runContext.changesetFiles.length, 0);
+  assert.deepEqual(runContext.changesetOverview.behaviorChanges, []);
 });
 
 test("ChangesetOverviewRunner aborts an in-flight Changeset Overview turn without consuming the retry budget", async () => {

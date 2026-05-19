@@ -1,7 +1,4 @@
-import {
-  normalizeChangesetEntriesForChangeMap,
-  type ChangeMapReadiness
-} from "./change-map.ts";
+import { type ChangeMapReadiness } from "./change-map.ts";
 import { createRunContext, type RunContext } from "./run-context.ts";
 import { retryWithLimit } from "./session-retry.ts";
 import type { ReviewChangesetEntry } from "../providers/review-source-provider.ts";
@@ -54,9 +51,6 @@ export class ChangesetOverviewRunner {
   }
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
-    const changesetFiles = normalizeChangesetEntriesForChangeMap(
-      input.changesetEntries
-    );
     let retryRepairFailure: ChangesetOverviewValidationDiagnostic | undefined;
 
     return retryWithLimit({
@@ -113,8 +107,7 @@ export class ChangesetOverviewRunner {
 
         return createRunContext({
           changesetOverview: changeMap,
-          userContext: input.userContext,
-          changesetFiles
+          userContext: input.userContext
         });
       },
       buildFinalError(lastCause) {

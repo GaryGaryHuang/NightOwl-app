@@ -1,7 +1,4 @@
-import type {
-  ChangeMapReadiness,
-  ExpectedChangedFileDescriptor
-} from "./change-map.ts";
+import type { ChangeMapReadiness } from "./change-map.ts";
 
 export interface RunContext {
   /**
@@ -17,7 +14,6 @@ export interface RunContext {
    */
   readonly changesetOverviewMarkdown: string;
   readonly userContext: readonly string[];
-  readonly changesetFiles: readonly ExpectedChangedFileDescriptor[];
 }
 
 /**
@@ -30,7 +26,6 @@ export interface RunContext {
 export function createRunContext(input: {
   changesetOverview: ChangeMapReadiness;
   userContext: readonly string[];
-  changesetFiles?: readonly ExpectedChangedFileDescriptor[];
 }): RunContext {
   const overviewMarkdown = input.changesetOverview.overviewMarkdown;
   const changesetOverviewMarkdown = overviewMarkdown.endsWith("\n")
@@ -40,7 +35,6 @@ export function createRunContext(input: {
   return Object.freeze({
     changesetOverview: input.changesetOverview,
     changesetOverviewMarkdown,
-    userContext: Object.freeze([...input.userContext]),
-    changesetFiles: Object.freeze([...(input.changesetFiles ?? [])])
+    userContext: Object.freeze([...input.userContext])
   });
 }

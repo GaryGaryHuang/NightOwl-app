@@ -3,21 +3,13 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { renderRunSummarySection } from "../../src/core/finalizers/run-summary-section.ts";
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
 import { StructuredOutputValidator, StructuredValidationReportError } from "../../src/core/structured-output-validator.ts";
-import {
-  createCoverageBuckets,
-  createPlannedNotesFromPaths,
-  createResolvedOutcomes,
-  createSuccessfulFile
-} from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
 type SemanticScenario =
   | "overclaim"
   | "retired-contradiction"
   | "hypothesis-id-mismatch"
-  | "coverage-ambiguity"
   | "unclosed-hypothesis"
   | "repeated-stop";
 
@@ -31,7 +23,6 @@ interface SemanticCorpusCase {
     decision?: string;
     taxonomy?: string;
     mustNotApproveHighSeverityConfirmedProblem?: boolean;
-    coverage?: Record<string, number>;
   };
 }
 
@@ -43,7 +34,6 @@ test("semantic eval corpus covers semantic review regression guardrails", () => 
       "overclaim",
       "retired-contradiction",
       "hypothesis-id-mismatch",
-      "coverage-ambiguity",
       "unclosed-hypothesis",
       "repeated-stop"
     ])
@@ -68,39 +58,6 @@ function loadSemanticCorpus(): SemanticCorpusCase[] {
 function runSemanticCase(
   corpusCase: SemanticCorpusCase
 ): SemanticCorpusCase["expected"] {
-  if (corpusCase.scenario === "coverage-ambiguity") {
-    const plannedNotes = createPlannedNotesFromPaths(["src/a.ts", "src/b.ts"]);
-    const rendered = renderRunSummarySection({
-      resolvedOutcomes: createResolvedOutcomes(
-        plannedNotes,
-        [
-          createSuccessfulFile("src/a.ts", []),
-          createSuccessfulFile("src/b.ts", [])
-        ],
-        []
-      ),
-      coverage: createCoverageBuckets({
-        totalChangedPaths: 5,
-        reviewableNonDeletedPaths: 4,
-        plannedReviewableNotePaths: 2,
-        deletedPaths: 1,
-        binaryOrNonReviewablePaths: 2,
-        successfulPlannedFiles: 2,
-        skippedPlannedFiles: 0,
-        changedTests: []
-      })
-    });
-    return {
-      coverage: {
-        totalChangedPaths: extractCoverageCount(rendered, "Total changed paths"),
-        plannedReviewableNotePaths: extractCoverageCount(rendered, "Planned reviewable notes"),
-        deletedPaths: extractCoverageCount(rendered, "Deleted paths"),
-        binaryOrNonReviewablePaths: extractCoverageCount(rendered, "Binary/non-reviewable paths"),
-        skippedPlannedFiles: extractCoverageCount(rendered, "Skipped planned files")
-      }
-    };
-  }
-
   const validator = new StructuredOutputValidator();
   const reviewBasis = createReviewBasis();
   const candidatePayload = createCandidatePayload(corpusCase.scenario);
@@ -151,12 +108,6 @@ function runSemanticCase(
       ? { mustNotApproveHighSeverityConfirmedProblem: !highSeverityApproved }
       : {})
   };
-}
-
-function extractCoverageCount(summary: string, label: string): number {
-  const match = new RegExp(`^- ${label}: (\\d+)$`, "mu").exec(summary);
-  assert.ok(match, `expected coverage line for ${label}`);
-  return Number(match[1]);
 }
 
 const DEFAULT_DIFF = [

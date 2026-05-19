@@ -132,8 +132,7 @@ function createCompletedRunResult(): ReviewRunSummary {
     runContext: {
       changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
       changesetOverviewMarkdown: "## Changeset Overview\n- 調整範圍：feature\n",
-      userContext: [],
-      changesetFiles: []
+      userContext: []
     },
     outputTarget: createOutputTarget({ basePath: REVIEW_BASE_PATH }),
     plannedFileCount: 2,

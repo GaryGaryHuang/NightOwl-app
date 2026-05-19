@@ -22,7 +22,6 @@ import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";
 import { buildRiskSnapshot } from "./risk-level.ts";
-import { buildRunCoverageBuckets } from "./run-coverage.ts";
 import type { SemanticReviewStats } from "./run-outcomes.ts";
 import type { StepDefinition, StepResult, StepRunner } from "./step-runner.ts";
 import {
@@ -382,16 +381,6 @@ export class ReviewOrchestrator {
     request: RunRequest;
   }): Promise<FinalizerFailure[]> {
     const failures: FinalizerFailure[] = [];
-    const coverage = buildRunCoverageBuckets({
-      runContext: input.runContext,
-      plannedReviewableNotePaths: input.plannedNoteFiles.length,
-      successfulPlannedFiles: input.resolvedOutcomes.filter(
-        (outcome) => outcome.status === "successful"
-      ).length,
-      skippedPlannedFiles: input.resolvedOutcomes.filter(
-        (outcome) => outcome.status === "skipped"
-      ).length
-    });
 
     await this.#tryPublishFinalizer("index", failures, () =>
       input.outputPublisher.publishArtifact("index", {
@@ -401,8 +390,7 @@ export class ReviewOrchestrator {
           headRef: input.request.headRef,
           resolvedOutcomes: input.resolvedOutcomes,
           outputTarget: input.outputTarget,
-          plannedNotes: input.plannedNoteFiles,
-          coverage
+          plannedNotes: input.plannedNoteFiles
         })
       })
     );

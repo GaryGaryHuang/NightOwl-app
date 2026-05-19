@@ -533,8 +533,7 @@ function createCompletedRunResult(
     runContext: {
       changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
       changesetOverviewMarkdown: "## Changeset Overview\n- 調整範圍：feature\n",
-      userContext: [],
-      changesetFiles: []
+      userContext: []
     },
     outputTarget: {
       ...createOutputTarget({ basePath: BASE_REVIEW_PATH }),

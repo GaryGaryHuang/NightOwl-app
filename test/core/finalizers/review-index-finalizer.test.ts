@@ -73,7 +73,6 @@ test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links"
     "- [changeset-overview.md](./changeset-overview.md)",
     "## Run Summary",
     "- Final findings totals: must=0, nice=0",
-    "### Coverage",
     "### Risk Distribution",
     "## File Notes",
     "- [None] [`README.md`](./files/README.md.md)",

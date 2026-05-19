@@ -47,7 +47,6 @@ interface ChangesetOverviewRunSummary {
   behaviorChangeCount: number;
   unresolvedUnknownCount: number;
   missingInformationCount: number;
-  changedFileCount: number;
   overviewHash: string;
   objectiveSummary: string;
 }
@@ -328,7 +327,6 @@ function summarizeChangesetOverview(run: number, runContext: RunContext): Change
     behaviorChangeCount: overview.behaviorChanges.length,
     unresolvedUnknownCount: overview.unresolvedUnknowns.length,
     missingInformationCount: overview.missingInformation.length,
-    changedFileCount: runContext.changesetFiles.length,
     overviewHash: sha256(overview.overviewMarkdown),
     objectiveSummary: overview.reviewObjective.summary
   };

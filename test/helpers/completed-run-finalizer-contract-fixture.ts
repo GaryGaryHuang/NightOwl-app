@@ -3,7 +3,6 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "../../src/core/review-path-resolver.ts";
-import type { RunCoverageBuckets } from "../../src/core/run-coverage.ts";
 import { resolveFileOutcomes, type ResolvedFileOutcome } from "../../src/core/run-outcome-resolver.ts";
 import type {
   SemanticReviewStats
@@ -99,21 +98,6 @@ function createRiskSnapshot(
       semanticReview?.missingInformationCount
         ? "No approved findings; semantic validation completed with limitations."
         : "Derived from approved findings."
-  };
-}
-
-export function createCoverageBuckets(
-  overrides: Partial<RunCoverageBuckets> = {}
-): RunCoverageBuckets {
-  return {
-    totalChangedPaths: overrides.totalChangedPaths ?? 4,
-    reviewableNonDeletedPaths: overrides.reviewableNonDeletedPaths ?? 3,
-    plannedReviewableNotePaths: overrides.plannedReviewableNotePaths ?? 2,
-    deletedPaths: overrides.deletedPaths ?? 1,
-    binaryOrNonReviewablePaths: overrides.binaryOrNonReviewablePaths ?? 1,
-    successfulPlannedFiles: overrides.successfulPlannedFiles ?? 1,
-    skippedPlannedFiles: overrides.skippedPlannedFiles ?? 1,
-    changedTests: overrides.changedTests ?? ["test/app.test.ts"]
   };
 }
 

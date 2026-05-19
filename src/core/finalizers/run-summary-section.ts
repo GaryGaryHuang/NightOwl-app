@@ -5,20 +5,17 @@ import {
   RISK_ORDER,
   type RiskLevel
 } from "../risk-level.ts";
-import type { RunCoverageBuckets } from "../run-coverage.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 import type { SemanticReviewStats } from "../run-outcomes.ts";
 
 interface RunSummarySectionRenderInput {
   resolvedOutcomes: ResolvedFileOutcome[];
-  coverage?: RunCoverageBuckets;
 }
 
 /**
  * Render the run-level summary section embedded in index.md.
  */
 export function renderRunSummarySection(input: RunSummarySectionRenderInput): string {
-  const plannedFileCount = input.resolvedOutcomes.length;
   const successfulFiles = input.resolvedOutcomes
     .filter(
       (r): r is Extract<ResolvedFileOutcome, { status: "successful" }> =>
@@ -31,17 +28,6 @@ export function renderRunSummarySection(input: RunSummarySectionRenderInput): st
         r.status === "skipped"
     )
     .map((r) => r.outcome);
-  const coverage = input.coverage ?? {
-    totalChangedPaths: plannedFileCount,
-    reviewableNonDeletedPaths: plannedFileCount,
-    plannedReviewableNotePaths: plannedFileCount,
-    deletedPaths: 0,
-    binaryOrNonReviewablePaths: 0,
-    successfulPlannedFiles: successfulFiles.length,
-    skippedPlannedFiles: skippedFiles.length,
-    changedTests: []
-  };
-
   const totalMust = successfulFiles.reduce(
     (count, file) => count + countMustFindings(file.findings),
     0
@@ -89,16 +75,6 @@ export function renderRunSummarySection(input: RunSummarySectionRenderInput): st
   return [
     "## Run Summary",
     `- Final findings totals: must=${totalMust}, nice=${totalNice}`,
-    "",
-    "### Coverage",
-    `- Total changed paths: ${coverage.totalChangedPaths}`,
-    `- Reviewable non-deleted paths: ${coverage.reviewableNonDeletedPaths}`,
-    `- Planned reviewable notes: ${coverage.plannedReviewableNotePaths}`,
-    `- Successful planned files: ${coverage.successfulPlannedFiles}`,
-    `- Skipped planned files: ${coverage.skippedPlannedFiles}`,
-    `- Deleted paths: ${coverage.deletedPaths}`,
-    `- Binary/non-reviewable paths: ${coverage.binaryOrNonReviewablePaths}`,
-    `- Changed tests: ${formatChangedTests(coverage.changedTests)}`,
     "",
     "### Risk Distribution",
     `- High: ${riskCounts.High}`,
@@ -163,12 +139,6 @@ function buildSemanticSummary(outcomes: ResolvedFileOutcome[]): {
     maxIterationsUsed,
     lines: lines.length === 0 ? ["- 無"] : lines
   };
-}
-
-function formatChangedTests(changedTests: readonly string[]): string {
-  return changedTests.length === 0
-    ? "無"
-    : changedTests.map((filePath) => `\`${filePath}\``).join(", ");
 }
 
 function createEmptySemanticReviewStats(): SemanticReviewStats {
