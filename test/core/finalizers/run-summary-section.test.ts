@@ -58,7 +58,6 @@ test("RunSummarySection renders the aggregate summary section with rebased deriv
   assertTextContainsInOrder(rendered, [
     "## Run Summary",
     "- Final findings totals: must=2, nice=1",
-    "### Semantic Validation",
     "### Successful Files",
     "### Skipped Files"
   ]);
@@ -126,7 +125,7 @@ test("RunSummarySection keeps successful files ordered by derived risk levels", 
   );
 });
 
-test("RunSummarySection reports semantic limitations without inflating risk", () => {
+test("RunSummarySection keeps successful files output stable when semantic limitations exist", () => {
   const rendered = renderSummarySection({
     plannedNotes: createPlannedNotesFromPaths(["src/clean.ts", "src/blocked.ts"]),
     successfulFiles: [
@@ -151,14 +150,6 @@ test("RunSummarySection reports semantic limitations without inflating risk", ()
     ]
   });
 
-  assert.match(rendered, /^### Semantic Validation$/mu);
-  assert.match(rendered, /- Passed cleanly: 1/u);
-  assert.match(rendered, /- Missing-information items: 1/u);
-  assert.match(rendered, /- Dropped candidates: 1/u);
-  assert.match(
-    rendered,
-    /`src\/blocked\.ts` - passed_with_limitations; approved=0; missing-information=1/u
-  );
   assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
   assert.match(
     rendered,

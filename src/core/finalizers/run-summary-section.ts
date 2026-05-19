@@ -5,7 +5,6 @@ import {
   RISK_ORDER
 } from "../risk-level.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
-import type { SemanticReviewStats } from "../run-outcomes.ts";
 
 interface RunSummarySectionRenderInput {
   resolvedOutcomes: ResolvedFileOutcome[];
@@ -60,19 +59,10 @@ export function renderRunSummarySection(input: RunSummarySectionRenderInput): st
       : skippedFiles.map(
           (file) => `- \`${file.filePath}\` - ${file.stepId} - ${file.reason}`
         );
-  const semanticSummary = buildSemanticSummary(input.resolvedOutcomes);
 
   return [
     "## Run Summary",
     `- Final findings totals: must=${totalMust}, nice=${totalNice}`,
-    "",
-    "### Semantic Validation",
-    `- Passed cleanly: ${semanticSummary.passedCleanly}`,
-    `- Passed with limitations: ${semanticSummary.passedWithLimitations}`,
-    `- Missing-information items: ${semanticSummary.missingInformationItems}`,
-    `- Dropped candidates: ${semanticSummary.droppedCandidates}`,
-    `- Max semantic iterations used: ${semanticSummary.maxIterationsUsed}`,
-    ...semanticSummary.lines,
     "",
     "### Successful Files",
     ...successfulLines,
@@ -80,60 +70,4 @@ export function renderRunSummarySection(input: RunSummarySectionRenderInput): st
     "### Skipped Files",
     ...skippedLines
   ].join("\n");
-}
-
-function buildSemanticSummary(outcomes: ResolvedFileOutcome[]): {
-  passedCleanly: number;
-  passedWithLimitations: number;
-  missingInformationItems: number;
-  droppedCandidates: number;
-  maxIterationsUsed: number;
-  lines: string[];
-} {
-  let passedCleanly = 0;
-  let passedWithLimitations = 0;
-  let missingInformationItems = 0;
-  let droppedCandidates = 0;
-  let maxIterationsUsed = 0;
-  const lines: string[] = [];
-
-  for (const outcome of outcomes) {
-    const semantic = outcome.outcome.semanticReview ?? createEmptySemanticReviewStats();
-    maxIterationsUsed = Math.max(maxIterationsUsed, semantic.semanticIterationCount);
-    missingInformationItems += semantic.missingInformationCount;
-    droppedCandidates += (semantic.decisionCounts.drop ?? 0);
-
-    if (semantic.status === "passed") {
-      passedCleanly += 1;
-    } else if (semantic.status === "passed_with_limitations") {
-      passedWithLimitations += 1;
-    }
-
-    if (semantic.missingInformationCount > 0) {
-      lines.push(
-        `- \`${outcome.outcome.filePath}\` - ${semantic.status}; approved=${semantic.approvedFindingCount}; missing-information=${semantic.missingInformationCount}`
-      );
-    }
-  }
-
-  return {
-    passedCleanly,
-    passedWithLimitations,
-    missingInformationItems,
-    droppedCandidates,
-    maxIterationsUsed,
-    lines: lines.length === 0 ? ["- 無"] : lines
-  };
-}
-
-function createEmptySemanticReviewStats(): SemanticReviewStats {
-  return {
-    status: "not_run",
-    semanticIterationCount: 0,
-    candidateFindingCount: 0,
-    approvedFindingCount: 0,
-    missingInformationCount: 0,
-    failedGateCounts: {},
-    decisionCounts: {}
-  };
 }
