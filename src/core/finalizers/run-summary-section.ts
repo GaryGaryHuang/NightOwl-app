@@ -2,8 +2,7 @@ import {
   countMustFindings,
   countNiceFindings,
   deriveFileRiskLevel,
-  RISK_ORDER,
-  type RiskLevel
+  RISK_ORDER
 } from "../risk-level.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 import type { SemanticReviewStats } from "../run-outcomes.ts";
@@ -41,15 +40,6 @@ export function renderRunSummarySection(input: RunSummarySectionRenderInput): st
     file,
     risk: deriveFileRiskLevel(file.findings)
   }));
-  const riskCounts: Record<RiskLevel, number> = {
-    High: 0,
-    Low: 0,
-    None: 0
-  };
-
-  for (const { risk } of successfulFilesWithRisk) {
-    riskCounts[risk] += 1;
-  }
 
   const sortedSuccessfulFiles = [...successfulFilesWithRisk].sort(
     (a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk]
@@ -75,11 +65,6 @@ export function renderRunSummarySection(input: RunSummarySectionRenderInput): st
   return [
     "## Run Summary",
     `- Final findings totals: must=${totalMust}, nice=${totalNice}`,
-    "",
-    "### Risk Distribution",
-    `- High: ${riskCounts.High}`,
-    `- Low: ${riskCounts.Low}`,
-    `- None: ${riskCounts.None}`,
     "",
     "### Semantic Validation",
     `- Passed cleanly: ${semanticSummary.passedCleanly}`,

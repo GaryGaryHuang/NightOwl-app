@@ -47,10 +47,6 @@ test("RunSummarySection renders the aggregate summary section with rebased deriv
 
   assert.match(rendered, /^## Run Summary$/mu);
   assert.match(rendered, /- Final findings totals: must=2, nice=1/u);
-  assert.match(rendered, /^### Risk Distribution$/mu);
-  assert.match(rendered, /- High: 2/u);
-  assert.match(rendered, /- Low: 0/u);
-  assert.match(rendered, /- None: 0/u);
   assert.match(
     rendered,
     /### Successful Files[\s\S]*- \[High\] `src\/a\.ts` - must=1, nice=1[\s\S]*- \[High\] `src\/c\.ts` - must=1, nice=0/u
@@ -62,7 +58,7 @@ test("RunSummarySection renders the aggregate summary section with rebased deriv
   assertTextContainsInOrder(rendered, [
     "## Run Summary",
     "- Final findings totals: must=2, nice=1",
-    "### Risk Distribution",
+    "### Semantic Validation",
     "### Successful Files",
     "### Skipped Files"
   ]);
@@ -90,9 +86,6 @@ test("RunSummarySection treats an all-skipped run as zero-risk aggregate output"
   });
 
   assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
-  assert.match(rendered, /- High: 0/u);
-  assert.match(rendered, /- Low: 0/u);
-  assert.match(rendered, /- None: 0/u);
   assert.match(rendered, /### Successful Files\n- 無/u);
   assert.match(rendered, /- `src\/a\.ts` - review-basis - deterministic validation failed/u);
   assert.match(
@@ -116,7 +109,7 @@ test("RunSummarySection excludes skipped files from final findings totals", () =
   assert.doesNotMatch(rendered, /must=1, nice=1/u);
 });
 
-test("RunSummarySection renders Risk Distribution section with High, Low, and None counts", () => {
+test("RunSummarySection keeps successful files ordered by derived risk levels", () => {
   const rendered = renderSummarySection({
     plannedNotes: createPlannedNotesFromPaths(["high.ts", "another-high.ts", "low.ts", "none.ts"]),
     successfulFiles: [
@@ -127,10 +120,10 @@ test("RunSummarySection renders Risk Distribution section with High, Low, and No
     ]
   });
 
-  assert.match(rendered, /^### Risk Distribution$/mu);
-  assert.match(rendered, /- High: 2/u);
-  assert.match(rendered, /- Low: 1/u);
-  assert.match(rendered, /- None: 1/u);
+  assert.match(
+    rendered,
+    /### Successful Files[\s\S]*- \[High\] `high\.ts` - must=1, nice=0[\s\S]*- \[High\] `another-high\.ts` - must=1, nice=0[\s\S]*- \[Low\] `low\.ts` - must=0, nice=1[\s\S]*- \[None\] `none\.ts` - must=0, nice=0/u
+  );
 });
 
 test("RunSummarySection reports semantic limitations without inflating risk", () => {
@@ -167,7 +160,10 @@ test("RunSummarySection reports semantic limitations without inflating risk", ()
     /`src\/blocked\.ts` - passed_with_limitations; approved=0; missing-information=1/u
   );
   assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
-  assert.match(rendered, /- None: 2/u);
+  assert.match(
+    rendered,
+    /### Successful Files[\s\S]*- \[None\] `src\/clean\.ts` - must=0, nice=0[\s\S]*- \[None\] `src\/blocked\.ts` - must=0, nice=0/u
+  );
 });
 
 function assertTextContainsInOrder(text: string, fragments: string[]): void {
