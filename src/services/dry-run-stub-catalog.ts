@@ -214,9 +214,7 @@ const STUB_SUMMARY = [
   "- 已核對依據：dry-run stub。",
   "- 待確認資訊：無。",
   "### 行為變更提醒",
-  "- 無行為變更",
-  "### 風險判定理由",
-  "- dry-run stub 沒有 validated findings。"
+  "- 無行為變更"
 ].join("\n");
 
 export type DryRunResponseProvider = (prompt: string) => string;

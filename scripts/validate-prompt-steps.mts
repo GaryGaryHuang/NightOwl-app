@@ -72,7 +72,6 @@ interface SemanticRunSummary {
   validationAction: string;
   approvedFindingCount: number;
   validationMissingInformationCount: number;
-  summaryRiskLine: string;
   summaryHash: string;
 }
 
@@ -379,7 +378,6 @@ function summarizeSemantic(
     approvedFindingCount: context.getFindings()?.length ?? 0,
     validationMissingInformationCount:
       validationReport.missingInformationItems.length,
-    summaryRiskLine: extractSummaryRiskLine(summary),
     summaryHash: sha256(summary)
   };
 }
@@ -447,12 +445,6 @@ function readOption(args: string[], name: string): string | undefined {
     throw new Error(`${name} requires a value.`);
   }
   return value;
-}
-
-function extractSummaryRiskLine(summary: string): string {
-  return summary
-    .split(/\r?\n/u)
-    .find((line) => line.includes("整體風險等級"))?.trim() ?? "";
 }
 
 function noteFileName(filePath: string): string {

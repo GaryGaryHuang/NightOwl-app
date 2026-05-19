@@ -124,9 +124,7 @@ export function buildSessionResponse(
       "- 已核對依據：依 repo source-of-truth 與版本假設審查。",
       "- 待確認資訊：無。",
       "### 行為變更提醒",
-      "- 無行為變更",
-      "### 風險判定理由",
-      "- 至少一個 must-fix finding 經驗證後仍成立。"
+      "- 無行為變更"
     ].join("\n");
   }
 

@@ -16,8 +16,6 @@ test("buildRiskSnapshot returns a valid RiskSnapshot for all risk levels", async
     assert.equal(snapshot.mustCount, 1);
     assert.equal(snapshot.niceCount, 0);
     assert.deepEqual(snapshot.acceptedFindingIds, ["must-10"]);
-    assert.equal(typeof snapshot.riskBasis, "string");
-    assert.ok(snapshot.riskBasis.length > 0, "riskBasis should be non-empty");
   });
 
   await t.test("nice-only findings → Low", () => {
@@ -81,19 +79,3 @@ test("buildRiskSnapshot derivedRiskLevel matches deriveFileRiskLevel", () => {
   }
 });
 
-test("buildRiskSnapshot riskBasis is descriptive for each risk level", async (t) => {
-  await t.test("High basis mentions must", () => {
-    const snapshot = buildRiskSnapshot([createFinding("must", 96)]);
-    assert.ok(snapshot.riskBasis.length > 0);
-  });
-
-  await t.test("Low basis mentions nice", () => {
-    const snapshot = buildRiskSnapshot([createFinding("nice", 95)]);
-    assert.ok(snapshot.riskBasis.length > 0);
-  });
-
-  await t.test("None basis mentions no findings", () => {
-    const snapshot = buildRiskSnapshot([]);
-    assert.ok(snapshot.riskBasis.length > 0);
-  });
-});

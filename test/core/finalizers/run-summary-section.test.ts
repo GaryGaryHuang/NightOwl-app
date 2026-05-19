@@ -26,7 +26,7 @@ function renderSummarySection(overrides: {
   });
 }
 
-test("RunSummarySection renders the aggregate summary section with rebased derived risk levels", () => {
+test("RunSummarySection renders the aggregate summary section without priority prefixes", () => {
   const rendered = renderSummarySection({
     plannedNotes: createPlannedNotesFromPaths(["src/a.ts", "src/b.ts", "src/c.ts"]),
     successfulFiles: [
@@ -49,7 +49,7 @@ test("RunSummarySection renders the aggregate summary section with rebased deriv
   assert.match(rendered, /- Final findings totals: must=2, nice=1/u);
   assert.match(
     rendered,
-    /### Successful Files[\s\S]*- \[High\] `src\/a\.ts` - must=1, nice=1[\s\S]*- \[High\] `src\/c\.ts` - must=1, nice=0/u
+    /### Successful Files[\s\S]*- `src\/a\.ts` - must=1, nice=1[\s\S]*- `src\/c\.ts` - must=1, nice=0/u
   );
   assert.match(
     rendered,
@@ -71,7 +71,7 @@ test("RunSummarySection renders explicit empty sections for zero-file runs", () 
   assert.match(rendered, /### Skipped Files\n- 無/u);
 });
 
-test("RunSummarySection treats an all-skipped run as zero-risk aggregate output", () => {
+test("RunSummarySection treats an all-skipped run as zero-findings aggregate output", () => {
   const rendered = renderSummarySection({
     plannedNotes: createPlannedNotesFromPaths(["src/a.ts", "src/b.ts"]),
     skippedFiles: [
@@ -108,7 +108,7 @@ test("RunSummarySection excludes skipped files from final findings totals", () =
   assert.doesNotMatch(rendered, /must=1, nice=1/u);
 });
 
-test("RunSummarySection keeps successful files ordered by derived risk levels", () => {
+test("RunSummarySection keeps successful files ordered by approved-finding priority", () => {
   const rendered = renderSummarySection({
     plannedNotes: createPlannedNotesFromPaths(["high.ts", "another-high.ts", "low.ts", "none.ts"]),
     successfulFiles: [
@@ -121,7 +121,7 @@ test("RunSummarySection keeps successful files ordered by derived risk levels", 
 
   assert.match(
     rendered,
-    /### Successful Files[\s\S]*- \[High\] `high\.ts` - must=1, nice=0[\s\S]*- \[High\] `another-high\.ts` - must=1, nice=0[\s\S]*- \[Low\] `low\.ts` - must=0, nice=1[\s\S]*- \[None\] `none\.ts` - must=0, nice=0/u
+    /### Successful Files[\s\S]*- `high\.ts` - must=1, nice=0[\s\S]*- `another-high\.ts` - must=1, nice=0[\s\S]*- `low\.ts` - must=0, nice=1[\s\S]*- `none\.ts` - must=0, nice=0/u
   );
 });
 
@@ -153,7 +153,7 @@ test("RunSummarySection keeps successful files output stable when semantic limit
   assert.match(rendered, /- Final findings totals: must=0, nice=0/u);
   assert.match(
     rendered,
-    /### Successful Files[\s\S]*- \[None\] `src\/clean\.ts` - must=0, nice=0[\s\S]*- \[None\] `src\/blocked\.ts` - must=0, nice=0/u
+    /### Successful Files[\s\S]*- `src\/clean\.ts` - must=0, nice=0[\s\S]*- `src\/blocked\.ts` - must=0, nice=0/u
   );
 });
 

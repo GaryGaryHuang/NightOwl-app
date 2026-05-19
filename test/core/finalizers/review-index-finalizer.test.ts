@@ -75,7 +75,7 @@ test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links"
     "- Final findings totals: must=0, nice=0",
     "### Successful Files",
     "## File Notes",
-    "- [None] [`README.md`](./files/README.md.md)",
+    "- [`README.md`](./files/README.md.md)",
     "- [Skipped] [`src/app.ts`](./files/src__app.ts.md)",
     "- [Skipped] [`packages/app/index.ts`](./files/app__index.ts.md)"
   ]);
@@ -118,10 +118,10 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
     skippedFiles: []
   });
 
-  assert.match(rendered, /- \[None\] \[`src\/api\/index\.ts`\]\(\.\/files\/src__api__index\.ts\.md\)/u);
+  assert.match(rendered, /- \[`src\/api\/index\.ts`\]\(\.\/files\/src__api__index\.ts\.md\)/u);
   assert.match(
     rendered,
-    /- \[None\] \[`tests\/api\/index\.ts`\]\(\.\/files\/tests__api__index\.ts\.md\)/u
+    /- \[`tests\/api\/index\.ts`\]\(\.\/files\/tests__api__index\.ts\.md\)/u
   );
   assert.doesNotMatch(rendered, /\\files\\/u);
 });
@@ -143,13 +143,13 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
     skippedFiles: []
   });
 
-  assert.match(rendered, /- \[None\] \[`foo bar\.ts`\]\(\.\/files\/foo%20bar\.ts\.md\)/u);
-  assert.match(rendered, /- \[None\] \[`foo#bar\)\.ts`\]\(\.\/files\/foo%23bar%29\.ts\.md\)/u);
+  assert.match(rendered, /- \[`foo bar\.ts`\]\(\.\/files\/foo%20bar\.ts\.md\)/u);
+  assert.match(rendered, /- \[`foo#bar\)\.ts`\]\(\.\/files\/foo%23bar%29\.ts\.md\)/u);
   assert.doesNotMatch(rendered, /\(\.\/files\/foo bar\.ts\.md\)/u);
   assert.doesNotMatch(rendered, /\(\.\/files\/foo#bar\)\.ts\.md\)/u);
 });
 
-test("ReviewIndexFinalizer sorts file notes by High to Low to None with skipped files last", () => {
+test("ReviewIndexFinalizer sorts file notes by approved-finding priority with skipped files last", () => {
   const rendered = renderIndex({
     repoRoot: "/workspace/repo",
     baseRef: "main",
@@ -178,15 +178,15 @@ test("ReviewIndexFinalizer sorts file notes by High to Low to None with skipped 
   });
 
   assertTextContainsInOrder(rendered, [
-    "- [High] [`another-high.ts`]",
-    "- [High] [`high.ts`]",
-    "- [Low] [`low.ts`]",
-    "- [None] [`none.ts`]",
+    "- [`another-high.ts`]",
+    "- [`high.ts`]",
+    "- [`low.ts`]",
+    "- [`none.ts`]",
     "- [Skipped] [`skipped.ts`]"
   ]);
 });
 
-test("ReviewIndexFinalizer preserves planned order within the same risk level", () => {
+test("ReviewIndexFinalizer preserves planned order within the same priority bucket", () => {
   const rendered = renderIndex({
     repoRoot: "/workspace/repo",
     baseRef: "main",
@@ -206,9 +206,9 @@ test("ReviewIndexFinalizer preserves planned order within the same risk level", 
   });
 
   assertTextContainsInOrder(rendered, [
-    "- [None] [`a.ts`]",
-    "- [None] [`b.ts`]",
-    "- [None] [`c.ts`]"
+    "- [`a.ts`]",
+    "- [`b.ts`]",
+    "- [`c.ts`]"
   ]);
 });
 
@@ -246,11 +246,11 @@ test("ReviewIndexFinalizer distinguishes missing-information semantic stops from
 
   assert.match(
     rendered,
-    /- \[None\]\[Passed\] \[`src\/clean\.ts`\]\(\.\/files\/src\/clean\.ts\.md\)/u
+    /- \[Passed\] \[`src\/clean\.ts`\]\(\.\/files\/src\/clean\.ts\.md\)/u
   );
   assert.match(
     rendered,
-    /- \[None\]\[Limited\]\[MissingInfo\] \[`src\/blocked\.ts`\]\(\.\/files\/src\/blocked\.ts\.md\)/u
+    /- \[Limited\]\[MissingInfo\] \[`src\/blocked\.ts`\]\(\.\/files\/src\/blocked\.ts\.md\)/u
   );
   assert.match(
     rendered,

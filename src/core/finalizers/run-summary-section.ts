@@ -35,23 +35,23 @@ export function renderRunSummarySection(input: RunSummarySectionRenderInput): st
     0
   );
 
-  const successfulFilesWithRisk = successfulFiles.map((file) => ({
+  const successfulFilesWithPriority = successfulFiles.map((file) => ({
     file,
-    risk: deriveFileRiskLevel(file.findings)
+    sortKey: RISK_ORDER[deriveFileRiskLevel(file.findings)]
   }));
 
-  const sortedSuccessfulFiles = [...successfulFilesWithRisk].sort(
-    (a, b) => RISK_ORDER[a.risk] - RISK_ORDER[b.risk]
+  const sortedSuccessfulFiles = [...successfulFilesWithPriority].sort(
+    (a, b) => a.sortKey - b.sortKey
   );
 
   const successfulLines =
     sortedSuccessfulFiles.length === 0
       ? ["- 無"]
-      : sortedSuccessfulFiles.map(({ file, risk }) => {
+      : sortedSuccessfulFiles.map(({ file }) => {
           const mustCount = countMustFindings(file.findings);
           const niceCount = countNiceFindings(file.findings);
 
-          return `- [${risk}] \`${file.filePath}\` - must=${mustCount}, nice=${niceCount}`;
+          return `- \`${file.filePath}\` - must=${mustCount}, nice=${niceCount}`;
         });
   const skippedLines =
     skippedFiles.length === 0

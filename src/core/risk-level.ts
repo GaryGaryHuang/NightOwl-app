@@ -18,7 +18,7 @@ export function countNiceFindings(findings: Finding[] | undefined): number {
 }
 
 /**
- * Collapse finalized findings into the risk label shown in review notes and the run index.
+ * Collapse finalized findings into the priority bucket used for run-level ordering.
  *
  * Any accepted confirmed_problem/high finding escalates the file to High;
  * remaining findings (confirmed_problem/low or reasonable_risk) map to Low;
@@ -42,14 +42,13 @@ export interface RiskSnapshot {
   mustCount: number;
   niceCount: number;
   acceptedFindingIds: string[];
-  riskBasis: string;
 }
 
 /**
- * Build a deterministic risk snapshot from finalized findings.
+ * Build a deterministic approved-findings snapshot from finalized findings.
  *
- * Delegates to `deriveFileRiskLevel()` for the risk label so the snapshot
- * is guaranteed to agree with review notes and the run index summary.
+ * Delegates to `deriveFileRiskLevel()` for the internal priority bucket so the
+ * snapshot stays aligned with summary status and run-level ordering.
  */
 export function buildRiskSnapshot(findings: Finding[] | undefined): RiskSnapshot {
   const derivedRiskLevel = deriveFileRiskLevel(findings);
@@ -63,26 +62,6 @@ export function buildRiskSnapshot(findings: Finding[] | undefined): RiskSnapshot
     derivedRiskLevel,
     mustCount,
     niceCount,
-    acceptedFindingIds,
-    riskBasis: buildRiskBasis(
-      derivedRiskLevel,
-      mustCount,
-      niceCount
-    )
+    acceptedFindingIds
   };
-}
-
-function buildRiskBasis(
-  level: RiskLevel,
-  mustCount: number,
-  niceCount: number
-): string {
-  switch (level) {
-    case "High":
-      return `High: ${mustCount} must-fix finding(s) remain after verification`;
-    case "Low":
-      return `Low: ${niceCount} nice-to-have finding(s) remain after verification; no must-fix findings`;
-    case "None":
-      return "None: no accepted findings";
-  }
 }

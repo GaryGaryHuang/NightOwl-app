@@ -8,7 +8,7 @@ import { deriveFileRiskLevel, RISK_ORDER } from "../risk-level.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
 import { renderRunSummarySection } from "./run-summary-section.ts";
 
-// Derives from RISK_ORDER key count so skipped items always sort after every known risk level.
+// Derives from RISK_ORDER key count so skipped items always sort after every known priority bucket.
 const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;
 
 interface ReviewIndexRenderInput {
@@ -21,7 +21,7 @@ interface ReviewIndexRenderInput {
 }
 
 /**
- * Render the run index with deterministic artifact links and severity-ordered file notes.
+ * Render the run index with deterministic artifact links and priority-ordered file notes.
  */
 export function renderReviewIndex(input: ReviewIndexRenderInput): string {
     const resolvedOutcomes = input.resolvedOutcomes;
@@ -54,12 +54,12 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
             );
 
             if (resolved.status === "successful") {
-              const prefix = [
-                `[${deriveFileRiskLevel(resolved.outcome.findings)}]`,
-                formatSemanticBadge(resolved.outcome.semanticReview)
-              ].filter(Boolean).join("");
+              const badge = formatSemanticBadge(resolved.outcome.semanticReview);
+              const linkLabel = `[\`${note.filePath}\`](${link})`;
               return [
-                `- ${prefix} [\`${note.filePath}\`](${link})`,
+                badge === ""
+                  ? `- ${linkLabel}`
+                  : `- ${badge} ${linkLabel}`,
                 ...formatMissingInformationDetails(resolved.outcome.semanticReview)
               ].join("\n");
             }

@@ -4,7 +4,6 @@ import test from "node:test";
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
 import { ReviewSummaryStep } from "../../../src/core/steps/review-summary-step.ts";
 import {
-  parseRiskLevelFromResponse,
   createReviewSummaryResolve
 } from "../../../src/core/steps/step-resolve-helpers.ts";
 import type { StepResolveServices } from "../../../src/core/step-runner.ts";
@@ -48,115 +47,17 @@ function createFinding(
 
 const FAKE_SERIALIZER = new ReviewStatePromptSerializer();
 
-// --- parseRiskLevelFromResponse tests ---
-
-test("parseRiskLevelFromResponse extracts valid risk levels", async (t) => {
-  await t.test("extracts High", () => {
-    assert.equal(
-      parseRiskLevelFromResponse("- 整體風險等級：High"),
-      "High"
-    );
-  });
-
-  await t.test("extracts Low", () => {
-    assert.equal(
-      parseRiskLevelFromResponse("- 整體風險等級：Low"),
-      "Low"
-    );
-  });
-
-  await t.test("extracts None", () => {
-    assert.equal(
-      parseRiskLevelFromResponse("- 整體風險等級：None"),
-      "None"
-    );
-  });
-
-  await t.test("handles whitespace around level", () => {
-    assert.equal(
-      parseRiskLevelFromResponse("- 整體風險等級： High "),
-      "High"
-    );
-  });
-
-  await t.test("returns undefined for non-canonical label", () => {
-    assert.equal(
-      parseRiskLevelFromResponse("- 整體風險等級：Critical"),
-      undefined
-    );
-  });
-
-  await t.test("returns undefined when line is missing", () => {
-    assert.equal(
-      parseRiskLevelFromResponse("## Summary\nno risk line here"),
-      undefined
-    );
-  });
-
-  await t.test("extracts English summary risk line", () => {
-    assert.equal(
-      parseRiskLevelFromResponse("- Overall risk level: None"),
-      "None"
-    );
-  });
-
-  await t.test("picks first match in multi-line response", () => {
-    const response = [
-      "before",
-      "- 整體風險等級：Low",
-      "- 整體風險等級：High"
-    ].join("\n");
-    assert.equal(parseRiskLevelFromResponse(response), "Low");
-  });
-});
-
 // --- createReviewSummaryResolve tests ---
 
-test("createReviewSummaryResolve rejects when risk level mismatches snapshot", async () => {
-  const resolve = createReviewSummaryResolve({
-    stepId: "review-summary",
-    filePath: "src/app.ts",
-    sectionKey: "summary",
-    expectedRiskLevel: "High"
-  });
-
-  const response = buildSummaryResponse("Low");
-
-  await assert.rejects(
-    () => resolve(response, createResolveServices()),
-    /risk.*mismatch|整體風險等級/i
-  );
-});
-
-test("createReviewSummaryResolve rejects when risk level is unparseable", async () => {
-  const resolve = createReviewSummaryResolve({
-    stepId: "review-summary",
-    filePath: "src/app.ts",
-    sectionKey: "summary",
-    expectedRiskLevel: "None"
-  });
-
-  const response = [
-    buildNarrativeResponse(),
-    "No risk line"
-  ].join("\n");
-
-  await assert.rejects(
-    () => resolve(response, createResolveServices()),
-    /risk.*mismatch|整體風險等級/i
-  );
-});
-
-test("createReviewSummaryResolve accepts matching risk without external completion service", async () => {
+test("createReviewSummaryResolve accepts narrative without external completion service", async () => {
   const context = createContext();
   const resolve = createReviewSummaryResolve({
     stepId: "review-summary",
     filePath: "src/app.ts",
-    sectionKey: "summary",
-    expectedRiskLevel: "None"
+    sectionKey: "summary"
   });
 
-  const response = buildSummaryResponse("None");
+  const response = buildSummaryResponse();
   const applyTo = await resolve(response, createResolveServices());
   applyTo(context);
 
@@ -167,8 +68,7 @@ test("createReviewSummaryResolve rejects empty narrative packaging", async () =>
   const resolve = createReviewSummaryResolve({
     stepId: "review-summary",
     filePath: "src/app.ts",
-    sectionKey: "summary",
-    expectedRiskLevel: "None"
+    sectionKey: "summary"
   });
 
   await assert.rejects(
@@ -181,8 +81,7 @@ test("createReviewSummaryResolve rejects narrative missing required sections", a
   const resolve = createReviewSummaryResolve({
     stepId: "review-summary",
     filePath: "src/app.ts",
-    sectionKey: "summary",
-    expectedRiskLevel: "None"
+    sectionKey: "summary"
   });
 
   await assert.rejects(
@@ -227,8 +126,9 @@ test("ReviewSummaryStep.prepare() frames internal review state as source materia
   );
   assert.match(
     instruction,
-    /Required output sections, in this order; begin with `### 審查依據`:[\s\S]*### 行為變更提醒[\s\S]*### 風險判定理由/u
+    /Required output sections, in this order; begin with `### 審查依據`:[\s\S]*### 行為變更提醒/u
   );
+  assert.doesNotMatch(instruction, /風險判定理由/u);
   assert.match(
     instruction,
     /Section line shapes:[\s\S]*異動概要[\s\S]*已核對依據[\s\S]*待確認資訊/u
@@ -261,7 +161,6 @@ test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
       name: "clean",
       setup: () => createContext([]),
       expected: {
-        riskLevel: "None",
         mustFixFindingCount: 0,
         niceToHaveFindingCount: 0,
         limitationSummary: "無"
@@ -275,7 +174,6 @@ test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
         return context;
       },
       expected: {
-        riskLevel: "None",
         mustFixFindingCount: 0,
         niceToHaveFindingCount: 0,
         limitationSummary: "1 項 missing information"
@@ -285,7 +183,6 @@ test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
       name: "nice only",
       setup: () => createContext([createFinding("nice", "F1")]),
       expected: {
-        riskLevel: "Low",
         mustFixFindingCount: 0,
         niceToHaveFindingCount: 1,
         limitationSummary: "無"
@@ -295,7 +192,6 @@ test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
       name: "must wins over nice",
       setup: () => createContext([createFinding("must", "F1"), createFinding("nice", "F2")]),
       expected: {
-        riskLevel: "High",
         mustFixFindingCount: 1,
         niceToHaveFindingCount: 1,
         limitationSummary: "無"
@@ -316,10 +212,7 @@ test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
 
       const summary = context.getSection("summary") ?? "";
       const { beforeNarrative, afterNarrative } = splitComposedReport(summary);
-      assert.equal(
-        parseRiskLevelFromResponse(beforeNarrative),
-        testCase.expected.riskLevel
-      );
+      assert.doesNotMatch(beforeNarrative, /- 結論：/u);
       assert.match(
         beforeNarrative,
         new RegExp(`must-fix ${testCase.expected.mustFixFindingCount}；nice-to-have ${testCase.expected.niceToHaveFindingCount}`, "u")
@@ -377,7 +270,7 @@ test("ReviewSummaryStep.resolve composes host-owned report shell around narrativ
   const { beforeNarrative, afterNarrative } = splitComposedReport(summary);
 
   assert.match(summary, /^## Summary/mu);
-  assert.equal(parseRiskLevelFromResponse(beforeNarrative), "High");
+  assert.doesNotMatch(beforeNarrative, /- 結論：/u);
   assert.match(beforeNarrative, /must-fix 1/u);
   assert.match(beforeNarrative, /nice-to-have 1/u);
   assert.match(beforeNarrative, /1 項 missing information/u);
@@ -386,10 +279,9 @@ test("ReviewSummaryStep.resolve composes host-owned report shell around narrativ
 
 // --- helpers ---
 
-function buildSummaryResponse(riskLevel: string): string {
+function buildSummaryResponse(): string {
   return [
     "## Summary",
-    `- 整體風險等級：${riskLevel}`,
     buildNarrativeResponse()
   ].join("\n");
 }
@@ -401,9 +293,7 @@ function buildNarrativeResponse(): string {
     "- 已核對依據：validated review state.",
     "- 待確認資訊：無",
     "### 行為變更提醒",
-    "- 無行為變更",
-    "### 風險判定理由",
-    "- Review result follows from validated review state."
+    "- 無行為變更"
   ].join("\n");
 }
 

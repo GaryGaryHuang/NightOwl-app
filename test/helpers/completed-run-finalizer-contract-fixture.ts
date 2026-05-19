@@ -93,11 +93,7 @@ function createRiskSnapshot(
     derivedRiskLevel: mustCount > 0 ? "High" : niceCount > 0 ? "Low" : "None",
     mustCount,
     niceCount,
-    acceptedFindingIds: findings.map((finding) => finding.findingId),
-    riskBasis:
-      semanticReview?.missingInformationCount
-        ? "No approved findings; semantic validation completed with limitations."
-        : "Derived from approved findings."
+    acceptedFindingIds: findings.map((finding) => finding.findingId)
   };
 }
 

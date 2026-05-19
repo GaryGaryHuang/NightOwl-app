@@ -74,19 +74,14 @@ export function lineRangeTraceability(lineStart: number, lineEnd: number) {
   };
 }
 
-export type ReviewSummaryNarrativeRiskLevel = "High" | "Low" | "None";
-
 export function buildSummaryResponse(
   filePath: string,
-  options: { label?: string; riskLevel?: ReviewSummaryNarrativeRiskLevel } = {}
+  options: { label?: string } = {}
 ): string {
   const label = options.label ?? filePath;
-  const riskLevel = options.riskLevel ?? "High";
   return [
     "## Summary",
     "### 審查結論",
-    "- 結論：測試結論",
-    `- 整體風險等級：${riskLevel}`,
     "- 已驗證的結果：must-fix 1；nice-to-have 0",
     "- 審查限制：無",
     "",
@@ -95,9 +90,7 @@ export function buildSummaryResponse(
     `- 已核對依據：依 ${label} 的 repo source-of-truth 與版本假設審查。`,
     "- 待確認資訊：無。",
     "### 行為變更提醒",
-    "- 無行為變更",
-    "### 風險判定理由",
-    "- final findings 仍需留意。"
+    "- 無行為變更"
   ].join("\n");
 }
 
@@ -135,7 +128,6 @@ export function buildFindingsForFile(filePath: string): Finding[] {
 export interface SuccessfulStepResultOptions {
   onTerminalApply?: () => void;
   findingsByFile?: ReadonlyMap<string, Finding[]>;
-  narrativeRiskByFile?: ReadonlyMap<string, ReviewSummaryNarrativeRiskLevel>;
 }
 
 /**
@@ -143,8 +135,6 @@ export interface SuccessfulStepResultOptions {
  * slot for each step. This mirrors the real step implementations so orchestrator
  * tests can verify state propagation without running an actual Copilot session.
  *
- * The optional `narrativeRiskByFile` map lets tests override the risk level
- * written in the Review Summary summary, enabling assertions on risk-level derivation.
  */
 export function buildSuccessfulStepResult(
   stepId: string,
@@ -187,7 +177,7 @@ export function buildSuccessfulStepResult(
       applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "summary",
-          buildSummaryResponse(filePath, { riskLevel: options.narrativeRiskByFile?.get(filePath) })
+          buildSummaryResponse(filePath)
         );
         options.onTerminalApply?.();
       }
