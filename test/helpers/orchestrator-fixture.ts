@@ -97,10 +97,7 @@ export function buildSummaryResponse(
     "### 行為變更提醒",
     "- 無行為變更",
     "### 風險判定理由",
-    "- final findings 仍需留意。",
-    "",
-    "### 後續行動",
-    "- 測試 fixture action。"
+    "- final findings 仍需留意。"
   ].join("\n");
 }
 

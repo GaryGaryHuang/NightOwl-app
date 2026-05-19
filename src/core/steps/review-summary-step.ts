@@ -26,17 +26,12 @@ type ReviewSummaryVerdict =
     | "僅有非阻斷性建議"
     | "必須優先修正";
 
-type ReviewSummaryConfidenceState = "complete" | "limited";
-
 interface ReviewSummaryStatus {
     readonly verdict: ReviewSummaryVerdict;
     readonly riskLevel: RiskSnapshot["derivedRiskLevel"];
     readonly mustFixFindingCount: number;
     readonly niceToHaveFindingCount: number;
-    readonly missingInformationCount: number;
-    readonly reviewConfidenceState: ReviewSummaryConfidenceState;
     readonly limitationSummary: string;
-    readonly actionGuidance: readonly string[];
 }
 
 /**
@@ -84,12 +79,6 @@ export class ReviewSummaryStep implements StepDefinition {
                 filePath: context.filePath,
                 sectionKey: SUMMARY_SECTION_KEY,
                 expectedRiskLevel: snapshot.derivedRiskLevel,
-                forbiddenResponsePatterns: [
-                    /^##\s+Summary\b/mu,
-                    /^###\s+審查結論(?:\s|$)/mu,
-                    /^###\s+後續行動(?:\s|$)/mu,
-                    /(?:整體風險等級|Overall risk level)[：:]/iu
-                ],
                 composeReport: (response) => composeReviewSummaryReport(response, summaryStatus)
             })
         };
@@ -154,23 +143,14 @@ function buildReviewSummaryStatus(
     snapshot: RiskSnapshot,
     missingInformationCount: number
 ): ReviewSummaryStatus {
-    const reviewConfidenceState: ReviewSummaryConfidenceState =
-        missingInformationCount > 0 ? "limited" : "complete";
     return {
         verdict: deriveReviewSummaryVerdict(snapshot, missingInformationCount),
         riskLevel: snapshot.derivedRiskLevel,
         mustFixFindingCount: snapshot.mustCount,
         niceToHaveFindingCount: snapshot.niceCount,
-        missingInformationCount,
-        reviewConfidenceState,
         limitationSummary: missingInformationCount === 0
             ? "無"
-            : `${missingInformationCount} 項 missing information`,
-        actionGuidance: buildReviewSummaryActionGuidance(
-            snapshot,
-            reviewConfidenceState,
-            missingInformationCount
-        )
+            : `${missingInformationCount} 項 missing information`
     };
 }
 
@@ -190,44 +170,6 @@ function deriveReviewSummaryVerdict(
     return "未發現需處理事項";
 }
 
-function buildReviewSummaryActionGuidance(
-    snapshot: RiskSnapshot,
-    reviewConfidenceState: ReviewSummaryConfidenceState,
-    missingInformationCount: number
-): string[] {
-    const limitationGuidance = reviewConfidenceState === "limited"
-        ? [
-            `審查限制：仍有 ${missingInformationCount} 項 missing information。`
-        ]
-        : [];
-
-    if (snapshot.mustCount > 0) {
-        return [
-            "Must-fix：有已確認的 must-fix findings。",
-            snapshot.niceCount > 0
-                ? "Nice-to-have：有已確認的 nice-to-have findings。"
-                : "Nice-to-have：無。",
-            ...limitationGuidance
-        ];
-    }
-    if (snapshot.niceCount > 0) {
-        return [
-            "Must-fix：無。",
-            "Nice-to-have：有已確認的 nice-to-have findings。",
-            ...limitationGuidance
-        ];
-    }
-    if (limitationGuidance.length > 0) {
-        return [
-            "Clean：沒有 validated findings。",
-            ...limitationGuidance
-        ];
-    }
-    return [
-        "Clean：沒有 validated findings。"
-    ];
-}
-
 function composeReviewSummaryReport(response: string, status: ReviewSummaryStatus): string {
     const narrative = response.trim();
     return [
@@ -238,9 +180,6 @@ function composeReviewSummaryReport(response: string, status: ReviewSummaryStatu
         `- 已驗證的結果：must-fix ${status.mustFixFindingCount}；nice-to-have ${status.niceToHaveFindingCount}`,
         `- 審查限制：${status.limitationSummary}`,
         "",
-        narrative,
-        "",
-        "### 後續行動",
-        ...status.actionGuidance.map((line) => `- ${line}`)
+        narrative
     ].join("\n");
 }

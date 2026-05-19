@@ -278,8 +278,7 @@ test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
         riskLevel: "None",
         mustFixFindingCount: 0,
         niceToHaveFindingCount: 0,
-        limitationSummary: "1 項 missing information",
-        actionPattern: /審查限制：仍有 1 項 missing information/u
+        limitationSummary: "1 項 missing information"
       }
     },
     {
@@ -329,12 +328,7 @@ test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
         beforeNarrative,
         new RegExp(`審查限制：${testCase.expected.limitationSummary}`, "u")
       );
-      assert.notEqual(afterNarrative.trim(), "");
-      const actionPattern =
-        "actionPattern" in testCase.expected ? testCase.expected.actionPattern : undefined;
-      if (actionPattern) {
-        assert.match(afterNarrative, actionPattern);
-      }
+      assert.equal(afterNarrative.trim(), "");
     });
   }
 });
@@ -387,51 +381,7 @@ test("ReviewSummaryStep.resolve composes host-owned report shell around narrativ
   assert.match(beforeNarrative, /must-fix 1/u);
   assert.match(beforeNarrative, /nice-to-have 1/u);
   assert.match(beforeNarrative, /1 項 missing information/u);
-  assert.match(afterNarrative, /審查限制：仍有 1 項 missing information/u);
-  assert.notEqual(afterNarrative.trim(), "");
-});
-
-test("ReviewSummaryStep.resolve rejects narrative that tries to own host-computed report fields", async () => {
-  const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
-  const context = createContext([]);
-  const plan = step.prepare(context);
-
-  await assert.rejects(
-    () =>
-      plan.resolve(
-        [
-          buildNarrativeResponse(),
-          "- 整體風險等級：Low"
-        ].join("\n"),
-        createResolveServices()
-      ),
-    /host-computed report field/u
-  );
-});
-
-test("ReviewSummaryStep.resolve rejects narrative that tries to own host-composed sections", async (t) => {
-  const cases = ["### 審查結論", "### 後續行動"];
-
-  for (const heading of cases) {
-    await t.test(heading, async () => {
-      const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
-      const context = createContext([]);
-      const plan = step.prepare(context);
-
-      await assert.rejects(
-        () =>
-          plan.resolve(
-            [
-              buildNarrativeResponse(),
-              heading,
-              "- model-owned action guidance"
-            ].join("\n"),
-            createResolveServices()
-          ),
-        /host-computed report field/u
-      );
-    });
-  }
+  assert.equal(afterNarrative.trim(), "");
 });
 
 // --- helpers ---

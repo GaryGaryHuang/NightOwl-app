@@ -636,7 +636,7 @@ function buildSemanticLoopStepResult(
     return {
       stepId,
       applyTo(context: FileReviewContext) {
-        context.setSection("summary", "## Summary\n### 審查結論\n- 結論：未發現需處理事項\n- 整體風險等級：None\n- 已驗證的結果：must-fix 0；nice-to-have 0\n- 審查限制：無\n\n### 審查依據\n- 異動概要：無\n- 已核對依據：無\n- 待確認資訊：無\n### 行為變更提醒\n- 無行為變更\n### 風險判定理由\n- no approved findings\n\n### 後續行動\n- no action");
+        context.setSection("summary", "## Summary\n### 審查結論\n- 結論：未發現需處理事項\n- 整體風險等級：None\n- 已驗證的結果：must-fix 0；nice-to-have 0\n- 審查限制：無\n\n### 審查依據\n- 異動概要：無\n- 已核對依據：無\n- 待確認資訊：無\n### 行為變更提醒\n- 無行為變更\n### 風險判定理由\n- no approved findings");
       }
     };
   }

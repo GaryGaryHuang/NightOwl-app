@@ -77,20 +77,18 @@ export function parseRiskLevelFromResponse(response: string): RiskLevel | undefi
  * Factory for the resolve() closure used by Review Summary.
  *
  * Review Summary is user-facing packaging, not a semantic review step. Keep validation
- * lightweight and deterministic: reject only broken packaging and host-owned
- * fields before writing the composed Summary.
+ * lightweight and deterministic: reject only broken packaging before writing the
+ * composed Summary.
  */
 export function createReviewSummaryResolve(input: {
   stepId: string;
   filePath: string;
   sectionKey: ReviewSectionKey;
   expectedRiskLevel: RiskLevel;
-  forbiddenResponsePatterns?: readonly RegExp[];
   composeReport?: (response: string) => string;
 }): StepExecutionPlan["resolve"] {
   return async (response) => {
     rejectMalformedReviewSummaryNarrative(response);
-    rejectForbiddenReviewSummaryResponsePatterns(response, input.forbiddenResponsePatterns ?? []);
     const sectionContent = input.composeReport?.(response) ?? response;
 
     // Deterministic pre-check: risk level must match snapshot
@@ -125,20 +123,6 @@ function rejectMalformedReviewSummaryNarrative(response: string): void {
     if (!section.pattern.test(response)) {
       throw new Error(
         `Review Summary narrative is missing required section: ${section.label}`
-      );
-    }
-  }
-}
-
-function rejectForbiddenReviewSummaryResponsePatterns(
-  response: string,
-  patterns: readonly RegExp[]
-): void {
-  for (const pattern of patterns) {
-    const match = pattern.exec(response);
-    if (match) {
-      throw new Error(
-        `Review Summary narrative attempted to own a host-computed report field: ${match[0]}`
       );
     }
   }
