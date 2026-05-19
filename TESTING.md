@@ -29,7 +29,7 @@ Fast, deterministic single-module logic tests. A test is unit when it exercises 
 - Runs without network, child process, or real Git operations; file system use is limited to deterministic single-module path/canonicalization cases and must not exercise provider or app I/O
 - Deterministic: same input always produces the same output
 
-**Typical subjects:** CLI parser, risk derivation, config normalization, step runner retry, shell/web-fetch policy decision logic, Markdown finalizers, etc. See the `unit` array in `test/test-tier-manifest.json` for the full list.
+**Typical subjects:** CLI parser, approved-findings priority derivation, config normalization, step runner retry, shell/web-fetch policy decision logic, Markdown finalizers, etc. See the `unit` array in `test/test-tier-manifest.json` for the full list.
 
 ### Integration
 
