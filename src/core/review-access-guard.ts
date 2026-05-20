@@ -1,7 +1,12 @@
 import { realpathSync } from "node:fs";
 import path from "node:path";
 
-import { nightowlRoot, reviewOutputRoot } from "./nightowl-namespace.ts";
+import { nightowlRoot, reviewOutputRoot as buildReviewOutputRoot } from "./nightowl-namespace.ts";
+
+export interface ReviewReadBoundary {
+  repoRoot: string;
+  reviewOutputRoot?: string;
+}
 
 /**
  * Returns true when the given path is within the allowed read boundary for a
@@ -13,19 +18,32 @@ import { nightowlRoot, reviewOutputRoot } from "./nightowl-namespace.ts";
  */
 export function isAllowedReviewReadPath(
   requestedPath: string,
-  repoRoot: string
+  boundary: string | ReviewReadBoundary
 ): boolean {
-  if (!path.isAbsolute(requestedPath) || !path.isAbsolute(repoRoot)) {
+  const sourceRoot =
+    typeof boundary === "string" ? boundary : boundary.repoRoot;
+  const outputRoot =
+    typeof boundary === "string"
+      ? buildReviewOutputRoot(sourceRoot)
+      : boundary.reviewOutputRoot ?? buildReviewOutputRoot(sourceRoot);
+
+  if (
+    !path.isAbsolute(requestedPath) ||
+    !path.isAbsolute(sourceRoot) ||
+    !path.isAbsolute(outputRoot)
+  ) {
     throw new Error(
       "isAllowedReviewReadPath requires absolute paths. " +
-        `Received requestedPath=${JSON.stringify(requestedPath)}, repoRoot=${JSON.stringify(repoRoot)}`
+        `Received requestedPath=${JSON.stringify(requestedPath)}, ` +
+        `repoRoot=${JSON.stringify(sourceRoot)}, ` +
+        `reviewOutputRoot=${JSON.stringify(outputRoot)}`
     );
   }
 
   const resolvedPath = path.resolve(requestedPath);
-  const resolvedRoot = path.resolve(repoRoot);
+  const resolvedRoot = path.resolve(sourceRoot);
   const nightowlRootPath = path.resolve(nightowlRoot(resolvedRoot));
-  const reviewRoot = path.resolve(reviewOutputRoot(resolvedRoot));
+  const reviewRoot = path.resolve(outputRoot);
 
   const isWithinLexicalRepo = isPathInsideOrEqual(resolvedPath, resolvedRoot);
   const isWithinLexicalReview = isPathInsideOrEqual(resolvedPath, reviewRoot);
@@ -38,10 +56,19 @@ export function isAllowedReviewReadPath(
   const canonicalNightowlRoot = canonicalizeBoundaryPath(nightowlRootPath);
   const canonicalReviewRoot = canonicalizeBoundaryPath(reviewRoot);
   const canonicalRequested = canonicalizeBoundaryPath(resolvedPath);
+  const canonicalOutputRepoRoot = canonicalizeBoundaryPath(
+    path.dirname(path.dirname(reviewRoot))
+  );
+  const canonicalOutputNightowlRoot = canonicalizeBoundaryPath(
+    path.dirname(reviewRoot)
+  );
 
   const hasValidCanonicalReviewBoundary =
-    isPathInsideOrEqual(canonicalReviewRoot, canonicalRoot) &&
-    isPathInsideOrEqual(canonicalReviewRoot, canonicalNightowlRoot);
+    typeof boundary === "string"
+      ? isPathInsideOrEqual(canonicalReviewRoot, canonicalRoot) &&
+        isPathInsideOrEqual(canonicalReviewRoot, canonicalNightowlRoot)
+      : isPathInsideOrEqual(canonicalReviewRoot, canonicalOutputRepoRoot) &&
+        isPathInsideOrEqual(canonicalReviewRoot, canonicalOutputNightowlRoot);
 
   if (
     hasValidCanonicalReviewBoundary &&

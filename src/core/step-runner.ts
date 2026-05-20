@@ -72,7 +72,10 @@ export interface RunStepInput {
   context: FileReviewContext;
   outputBaseDir: string;
   repoRoot: string;
+  reviewOutputRoot?: string;
   signal?: AbortSignal;
+  sourceBaseRef?: string;
+  sourceHeadRef?: string;
   workingDirectory?: string;
 }
 
@@ -132,6 +135,15 @@ export class StepRunner {
           model: plan.reviewProfile.model,
           outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,
+          ...(input.reviewOutputRoot === undefined
+            ? {}
+            : { reviewOutputRoot: input.reviewOutputRoot }),
+          ...(input.sourceBaseRef === undefined
+            ? {}
+            : { sourceBaseRef: input.sourceBaseRef }),
+          ...(input.sourceHeadRef === undefined
+            ? {}
+            : { sourceHeadRef: input.sourceHeadRef }),
           systemMessage: plan.prompt.systemMessage,
           ...(input.workingDirectory === undefined
             ? {}

@@ -30,6 +30,7 @@ import {
   type OutputTarget,
   type PlannedNoteFile
 } from "./review-path-resolver.ts";
+import { reviewOutputRoot } from "./nightowl-namespace.ts";
 import { ReviewStatePromptSerializer } from "./review-state-prompt-serializer.ts";
 import {
   CANDIDATE_FINDINGS_STEP_ID,
@@ -103,6 +104,13 @@ export interface ReviewOrchestratorOptions {
   timestampProvider?: () => string;
 }
 
+export interface ReviewOrchestratorRunOptions {
+  signal?: AbortSignal;
+  outputRepoRoot?: string;
+  sourceBaseRef?: string;
+  sourceHeadRef?: string;
+}
+
 /**
  * Coordinate the full review run: Changeset Overview, per-file fan-out, and final run-level artifacts.
  */
@@ -161,7 +169,7 @@ export class ReviewOrchestrator {
 
   async run(
     request: RunRequest,
-    options?: { signal?: AbortSignal }
+    options?: ReviewOrchestratorRunOptions
   ): Promise<ReviewRunSummary> {
     this.#emitProgressEvent({
       type: "phase-changed",
@@ -170,11 +178,19 @@ export class ReviewOrchestrator {
 
     const startPath = path.resolve(this.#workingDirectory, request.repoPath ?? ".");
     const repoRoot = await this.#sourceProvider.resolveRepoRoot(startPath);
+    const outputRepoRoot = options?.outputRepoRoot ?? repoRoot;
+    const sourceBaseRef = options?.sourceBaseRef ?? request.baseRef;
+    const sourceHeadRef = options?.sourceHeadRef ?? request.headRef;
+    const outputReviewRoot = reviewOutputRoot(outputRepoRoot);
 
     // Changeset Overview must complete first because its RunContext feeds the per-file Overview step.
     const runContext = await this.#runChangesetOverview({
+      outputRepoRoot,
+      reviewOutputRoot: outputReviewRoot,
       repoRoot,
       request,
+      sourceBaseRef,
+      sourceHeadRef,
       signal: options?.signal
     });
 
@@ -203,18 +219,18 @@ export class ReviewOrchestrator {
     });
     abortGuard.throwIfAborted();
 
-    const branchName = await this.#sourceProvider.getCurrentBranch(repoRoot);
+    const branchName = await this.#sourceProvider.getCurrentBranch(outputRepoRoot);
     const changedFiles = await this.#sourceProvider.getChangedFiles(
       repoRoot,
-      request.baseRef,
-      request.headRef
+      sourceBaseRef,
+      sourceHeadRef
     );
     const reviewableFiles = await this.#reviewFileFilter.filterReviewableFiles(
       repoRoot,
       changedFiles
     );
     const outputTarget = buildOutputTarget({
-      repoRoot,
+      repoRoot: outputRepoRoot,
       branchName,
       headRef: request.headRef,
       timestamp: this.#timestampProvider()
@@ -232,7 +248,7 @@ export class ReviewOrchestrator {
 
     this.#emitProgressEvent({
       type: "run-initialized",
-      repoRoot,
+      repoRoot: outputRepoRoot,
       outputTarget,
       plannedFileCount: plannedNoteFiles.length
     });
@@ -266,8 +282,12 @@ export class ReviewOrchestrator {
       outputTarget,
       request,
       repoRoot,
+      outputRepoRoot,
       runContext,
       signal: options?.signal,
+      reviewOutputRoot: outputReviewRoot,
+      sourceBaseRef,
+      sourceHeadRef,
       steps,
       abortGuard
     });
@@ -297,13 +317,13 @@ export class ReviewOrchestrator {
       outputTarget,
       plannedNoteFiles,
       resolvedOutcomes,
-      repoRoot,
+      repoRoot: outputRepoRoot,
       runContext,
       request
     });
 
     return {
-      repoRoot,
+      repoRoot: outputRepoRoot,
       runContext,
       outputTarget,
       plannedFileCount: plannedNoteFiles.length,
@@ -315,22 +335,29 @@ export class ReviewOrchestrator {
   }
 
   async #runChangesetOverview(input: {
+    outputRepoRoot: string;
+    reviewOutputRoot: string;
     repoRoot: string;
     request: RunRequest;
+    sourceBaseRef: string;
+    sourceHeadRef: string;
     signal?: AbortSignal;
   }): Promise<RunContext> {
     const changesetEntries = await this.#sourceProvider.getChangesetEntries(
       input.repoRoot,
-      input.request.baseRef,
-      input.request.headRef
+      input.sourceBaseRef,
+      input.sourceHeadRef
     );
 
     try {
       return await this.#changesetOverviewRunner.run({
         changesetEntries,
-        outputBaseDir: input.repoRoot,
+        outputBaseDir: input.outputRepoRoot,
         repoRoot: input.repoRoot,
+        reviewOutputRoot: input.reviewOutputRoot,
         signal: input.signal,
+        sourceBaseRef: input.sourceBaseRef,
+        sourceHeadRef: input.sourceHeadRef,
         userContext: input.request.userContext,
         workingDirectory: input.repoRoot
       });
@@ -340,7 +367,7 @@ export class ReviewOrchestrator {
       }
 
       await this.#onRunLevelFailure({
-        repoRoot: input.repoRoot,
+        repoRoot: input.outputRepoRoot,
         request: input.request
       });
       throw error;
@@ -467,9 +494,13 @@ export class ReviewOrchestrator {
     outputPublisher: RunOutputPublisher;
     outputTarget: OutputTarget;
     request: RunRequest;
+    outputRepoRoot: string;
     repoRoot: string;
     runContext: RunContext;
     signal?: AbortSignal;
+    reviewOutputRoot: string;
+    sourceBaseRef: string;
+    sourceHeadRef: string;
     abortGuard: RunAbortGuard;
     steps: StepDefinition[];
   }): Promise<void> {
@@ -526,9 +557,13 @@ export class ReviewOrchestrator {
               outputPublisher: input.outputPublisher,
               outputTarget: input.outputTarget,
               request: input.request,
+              outputRepoRoot: input.outputRepoRoot,
               repoRoot: input.repoRoot,
               runContext: input.runContext,
               signal: input.signal,
+              reviewOutputRoot: input.reviewOutputRoot,
+              sourceBaseRef: input.sourceBaseRef,
+              sourceHeadRef: input.sourceHeadRef,
               abortGuard: input.abortGuard,
               steps: input.steps
             });
@@ -549,9 +584,13 @@ export class ReviewOrchestrator {
     outputPublisher: RunOutputPublisher;
     outputTarget: OutputTarget;
     request: RunRequest;
+    outputRepoRoot: string;
     repoRoot: string;
     runContext: RunContext;
     signal?: AbortSignal;
+    reviewOutputRoot: string;
+    sourceBaseRef: string;
+    sourceHeadRef: string;
     abortGuard: RunAbortGuard;
     steps: StepDefinition[];
   }): Promise<void> {
@@ -561,8 +600,8 @@ export class ReviewOrchestrator {
       // Load the file diff once so the per-file state machine can operate on a stable snapshot.
       diffContent = await this.#sourceProvider.getDiff(
         input.repoRoot,
-        input.request.baseRef,
-        input.request.headRef,
+        input.sourceBaseRef,
+        input.sourceHeadRef,
         input.workItem.plannedNote.filePath
       );
     } catch (error) {
@@ -624,7 +663,10 @@ export class ReviewOrchestrator {
           context: fileContext,
           outputBaseDir: input.outputTarget.basePath,
           repoRoot: input.repoRoot,
+          reviewOutputRoot: input.reviewOutputRoot,
           signal: input.signal,
+          sourceBaseRef: input.sourceBaseRef,
+          sourceHeadRef: input.sourceHeadRef,
           workingDirectory: input.repoRoot
         });
       } catch (error) {

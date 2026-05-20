@@ -77,6 +77,18 @@ function createSignalTestApp(options: {
         return files;
       }
     },
+    reviewSourceSnapshotProvider: {
+      async createSnapshot() {
+        return {
+          originalRepoRoot: "/tmp/signal-test",
+          reviewSourceRoot: "/tmp/signal-test",
+          resolvedBaseRef: "main",
+          resolvedHeadRef: "feature-branch",
+          isDirty: false,
+          async cleanup() {}
+        };
+      }
+    },
     outputSink: defineOutputSinkDouble({
       async initializeRun() {
         return this;
@@ -230,9 +242,9 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when Cha
               await config.hooks?.onPreToolUse?.(
                 {
                   timestamp: 0,
-                  cwd: repoRoot,
+                  cwd: config.workingDirectory ?? repoRoot,
                   toolName: "bash",
-                  toolArgs: { command: "git log --oneline" }
+                  toolArgs: { command: "git show HEAD:src/app.ts" }
                 } as never,
                 { sessionId: "s1" } as never
               );
@@ -274,7 +286,7 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when Cha
     for (const record of auditRecords) {
       assert.equal(record.tool, "bash");
       assert.equal(record.decision, "allow");
-      assert.deepEqual(record.args, { command: "git log --oneline" });
+      assert.deepEqual(record.args, { command: "git show HEAD:src/app.ts" });
     }
   } finally {
     fixture.cleanup();
@@ -309,9 +321,9 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when cha
               await config.hooks?.onPreToolUse?.(
                 {
                   timestamp: 0,
-                  cwd: repoRoot,
+                  cwd: config.workingDirectory ?? repoRoot,
                   toolName: "bash",
-                  toolArgs: { command: "git log --oneline" }
+                  toolArgs: { command: "git show HEAD:src/app.ts" }
                 } as never,
                 { sessionId: "s1" } as never
               );
@@ -367,7 +379,7 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when cha
     for (const record of auditRecords) {
       assert.equal(record.tool, "bash");
       assert.equal(record.decision, "allow");
-      assert.deepEqual(record.args, { command: "git log --oneline" });
+      assert.deepEqual(record.args, { command: "git show HEAD:src/app.ts" });
     }
   } finally {
     fixture.cleanup();

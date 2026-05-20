@@ -53,6 +53,7 @@ describe("createLocalReviewRunApp progress wiring", () => {
           return `--- a/${filePath}\n+++ b/${filePath}\n@@ -1 +1 @@\n-old\n+new\n`;
         }
       },
+      reviewSourceSnapshotProvider: createPassthroughSnapshotProvider("/workspace/repo"),
       reviewFileFilter: {
         async filterReviewableFiles(_repoRoot: string, files: string[]) {
           return files;
@@ -158,6 +159,7 @@ test("createLocalReviewRunApp emits a progress warning when tool-audit writes fa
           return `--- a/${filePath}\n+++ b/${filePath}\n@@ -1 +1 @@\n-old\n+new\n`;
         }
       },
+      reviewSourceSnapshotProvider: createPassthroughSnapshotProvider(repoRoot),
       reviewFileFilter: {
         async filterReviewableFiles(_repoRoot: string, files: string[]) {
           return files;
@@ -272,4 +274,19 @@ function createSingleStepFactory(): ReviewPerFileStepsFactory {
       }
     }
   ];
+}
+
+function createPassthroughSnapshotProvider(repoRoot: string) {
+  return {
+    async createSnapshot() {
+      return {
+        originalRepoRoot: repoRoot,
+        reviewSourceRoot: repoRoot,
+        resolvedBaseRef: "main",
+        resolvedHeadRef: "feature-branch",
+        isDirty: false,
+        async cleanup() {}
+      };
+    }
+  };
 }

@@ -97,3 +97,15 @@ test("reduceProgressEvent warns when file completion arrives before claim", () =
     /warning: cliprogressreporter ignored completed for non-active file/iu
   );
 });
+
+test("reduceProgressEvent renders transient run warnings", () => {
+  const result = reduceProgressEvent(createInitialProgressState(), {
+    type: "run-warning",
+    message: "uncommitted changes are ignored"
+  });
+
+  assert.equal(
+    result.instruction.appendMessage,
+    "Warning: uncommitted changes are ignored"
+  );
+});

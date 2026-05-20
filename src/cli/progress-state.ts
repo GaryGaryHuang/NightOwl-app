@@ -115,6 +115,14 @@ export function reduceProgressEvent(
         }
       };
 
+    case "run-warning":
+      return {
+        state: current,
+        instruction: {
+          appendMessage: `Warning: ${event.message}`
+        }
+      };
+
     case "review-session-log":
       return {
         state: current,

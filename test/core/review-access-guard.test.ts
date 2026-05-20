@@ -61,6 +61,46 @@ test("isAllowedReviewReadPath enforces the repo-source and review-output read bo
   }
 });
 
+test("isAllowedReviewReadPath supports separate snapshot source and original review output roots", () => {
+  const sourceRoot = "/tmp/nightowl-source-snapshot";
+  const reviewOutputRoot = "/workspace/repo/.nightowl/review";
+  const cases: Array<{
+    requestedPath: string;
+    expected: boolean;
+  }> = [
+    {
+      requestedPath: "/tmp/nightowl-source-snapshot/src/app.ts",
+      expected: true
+    },
+    {
+      requestedPath: "/tmp/nightowl-source-snapshot/.nightowl/reviewconfig.json",
+      expected: false
+    },
+    {
+      requestedPath: "/workspace/repo/.nightowl/review/current/index.md",
+      expected: true
+    },
+    {
+      requestedPath: "/workspace/repo/.nightowl/review/previous/files/app.md",
+      expected: true
+    },
+    {
+      requestedPath: "/workspace/repo/src/app.ts",
+      expected: false
+    }
+  ];
+
+  for (const { requestedPath, expected } of cases) {
+    assert.equal(
+      isAllowedReviewReadPath(requestedPath, {
+        repoRoot: sourceRoot,
+        reviewOutputRoot
+      }),
+      expected
+    );
+  }
+});
+
 test("isAllowedReviewReadPath throws when given a relative requestedPath", () => {
   assert.throws(
     () => isAllowedReviewReadPath("src/app.ts", "/workspace/repo"),
@@ -124,6 +164,32 @@ test("isAllowedReviewReadPath denies a review root that is itself symlinked outs
     );
 
     assert.equal(isAllowedReviewReadPath(escapedPath, fixture.repoRoot), false);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("isAllowedReviewReadPath denies an explicit review output root that is symlinked outside its repo", () => {
+  const fixture = createReadBoundaryFixture({ symlinkReviewRoot: true });
+
+  try {
+    const sourceRoot = path.join(fixture.repoRoot, "..", "snapshot");
+    mkdirSync(path.join(sourceRoot, "src"), { recursive: true });
+    const escapedPath = path.join(
+      fixture.repoRoot,
+      ".nightowl",
+      "review",
+      "session1",
+      "secret.txt"
+    );
+
+    assert.equal(
+      isAllowedReviewReadPath(escapedPath, {
+        repoRoot: sourceRoot,
+        reviewOutputRoot: path.join(fixture.repoRoot, ".nightowl", "review")
+      }),
+      false
+    );
   } finally {
     fixture.cleanup();
   }

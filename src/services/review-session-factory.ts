@@ -19,7 +19,12 @@ export interface ReviewSessionProfile {
   knowledgeMode: ReviewKnowledgeMode;
   model: string;
   outputBaseDir: string;
+  /** Review source boundary; snapshot-backed local runs use the detached source root. */
   repoRoot: string;
+  /** Original repository `.nightowl/review` root allowed for reading review artifacts. */
+  reviewOutputRoot?: string;
+  sourceBaseRef?: string;
+  sourceHeadRef?: string;
   systemMessage: string;
   workingDirectory?: string;
 }

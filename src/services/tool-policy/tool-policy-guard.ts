@@ -265,7 +265,7 @@ export class ToolPolicyGuard {
 
     if (readPath !== undefined) {
       try {
-        if (isAllowedReviewReadPath(readPath, profile.repoRoot)) {
+        if (isAllowedReviewReadPath(readPath, profile)) {
           return { tool: "read", decision: "allow", args: { path: readPath } };
         }
       } catch {

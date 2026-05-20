@@ -51,6 +51,10 @@ export type RunProgressEvent =
       message: string;
     }
   | {
+      type: "run-warning";
+      message: string;
+    }
+  | {
       type: "review-session-log";
       stepId: string;
       message: string;

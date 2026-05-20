@@ -331,6 +331,7 @@ test("runCli surfaces a clear runtime error when Changeset Overview session star
         throw new Error("unreachable");
       }
     },
+    reviewSourceSnapshotProvider: createPassthroughSnapshotProvider(REPO_ROOT),
     clientManager: {
       async start() {
         throw new Error("Copilot CLI is unavailable.");
@@ -545,6 +546,21 @@ function createCompletedRunResult(
     dryRun: false,
     finalizerFailures: [],
     ...restOverrides
+  };
+}
+
+function createPassthroughSnapshotProvider(repoRoot: string) {
+  return {
+    async createSnapshot() {
+      return {
+        originalRepoRoot: repoRoot,
+        reviewSourceRoot: repoRoot,
+        resolvedBaseRef: "main",
+        resolvedHeadRef: "feature-branch",
+        isDirty: false,
+        async cleanup() {}
+      };
+    }
   };
 }
 

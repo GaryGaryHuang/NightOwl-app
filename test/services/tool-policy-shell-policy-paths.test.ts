@@ -103,3 +103,232 @@ test("tool policy shell policy propagates cd-derived cwd and enforces cd path bo
     "cd /tmp && ls"
   ]);
 });
+
+test("tool policy shell policy supports separate snapshot source and original review output roots", () => {
+  const snapshotProfile = {
+    repoRoot: "/tmp/nightowl-source-snapshot",
+    reviewOutputRoot: "/workspace/repo/.nightowl/review",
+    sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+    sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+  };
+
+  for (const command of [
+    "cat /tmp/nightowl-source-snapshot/src/app.ts",
+    "git -C /tmp/nightowl-source-snapshot diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "cat /workspace/repo/.nightowl/review/previous/index.md",
+    "cd /workspace/repo/.nightowl/review && ls previous"
+  ]) {
+    assert.equal(
+      evaluateReadonlyShellCommand(command, snapshotProfile),
+      undefined,
+      command
+    );
+  }
+
+  for (const command of [
+    "cat /workspace/repo/src/app.ts",
+    "git -C /workspace/repo diff base...head",
+    "git -C /workspace/repo/.nightowl/review show HEAD:src/app.ts",
+    "cd /workspace/repo/.nightowl/review && git show HEAD:src/app.ts",
+    "cd /workspace/repo && ls src"
+  ]) {
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, snapshotProfile),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
+      command
+    );
+  }
+});
+
+test("tool policy shell policy validates SDK cwd before allowing bare path arguments", () => {
+  const snapshotProfile = {
+    repoRoot: "/tmp/nightowl-source-snapshot",
+    reviewOutputRoot: "/workspace/repo/.nightowl/review",
+    sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+    sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+  };
+
+  assert.equal(
+    evaluateReadonlyShellCommand(
+      "cat app.ts",
+      snapshotProfile,
+      "/tmp/nightowl-source-snapshot/src"
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    evaluateReadonlyShellCommand(
+      "cat app.ts",
+      snapshotProfile,
+      "/workspace/repo/src"
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
+    }
+  );
+});
+
+test("tool policy shell policy allows only run-ref-bound Git evidence forms in snapshot-backed sessions", () => {
+  const snapshotProfile = {
+    repoRoot: "/tmp/nightowl-source-snapshot",
+    reviewOutputRoot: "/workspace/repo/.nightowl/review",
+    sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+    sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+  };
+
+  for (const command of [
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git show HEAD:src/app.ts",
+    "git show @:src/app.ts",
+    "git show 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc:src/app.ts",
+    "git show c1d76cc53b8ded1562c6f1064fb66f582841bd39:src/app.ts",
+    "git grep token HEAD -- src/app.ts",
+    "git grep -n token c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src"
+  ]) {
+    assert.equal(
+      evaluateReadonlyShellCommand(command, snapshotProfile),
+      undefined,
+      command
+    );
+  }
+});
+
+test("tool policy shell policy rejects unsupported Git forms in snapshot-backed sessions", () => {
+  const snapshotProfile = {
+    repoRoot: "/tmp/nightowl-source-snapshot",
+    reviewOutputRoot: "/workspace/repo/.nightowl/review",
+    sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+    sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+  };
+
+  for (const command of [
+    "git show feature:src/app.ts",
+    "git diff main...feature -- src/app.ts",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git grep TODO feature -- src/app.ts",
+    "git grep --full-name TODO c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src",
+    "git status --short",
+    "git cat-file -p HEAD:src/app.ts"
+  ]) {
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, snapshotProfile),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
+      command
+    );
+  }
+});
+
+test("tool policy shell policy validates snapshot Git object paths and ambiguous shell path tokens", () => {
+  const snapshotProfile = {
+    repoRoot: "/tmp/nightowl-source-snapshot",
+    reviewOutputRoot: "/workspace/repo/.nightowl/review",
+    sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+    sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+  };
+
+  for (const command of [
+    "git show HEAD:.nightowl/reviewconfig.json",
+    "git show HEAD:/workspace/repo/.nightowl/review/previous/index.md",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- /workspace/repo/.nightowl/review/previous/index.md",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- .",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- :/",
+    "git grep token HEAD -- .",
+    "git grep token HEAD -- :/",
+    "find .. -maxdepth 1 -type f",
+    "rg --pre=/workspace/repo/tools/pre.sh token src/seed.ts"
+  ]) {
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, snapshotProfile),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
+      command
+    );
+  }
+
+  for (const command of [
+    "git show HEAD:src/app.ts",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "find src -maxdepth 1 -type f",
+    "grep -R token src",
+    "ls -a src",
+    "ls -la /tmp/nightowl-source-snapshot/src",
+    "tree -a src",
+    "rg --hidden token src",
+    "rg --unrestricted --unrestricted token src",
+    "sed -n '1,10p' src/seed.ts"
+  ]) {
+    assert.equal(
+      evaluateReadonlyShellCommand(command, snapshotProfile),
+      undefined,
+      command
+    );
+  }
+});
+
+test("tool policy shell policy keeps snapshot shell inspection out of source .nightowl", () => {
+  const snapshotProfile = {
+    repoRoot: "/tmp/nightowl-source-snapshot",
+    reviewOutputRoot: "/workspace/repo/.nightowl/review",
+    sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+    sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+  };
+
+  for (const command of [
+    "find . -type f",
+    "grep -R token .",
+    "rg --hidden token .",
+    "ls -a .",
+    "tree -a ."
+  ]) {
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, snapshotProfile),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
+      command
+    );
+  }
+
+  for (const command of [
+    "find src -type f",
+    "grep -R token src",
+    "rg --hidden token src",
+    "ls -a src",
+    "tree -a src"
+  ]) {
+    assert.equal(
+      evaluateReadonlyShellCommand(command, snapshotProfile),
+      undefined,
+      command
+    );
+  }
+});
+
+test("tool policy shell policy keeps snapshot-only Git restrictions out of explicit same-root profiles", () => {
+  const sameRootProfile = {
+    repoRoot: "/workspace/repo",
+    reviewOutputRoot: "/workspace/repo/.nightowl/review"
+  };
+
+  for (const command of [
+    "git diff main...feature-branch --name-status",
+    "git merge-base main feature-branch",
+    "git rev-parse origin/main"
+  ]) {
+    assert.equal(
+      evaluateReadonlyShellCommand(command, sameRootProfile),
+      undefined,
+      command
+    );
+  }
+});

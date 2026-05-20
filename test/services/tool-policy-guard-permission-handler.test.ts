@@ -7,13 +7,14 @@ import {
   CUSTOM_TOOL_DENY_REASON,
   HOOK_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
+  ToolPolicyGuard,
   UNKNOWN_KIND_DENY_REASON,
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
 } from "../../src/services/tool-policy/tool-policy-guard.ts";
 import {
   assertAuditRecord,
-  createPermissionRequest,
   createPolicySession,
+  createPermissionRequest,
   FakeHostnameClassifier,
   InMemoryAuditSink
 } from "../helpers/tool-policy-fixture.ts";
@@ -56,6 +57,103 @@ test("tool policy guard permission handler enforces the read and write boundary 
     tool: "write",
     decision: "deny",
     reason: "Write operations are not permitted in review sessions."
+  });
+});
+
+test("tool policy guard permission handler reads snapshot source and original review output while denying live checkout source", async () => {
+  const sink = new InMemoryAuditSink();
+  const guard = new ToolPolicyGuard({});
+  const handler = guard.buildPermissionHandler(
+    {
+      repoRoot: "/tmp/nightowl-source-snapshot",
+      reviewOutputRoot: "/workspace/repo/.nightowl/review"
+    },
+    sink
+  );
+
+  assert.deepEqual(
+    await handler(
+      createPermissionRequest({
+        kind: "read",
+        path: "/tmp/nightowl-source-snapshot/src/app.ts"
+      }),
+      SESSION_CONTEXT
+    ),
+    APPROVED
+  );
+  assert.deepEqual(
+    await handler(
+      createPermissionRequest({
+        kind: "read",
+        path: "/workspace/repo/.nightowl/review/previous/index.md"
+      }),
+      SESSION_CONTEXT
+    ),
+    APPROVED
+  );
+  assert.deepEqual(
+    await handler(
+      createPermissionRequest({
+        kind: "read",
+        path: "/workspace/repo/src/app.ts"
+      }),
+      SESSION_CONTEXT
+    ),
+    DENIED
+  );
+
+  assertAuditRecord(sink.records[0], { tool: "read", decision: "allow" });
+  assertAuditRecord(sink.records[1], { tool: "read", decision: "allow" });
+  assertAuditRecord(sink.records[2], {
+    tool: "read",
+    decision: "deny",
+    reason: "Read path is outside the allowed boundary."
+  });
+});
+
+test("tool policy guard permission handler applies snapshot-backed shell policy", async () => {
+  const sink = new InMemoryAuditSink();
+  const guard = new ToolPolicyGuard({});
+  const handler = guard.buildPermissionHandler(
+    {
+      repoRoot: "/tmp/nightowl-source-snapshot",
+      reviewOutputRoot: "/workspace/repo/.nightowl/review",
+      sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+      sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+    },
+    sink
+  );
+
+  assert.deepEqual(
+    await handler(
+      createPermissionRequest({
+        kind: "shell",
+        fullCommandText: "cat ./src/app.ts"
+      }),
+      SESSION_CONTEXT
+    ),
+    APPROVED
+  );
+  assert.deepEqual(
+    await handler(
+      createPermissionRequest({
+        kind: "shell",
+        fullCommandText: "git status"
+      }),
+      SESSION_CONTEXT
+    ),
+    DENIED
+  );
+
+  assertAuditRecord(sink.records[0], {
+    tool: "shell",
+    decision: "allow",
+    args: { fullCommandText: "cat ./src/app.ts" }
+  });
+  assertAuditRecord(sink.records[1], {
+    tool: "shell",
+    decision: "deny",
+    args: { fullCommandText: "git status" }
   });
 });
 

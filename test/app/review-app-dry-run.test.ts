@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, before, after, test } from "node:test";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
+import type { RunProgressEvent } from "../../src/core/run-progress.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
 
 /**
@@ -23,10 +24,15 @@ describe("dry-run integration", () => {
   let result: ReviewRunSummary;
   let clientManagerStartCalls: number;
   let clientManagerStopCalls: number;
+  const events: RunProgressEvent[] = [];
 
   before(async () => {
     fixture = createReviewRepoFixture();
     fixture.writeFile(".nightowl/reviewignore", "dist/**\n");
+    fixture.writeFile(".nightowl/reviewconfig.json", "{\"maxConcurrentFiles\":1}\n");
+    fixture.commitAll("add nightowl config");
+    fixture.writeFile(".nightowl/reviewignore", "\n");
+    fixture.writeFile(".nightowl/reviewconfig.json", "not json\n");
 
     clientManagerStartCalls = 0;
     clientManagerStopCalls = 0;
@@ -45,6 +51,9 @@ describe("dry-run integration", () => {
         getClient() {
           throw new Error("clientManager.getClient() must not be called in dry-run");
         }
+      },
+      onProgressEvent(event) {
+        events.push(event);
       }
     });
 
@@ -69,7 +78,11 @@ describe("dry-run integration", () => {
   test("result metadata reflects dry-run mode", () => {
     assert.equal(result.dryRun, true);
     assert.equal(result.skippedFileCount, 0, "dry-run should skip no files");
-    assert.ok(result.successfulFileCount > 0, "dry-run should process at least one file");
+    assert.equal(
+      result.successfulFileCount,
+      2,
+      "dry-run should use committed snapshot reviewignore and ignore live uncommitted edits"
+    );
   });
 
   test("output folder contains all required artifacts", () => {
@@ -83,6 +96,28 @@ describe("dry-run integration", () => {
   test("tool-audit.jsonl is empty (no SDK calls in dry-run)", () => {
     const content = readFileSync(result.outputTarget.toolAuditPath, "utf8");
     assert.equal(content.trim(), "", "tool-audit.jsonl must be empty in dry-run");
+  });
+
+  test("dry-run uses committed snapshot config/reviewignore while warning about ignored dirty changes", () => {
+    const noteFiles = readdirSync(result.outputTarget.filesPath);
+
+    assert.ok(
+      noteFiles.some((fileName) => fileName.includes("app.ts")),
+      "expected source file notes"
+    );
+    assert.equal(
+      noteFiles.some((fileName) => fileName.includes("dist")),
+      false,
+      "live uncommitted reviewignore changes must not affect file planning"
+    );
+    assert.ok(
+      events.some(
+        (event) =>
+          event.type === "run-warning" &&
+          /uncommitted changes are ignored/iu.test(event.message)
+      ),
+      "dirty working tree should emit a transient warning"
+    );
   });
 
 });

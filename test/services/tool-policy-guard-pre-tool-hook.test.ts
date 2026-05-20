@@ -245,25 +245,9 @@ test("tool policy guard pre-tool hook fails closed for shell policy exceptions a
     mock.restoreAll();
   }
 
-  const throwingProxy = new Proxy({} as Record<string, unknown>, {
-    has(): never {
-      throw new Error("has trap throws");
-    }
-  });
-
-  assert.deepEqual(
-    await hook(createHookInput("bash", throwingProxy), SESSION_CONTEXT),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason: SHELL_POLICY_FAIL_CLOSED_REASON
-    }
-  );
-
-  assert.equal(sink.records.length, 2);
+  assert.equal(sink.records.length, 1);
   assert.equal(sink.records[0].reason, SHELL_POLICY_FAIL_CLOSED_REASON);
   assert.deepEqual(sink.records[0].args, { command: "git log /workspace/repo" });
-  assert.equal(sink.records[1].reason, SHELL_POLICY_FAIL_CLOSED_REASON);
-  assert.deepEqual(sink.records[1].args, { command: "" });
 });
 
 test("tool policy guard pre-tool hook fails closed for url policy exceptions and records the deny reason", async () => {

@@ -54,23 +54,15 @@ const READONLY_REVIEW_COMMAND_GROUPS = [
       "rg TODO src/",
       "grep 'a|b' src/app.ts",
       "sed -n '1,10p' src/app.ts",
-      "wc -l src/app.ts",
-      "tree src/"
+      "wc -l src/app.ts"
     ]
   },
   {
     name: "lightweight text and path processing",
     commands: [
-      "cut -d: -f1 src/app.ts",
-      "sort src/app.ts | uniq",
       "nl -ba src/app.ts",
       "file src/app.ts",
-      "stat src/app.ts",
-      "realpath src/app.ts",
-      "basename /workspace/repo/src/app.ts",
-      "dirname /workspace/repo/src/app.ts",
-      "diff src/old.ts src/new.ts",
-      "git log --oneline | awk '{print $1}'",
+      "sort src/app.ts",
       "wc src/app.ts"
     ]
   }
@@ -113,6 +105,22 @@ test("tool policy shell policy denies find with destructive or subcommand-execut
     "find . -exec sh {} +",
     "find . -name '*.ts' -exec cat {} +",
     "find . -execdir sh {} +"
+  ]);
+});
+
+test("tool policy shell policy preserves non-snapshot utility commands", () => {
+  assertAllowedCommands([
+    "awk '{print $1}' src/app.ts",
+    "tree src/",
+    "realpath src/app.ts",
+    "basename /workspace/repo/src/app.ts",
+    "dirname /workspace/repo/src/app.ts",
+    "cut -d: -f1 src/app.ts",
+    "sort src/app.ts | uniq",
+    "stat src/app.ts",
+    "diff src/old.ts src/new.ts",
+    "git log --oneline | awk '{print $1}'",
+    "rg --pre=tools/pre.sh token src/app.ts"
   ]);
 });
 

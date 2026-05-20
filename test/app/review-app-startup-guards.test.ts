@@ -12,6 +12,7 @@ test("createLocalReviewRunApp fails before client startup, Changeset Overview, a
 
   try {
     fixture.writeFile(".nightowl/reviewconfig.json", "{");
+    fixture.commitAll("add invalid review config");
 
     let startCalls = 0;
     let stopCalls = 0;
