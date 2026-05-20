@@ -64,6 +64,7 @@
     "test/app/review-app-lifecycle.test.ts",
     "test/app/review-app-mcp-startup-failure.test.ts",
     "test/app/review-app-progress.test.ts",
+    "test/app/review-app-snapshot-cleanup.test.ts",
     "test/app/review-app-source-snapshot.test.ts",
     "test/app/review-app-startup-guards.test.ts",
     "test/app/review-app-web-fetch.test.ts",

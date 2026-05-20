@@ -7,14 +7,13 @@ import { describe, before, test } from "node:test";
 import type { SessionConfig } from "@github/copilot-sdk";
 
 import { createLocalReviewRunApp } from "../../src/app/review-app.ts";
-import type { ReviewPerFileStepsFactory } from "../../src/core/orchestrator.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import type { RunProgressEvent } from "../../src/core/run-progress.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
-import type { StepDefinition } from "../../src/core/step-runner.ts";
 import { stubChangeMap } from "../helpers/change-map-stub.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";
+import { createPassthroughSnapshotProvider, createSingleStepFactory } from "../helpers/review-app-fakes.ts";
 
 /**
  * App-level wiring smoke for run progress.
@@ -249,44 +248,3 @@ test("createLocalReviewRunApp emits a progress warning when tool-audit writes fa
     rmSync(repoRoot, { force: true, recursive: true });
   }
 });
-
-function createSingleStepFactory(): ReviewPerFileStepsFactory {
-  return (): StepDefinition[] => [
-    {
-      stepId: "review-summary",
-      prepare(context) {
-        return {
-          stepId: "review-summary",
-          prompt: {
-            systemMessage: "custom system",
-            userMessage: `review ${context.filePath}`
-          },
-          reviewProfile: {
-            knowledgeMode: "disabled",
-            model: "gpt-5.4-mini"
-          },
-          async resolve() {
-            return (fileContext) => {
-              buildSuccessfulStepResult("review-summary", fileContext.filePath).applyTo(fileContext);
-            };
-          }
-        };
-      }
-    }
-  ];
-}
-
-function createPassthroughSnapshotProvider(repoRoot: string) {
-  return {
-    async createSnapshot() {
-      return {
-        originalRepoRoot: repoRoot,
-        reviewSourceRoot: repoRoot,
-        resolvedBaseRef: "main",
-        resolvedHeadRef: "feature-branch",
-        isDirty: false,
-        async cleanup() {}
-      };
-    }
-  };
-}
