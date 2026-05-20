@@ -1,8 +1,6 @@
 export interface ToolPolicyBoundaryContext {
   repoRoot: string;
   reviewOutputRoot?: string;
-  sourceBaseRef?: string;
-  sourceHeadRef?: string;
 }
 
 export interface ToolPolicyDecisionDeny {

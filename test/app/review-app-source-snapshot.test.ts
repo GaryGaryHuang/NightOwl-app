@@ -117,13 +117,9 @@ test("createLocalReviewRunApp reviews the resolved head snapshot while keeping a
   assert.equal(calls.changesetOverviewInputs.at(0)?.repoRoot, snapshotRoot);
   assert.equal(calls.changesetOverviewInputs.at(0)?.workingDirectory, snapshotRoot);
   assert.equal(calls.changesetOverviewInputs.at(0)?.outputBaseDir, originalRoot);
-  assert.equal(calls.changesetOverviewInputs.at(0)?.sourceBaseRef, "base-sha");
-  assert.equal(calls.changesetOverviewInputs.at(0)?.sourceHeadRef, "head-sha");
   assert.equal(calls.stepInputs.at(0)?.repoRoot, snapshotRoot);
   assert.equal(calls.stepInputs.at(0)?.workingDirectory, snapshotRoot);
   assert.equal(calls.stepInputs.at(0)?.outputBaseDir, result.outputTarget.basePath);
-  assert.equal(calls.stepInputs.at(0)?.sourceBaseRef, "base-sha");
-  assert.equal(calls.stepInputs.at(0)?.sourceHeadRef, "head-sha");
   assert.ok(result.outputTarget.basePath.startsWith(path.join(originalRoot, ".nightowl", "review")));
   assert.equal(result.outputTarget.basePath.startsWith(snapshotRoot), false);
   assert.match(result.outputTarget.basePath, /feature-branch_05191200$/u);
@@ -732,8 +728,6 @@ interface RunCallRecorder {
   changesetOverviewInputs: Array<{
     repoRoot: string;
     outputBaseDir: string;
-    sourceBaseRef?: string;
-    sourceHeadRef?: string;
     workingDirectory?: string;
   }>;
   cleanupCount: number;

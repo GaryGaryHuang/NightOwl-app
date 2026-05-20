@@ -38,8 +38,6 @@ export interface ReviewSessionProfileLike {
   outputBaseDir: string;
   repoRoot: string;
   reviewOutputRoot?: string;
-  sourceBaseRef?: string;
-  sourceHeadRef?: string;
   systemMessage: string;
   workingDirectory?: string;
 }

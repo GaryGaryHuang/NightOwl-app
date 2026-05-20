@@ -23,8 +23,6 @@ export interface ReviewSessionProfile {
   repoRoot: string;
   /** Original repository `.nightowl/review` root allowed for reading review artifacts. */
   reviewOutputRoot?: string;
-  sourceBaseRef?: string;
-  sourceHeadRef?: string;
   systemMessage: string;
   workingDirectory?: string;
 }

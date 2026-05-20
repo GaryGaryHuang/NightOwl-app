@@ -187,8 +187,6 @@ test("ReviewSessionFactory passes separate source and review output roots to Too
     ...BASE_REVIEW_PROFILE,
     repoRoot: "/tmp/nightowl-source-snapshot",
     reviewOutputRoot: "/workspace/repo/.nightowl/review",
-    sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
-    sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39",
     workingDirectory: "/tmp/nightowl-source-snapshot"
   };
 
@@ -356,8 +354,6 @@ test("ReviewSessionFactory does not inject snapshot root fields into the system 
     ...BASE_REVIEW_PROFILE,
     repoRoot: "/tmp/nightowl-source-snapshot",
     reviewOutputRoot: "/Users/dev/my-project/.nightowl/review",
-    sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
-    sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39",
     systemMessage: "base prompt",
     workingDirectory: "/tmp/nightowl-source-snapshot"
   });

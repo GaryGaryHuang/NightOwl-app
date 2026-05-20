@@ -117,9 +117,7 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
   const handler = guard.buildPermissionHandler(
     {
       repoRoot: "/tmp/nightowl-source-snapshot",
-      reviewOutputRoot: "/workspace/repo/.nightowl/review",
-      sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
-      sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+      reviewOutputRoot: "/workspace/repo/.nightowl/review"
     },
     sink
   );
@@ -138,7 +136,7 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
     await handler(
       createPermissionRequest({
         kind: "shell",
-        fullCommandText: "git status"
+        fullCommandText: "git show HEAD:.nightowl/reviewconfig.json"
       }),
       SESSION_CONTEXT
     ),
@@ -153,7 +151,7 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
   assertAuditRecord(sink.records[1], {
     tool: "shell",
     decision: "deny",
-    args: { fullCommandText: "git status" }
+    args: { fullCommandText: "git show HEAD:.nightowl/reviewconfig.json" }
   });
 });
 
