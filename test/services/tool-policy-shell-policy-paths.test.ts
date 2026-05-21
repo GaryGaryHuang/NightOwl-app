@@ -184,6 +184,21 @@ test("tool policy shell policy supports separate snapshot source and original re
   }
 });
 
+test("tool policy shell policy does not infer recursive snapshot root traversal", () => {
+  for (const command of [
+    "find . -type f",
+    "grep -R token .",
+    "rg --hidden token .",
+    "ls -a ."
+  ]) {
+    assert.equal(
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
+      undefined,
+      command
+    );
+  }
+});
+
 test("tool policy shell policy validates SDK cwd before allowing bare path arguments", () => {
   assert.equal(
     evaluateReadonlyShellCommand(

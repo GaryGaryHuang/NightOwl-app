@@ -382,8 +382,7 @@ function hasOnlyAllowedPathArguments(
 
   if (
     isSnapshotBackedProfile(profile) &&
-    (hasDisallowedSnapshotPreprocessHook(tokens) ||
-      hasDisallowedSnapshotRootEnumeration(tokens, profile, baseDirectory))
+    hasDisallowedSnapshotPreprocessHook(tokens)
   ) {
     return false;
   }
@@ -627,149 +626,6 @@ function hasDisallowedSnapshotPreprocessHook(tokens: readonly string[]): boolean
   );
 }
 
-function hasDisallowedSnapshotRootEnumeration(
-  tokens: readonly string[],
-  profile: ToolPolicyBoundaryContext,
-  baseDirectory: string
-): boolean {
-  switch (tokens[0]) {
-    case "find":
-      return targetsSourceRootOrImplicitRoot(
-        getFindTargetTokens(tokens),
-        profile,
-        baseDirectory
-      );
-    case "grep":
-      return (
-        hasRecursiveGrepFlag(tokens) &&
-        targetsSourceRootOrImplicitRoot(
-          getSearchTargetTokens(tokens),
-          profile,
-          baseDirectory
-        )
-      );
-    case "rg":
-      return (
-        hasRipgrepHiddenTraversalFlag(tokens) &&
-        targetsSourceRootOrImplicitRoot(
-          getSearchTargetTokens(tokens),
-          profile,
-          baseDirectory
-        )
-      );
-    case "ls":
-      return (
-        hasHiddenListingFlag(tokens) &&
-        targetsSourceRootOrImplicitRoot(
-          getListingTargetTokens(tokens),
-          profile,
-          baseDirectory
-        )
-      );
-    default:
-      return false;
-  }
-}
-
-function getFindTargetTokens(tokens: readonly string[]): string[] {
-  const targets: string[] = [];
-
-  for (const token of tokens.slice(1)) {
-    if (token.startsWith("-")) {
-      break;
-    }
-
-    targets.push(token);
-  }
-
-  return targets;
-}
-
-function getSearchTargetTokens(tokens: readonly string[]): string[] {
-  const targets: string[] = [];
-  let hasPattern = false;
-
-  for (const token of tokens.slice(1)) {
-    if (token === "--") {
-      continue;
-    }
-
-    if (token.startsWith("-")) {
-      continue;
-    }
-
-    if (!hasPattern) {
-      hasPattern = true;
-      continue;
-    }
-
-    targets.push(token);
-  }
-
-  return targets;
-}
-
-function getListingTargetTokens(tokens: readonly string[]): string[] {
-  return tokens.slice(1).filter((token) => !token.startsWith("-"));
-}
-
-function targetsSourceRootOrImplicitRoot(
-  targets: readonly string[],
-  profile: ToolPolicyBoundaryContext,
-  baseDirectory: string
-): boolean {
-  if (targets.length === 0) {
-    return isSourceRootPath(baseDirectory, profile);
-  }
-
-  return targets.some((target) =>
-    isSourceRootPath(resolvePathToken(target, baseDirectory), profile)
-  );
-}
-
-function hasRecursiveGrepFlag(tokens: readonly string[]): boolean {
-  return tokens.slice(1).some((token) => {
-    if (token === "--recursive") {
-      return true;
-    }
-
-    return token.startsWith("-") && !token.startsWith("--") &&
-      (token.includes("R") || token.includes("r"));
-  });
-}
-
-function hasRipgrepHiddenTraversalFlag(tokens: readonly string[]): boolean {
-  let unrestrictedCount = 0;
-
-  for (const token of tokens.slice(1)) {
-    if (token === "--hidden" || token === "-.") {
-      return true;
-    }
-
-    if (token === "--unrestricted") {
-      unrestrictedCount += 1;
-      continue;
-    }
-
-    if (/^-u+$/u.test(token)) {
-      unrestrictedCount += token.length - 1;
-    }
-  }
-
-  return unrestrictedCount >= 2;
-}
-
-function hasHiddenListingFlag(tokens: readonly string[]): boolean {
-  return tokens.slice(1).some((token) => {
-    if (token === "--all" || token === "--almost-all") {
-      return true;
-    }
-
-    return token.startsWith("-") && !token.startsWith("--") &&
-      (token.includes("a") || token.includes("A"));
-  });
-}
-
 function resolveAllowedBaseDirectory(
   profile: ToolPolicyBoundaryContext,
   commandCwd?: string,
@@ -826,13 +682,6 @@ function isSourceTreePath(
   profile: ToolPolicyBoundaryContext
 ): boolean {
   return isAllowedReviewReadPath(candidate, profile);
-}
-
-function isSourceRootPath(
-  candidate: string,
-  profile: ToolPolicyBoundaryContext
-): boolean {
-  return path.resolve(candidate) === path.resolve(profile.repoRoot);
 }
 
 function isReviewArtifactPath(
