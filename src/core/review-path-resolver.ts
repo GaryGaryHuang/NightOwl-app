@@ -3,7 +3,6 @@ import path from "node:path";
 import { reviewOutputRoot } from "./nightowl-namespace.ts";
 
 export interface BuildSessionIdInput {
-  branchName?: string;
   headRef: string;
   timestamp: string;
 }
@@ -26,10 +25,7 @@ export interface PlannedNoteFile {
 }
 
 export function buildSessionId(input: BuildSessionIdInput): string {
-  const prefix =
-    sanitizeSegment(input.branchName ?? "") ||
-    sanitizeSegment(input.headRef) ||
-    "review";
+  const prefix = sanitizeSegment(input.headRef) || "review";
 
   return `${prefix}_${input.timestamp}`;
 }

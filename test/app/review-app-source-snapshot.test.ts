@@ -121,8 +121,8 @@ test("createLocalReviewRunApp reviews the resolved head snapshot while keeping a
     filePath: "src/app.ts"
   });
 
-  // Branch resolution targets the original repo (for output directory naming)
-  assert.deepEqual(calls.branchRoots, [originalRoot]);
+  // Output naming should rely on the user-requested review head, not the current branch.
+  assert.deepEqual(calls.branchRoots, []);
 
   // Orchestrator runners receive snapshot root as repoRoot and workingDirectory
   assert.equal(calls.changesetOverviewInputs.at(0)?.repoRoot, snapshotRoot);

@@ -10,12 +10,11 @@ import {
 
 const FILES_PATH = "/workspace/.nightowl/review/run/files";
 
-test("buildSessionId normalizes branch and head refs into filesystem-safe session ids", () => {
+test("buildSessionId normalizes review head refs into filesystem-safe session ids", () => {
   const cases = [
     {
-      label: "sanitized branch name",
+      label: "sanitized head ref",
       input: {
-        branchName: "feature/review path",
         headRef: "feature/review path",
         timestamp: "03131430"
       },
@@ -30,22 +29,20 @@ test("buildSessionId normalizes branch and head refs into filesystem-safe sessio
       expected: "refs_pull_42_head_03131430"
     },
     {
-      label: "collapsed repeated invalid separators",
+      label: "collapsed repeated invalid separators in head ref",
       input: {
-        branchName: "feature///review   path",
         headRef: "feature///review   path",
         timestamp: "03131430"
       },
       expected: "feature_review_path_03131430"
     },
     {
-      label: "narrow BuildSessionIdInput without repoRoot",
+      label: "current branch name does not affect naming",
       input: {
-        branchName: "main",
-        headRef: "main",
+        headRef: "refs/heads/review-target",
         timestamp: "04101200"
       },
-      expected: "main_04101200"
+      expected: "refs_heads_review-target_04101200"
     }
   ];
 
@@ -57,17 +54,16 @@ test("buildSessionId normalizes branch and head refs into filesystem-safe sessio
 test("buildOutputTarget returns review output paths", () => {
   const target = buildOutputTarget({
     repoRoot: "/workspace",
-    branchName: "feature_login",
-    headRef: "feature_login",
+    headRef: "refs/pull/42/head",
     timestamp: "03131430"
   });
 
   assert.deepEqual(target, {
-    basePath: "/workspace/.nightowl/review/feature_login_03131430",
-    changesetOverviewPath: "/workspace/.nightowl/review/feature_login_03131430/changeset-overview.md",
-    filesPath: "/workspace/.nightowl/review/feature_login_03131430/files",
-    indexPath: "/workspace/.nightowl/review/feature_login_03131430/index.md",
-    toolAuditPath: "/workspace/.nightowl/review/feature_login_03131430/tool-audit.jsonl"
+    basePath: "/workspace/.nightowl/review/refs_pull_42_head_03131430",
+    changesetOverviewPath: "/workspace/.nightowl/review/refs_pull_42_head_03131430/changeset-overview.md",
+    filesPath: "/workspace/.nightowl/review/refs_pull_42_head_03131430/files",
+    indexPath: "/workspace/.nightowl/review/refs_pull_42_head_03131430/index.md",
+    toolAuditPath: "/workspace/.nightowl/review/refs_pull_42_head_03131430/tool-audit.jsonl"
   });
 });
 

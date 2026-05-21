@@ -219,7 +219,6 @@ export class ReviewOrchestrator {
     });
     abortGuard.throwIfAborted();
 
-    const branchName = await this.#sourceProvider.getCurrentBranch(outputRepoRoot);
     const changedFiles = await this.#sourceProvider.getChangedFiles(
       repoRoot,
       sourceBaseRef,
@@ -231,7 +230,6 @@ export class ReviewOrchestrator {
     );
     const outputTarget = buildOutputTarget({
       repoRoot: outputRepoRoot,
-      branchName,
       headRef: request.headRef,
       timestamp: this.#timestampProvider()
     });
