@@ -112,9 +112,10 @@ See [TESTING.md](./TESTING.md) for tier decision criteria, test patterns, fixtur
 
 These are product safety boundaries that must not be circumvented or relaxed:
 
-- **Repo source tree is read-only for agent tools**: the review process must not write outside `repo_root/.nightowl/review/**`
+- **Agent tool read surface**: Agent tools may read the active repo source tree, including `repo_root/.nightowl/` non-review paths, but must not read `repo_root/.nightowl/review` or descendants
+- **Host output writes**: NightOwl host may create and update output artifacts only under `repo_root/.nightowl/review/**`; Agent tool write permission remains denied
 - **Shell allowlist**: only read-only analysis commands are permitted (for example, git queries, cat, ls, and grep); write or side-effect operations are forbidden
-- **Path boundaries**: shell path access is restricted to the repo source tree and `repo_root/.nightowl/review/**`; `repo_root/.nightowl/reviewconfig.json` and `repo_root/.nightowl/reviewignore` remain App-managed inputs
+- **Path boundaries**: shell path access follows the Agent tool read surface; `repo_root/.nightowl/reviewconfig.json`, `repo_root/.nightowl/reviewignore`, and other non-review `.nightowl/` paths are readable, while `repo_root/.nightowl/review/**` is denied even when `reviewOutputRoot` is configured
 - **Shell composition syntax**: `|`, `&&`, and `;` are allowed only if each command independently complies with the shell allowlist and path boundaries. `||`, background execution, command substitution, redirection, and non-read-only segments are forbidden.
 - **URL retrieval security** (`web_fetch` LLM tool / `url` SDK permission kind): only public HTTPS URLs are allowed; hostname DNS classification and host allowlist/denylist are enabled
 - **Tool audit**: production review sessions send tool decisions (allow/deny) to `tool-audit.jsonl` through best-effort writes; write failures surface diagnostics

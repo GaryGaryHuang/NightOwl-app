@@ -60,7 +60,7 @@ test("tool policy guard permission handler enforces the read and write boundary 
   });
 });
 
-test("tool policy guard permission handler reads snapshot source and original review output while denying live checkout source", async () => {
+test("tool policy guard permission handler reads snapshot source and non-review .nightowl while denying review artifacts", async () => {
   const sink = new InMemoryAuditSink();
   const guard = new ToolPolicyGuard({});
   const handler = guard.buildPermissionHandler(
@@ -87,11 +87,21 @@ test("tool policy guard permission handler reads snapshot source and original re
     await handler(
       createPermissionRequest({
         kind: "read",
-        path: "/workspace/repo/.nightowl/review/previous/index.md"
+        path: "/tmp/nightowl-source-snapshot/.nightowl/reviewignore"
       }),
       SESSION_CONTEXT
     ),
     APPROVED
+  );
+  assert.deepEqual(
+    await handler(
+      createPermissionRequest({
+        kind: "read",
+        path: "/workspace/repo/.nightowl/review/previous/index.md"
+      }),
+      SESSION_CONTEXT
+    ),
+    DENIED
   );
   assert.deepEqual(
     await handler(
@@ -107,6 +117,11 @@ test("tool policy guard permission handler reads snapshot source and original re
   assertAuditRecord(sink.records[0], { tool: "read", decision: "allow" });
   assertAuditRecord(sink.records[1], { tool: "read", decision: "allow" });
   assertAuditRecord(sink.records[2], {
+    tool: "read",
+    decision: "deny",
+    reason: "Read path is outside the allowed boundary."
+  });
+  assertAuditRecord(sink.records[3], {
     tool: "read",
     decision: "deny",
     reason: "Read path is outside the allowed boundary."
@@ -154,6 +169,16 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
       }),
       SESSION_CONTEXT
     ),
+    APPROVED
+  );
+  assert.deepEqual(
+    await handler(
+      createPermissionRequest({
+        kind: "shell",
+        fullCommandText: "git show HEAD:.nightowl/review/previous/index.md"
+      }),
+      SESSION_CONTEXT
+    ),
     DENIED
   );
 
@@ -172,8 +197,15 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
   });
   assertAuditRecord(sink.records[2], {
     tool: "shell",
-    decision: "deny",
+    decision: "allow",
     args: { fullCommandText: "git show HEAD:.nightowl/reviewconfig.json" }
+  });
+  assertAuditRecord(sink.records[3], {
+    tool: "shell",
+    decision: "deny",
+    args: {
+      fullCommandText: "git show HEAD:.nightowl/review/previous/index.md"
+    }
   });
 });
 

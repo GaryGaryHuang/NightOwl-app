@@ -28,7 +28,8 @@ const EVIDENCE_TRACEABILITY_BLOCK = createPromptBlock("evidence-traceability", [
 
 const HOST_ARTIFACT_AUTHORITY_BLOCK = createPromptBlock("host-artifact-authority", [
   "## Host Artifact Authority",
-  "- Treat host-provided structured review artifacts as authoritative inputs unless the current step explicitly requires new derivation."
+  "- Treat host-injected current-run structured review state as authoritative input unless the current step explicitly requires new derivation.",
+  "- Do not treat on-disk `.nightowl/review/**` artifacts as retrievable evidence; when review state is needed, use only the state supplied by the host for the current run."
 ]);
 
 const GLOBAL_UNCERTAINTY_BLOCK = createPromptBlock("global-uncertainty", [
@@ -41,7 +42,7 @@ const GLOBAL_UNCERTAINTY_BLOCK = createPromptBlock("global-uncertainty", [
 const CONTEXT_RETRIEVAL_BLOCK = createPromptBlock("context-retrieval", [
   "## Context Retrieval",
   "- Retrieve only the minimal context that the current step allows or requires to complete reliably.",
-  "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for supported read-only git evidence (`git diff`, `git show`, `git grep`) or when built-in tools cannot fulfill the task.",
+  "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for supported source-path-scoped read-only git evidence (`git diff`, `git show`, `git grep`) or when built-in tools cannot fulfill the task.",
   "- Use repo-relative paths for repository files. Do not reconstruct absolute temporary snapshot paths from memory.",
   "- Do not use Python, Python scripts, `python`, or `python3` for repository inspection or command execution; use the allowed read-only inspection tools and bash commands instead.",
   "- For repo-local unknowns about implementations, call sites, dependency injection wiring, tests, mappers, downstream consumers, or interface contracts, inspect the obvious counterpart files before concluding the fact is unavailable.",

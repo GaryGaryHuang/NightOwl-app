@@ -1,9 +1,6 @@
 import path from "node:path";
 
-import {
-  nightowlRoot,
-  reviewOutputRoot as buildReviewOutputRoot
-} from "../../core/nightowl-namespace.ts";
+import { reviewOutputRoot as buildReviewOutputRoot } from "../../core/nightowl-namespace.ts";
 import { isAllowedReviewReadPath } from "../../core/review-access-guard.ts";
 
 import {
@@ -391,6 +388,10 @@ function hasOnlyAllowedPathArguments(
     return false;
   }
 
+  if (tokens[0] === "git" && !hasOnlyAllowedGitObjectPaths(tokens, profile)) {
+    return false;
+  }
+
   for (const token of tokens.slice(1)) {
     if (token === "--") {
       continue;
@@ -401,7 +402,8 @@ function hasOnlyAllowedPathArguments(
     }
 
     if (
-      shouldValidatePathToken(token) &&
+      (shouldValidatePathToken(token) ||
+        isReviewArtifactPath(resolvePathToken(token, baseDirectory), profile)) &&
       !isAllowedReviewReadPath(resolvePathToken(token, baseDirectory), profile)
     ) {
       return false;
@@ -490,7 +492,7 @@ function isAllowedSnapshotGitShow(
 
   return (
     isAllowedSnapshotGitRunRef(runRef, profile) &&
-    isAllowedSnapshotGitSourcePath(sourcePath, profile, baseDirectory)
+    isAllowedSnapshotGitSourcePath(sourcePath, profile, profile.repoRoot)
   );
 }
 
@@ -574,11 +576,48 @@ function isAllowedSnapshotGitSourcePath(
   profile: ToolPolicyBoundaryContext,
   baseDirectory: string
 ): boolean {
-  return (
-    sourcePath.length > 0 &&
-    !sourcePath.startsWith(":") &&
-    isSourceTreePath(resolvePathToken(sourcePath, baseDirectory), profile)
-  );
+  if (sourcePath.length === 0 || sourcePath.startsWith(":")) {
+    return false;
+  }
+
+  return isSourceTreePath(resolvePathToken(sourcePath, baseDirectory), profile);
+}
+
+function hasOnlyAllowedGitObjectPaths(
+  tokens: readonly string[],
+  profile: ToolPolicyBoundaryContext
+): boolean {
+  const subcommand = tokens[1];
+
+  if (subcommand !== "show" && subcommand !== "cat-file") {
+    return true;
+  }
+
+  return tokens
+    .slice(2)
+    .filter((token) => token !== "--" && !token.startsWith("-"))
+    .every((token) => isAllowedGitObjectPathToken(token, profile));
+}
+
+function isAllowedGitObjectPathToken(
+  token: string,
+  profile: ToolPolicyBoundaryContext
+): boolean {
+  const separatorIndex = token.indexOf(":");
+
+  if (separatorIndex <= 0) {
+    return true;
+  }
+
+  const objectPath = token.slice(separatorIndex + 1);
+
+  if (!objectPath || objectPath.startsWith(":")) {
+    return false;
+  }
+
+  const resolvedObjectPath = resolvePathToken(objectPath, profile.repoRoot);
+
+  return isAllowedReviewReadPath(resolvedObjectPath, profile);
 }
 
 function hasDisallowedSnapshotPreprocessHook(tokens: readonly string[]): boolean {
@@ -786,14 +825,7 @@ function isSourceTreePath(
   candidate: string,
   profile: ToolPolicyBoundaryContext
 ): boolean {
-  const resolvedCandidate = path.resolve(candidate);
-  const resolvedSourceRoot = path.resolve(profile.repoRoot);
-  const resolvedNightOwlRoot = path.resolve(nightowlRoot(resolvedSourceRoot));
-
-  return (
-    isPathInsideOrEqual(resolvedCandidate, resolvedSourceRoot) &&
-    !isPathInsideOrEqual(resolvedCandidate, resolvedNightOwlRoot)
-  );
+  return isAllowedReviewReadPath(candidate, profile);
 }
 
 function isSourceRootPath(
@@ -801,6 +833,18 @@ function isSourceRootPath(
   profile: ToolPolicyBoundaryContext
 ): boolean {
   return path.resolve(candidate) === path.resolve(profile.repoRoot);
+}
+
+function isReviewArtifactPath(
+  candidate: string,
+  profile: ToolPolicyBoundaryContext
+): boolean {
+  const resolvedCandidate = path.resolve(candidate);
+  const resolvedReviewRoot = path.resolve(
+    buildReviewOutputRoot(path.resolve(profile.repoRoot))
+  );
+
+  return isPathInsideOrEqual(resolvedCandidate, resolvedReviewRoot);
 }
 
 function isPathInsideOrEqual(candidate: string, boundary: string): boolean {

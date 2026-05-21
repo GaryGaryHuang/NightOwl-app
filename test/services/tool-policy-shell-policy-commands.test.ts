@@ -126,9 +126,9 @@ test("tool policy shell policy preserves non-snapshot utility commands", () => {
 
 test("tool policy shell policy allows safe find inspection predicates", () => {
   assertAllowedCommands([
-    "find . -name '*.ts' -type f",
-    "find . -name '*.{ts,tsx}' -type f",
-    "find . -executable -type f"
+    "find src -name '*.ts' -type f",
+    "find src -name '*.{ts,tsx}' -type f",
+    "find src -executable -type f"
   ]);
 });
 

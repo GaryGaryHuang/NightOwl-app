@@ -37,7 +37,7 @@ test("tool policy guard pre-tool hook keeps representative shell and url allow-d
   const cases = [
     {
       input: createHookInput("bash", {
-        command: "git diff main...feature-branch --name-status"
+        command: "git diff main...feature-branch -- src"
       }),
       expected: undefined
     },
@@ -110,12 +110,41 @@ test("tool policy guard pre-tool hook passes snapshot source refs into shell pol
     ),
     undefined
   );
+  assert.equal(
+    await hook(
+      createHookInput(
+        "bash",
+        {
+          command: "git show HEAD:.nightowl/reviewconfig.json"
+        },
+        "/tmp/nightowl-source-snapshot"
+      ),
+      SESSION_CONTEXT
+    ),
+    undefined
+  );
   assert.deepEqual(
     await hook(
       createHookInput(
         "bash",
         {
           command: "git diff main feature -- src/app.ts"
+        },
+        "/tmp/nightowl-source-snapshot"
+      ),
+      SESSION_CONTEXT
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
+    }
+  );
+  assert.deepEqual(
+    await hook(
+      createHookInput(
+        "bash",
+        {
+          command: "cat /workspace/repo/.nightowl/review/previous/index.md"
         },
         "/tmp/nightowl-source-snapshot"
       ),

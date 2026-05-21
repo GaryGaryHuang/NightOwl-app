@@ -27,9 +27,10 @@ export interface ReviewSessionLike {
 /**
  * The profile passed to a review session factory when creating a session.
  *
- * `repoRoot` is the review source boundary. Snapshot-backed local reviews set
- * it to the detached source snapshot, while `reviewOutputRoot` points at the
- * original repository's `.nightowl/review` artifact tree.
+ * `repoRoot` is the active Agent read boundary. Snapshot-backed local reviews
+ * set it to the detached source snapshot. `reviewOutputRoot` identifies the
+ * host output metadata location for the original repository; it must not expand
+ * Agent read access.
  */
 export interface ReviewSessionProfileLike {
   stepId?: string;

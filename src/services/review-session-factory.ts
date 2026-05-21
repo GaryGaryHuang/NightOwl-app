@@ -21,7 +21,7 @@ export interface ReviewSessionProfile {
   outputBaseDir: string;
   /** Review source boundary; snapshot-backed local runs use the detached source root. */
   repoRoot: string;
-  /** Original repository `.nightowl/review` root allowed for reading review artifacts. */
+  /** Host output metadata location; not an Agent-readable boundary. */
   reviewOutputRoot?: string;
   /** Command-start resolved base ref used only by tool policy in snapshot-backed runs. */
   sourceBaseRef?: string;

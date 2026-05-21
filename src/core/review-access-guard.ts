@@ -1,7 +1,7 @@
-import { realpathSync } from "node:fs";
+import { lstatSync, readlinkSync, realpathSync } from "node:fs";
 import path from "node:path";
 
-import { nightowlRoot, reviewOutputRoot as buildReviewOutputRoot } from "./nightowl-namespace.ts";
+import { reviewOutputRoot as buildReviewOutputRoot } from "./nightowl-namespace.ts";
 
 export interface ReviewReadBoundary {
   repoRoot: string;
@@ -10,8 +10,8 @@ export interface ReviewReadBoundary {
 
 /**
  * Returns true when the given path is within the allowed read boundary for a
- * review session: either (1) inside the repo source tree but not under
- * `.nightowl/`, or (2) inside `repo_root/.nightowl/review/`.
+ * review session: inside the active repo source tree, including `.nightowl/`
+ * non-review paths, but never under `.nightowl/review/`.
  *
  * Both arguments must be absolute paths. Throws if either is relative, to
  * prevent silent mis-resolution against `process.cwd()`.
@@ -22,65 +22,34 @@ export function isAllowedReviewReadPath(
 ): boolean {
   const sourceRoot =
     typeof boundary === "string" ? boundary : boundary.repoRoot;
-  const outputRoot =
-    typeof boundary === "string"
-      ? buildReviewOutputRoot(sourceRoot)
-      : boundary.reviewOutputRoot ?? buildReviewOutputRoot(sourceRoot);
-
   if (
     !path.isAbsolute(requestedPath) ||
-    !path.isAbsolute(sourceRoot) ||
-    !path.isAbsolute(outputRoot)
+    !path.isAbsolute(sourceRoot)
   ) {
     throw new Error(
       "isAllowedReviewReadPath requires absolute paths. " +
         `Received requestedPath=${JSON.stringify(requestedPath)}, ` +
-        `repoRoot=${JSON.stringify(sourceRoot)}, ` +
-        `reviewOutputRoot=${JSON.stringify(outputRoot)}`
+        `repoRoot=${JSON.stringify(sourceRoot)}`
     );
   }
 
   const resolvedPath = path.resolve(requestedPath);
   const resolvedRoot = path.resolve(sourceRoot);
-  const nightowlRootPath = path.resolve(nightowlRoot(resolvedRoot));
-  const reviewRoot = path.resolve(outputRoot);
+  const sourceReviewRoot = path.resolve(buildReviewOutputRoot(resolvedRoot));
 
-  const isWithinLexicalRepo = isPathInsideOrEqual(resolvedPath, resolvedRoot);
-  const isWithinLexicalReview = isPathInsideOrEqual(resolvedPath, reviewRoot);
+  const canonicalRoot = canonicalizeReviewBoundaryPath(resolvedRoot);
+  const canonicalSourceReviewRoot = canonicalizeReviewBoundaryPath(sourceReviewRoot);
+  const canonicalRequested = canonicalizeReviewBoundaryPath(requestedPath);
 
-  if (!isWithinLexicalRepo && !isWithinLexicalReview) {
+  if (!isPathInsideOrEqual(canonicalRequested, canonicalRoot)) {
     return false;
   }
 
-  const canonicalRoot = canonicalizeBoundaryPath(resolvedRoot);
-  const canonicalNightowlRoot = canonicalizeBoundaryPath(nightowlRootPath);
-  const canonicalReviewRoot = canonicalizeBoundaryPath(reviewRoot);
-  const canonicalRequested = canonicalizeBoundaryPath(resolvedPath);
-  const canonicalOutputRepoRoot = canonicalizeBoundaryPath(
-    path.dirname(path.dirname(reviewRoot))
-  );
-  const canonicalOutputNightowlRoot = canonicalizeBoundaryPath(
-    path.dirname(reviewRoot)
-  );
-
-  const hasValidCanonicalReviewBoundary =
-    typeof boundary === "string"
-      ? isPathInsideOrEqual(canonicalReviewRoot, canonicalRoot) &&
-        isPathInsideOrEqual(canonicalReviewRoot, canonicalNightowlRoot)
-      : isPathInsideOrEqual(canonicalReviewRoot, canonicalOutputRepoRoot) &&
-        isPathInsideOrEqual(canonicalReviewRoot, canonicalOutputNightowlRoot);
-
-  if (
-    hasValidCanonicalReviewBoundary &&
-    isPathInsideOrEqual(canonicalRequested, canonicalReviewRoot)
-  ) {
-    return true;
+  if (isPathInsideOrEqual(resolvedPath, sourceReviewRoot)) {
+    return false;
   }
 
-  return (
-    isPathInsideOrEqual(canonicalRequested, canonicalRoot) &&
-    !isPathInsideOrEqual(canonicalRequested, canonicalNightowlRoot)
-  );
+  return !isPathInsideOrEqual(canonicalRequested, canonicalSourceReviewRoot);
 }
 
 function isPathInsideOrEqual(candidate: string, boundary: string): boolean {
@@ -89,17 +58,50 @@ function isPathInsideOrEqual(candidate: string, boundary: string): boolean {
   );
 }
 
-function canonicalizeBoundaryPath(absolutePath: string): string {
-  let current = absolutePath;
-  const missingSuffixSegments: string[] = [];
+export function canonicalizeReviewBoundaryPath(
+  absolutePath: string,
+  symlinkDepth = 0
+): string {
+  if (symlinkDepth > 40) {
+    throw new Error(`Too many symbolic links while resolving ${absolutePath}`);
+  }
 
-  while (true) {
+  const parsedPath = path.parse(absolutePath);
+  let current = realpathSync.native(parsedPath.root);
+  const relativeSegments = absolutePath
+    .slice(parsedPath.root.length)
+    .split(path.sep)
+    .filter((segment) => segment.length > 0);
+
+  for (const segment of relativeSegments) {
+    if (segment === ".") {
+      continue;
+    }
+
+    if (segment === "..") {
+      current = path.dirname(current);
+      continue;
+    }
+
+    const candidate = path.join(current, segment);
+
     try {
-      const canonical = realpathSync.native(current);
+      const stat = lstatSync(candidate);
 
-      return missingSuffixSegments.length === 0
-        ? canonical
-        : path.join(canonical, ...missingSuffixSegments.reverse());
+      if (stat.isSymbolicLink()) {
+        const linkTarget = readlinkSync(candidate);
+        const absoluteTarget = path.isAbsolute(linkTarget)
+          ? linkTarget
+          : path.resolve(current, linkTarget);
+
+        current = canonicalizeReviewBoundaryPath(
+          absoluteTarget,
+          symlinkDepth + 1
+        );
+        continue;
+      }
+
+      current = candidate;
     } catch (error) {
       const code =
         error instanceof Error && "code" in error
@@ -110,14 +112,9 @@ function canonicalizeBoundaryPath(absolutePath: string): string {
         throw error;
       }
 
-      const parent = path.dirname(current);
-
-      if (parent === current) {
-        throw error;
-      }
-
-      missingSuffixSegments.push(path.basename(current));
-      current = parent;
+      current = candidate;
     }
   }
+
+  return current;
 }
