@@ -439,7 +439,7 @@ function isAllowedSnapshotGitDiff(
     return false;
   }
 
-  const args = tokens.slice(2);
+  const args = tokens[2] === "--stat" ? tokens.slice(3) : tokens.slice(2);
   let separatorIndex: number;
 
   if (args[0] === `${refs.sourceBaseRef}...${refs.sourceHeadRef}`) {

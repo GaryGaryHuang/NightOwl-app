@@ -170,6 +170,8 @@ test("tool policy shell policy allows only run-ref-bound Git evidence forms in s
   for (const command of [
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git diff --stat 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src",
+    "git diff --stat 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src app",
     "git show HEAD:src/app.ts",
     "git show @:src/app.ts",
     "git show 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc:src/app.ts",
@@ -187,6 +189,8 @@ test("tool policy shell policy allows only run-ref-bound Git evidence forms in s
   for (const command of [
     "git show feature:src/app.ts",
     "git diff main...feature -- src/app.ts",
+    "git diff --stat -- src/app.ts",
+    "git diff --stat main feature -- src/app.ts",
     "git diff c1d76cc53b8ded1562c6f1064fb66f582841bd39 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc -- src/app.ts",
     "git diff c1d76cc53b8ded1562c6f1064fb66f582841bd39...6e199e57ec5e101ba9bd0347a37e9508a9b15bcc -- src/app.ts",
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39",
@@ -215,7 +219,9 @@ test("tool policy shell policy denies snapshot git diff when resolved source ref
 
   for (const command of [
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
-    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts"
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git diff --stat 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git diff --stat 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts"
   ]) {
     assert.deepEqual(
       evaluateReadonlyShellCommand(command, profileWithoutSourceRefs),
