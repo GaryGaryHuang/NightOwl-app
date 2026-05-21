@@ -5,7 +5,6 @@ import { reviewOutputRoot as buildReviewOutputRoot } from "./nightowl-namespace.
 
 export interface ReviewReadBoundary {
   repoRoot: string;
-  reviewOutputRoot?: string;
 }
 
 /**

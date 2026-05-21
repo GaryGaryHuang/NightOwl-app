@@ -68,7 +68,6 @@ test("isAllowedReviewReadPath allows repo source and .nightowl non-review paths 
 
 test("isAllowedReviewReadPath supports snapshot source roots without allowing original review output artifacts", () => {
   const sourceRoot = "/tmp/nightowl-source-snapshot";
-  const reviewOutputRoot = "/workspace/repo/.nightowl/review";
   const cases: Array<{
     requestedPath: string;
     expected: boolean;
@@ -110,10 +109,7 @@ test("isAllowedReviewReadPath supports snapshot source roots without allowing or
 
   for (const { requestedPath, expected } of cases) {
     assert.equal(
-      isAllowedReviewReadPath(requestedPath, {
-        repoRoot: sourceRoot,
-        reviewOutputRoot
-      }),
+      isAllowedReviewReadPath(requestedPath, { repoRoot: sourceRoot }),
       expected
     );
   }
@@ -279,32 +275,6 @@ test("isAllowedReviewReadPath denies a review root even when it is symlinked out
     );
 
     assert.equal(isAllowedReviewReadPath(escapedPath, fixture.repoRoot), false);
-  } finally {
-    fixture.cleanup();
-  }
-});
-
-test("isAllowedReviewReadPath denies an explicit review output root even when it is symlinked outside its repo", () => {
-  const fixture = createReadBoundaryFixture({ symlinkReviewRoot: true });
-
-  try {
-    const sourceRoot = path.join(fixture.repoRoot, "..", "snapshot");
-    mkdirSync(path.join(sourceRoot, "src"), { recursive: true });
-    const escapedPath = path.join(
-      fixture.repoRoot,
-      ".nightowl",
-      "review",
-      "session1",
-      "secret.txt"
-    );
-
-    assert.equal(
-      isAllowedReviewReadPath(escapedPath, {
-        repoRoot: sourceRoot,
-        reviewOutputRoot: path.join(fixture.repoRoot, ".nightowl", "review")
-      }),
-      false
-    );
   } finally {
     fixture.cleanup();
   }
