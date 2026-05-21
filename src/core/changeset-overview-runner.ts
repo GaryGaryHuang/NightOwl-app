@@ -22,6 +22,8 @@ export interface ChangesetOverviewRunnerInput {
   repoRoot: string;
   reviewOutputRoot?: string;
   signal?: AbortSignal;
+  sourceBaseRef?: string;
+  sourceHeadRef?: string;
   userContext: string[];
   workingDirectory?: string;
 }
@@ -65,6 +67,12 @@ export class ChangesetOverviewRunner {
           ...(input.reviewOutputRoot === undefined
             ? {}
             : { reviewOutputRoot: input.reviewOutputRoot }),
+          ...(input.sourceBaseRef === undefined
+            ? {}
+            : { sourceBaseRef: input.sourceBaseRef }),
+          ...(input.sourceHeadRef === undefined
+            ? {}
+            : { sourceHeadRef: input.sourceHeadRef }),
           systemMessage: CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
           workingDirectory: input.workingDirectory
         });

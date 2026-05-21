@@ -48,6 +48,13 @@ const OUT_OF_BOUNDARY_PATH_COMMANDS = [
   "diff /etc/hosts src/app.ts"
 ] as const;
 
+const SNAPSHOT_PROFILE = {
+  repoRoot: "/tmp/nightowl-source-snapshot",
+  reviewOutputRoot: "/workspace/repo/.nightowl/review",
+  sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+  sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+} as const;
+
 test("tool policy shell policy denies out-of-boundary path arguments", () => {
   assertDeniedCommands(OUT_OF_BOUNDARY_PATH_COMMANDS);
 });
@@ -105,19 +112,15 @@ test("tool policy shell policy propagates cd-derived cwd and enforces cd path bo
 });
 
 test("tool policy shell policy supports separate snapshot source and original review output roots", () => {
-  const snapshotProfile = {
-    repoRoot: "/tmp/nightowl-source-snapshot",
-    reviewOutputRoot: "/workspace/repo/.nightowl/review"
-  };
-
   for (const command of [
     "cat /tmp/nightowl-source-snapshot/src/app.ts",
     "git -C /tmp/nightowl-source-snapshot diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git -C /tmp/nightowl-source-snapshot diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
     "cat /workspace/repo/.nightowl/review/previous/index.md",
     "cd /workspace/repo/.nightowl/review && ls previous"
   ]) {
     assert.equal(
-      evaluateReadonlyShellCommand(command, snapshotProfile),
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       undefined,
       command
     );
@@ -131,7 +134,7 @@ test("tool policy shell policy supports separate snapshot source and original re
     "cd /workspace/repo && ls src"
   ]) {
     assert.deepEqual(
-      evaluateReadonlyShellCommand(command, snapshotProfile),
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       {
         permissionDecision: "deny",
         permissionDecisionReason: READONLY_BASH_DENY_REASON
@@ -142,15 +145,10 @@ test("tool policy shell policy supports separate snapshot source and original re
 });
 
 test("tool policy shell policy validates SDK cwd before allowing bare path arguments", () => {
-  const snapshotProfile = {
-    repoRoot: "/tmp/nightowl-source-snapshot",
-    reviewOutputRoot: "/workspace/repo/.nightowl/review"
-  };
-
   assert.equal(
     evaluateReadonlyShellCommand(
       "cat app.ts",
-      snapshotProfile,
+      SNAPSHOT_PROFILE,
       "/tmp/nightowl-source-snapshot/src"
     ),
     undefined
@@ -158,7 +156,7 @@ test("tool policy shell policy validates SDK cwd before allowing bare path argum
   assert.deepEqual(
     evaluateReadonlyShellCommand(
       "cat app.ts",
-      snapshotProfile,
+      SNAPSHOT_PROFILE,
       "/workspace/repo/src"
     ),
     {
@@ -169,51 +167,81 @@ test("tool policy shell policy validates SDK cwd before allowing bare path argum
 });
 
 test("tool policy shell policy allows only run-ref-bound Git evidence forms in snapshot-backed sessions", () => {
-  const snapshotProfile = {
-    repoRoot: "/tmp/nightowl-source-snapshot",
-    reviewOutputRoot: "/workspace/repo/.nightowl/review"
-  };
-
   for (const command of [
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
     "git show HEAD:src/app.ts",
     "git show @:src/app.ts",
     "git show 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc:src/app.ts",
     "git show c1d76cc53b8ded1562c6f1064fb66f582841bd39:src/app.ts",
     "git grep token HEAD -- src/app.ts",
-    "git grep -n token c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src",
+    "git grep -n token c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src"
+  ]) {
+    assert.equal(
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
+      undefined,
+      command
+    );
+  }
+
+  for (const command of [
     "git show feature:src/app.ts",
     "git diff main...feature -- src/app.ts",
-    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git diff c1d76cc53b8ded1562c6f1064fb66f582841bd39 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc -- src/app.ts",
+    "git diff c1d76cc53b8ded1562c6f1064fb66f582841bd39...6e199e57ec5e101ba9bd0347a37e9508a9b15bcc -- src/app.ts",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39",
     "git grep TODO feature -- src/app.ts",
     "git grep --full-name TODO c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src",
     "git status --short",
     "git cat-file -p HEAD:src/app.ts"
   ]) {
-    assert.equal(
-      evaluateReadonlyShellCommand(command, snapshotProfile),
-      undefined,
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
+      command
+    );
+  }
+});
+
+test("tool policy shell policy denies snapshot git diff when resolved source refs are unavailable", () => {
+  const profileWithoutSourceRefs = {
+    repoRoot: SNAPSHOT_PROFILE.repoRoot,
+    reviewOutputRoot: SNAPSHOT_PROFILE.reviewOutputRoot
+  };
+
+  for (const command of [
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts"
+  ]) {
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, profileWithoutSourceRefs),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
       command
     );
   }
 });
 
 test("tool policy shell policy validates snapshot Git object paths and ambiguous shell path tokens", () => {
-  const snapshotProfile = {
-    repoRoot: "/tmp/nightowl-source-snapshot",
-    reviewOutputRoot: "/workspace/repo/.nightowl/review"
-  };
-
   for (const command of [
     "git show HEAD:.nightowl/reviewconfig.json",
+    "git show HEAD:",
     "git show HEAD:/workspace/repo/.nightowl/review/previous/index.md",
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- /workspace/repo/.nightowl/review/previous/index.md",
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- :/",
     "git grep token HEAD -- :/",
+    "git grep token c1d76cc53b8ded1562c6f1064fb66f582841bd39",
+    "git show AAAAAAA:src/app.ts",
     "find .. -maxdepth 1 -type f"
   ]) {
     assert.deepEqual(
-      evaluateReadonlyShellCommand(command, snapshotProfile),
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       {
         permissionDecision: "deny",
         permissionDecisionReason: READONLY_BASH_DENY_REASON
@@ -225,20 +253,18 @@ test("tool policy shell policy validates snapshot Git object paths and ambiguous
   for (const command of [
     "git show HEAD:src/app.ts",
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
+    "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts",
     "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc...c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- .",
     "git grep token HEAD -- .",
     "find src -maxdepth 1 -type f",
     "grep -R token src",
     "ls -a src",
     "ls -la /tmp/nightowl-source-snapshot/src",
-    "tree -a src",
     "rg --hidden token src",
-    "rg --unrestricted --unrestricted token src",
-    "rg --pre=tools/pre.sh token src/seed.ts",
     "sed -n '1,10p' src/seed.ts"
   ]) {
     assert.equal(
-      evaluateReadonlyShellCommand(command, snapshotProfile),
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       undefined,
       command
     );
@@ -246,18 +272,13 @@ test("tool policy shell policy validates snapshot Git object paths and ambiguous
 });
 
 test("tool policy shell policy allows source root inspection but denies .nightowl path targets in snapshot mode", () => {
-  const snapshotProfile = {
-    repoRoot: "/tmp/nightowl-source-snapshot",
-    reviewOutputRoot: "/workspace/repo/.nightowl/review"
-  };
-
   for (const command of [
     "cat .nightowl/reviewconfig.json",
     "find .nightowl -type f",
     "ls .nightowl"
   ]) {
     assert.deepEqual(
-      evaluateReadonlyShellCommand(command, snapshotProfile),
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       {
         permissionDecision: "deny",
         permissionDecisionReason: READONLY_BASH_DENY_REASON
@@ -268,22 +289,64 @@ test("tool policy shell policy allows source root inspection but denies .nightow
 
   for (const command of [
     "find . -type f",
+    "find -type f",
     "grep -R token .",
+    "grep -R token",
     "rg --hidden token .",
+    "rg --hidden token",
+    "rg -uu token .",
     "ls -a .",
-    "tree -a .",
+    "ls -A"
+  ]) {
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
+      command
+    );
+  }
+
+  for (const command of [
     "find src -type f",
     "grep -R token src",
     "rg --hidden token src",
-    "ls -a src",
-    "tree -a src"
+    "ls -a src"
   ]) {
     assert.equal(
-      evaluateReadonlyShellCommand(command, snapshotProfile),
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       undefined,
       command
     );
   }
+});
+
+test("tool policy shell policy denies snapshot ripgrep preprocess hooks", () => {
+  for (const command of [
+    "rg --pre=tools/pre.sh token src/seed.ts",
+    "rg --pre tools/pre.sh token src/seed.ts"
+  ]) {
+    assert.deepEqual(
+      evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
+      {
+        permissionDecision: "deny",
+        permissionDecisionReason: READONLY_BASH_DENY_REASON
+      },
+      command
+    );
+  }
+
+  assert.equal(
+    evaluateReadonlyShellCommand(
+      "rg --pre=tools/pre.sh token src/app.ts",
+      {
+        repoRoot: "/workspace/repo",
+        reviewOutputRoot: "/workspace/repo/.nightowl/review"
+      }
+    ),
+    undefined
+  );
 });
 
 test("tool policy shell policy keeps snapshot-only Git restrictions out of explicit same-root profiles", () => {

@@ -374,12 +374,20 @@ function hasOnlyAllowedPathArguments(
       return false;
     }
 
-    return hasOnlyAllowedSnapshotGitPaths(tokens, profile, baseDirectory);
+    return isAllowedSnapshotGitEvidenceCommand(tokens, profile, baseDirectory);
   }
 
   const baseDirectory = resolveAllowedBaseDirectory(profile, commandCwd);
 
   if (baseDirectory === undefined) {
+    return false;
+  }
+
+  if (
+    isSnapshotBackedProfile(profile) &&
+    (hasDisallowedSnapshotPreprocessHook(tokens) ||
+      hasDisallowedSnapshotRootEnumeration(tokens, profile, baseDirectory))
+  ) {
     return false;
   }
 
@@ -403,11 +411,245 @@ function hasOnlyAllowedPathArguments(
   return true;
 }
 
-function hasOnlyAllowedSnapshotGitPaths(
+function isAllowedSnapshotGitEvidenceCommand(
   tokens: readonly string[],
   profile: ToolPolicyBoundaryContext,
   baseDirectory: string
 ): boolean {
+  switch (tokens[1]) {
+    case "diff":
+      return isAllowedSnapshotGitDiff(tokens, profile, baseDirectory);
+    case "show":
+      return isAllowedSnapshotGitShow(tokens, profile, baseDirectory);
+    case "grep":
+      return isAllowedSnapshotGitGrep(tokens, profile, baseDirectory);
+    default:
+      return false;
+  }
+}
+
+function isAllowedSnapshotGitDiff(
+  tokens: readonly string[],
+  profile: ToolPolicyBoundaryContext,
+  baseDirectory: string
+): boolean {
+  const refs = getSnapshotSourceRefs(profile);
+
+  if (!refs) {
+    return false;
+  }
+
+  const args = tokens.slice(2);
+  let separatorIndex: number;
+
+  if (args[0] === `${refs.sourceBaseRef}...${refs.sourceHeadRef}`) {
+    separatorIndex = 1;
+  } else if (
+    args[0] === refs.sourceBaseRef &&
+    args[1] === refs.sourceHeadRef
+  ) {
+    separatorIndex = 2;
+  } else {
+    return false;
+  }
+
+  if (args[separatorIndex] !== "--") {
+    return false;
+  }
+
+  return areAllowedSnapshotGitSourcePaths(
+    args.slice(separatorIndex + 1),
+    profile,
+    baseDirectory
+  );
+}
+
+function isAllowedSnapshotGitShow(
+  tokens: readonly string[],
+  profile: ToolPolicyBoundaryContext,
+  baseDirectory: string
+): boolean {
+  if (tokens.length !== 3) {
+    return false;
+  }
+
+  const objectPath = tokens[2];
+
+  if (!objectPath) {
+    return false;
+  }
+
+  const separatorIndex = objectPath.indexOf(":");
+
+  if (separatorIndex <= 0) {
+    return false;
+  }
+
+  const runRef = objectPath.slice(0, separatorIndex);
+  const sourcePath = objectPath.slice(separatorIndex + 1);
+
+  return (
+    isAllowedSnapshotGitRunRef(runRef, profile) &&
+    isAllowedSnapshotGitSourcePath(sourcePath, profile, baseDirectory)
+  );
+}
+
+function isAllowedSnapshotGitGrep(
+  tokens: readonly string[],
+  profile: ToolPolicyBoundaryContext,
+  baseDirectory: string
+): boolean {
+  let index = 2;
+
+  if (tokens[index] === "-n") {
+    index += 1;
+  }
+
+  const pattern = tokens[index];
+
+  if (!pattern || pattern.startsWith("-")) {
+    return false;
+  }
+
+  index += 1;
+
+  const runRef = tokens[index];
+
+  if (!runRef || !isAllowedSnapshotGitRunRef(runRef, profile)) {
+    return false;
+  }
+
+  index += 1;
+
+  if (tokens[index] !== "--") {
+    return false;
+  }
+
+  return areAllowedSnapshotGitSourcePaths(
+    tokens.slice(index + 1),
+    profile,
+    baseDirectory
+  );
+}
+
+function getSnapshotSourceRefs(profile: ToolPolicyBoundaryContext):
+  | { sourceBaseRef: string; sourceHeadRef: string }
+  | undefined {
+  const sourceBaseRef = profile.sourceBaseRef?.trim();
+  const sourceHeadRef = profile.sourceHeadRef?.trim();
+
+  if (!sourceBaseRef || !sourceHeadRef) {
+    return undefined;
+  }
+
+  return { sourceBaseRef, sourceHeadRef };
+}
+
+function isAllowedSnapshotGitRunRef(
+  ref: string,
+  profile: ToolPolicyBoundaryContext
+): boolean {
+  if (ref === "HEAD" || ref === "@") {
+    return true;
+  }
+
+  return ref === profile.sourceBaseRef || ref === profile.sourceHeadRef;
+}
+
+function areAllowedSnapshotGitSourcePaths(
+  sourcePaths: readonly string[],
+  profile: ToolPolicyBoundaryContext,
+  baseDirectory: string
+): boolean {
+  return (
+    sourcePaths.length > 0 &&
+    sourcePaths.every((sourcePath) =>
+      isAllowedSnapshotGitSourcePath(sourcePath, profile, baseDirectory)
+    )
+  );
+}
+
+function isAllowedSnapshotGitSourcePath(
+  sourcePath: string,
+  profile: ToolPolicyBoundaryContext,
+  baseDirectory: string
+): boolean {
+  return (
+    sourcePath.length > 0 &&
+    !sourcePath.startsWith(":") &&
+    isSourceTreePath(resolvePathToken(sourcePath, baseDirectory), profile)
+  );
+}
+
+function hasDisallowedSnapshotPreprocessHook(tokens: readonly string[]): boolean {
+  return (
+    tokens[0] === "rg" &&
+    tokens.some((token) => token === "--pre" || token.startsWith("--pre="))
+  );
+}
+
+function hasDisallowedSnapshotRootEnumeration(
+  tokens: readonly string[],
+  profile: ToolPolicyBoundaryContext,
+  baseDirectory: string
+): boolean {
+  switch (tokens[0]) {
+    case "find":
+      return targetsSourceRootOrImplicitRoot(
+        getFindTargetTokens(tokens),
+        profile,
+        baseDirectory
+      );
+    case "grep":
+      return (
+        hasRecursiveGrepFlag(tokens) &&
+        targetsSourceRootOrImplicitRoot(
+          getSearchTargetTokens(tokens),
+          profile,
+          baseDirectory
+        )
+      );
+    case "rg":
+      return (
+        hasRipgrepHiddenTraversalFlag(tokens) &&
+        targetsSourceRootOrImplicitRoot(
+          getSearchTargetTokens(tokens),
+          profile,
+          baseDirectory
+        )
+      );
+    case "ls":
+      return (
+        hasHiddenListingFlag(tokens) &&
+        targetsSourceRootOrImplicitRoot(
+          getListingTargetTokens(tokens),
+          profile,
+          baseDirectory
+        )
+      );
+    default:
+      return false;
+  }
+}
+
+function getFindTargetTokens(tokens: readonly string[]): string[] {
+  const targets: string[] = [];
+
+  for (const token of tokens.slice(1)) {
+    if (token.startsWith("-")) {
+      break;
+    }
+
+    targets.push(token);
+  }
+
+  return targets;
+}
+
+function getSearchTargetTokens(tokens: readonly string[]): string[] {
+  const targets: string[] = [];
+  let hasPattern = false;
+
   for (const token of tokens.slice(1)) {
     if (token === "--") {
       continue;
@@ -417,34 +659,76 @@ function hasOnlyAllowedSnapshotGitPaths(
       continue;
     }
 
-    if (token.startsWith(":")) {
-      return false;
-    }
-
-    const colonIndex = token.indexOf(":");
-
-    if (colonIndex > 0) {
-      const pathPart = token.slice(colonIndex + 1);
-
-      if (
-        pathPart.length > 0 &&
-        !isSourceTreePath(resolvePathToken(pathPart, baseDirectory), profile)
-      ) {
-        return false;
-      }
-
+    if (!hasPattern) {
+      hasPattern = true;
       continue;
     }
 
-    if (
-      shouldValidatePathToken(token) &&
-      !isSourceTreePath(resolvePathToken(token, baseDirectory), profile)
-    ) {
-      return false;
+    targets.push(token);
+  }
+
+  return targets;
+}
+
+function getListingTargetTokens(tokens: readonly string[]): string[] {
+  return tokens.slice(1).filter((token) => !token.startsWith("-"));
+}
+
+function targetsSourceRootOrImplicitRoot(
+  targets: readonly string[],
+  profile: ToolPolicyBoundaryContext,
+  baseDirectory: string
+): boolean {
+  if (targets.length === 0) {
+    return isSourceRootPath(baseDirectory, profile);
+  }
+
+  return targets.some((target) =>
+    isSourceRootPath(resolvePathToken(target, baseDirectory), profile)
+  );
+}
+
+function hasRecursiveGrepFlag(tokens: readonly string[]): boolean {
+  return tokens.slice(1).some((token) => {
+    if (token === "--recursive") {
+      return true;
+    }
+
+    return token.startsWith("-") && !token.startsWith("--") &&
+      (token.includes("R") || token.includes("r"));
+  });
+}
+
+function hasRipgrepHiddenTraversalFlag(tokens: readonly string[]): boolean {
+  let unrestrictedCount = 0;
+
+  for (const token of tokens.slice(1)) {
+    if (token === "--hidden" || token === "-.") {
+      return true;
+    }
+
+    if (token === "--unrestricted") {
+      unrestrictedCount += 1;
+      continue;
+    }
+
+    if (/^-u+$/u.test(token)) {
+      unrestrictedCount += token.length - 1;
     }
   }
 
-  return true;
+  return unrestrictedCount >= 2;
+}
+
+function hasHiddenListingFlag(tokens: readonly string[]): boolean {
+  return tokens.slice(1).some((token) => {
+    if (token === "--all" || token === "--almost-all") {
+      return true;
+    }
+
+    return token.startsWith("-") && !token.startsWith("--") &&
+      (token.includes("a") || token.includes("A"));
+  });
 }
 
 function resolveAllowedBaseDirectory(
@@ -510,6 +794,13 @@ function isSourceTreePath(
     isPathInsideOrEqual(resolvedCandidate, resolvedSourceRoot) &&
     !isPathInsideOrEqual(resolvedCandidate, resolvedNightOwlRoot)
   );
+}
+
+function isSourceRootPath(
+  candidate: string,
+  profile: ToolPolicyBoundaryContext
+): boolean {
+  return path.resolve(candidate) === path.resolve(profile.repoRoot);
 }
 
 function isPathInsideOrEqual(candidate: string, boundary: string): boolean {

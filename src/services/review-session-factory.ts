@@ -23,6 +23,10 @@ export interface ReviewSessionProfile {
   repoRoot: string;
   /** Original repository `.nightowl/review` root allowed for reading review artifacts. */
   reviewOutputRoot?: string;
+  /** Command-start resolved base ref used only by tool policy in snapshot-backed runs. */
+  sourceBaseRef?: string;
+  /** Command-start resolved head ref used only by tool policy in snapshot-backed runs. */
+  sourceHeadRef?: string;
   systemMessage: string;
   workingDirectory?: string;
 }

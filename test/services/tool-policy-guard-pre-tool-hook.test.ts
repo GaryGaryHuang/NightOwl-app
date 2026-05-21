@@ -21,11 +21,12 @@ const SESSION_CONTEXT = { sessionId: "s1" };
 
 function createHookInput(
   toolName: string,
-  toolArgs?: Record<string, unknown> | null
+  toolArgs?: Record<string, unknown> | null,
+  cwd = "/workspace/repo"
 ) {
   return {
     timestamp: 0,
-    cwd: "/workspace/repo",
+    cwd,
     toolName,
     toolArgs: toolArgs as Record<string, unknown> | undefined
   };
@@ -82,6 +83,48 @@ test("tool policy guard pre-tool hook bypasses unrelated tools", async () => {
       SESSION_CONTEXT
     ),
     undefined
+  );
+});
+
+test("tool policy guard pre-tool hook passes snapshot source refs into shell policy", async () => {
+  const { hook } = createPolicySession({
+    profile: {
+      repoRoot: "/tmp/nightowl-source-snapshot",
+      reviewOutputRoot: "/workspace/repo/.nightowl/review",
+      sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+      sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
+    }
+  });
+
+  assert.equal(
+    await hook(
+      createHookInput(
+        "bash",
+        {
+          command:
+            "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts"
+        },
+        "/tmp/nightowl-source-snapshot"
+      ),
+      SESSION_CONTEXT
+    ),
+    undefined
+  );
+  assert.deepEqual(
+    await hook(
+      createHookInput(
+        "bash",
+        {
+          command: "git diff main feature -- src/app.ts"
+        },
+        "/tmp/nightowl-source-snapshot"
+      ),
+      SESSION_CONTEXT
+    ),
+    {
+      permissionDecision: "deny",
+      permissionDecisionReason: READONLY_BASH_DENY_REASON
+    }
   );
 });
 

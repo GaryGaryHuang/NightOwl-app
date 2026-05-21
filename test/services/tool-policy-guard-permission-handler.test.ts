@@ -66,7 +66,9 @@ test("tool policy guard permission handler reads snapshot source and original re
   const handler = guard.buildPermissionHandler(
     {
       repoRoot: "/tmp/nightowl-source-snapshot",
-      reviewOutputRoot: "/workspace/repo/.nightowl/review"
+      reviewOutputRoot: "/workspace/repo/.nightowl/review",
+      sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+      sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
     },
     sink
   );
@@ -117,7 +119,9 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
   const handler = guard.buildPermissionHandler(
     {
       repoRoot: "/tmp/nightowl-source-snapshot",
-      reviewOutputRoot: "/workspace/repo/.nightowl/review"
+      reviewOutputRoot: "/workspace/repo/.nightowl/review",
+      sourceBaseRef: "6e199e57ec5e101ba9bd0347a37e9508a9b15bcc",
+      sourceHeadRef: "c1d76cc53b8ded1562c6f1064fb66f582841bd39"
     },
     sink
   );
@@ -127,6 +131,16 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
       createPermissionRequest({
         kind: "shell",
         fullCommandText: "cat ./src/app.ts"
+      }),
+      SESSION_CONTEXT
+    ),
+    APPROVED
+  );
+  assert.deepEqual(
+    await handler(
+      createPermissionRequest({
+        kind: "shell",
+        fullCommandText: "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts"
       }),
       SESSION_CONTEXT
     ),
@@ -149,6 +163,14 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
     args: { fullCommandText: "cat ./src/app.ts" }
   });
   assertAuditRecord(sink.records[1], {
+    tool: "shell",
+    decision: "allow",
+    args: {
+      fullCommandText:
+        "git diff 6e199e57ec5e101ba9bd0347a37e9508a9b15bcc c1d76cc53b8ded1562c6f1064fb66f582841bd39 -- src/app.ts"
+    }
+  });
+  assertAuditRecord(sink.records[2], {
     tool: "shell",
     decision: "deny",
     args: { fullCommandText: "git show HEAD:.nightowl/reviewconfig.json" }

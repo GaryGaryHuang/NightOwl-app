@@ -41,7 +41,7 @@ const GLOBAL_UNCERTAINTY_BLOCK = createPromptBlock("global-uncertainty", [
 const CONTEXT_RETRIEVAL_BLOCK = createPromptBlock("context-retrieval", [
   "## Context Retrieval",
   "- Retrieve only the minimal context that the current step allows or requires to complete reliably.",
-  "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for git operations (`git diff`, `git blame`, `git log`) or when built-in tools cannot fulfill the task.",
+  "- Prefer local evidence first: `view`, `grep`, `glob` for file inspection; use `bash` for supported read-only git evidence (`git diff`, `git show`, `git grep`) or when built-in tools cannot fulfill the task.",
   "- Do not use Python, Python scripts, `python`, or `python3` for repository inspection or command execution; use the allowed read-only inspection tools and bash commands instead.",
   "- For repo-local unknowns about implementations, call sites, dependency injection wiring, tests, mappers, downstream consumers, or interface contracts, inspect the obvious counterpart files before concluding the fact is unavailable.",
   "- Use `web_fetch` and MCP tools only when the current step allows or requires external knowledge verification that local context cannot provide. If retrieval is allowed and user-provided context includes URLs or external references, attempt retrieval when tools and policy allow; if retrieval is unavailable or blocked, do not fabricate content and surface the limitation only when it materially affects the current step's output.",

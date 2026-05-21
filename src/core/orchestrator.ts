@@ -356,6 +356,8 @@ export class ReviewOrchestrator {
         repoRoot: input.repoRoot,
         reviewOutputRoot: input.reviewOutputRoot,
         signal: input.signal,
+        sourceBaseRef: input.sourceBaseRef,
+        sourceHeadRef: input.sourceHeadRef,
         userContext: input.request.userContext,
         workingDirectory: input.repoRoot
       });
@@ -663,6 +665,8 @@ export class ReviewOrchestrator {
           repoRoot: input.repoRoot,
           reviewOutputRoot: input.reviewOutputRoot,
           signal: input.signal,
+          sourceBaseRef: input.sourceBaseRef,
+          sourceHeadRef: input.sourceHeadRef,
           workingDirectory: input.repoRoot
         });
       } catch (error) {

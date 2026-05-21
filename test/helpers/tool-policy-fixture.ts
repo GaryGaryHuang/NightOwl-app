@@ -53,6 +53,7 @@ export function createPermissionRequest(
 // either invoke the hook directly (simulating the SDK onPreToolUse callback)
 // or call the handler (simulating the permission resolution path) as needed.
 export function createPolicySession(options?: {
+  profile?: ToolPolicyBoundaryContext;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
   hostnameClassifier?: WebFetchHostnameClassifier;
@@ -79,8 +80,8 @@ export function createPolicySession(options?: {
 
   return {
     guard,
-    hook: guard.buildPreToolUseHook(BASE_PROFILE, options?.auditWriter),
-    handler: guard.buildPermissionHandler(BASE_PROFILE, options?.auditWriter)
+    hook: guard.buildPreToolUseHook(options?.profile ?? BASE_PROFILE, options?.auditWriter),
+    handler: guard.buildPermissionHandler(options?.profile ?? BASE_PROFILE, options?.auditWriter)
   };
 }
 

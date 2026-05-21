@@ -128,9 +128,13 @@ test("createLocalReviewRunApp reviews the resolved head snapshot while keeping a
   assert.equal(calls.changesetOverviewInputs.at(0)?.repoRoot, snapshotRoot);
   assert.equal(calls.changesetOverviewInputs.at(0)?.workingDirectory, snapshotRoot);
   assert.equal(calls.changesetOverviewInputs.at(0)?.outputBaseDir, originalRoot);
+  assert.equal(calls.changesetOverviewInputs.at(0)?.sourceBaseRef, "base-sha");
+  assert.equal(calls.changesetOverviewInputs.at(0)?.sourceHeadRef, "head-sha");
   assert.equal(calls.stepInputs.at(0)?.repoRoot, snapshotRoot);
   assert.equal(calls.stepInputs.at(0)?.workingDirectory, snapshotRoot);
   assert.equal(calls.stepInputs.at(0)?.outputBaseDir, result.outputTarget.basePath);
+  assert.equal(calls.stepInputs.at(0)?.sourceBaseRef, "base-sha");
+  assert.equal(calls.stepInputs.at(0)?.sourceHeadRef, "head-sha");
 
   // Output targets are under the original repo, not the snapshot
   assert.ok(result.outputTarget.basePath.startsWith(path.join(originalRoot, ".nightowl", "review")));
@@ -300,7 +304,12 @@ interface RunCallRecorder {
   branchRoots: string[];
   changedFileCalls: Array<{ repoRoot: string; baseRef: string; headRef: string }>;
   changesetEntryCalls: Array<{ repoRoot: string; baseRef: string; headRef: string }>;
-  changesetOverviewInputs: Array<Pick<ChangesetOverviewRunnerInput, "repoRoot" | "outputBaseDir" | "workingDirectory">>;
+  changesetOverviewInputs: Array<
+    Pick<
+      ChangesetOverviewRunnerInput,
+      "repoRoot" | "outputBaseDir" | "workingDirectory" | "sourceBaseRef" | "sourceHeadRef"
+    >
+  >;
   cleanupCount: number;
   configRoots: string[];
   diffCalls: Array<{ repoRoot: string; baseRef: string; headRef: string; filePath: string }>;

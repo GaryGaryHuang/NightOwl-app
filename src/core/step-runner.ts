@@ -74,6 +74,8 @@ export interface RunStepInput {
   repoRoot: string;
   reviewOutputRoot?: string;
   signal?: AbortSignal;
+  sourceBaseRef?: string;
+  sourceHeadRef?: string;
   workingDirectory?: string;
 }
 
@@ -136,6 +138,12 @@ export class StepRunner {
           ...(input.reviewOutputRoot === undefined
             ? {}
             : { reviewOutputRoot: input.reviewOutputRoot }),
+          ...(input.sourceBaseRef === undefined
+            ? {}
+            : { sourceBaseRef: input.sourceBaseRef }),
+          ...(input.sourceHeadRef === undefined
+            ? {}
+            : { sourceHeadRef: input.sourceHeadRef }),
           systemMessage: plan.prompt.systemMessage,
           ...(input.workingDirectory === undefined
             ? {}
