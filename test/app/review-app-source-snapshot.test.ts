@@ -227,8 +227,8 @@ test("createLocalReviewRunApp keeps snapshot implementation details out of user-
       );
     }
 
-    assert.match(indexContent, /- Base ref: `main`/u);
-    assert.match(indexContent, /- Head ref: `feature-branch`/u);
+    assert.match(indexContent, /## Review Overview/u);
+    assert.match(indexContent, /## Change Context/u);
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }

@@ -1,148 +1,122 @@
-import path from "node:path";
-
 import type {
   OutputTarget,
   PlannedNoteFile
 } from "../review-path-resolver.ts";
-import { deriveFileRiskLevel, RISK_ORDER } from "../risk-level.ts";
+import {
+  countMustFindings,
+  countNiceFindings
+} from "../risk-level.ts";
 import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
-import { renderRunSummarySection } from "./run-summary-section.ts";
-
-// Derives from RISK_ORDER key count so skipped items always sort after every known priority bucket.
-const SKIPPED_SORT_KEY = Object.keys(RISK_ORDER).length;
+import {
+  renderCleanFilesSection,
+  renderFilesRequiringAttentionSection,
+  renderSkippedFilesSection
+} from "./run-summary-section.ts";
 
 interface ReviewIndexRenderInput {
-  repoRoot: string;
-  baseRef: string;
-  headRef: string;
+  changesetOverviewMarkdown: string;
   outputTarget: OutputTarget;
   plannedNotes: PlannedNoteFile[];
   resolvedOutcomes: ResolvedFileOutcome[];
 }
 
 /**
- * Render the run index with deterministic artifact links and priority-ordered file notes.
+ * Render the run index with review overview, change context, and reviewed-file sections.
  */
 export function renderReviewIndex(input: ReviewIndexRenderInput): string {
     const resolvedOutcomes = input.resolvedOutcomes;
+    const successfulOutcomes = resolvedOutcomes.filter(
+      (r): r is Extract<ResolvedFileOutcome, { status: "successful" }> =>
+        r.status === "successful"
+    );
 
-    const successfulCount = resolvedOutcomes.filter((r) => r.status === "successful").length;
-    const skippedCount = resolvedOutcomes.filter((r) => r.status === "skipped").length;
+    const successfulCount = successfulOutcomes.length;
+    const totalMust = successfulOutcomes.reduce(
+      (count, outcome) => count + countMustFindings(outcome.outcome.findings),
+      0
+    );
+    const totalNice = successfulOutcomes.reduce(
+      (count, outcome) => count + countNiceFindings(outcome.outcome.findings),
+      0
+    );
+    const changeContext = projectChangeContext(input.changesetOverviewMarkdown);
+    const reviewLimitations = formatReviewLimitations(resolvedOutcomes);
+    const reviewedFileSectionInput = {
+      basePath: input.outputTarget.basePath,
+      plannedNotes: input.plannedNotes,
+      resolvedOutcomes: input.resolvedOutcomes
+    };
+    const skippedSection = renderSkippedFilesSection(reviewedFileSectionInput);
+    const reviewedFileSections = [
+      renderFilesRequiringAttentionSection(reviewedFileSectionInput),
+      renderCleanFilesSection(reviewedFileSectionInput)
+    ].filter((section): section is string => section !== undefined);
 
-    const indexedOutcomes = input.plannedNotes.map((note, index) => ({
-      note,
-      resolved: resolvedOutcomes[index]
-    }));
-
-    const sortedEntries = [...indexedOutcomes].sort((a, b) => {
-      const aKey = a.resolved.status === "successful"
-        ? RISK_ORDER[deriveFileRiskLevel(a.resolved.outcome.findings)]
-        : SKIPPED_SORT_KEY;
-      const bKey = b.resolved.status === "successful"
-        ? RISK_ORDER[deriveFileRiskLevel(b.resolved.outcome.findings)]
-        : SKIPPED_SORT_KEY;
-      return aKey - bKey;
-    });
-
-    const fileNoteLines =
-      sortedEntries.length === 0
-        ? ["- 無"]
-        : sortedEntries.map(({ note, resolved }) => {
-            const link = toRelativeLink(
-              input.outputTarget.basePath,
-              note.noteFilePath
-            );
-
-            if (resolved.status === "successful") {
-              const badge = formatSemanticBadge(resolved.outcome.semanticReview);
-              const linkLabel = `[\`${note.filePath}\`](${link})`;
-              return [
-                badge === ""
-                  ? `- ${linkLabel}`
-                  : `- ${badge} ${linkLabel}`,
-                ...formatMissingInformationDetails(resolved.outcome.semanticReview)
-              ].join("\n");
-            }
-
-            return `- [Skipped] [\`${note.filePath}\`](${link})`;
-          });
+    if (!skippedSection && reviewedFileSections.length === 0) {
+      reviewedFileSections.push(["## Clean Files", "- 無"].join("\n"));
+    }
 
     return [
       "# Review Index",
       "",
-      `- Repo root: \`${input.repoRoot}\``,
-      `- Base ref: \`${input.baseRef}\``,
-      `- Head ref: \`${input.headRef}\``,
-      `- Planned files: ${input.plannedNotes.length}`,
-      `- Successful files: ${successfulCount}`,
-      `- Skipped files: ${skippedCount}`,
+      "## Review Overview",
+      `- Findings: must=${totalMust}, nice=${totalNice}`,
+      `- Review coverage: ${successfulCount}/${input.plannedNotes.length} files fully reviewed`,
+      ...(reviewLimitations ? [`- Review limitations: ${reviewLimitations}`] : []),
+      ...(skippedSection ? ["", skippedSection] : []),
       "",
-      "## Run Artifacts",
-      `- [changeset-overview.md](${toRelativeLink(input.outputTarget.basePath, input.outputTarget.changesetOverviewPath)})`,
+      "## Change Context",
+      `- Scope: ${changeContext.scope}`,
+      `- Behavior changes: ${changeContext.behaviorChanges}`,
       "",
-      renderRunSummarySection({ resolvedOutcomes: input.resolvedOutcomes }),
-      "",
-      "## File Notes",
-      ...fileNoteLines
+      ...interleaveSections(reviewedFileSections)
     ].join("\n");
-}
-
-function formatMissingInformationDetails(input: {
-  missingInformationCount: number;
-} | undefined): string[] {
-  if (!input || input.missingInformationCount === 0) {
-    return [];
-  }
-
-  const itemLabel = input.missingInformationCount === 1 ? "item" : "items";
-  return [
-    `  - Missing information: ${input.missingInformationCount} ${itemLabel}; open the file note and read \`## Missing Information\`.`
-  ];
 }
 
 export type ReviewIndexRenderer = typeof renderReviewIndex;
 
-function formatSemanticBadge(input: {
-  status: string;
-  missingInformationCount: number;
-} | undefined): string {
-  if (!input) {
-    return "";
+function formatReviewLimitations(
+  resolvedOutcomes: ResolvedFileOutcome[]
+): string | undefined {
+  const limitedFileCount = resolvedOutcomes.filter(
+    (outcome) => outcome.outcome.semanticReview.missingInformationCount > 0
+  ).length;
+
+  if (limitedFileCount === 0) {
+    return undefined;
   }
 
-  const badges: string[] = [];
-  if (input.status === "passed") {
-    badges.push("[Passed]");
-  } else if (input.status === "passed_with_limitations") {
-    badges.push("[Limited]");
-  }
-
-  if (input.missingInformationCount > 0) {
-    badges.push("[MissingInfo]");
-  }
-
-  return badges.join("");
+  return limitedFileCount === 1
+    ? "1 file has missing information"
+    : `${limitedFileCount} files have missing information`;
 }
 
-function toRelativeLink(basePath: string, targetPath: string): string {
-  const normalizedBasePath = normalizeForLink(basePath);
-  const normalizedTargetPath = normalizeForLink(targetPath);
-  const relativePath = path.posix.relative(normalizedBasePath, normalizedTargetPath);
-  const encodedPath = relativePath
-    .split("/")
-    .map((segment) => encodePathSegment(segment))
-    .join("/");
-
-  return `./${encodedPath}`;
+function projectChangeContext(overviewMarkdown: string): {
+  scope: string;
+  behaviorChanges: string;
+} {
+  return {
+    scope: extractOverviewBulletValue(overviewMarkdown, "Scope") ?? "none recorded",
+    behaviorChanges:
+      extractOverviewBulletValue(overviewMarkdown, "Behavior changes") ??
+      "none recorded"
+  };
 }
 
-function normalizeForLink(filePath: string): string {
-  return filePath.replace(/\\/gu, "/");
+function extractOverviewBulletValue(
+  overviewMarkdown: string,
+  label: string
+): string | undefined {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const match = overviewMarkdown.match(
+    new RegExp(`^- ${escapedLabel}:\\s*(.+)$`, "mu")
+  );
+  const value = match?.[1]?.trim();
+  return value ? value : undefined;
 }
 
-function encodePathSegment(segment: string): string {
-  return encodeURIComponent(segment).replace(
-    /[!'()*]/gu,
-    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`
+function interleaveSections(sections: string[]): string[] {
+  return sections.flatMap((section, index) =>
+    index === 0 ? [section] : ["", section]
   );
 }

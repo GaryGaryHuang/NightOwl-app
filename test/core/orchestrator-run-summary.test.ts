@@ -88,7 +88,7 @@ test("ReviewOrchestrator feeds the index finalizer in-memory outcomes rather tha
 
       assert.doesNotMatch(indexContent, /CORRUPTED/u);
       assert.doesNotMatch(indexContent, /EXTRA DISK FILE/u);
-      assert.match(indexContent, /## Run Summary/u);
+      assert.match(indexContent, /## Review Overview/u);
     }
   );
 });

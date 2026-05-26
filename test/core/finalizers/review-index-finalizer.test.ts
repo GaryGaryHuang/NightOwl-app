@@ -14,25 +14,29 @@ import {
 } from "../../helpers/completed-run-finalizer-contract-fixture.ts";
 
 function renderIndex(input: {
-  repoRoot?: string;
-  baseRef?: string;
-  headRef?: string;
+  changesetOverviewMarkdown?: string;
   outputTarget?: ReturnType<typeof createOutputTarget>;
   plannedNotes: PlannedNoteFile[];
   successfulFiles: SuccessfulFileOutcome[];
   skippedFiles: SkippedFileOutcome[];
 }): string {
   return renderReviewIndex({
-    repoRoot: input.repoRoot ?? "/workspace/repo",
-    baseRef: input.baseRef ?? "main",
-    headRef: input.headRef ?? "feature-branch",
+    changesetOverviewMarkdown:
+      input.changesetOverviewMarkdown ??
+      [
+        "## Changeset Overview",
+        "- Scope: feature/config/test",
+        "- Cross-file boundaries: none",
+        "- Behavior changes: adds a review flow",
+        "- Test coverage observations: no corresponding test changes observed"
+      ].join("\n"),
     outputTarget: input.outputTarget ?? createOutputTarget(),
     plannedNotes: input.plannedNotes,
     resolvedOutcomes: createResolvedOutcomes(input.plannedNotes, input.successfulFiles, input.skippedFiles)
   });
 }
 
-test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links", () => {
+test("ReviewIndexFinalizer renders review overview, change context, and grouped file sections", () => {
   const rendered = renderIndex({
     plannedNotes: createPlannedNotes([
       plannedNote("README.md", "README.md.md"),
@@ -55,51 +59,46 @@ test("ReviewIndexFinalizer renders run metadata, artifacts, and file note links"
   });
 
   assert.match(rendered, /^# Review Index$/mu);
-  assert.match(rendered, /- Repo root: `\/workspace\/repo`/u);
-  assert.match(rendered, /- Base ref: `main`/u);
-  assert.match(rendered, /- Head ref: `feature-branch`/u);
-  assert.match(rendered, /- Planned files: 3/u);
-  assert.match(rendered, /- Successful files: 1/u);
-  assert.match(rendered, /- Skipped files: 2/u);
-  assertRunArtifacts(rendered);
+  assert.match(rendered, /## Review Overview/u);
+  assert.match(rendered, /- Findings: must=0, nice=0/u);
+  assert.match(rendered, /- Review coverage: 1\/3 files fully reviewed/u);
+  assert.doesNotMatch(rendered, /- Review limitations:/u);
+  assert.match(rendered, /## Skipped Files/u);
+  assert.match(rendered, /## Change Context/u);
+  assert.match(rendered, /## Clean Files/u);
+  assert.doesNotMatch(rendered, /## Files Requiring Attention/u);
+  assert.doesNotMatch(rendered, /## File Notes/u);
   assertTextContainsInOrder(rendered, [
-    "- Repo root: `/workspace/repo`",
-    "- Base ref: `main`",
-    "- Head ref: `feature-branch`",
-    "- Planned files: 3",
-    "- Successful files: 1",
-    "- Skipped files: 2",
-    "## Run Artifacts",
-    "- [changeset-overview.md](./changeset-overview.md)",
-    "## Run Summary",
-    "- Final findings totals: must=0, nice=0",
-    "### Successful Files",
-    "## File Notes",
-    "- [`README.md`](./files/README.md.md)",
-    "- [Skipped] [`src/app.ts`](./files/src__app.ts.md)",
-    "- [Skipped] [`packages/app/index.ts`](./files/app__index.ts.md)"
+    "## Review Overview",
+    "- Findings: must=0, nice=0",
+    "- Review coverage: 1/3 files fully reviewed",
+    "## Skipped Files",
+    "- [`src/app.ts`](./files/src__app.ts.md)",
+    "- [`packages/app/index.ts`](./files/app__index.ts.md)",
+    "## Change Context",
+    "- Scope: feature/config/test",
+    "- Behavior changes: adds a review flow",
+    "## Clean Files",
+    "- [`README.md`](./files/README.md.md)"
   ]);
 });
 
-test("ReviewIndexFinalizer renders explicit empty file notes for zero-file runs", () => {
+test("ReviewIndexFinalizer renders an explicit empty clean-files section for zero-file runs", () => {
   const rendered = renderIndex({
     plannedNotes: [],
     successfulFiles: [],
     skippedFiles: []
   });
 
-  assert.match(rendered, /- Planned files: 0/u);
-  assert.match(rendered, /- Successful files: 0/u);
-  assert.match(rendered, /- Skipped files: 0/u);
-  assertRunArtifacts(rendered);
-  assert.match(rendered, /## File Notes\n- 無/u);
+  assert.match(rendered, /- Review coverage: 0\/0 files fully reviewed/u);
+  assert.doesNotMatch(rendered, /- Review limitations:/u);
+  assert.doesNotMatch(rendered, /## Skipped Files/u);
+  assert.doesNotMatch(rendered, /## Files Requiring Attention/u);
+  assert.match(rendered, /## Clean Files\n- 無/u);
 });
 
 test("ReviewIndexFinalizer preserves collision-resolved note targets and forward slashes", () => {
   const rendered = renderIndex({
-    repoRoot: String.raw`C:\workspace\repo`,
-    baseRef: "main",
-    headRef: "feature-branch",
     outputTarget: createOutputTarget({
       basePath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430`,
       changesetOverviewPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\changeset-overview.md`,
@@ -128,9 +127,6 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
 
 test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => {
   const rendered = renderIndex({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
       plannedNote("foo bar.ts", "foo bar.ts.md"),
@@ -149,24 +145,24 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
   assert.doesNotMatch(rendered, /\(\.\/files\/foo#bar\)\.ts\.md\)/u);
 });
 
-test("ReviewIndexFinalizer sorts file notes by approved-finding priority with skipped files last", () => {
+test("ReviewIndexFinalizer splits successful files into attention and clean sections", () => {
   const rendered = renderIndex({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
-      plannedNote("none.ts"),
-      plannedNote("low.ts"),
-      plannedNote("another-high.ts"),
-      plannedNote("high.ts"),
+      plannedNote("nice.ts"),
+      plannedNote("clean.ts"),
+      plannedNote("missing.ts"),
+      plannedNote("must.ts"),
       plannedNote("skipped.ts")
     ]),
     successfulFiles: [
-      createSuccessfulFile("none.ts", []),
-      createSuccessfulFile("low.ts", [createFinding("nice", 80, { title: "Low issue" })]),
-      createSuccessfulFile("another-high.ts", [createFinding("must", 80, { title: "Another high issue" })]),
-      createSuccessfulFile("high.ts", [createFinding("must", 90, { title: "High issue" })])
+      createSuccessfulFile("nice.ts", [createFinding("nice", 80, { title: "Low issue" })]),
+      createSuccessfulFile("clean.ts", []),
+      createSuccessfulFile("missing.ts", [], {
+        status: "passed_with_limitations",
+        missingInformationCount: 2
+      }),
+      createSuccessfulFile("must.ts", [createFinding("must", 90, { title: "High issue" })])
     ],
     skippedFiles: [
       createSkippedFile(
@@ -178,19 +174,19 @@ test("ReviewIndexFinalizer sorts file notes by approved-finding priority with sk
   });
 
   assertTextContainsInOrder(rendered, [
-    "- [`another-high.ts`]",
-    "- [`high.ts`]",
-    "- [`low.ts`]",
-    "- [`none.ts`]",
-    "- [Skipped] [`skipped.ts`]"
+    "## Skipped Files",
+    "- [`skipped.ts`](./files/skipped.ts.md)",
+    "## Files Requiring Attention",
+    "| [must.ts](./files/must.ts.md) | 1 | 0 | 0 |",
+    "| [missing.ts](./files/missing.ts.md) | 0 | 0 | 2 |",
+    "| [nice.ts](./files/nice.ts.md) | 0 | 1 | 0 |",
+    "## Clean Files",
+    "- [`clean.ts`](./files/clean.ts.md)"
   ]);
 });
 
-test("ReviewIndexFinalizer preserves planned order within the same priority bucket", () => {
+test("ReviewIndexFinalizer preserves planned order within the clean-files section", () => {
   const rendered = renderIndex({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
       plannedNote("a.ts"),
@@ -206,17 +202,15 @@ test("ReviewIndexFinalizer preserves planned order within the same priority buck
   });
 
   assertTextContainsInOrder(rendered, [
-    "- [`a.ts`]",
-    "- [`b.ts`]",
-    "- [`c.ts`]"
+    "## Clean Files",
+    "- [`a.ts`](./files/a.ts.md)",
+    "- [`b.ts`](./files/b.ts.md)",
+    "- [`c.ts`](./files/c.ts.md)"
   ]);
 });
 
-test("ReviewIndexFinalizer distinguishes missing-information semantic stops from clean reviews", () => {
+test("ReviewIndexFinalizer separates missing-information files from clean files", () => {
   const rendered = renderIndex({
-    repoRoot: "/workspace/repo",
-    baseRef: "main",
-    headRef: "feature-branch",
     outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
       plannedNote("src/clean.ts"),
@@ -246,15 +240,49 @@ test("ReviewIndexFinalizer distinguishes missing-information semantic stops from
 
   assert.match(
     rendered,
-    /- \[Passed\] \[`src\/clean\.ts`\]\(\.\/files\/src\/clean\.ts\.md\)/u
+    /\| \[src\/blocked\.ts\]\(\.\/files\/src\/blocked\.ts\.md\) \| 0 \| 0 \| 1 \|/u
   );
   assert.match(
     rendered,
-    /- \[Limited\]\[MissingInfo\] \[`src\/blocked\.ts`\]\(\.\/files\/src\/blocked\.ts\.md\)/u
+    /## Clean Files[\s\S]*- \[`src\/clean\.ts`\]\(\.\/files\/src\/clean\.ts\.md\)/u
   );
+  assert.match(rendered, /- Review limitations: 1 file has missing information/u);
+});
+
+test("ReviewIndexFinalizer projects scope and behavior changes from the changeset overview", () => {
+  const rendered = renderIndex({
+    changesetOverviewMarkdown: [
+      "## Changeset Overview",
+      "- Scope: bugfix/test",
+      "- Cross-file boundaries: none",
+      "- Behavior changes: fixes retry backoff behavior",
+      "- Test coverage observations: retry tests updated"
+    ].join("\n"),
+    plannedNotes: createPlannedNotes([plannedNote("src/retry.ts")]),
+    successfulFiles: [createSuccessfulFile("src/retry.ts", [])],
+    skippedFiles: []
+  });
+
+  assert.match(rendered, /- Scope: bugfix\/test/u);
+  assert.match(rendered, /- Behavior changes: fixes retry backoff behavior/u);
+});
+
+test("ReviewIndexFinalizer escapes table-breaking pipe characters in attention rows", () => {
+  const rendered = renderIndex({
+    plannedNotes: createPlannedNotes([
+      plannedNote("src/foo|bar.ts", "src__foo|bar.ts.md")
+    ]),
+    successfulFiles: [
+      createSuccessfulFile("src/foo|bar.ts", [
+        createFinding("nice", 80, { title: "Low issue" })
+      ])
+    ],
+    skippedFiles: []
+  });
+
   assert.match(
     rendered,
-    /Missing information: 1 item; open the file note and read `## Missing Information`/u
+    /\| \[src\/foo\\\|bar\.ts\]\(\.\/files\/src__foo%7Cbar\.ts\.md\) \| 0 \| 1 \| 0 \|/u
   );
 });
 
@@ -267,13 +295,6 @@ function assertTextContainsInOrder(text: string, fragments: string[]): void {
     assert.ok(index >= 0, `expected fragment in order: ${fragment}`);
     cursor = index + fragment.length;
   }
-}
-
-function assertRunArtifacts(rendered: string): void {
-  assertTextContainsInOrder(rendered, [
-    "## Run Artifacts",
-    "- [changeset-overview.md](./changeset-overview.md)"
-  ]);
 }
 
 function plannedNote(

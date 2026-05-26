@@ -410,9 +410,7 @@ export class ReviewOrchestrator {
     await this.#tryPublishFinalizer("index", failures, () =>
       input.outputPublisher.publishArtifact("index", {
         content: this.#renderReviewIndex({
-          repoRoot: input.repoRoot,
-          baseRef: input.request.baseRef,
-          headRef: input.request.headRef,
+          changesetOverviewMarkdown: input.runContext.changesetOverviewMarkdown,
           resolvedOutcomes: input.resolvedOutcomes,
           outputTarget: input.outputTarget,
           plannedNotes: input.plannedNoteFiles
