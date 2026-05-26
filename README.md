@@ -82,7 +82,7 @@ Each run produces output under `<repo_root>/.nightowl/review/<session_id>/`:
 |------|-------------|
 | `files/*.md` | Structured review notes for each file selected for review |
 | `changeset-overview.md` | Run-level overview of the reviewed changeset |
-| `index.md` | Landing page linking all per-file notes and embedding run summary details |
+| `index.md` | Landing page with review overview, change context, and grouped per-file note links |
 | `tool-audit.jsonl` | Best-effort tool usage audit log for allow/deny decisions |
 
 ## Configuration
@@ -113,7 +113,7 @@ NightOwl runs a three-stage review pipeline:
 
 1. **Changeset Overview**: scans the entire changeset once to build global context (scope of changes, cross-file relationships, user-provided context).
 2. **Per-file semantic review**: NightOwl runs four steps for each file selected for review: Review Basis, Candidate Findings, Semantic Validation, and Review Summary. Semantic Validation can send a file back through Candidate Findings before Review Summary when more evidence is needed. Files are processed in parallel with bounded concurrency (default 5), while steps remain strictly sequential within each file.
-3. **Run-level finalization**: writes the index and embedded run summary after every file selected for review finishes.
+3. **Run-level finalization**: writes the index with review overview, change context, and grouped per-file sections after every file selected for review finishes.
 
 Each per-file step attempt runs in its own Copilot SDK session and must pass deterministic validation before NightOwl uses the result. Per-file steps use three total attempts; if a step fails after those attempts, the file is skipped.
 

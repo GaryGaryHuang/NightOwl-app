@@ -32,7 +32,7 @@ src/
 │   ├── orchestrator.ts  Flow control: Changeset Overview → path planning → fan-out → ReviewBasis → Candidate Findings → Semantic Validation → Review Summary → finalizers
 │   ├── step-runner.ts   Step execution + completion check + retry
 │   ├── steps/           Prompt modules for Changeset Overview plus per-file steps (ReviewBasis, Candidate Findings, Semantic Validation, and Review Summary)
-│   └── finalizers/      Output renderers (review notes, index, embedded run summary)
+│   └── finalizers/      Output renderers (review notes and index artifacts)
 ├── providers/           External I/O adapters (Git, filesystem, config)
 └── services/            SDK session lifecycle, tool policy, MCP injection
 ```
