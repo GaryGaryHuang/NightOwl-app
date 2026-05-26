@@ -1,10 +1,16 @@
+import path from "node:path";
+
 import {
   type PermissionHandler,
   type PermissionRequest,
   type SessionConfig
 } from "@github/copilot-sdk";
 
-import { isAllowedReviewReadPath } from "../../core/review-access-guard.ts";
+import { reviewOutputRoot as buildReviewOutputRoot } from "../../core/nightowl-namespace.ts";
+import {
+  canonicalizeReviewBoundaryPath,
+  isAllowedReviewReadPath
+} from "../../core/review-access-guard.ts";
 import {
   evaluateReadonlyShellCommand,
   READONLY_BASH_DENY_REASON
@@ -48,6 +54,12 @@ const EMPTY_TOOL_ARGS_DEFERRED_REASON =
   "Empty toolArgs; deferred to permissionHandler.";
 const WEB_FETCH_POLICY_FAIL_CLOSED_REASON =
   "URL policy evaluation failed; denied as a precaution.";
+const READ_PATH_INVALID_DENY_REASON =
+  "Read permission request did not include a valid path.";
+const READ_PATH_BOUNDARY_DENY_REASON =
+  "Read path is outside the allowed review source boundary. For repository files, retry with a repo-relative `view.path`; do not pass absolute paths.";
+const READ_REVIEW_ARTIFACT_DENY_REASON =
+  "On-disk `.nightowl/review/**` artifacts are not retrievable review evidence. Use only the review state supplied by the host for the current run.";
 const PRE_TOOL_USE_NOT_HANDLED = Symbol("pre-tool-use-not-handled");
 
 // Module-scoped intermediate decision record produced by each kind branch inside
@@ -263,22 +275,31 @@ export class ToolPolicyGuard {
   ): HandlerDecisionRecord {
     const readPath = typeof request.path === "string" ? request.path : undefined;
 
-    if (readPath !== undefined) {
-      try {
-        if (isAllowedReviewReadPath(readPath, profile)) {
-          return { tool: "read", decision: "allow", args: { path: readPath } };
-        }
-      } catch {
-        // Fail closed when the shared read-boundary helper rejects invalid input
-        // or cannot canonicalize the path safely.
+    if (readPath === undefined) {
+      return {
+        tool: "read",
+        decision: "deny",
+        reason: READ_PATH_INVALID_DENY_REASON,
+        args: {}
+      };
+    }
+
+    try {
+      if (isAllowedReviewReadPath(readPath, profile)) {
+        return { tool: "read", decision: "allow", args: { path: readPath } };
       }
+    } catch {
+      // Fail closed when the shared read-boundary helper rejects invalid input
+      // or cannot canonicalize the path safely.
     }
 
     return {
       tool: "read",
       decision: "deny",
-      reason: "Read path is outside the allowed boundary.",
-      args: readPath !== undefined ? { path: readPath } : {}
+      reason: isReviewArtifactReadPath(readPath, profile)
+        ? READ_REVIEW_ARTIFACT_DENY_REASON
+        : READ_PATH_BOUNDARY_DENY_REASON,
+      args: { path: readPath }
     };
   }
 
@@ -444,7 +465,7 @@ export class ToolPolicyGuard {
 
       return record.decision === "allow"
         ? { kind: "approve-once" }
-        : { kind: "user-not-available" };
+        : { kind: "reject", feedback: record.reason };
     };
   }
 
@@ -505,10 +526,63 @@ export class ToolPolicyGuard {
   }
 }
 
+function isReviewArtifactReadPath(
+  readPath: string,
+  profile: ToolPolicyBoundaryContext
+): boolean {
+  if (!path.isAbsolute(readPath)) {
+    return false;
+  }
+
+  const reviewRoots = [
+    buildReviewOutputRoot(profile.repoRoot),
+    profile.reviewOutputRoot
+  ].filter(
+    (candidate): candidate is string =>
+      typeof candidate === "string" &&
+      candidate.length > 0 &&
+      path.isAbsolute(candidate)
+  );
+
+  return reviewRoots.some((reviewRoot) =>
+    isPathInsideOrEqualForFeedback(readPath, reviewRoot)
+  );
+}
+
+function isPathInsideOrEqualForFeedback(
+  candidate: string,
+  boundary: string
+): boolean {
+  const resolvedCandidate = path.resolve(candidate);
+  const resolvedBoundary = path.resolve(boundary);
+
+  if (
+    resolvedCandidate === resolvedBoundary ||
+    resolvedCandidate.startsWith(`${resolvedBoundary}${path.sep}`)
+  ) {
+    return true;
+  }
+
+  try {
+    const canonicalCandidate = canonicalizeReviewBoundaryPath(resolvedCandidate);
+    const canonicalBoundary = canonicalizeReviewBoundaryPath(resolvedBoundary);
+
+    return (
+      canonicalCandidate === canonicalBoundary ||
+      canonicalCandidate.startsWith(`${canonicalBoundary}${path.sep}`)
+    );
+  } catch {
+    return false;
+  }
+}
+
 export {
   CUSTOM_TOOL_DENY_REASON,
   EMPTY_TOOL_ARGS_DEFERRED_REASON,
   HOOK_DENY_REASON,
+  READ_PATH_INVALID_DENY_REASON,
+  READ_PATH_BOUNDARY_DENY_REASON,
+  READ_REVIEW_ARTIFACT_DENY_REASON,
   READONLY_BASH_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
   SHELL_TOOL_NAMES,

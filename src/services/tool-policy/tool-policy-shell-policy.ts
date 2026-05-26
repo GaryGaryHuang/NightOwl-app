@@ -68,6 +68,7 @@ const ALLOWED_COMMANDS = new Map<string, CommandPolicy>([
   }],
 
   // --- path utilities ---
+  ["pwd", DEFAULT_POLICY],
   ["realpath", DEFAULT_POLICY],
   ["basename", DEFAULT_POLICY],
   ["dirname", DEFAULT_POLICY],

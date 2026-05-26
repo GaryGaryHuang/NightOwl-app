@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  READONLY_BASH_DENY_REASON,
+  UNSAFE_WEB_FETCH_URL_REASON
+} from "../../src/services/tool-policy/tool-policy-guard.ts";
+import {
   BASE_PROFILE,
   createPermissionRequest,
   createPolicySession
 } from "../helpers/tool-policy-fixture.ts";
 
 const SESSION_CONTEXT = { sessionId: "s1" };
+const denied = (feedback: string) => ({ kind: "reject", feedback }) as const;
 
 function createHookInput(
   toolName: string,
@@ -33,9 +38,7 @@ test("dual-path consistency: shell deny remains aligned between handler and hook
     SESSION_CONTEXT
   );
 
-  assert.deepEqual(handlerResult, {
-    kind: "user-not-available"
-  });
+  assert.deepEqual(handlerResult, denied(READONLY_BASH_DENY_REASON));
   assert.notEqual(hookResult, undefined);
   assert.equal(
     (hookResult as { permissionDecision: string }).permissionDecision,
@@ -55,9 +58,7 @@ test("dual-path consistency: URL deny remains aligned between handler and hook",
     SESSION_CONTEXT
   );
 
-  assert.deepEqual(handlerResult, {
-    kind: "user-not-available"
-  });
+  assert.deepEqual(handlerResult, denied(UNSAFE_WEB_FETCH_URL_REASON));
   assert.notEqual(hookResult, undefined);
   assert.equal(
     (hookResult as { permissionDecision: string }).permissionDecision,

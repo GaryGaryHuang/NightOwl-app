@@ -112,6 +112,9 @@ test("tool policy shell policy preserves non-snapshot utility commands", () => {
   assertAllowedCommands([
     "awk '{print $1}' src/app.ts",
     "tree src/",
+    "pwd",
+    "pwd -P",
+    "pwd -L",
     "realpath src/app.ts",
     "basename /workspace/repo/src/app.ts",
     "dirname /workspace/repo/src/app.ts",
