@@ -133,8 +133,9 @@ describe("createLocalReviewRunApp web-fetch tool policy wiring", () => {
     // lives in test/services/tool-policy-web-fetch-policy.test.ts.
     const decision = await preToolUse(
       {
-        timestamp: Date.now(),
-        cwd: repoDir,
+        sessionId: "session-1",
+        timestamp: new Date(),
+        workingDirectory: repoDir,
         toolName: "web_fetch",
         toolArgs: { url: "http://localhost:3000" }
       },

@@ -44,6 +44,7 @@
     "test/providers/review-config-parser.test.ts",
     "test/providers/review-config-web-fetch-host-parser.test.ts",
     "test/providers/reviewable-file-policy.test.ts",
+    "test/scripts/dump-copilot-system-message-section.test.ts",
     "test/scripts/test-tier-tooling.test.ts",
     "test/services/copilot-availability-checker.test.ts",
     "test/services/copilot-client-manager.test.ts",

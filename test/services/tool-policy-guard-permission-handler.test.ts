@@ -5,6 +5,8 @@ import test from "node:test";
 
 import {
   CUSTOM_TOOL_DENY_REASON,
+  EXTENSION_MANAGEMENT_DENY_REASON,
+  EXTENSION_PERMISSION_ACCESS_DENY_REASON,
   HOOK_DENY_REASON,
   READONLY_BASH_DENY_REASON,
   READ_PATH_BOUNDARY_DENY_REASON,
@@ -260,7 +262,10 @@ test("tool policy guard permission handler approves requests when optional field
   const sink = new InMemoryAuditSink();
   const { handler } = createPolicySession({ auditWriter: sink });
 
-  assert.deepEqual(await handler({ kind: "shell" }, SESSION_CONTEXT), APPROVED);
+  assert.deepEqual(
+    await handler(createPermissionRequest({ kind: "shell" }), SESSION_CONTEXT),
+    APPROVED
+  );
   assertAuditRecord(sink.records[0], { tool: "shell", decision: "allow", args: {} });
 });
 
@@ -357,6 +362,40 @@ test("tool policy guard permission handler handles defensive and extensibility k
       }
     },
     {
+      request: createPermissionRequest({
+        kind: "extension-management",
+        extensionName: "demo-extension",
+        operation: "reload"
+      }),
+      expected: denied(EXTENSION_MANAGEMENT_DENY_REASON),
+      expectedAudit: {
+        tool: "extension-management",
+        decision: "deny",
+        reason: EXTENSION_MANAGEMENT_DENY_REASON,
+        args: {
+          extensionName: "demo-extension",
+          operation: "reload"
+        }
+      }
+    },
+    {
+      request: createPermissionRequest({
+        kind: "extension-permission-access",
+        extensionName: "demo-extension",
+        capabilities: ["filesystem", "network"]
+      }),
+      expected: denied(EXTENSION_PERMISSION_ACCESS_DENY_REASON),
+      expectedAudit: {
+        tool: "extension-permission-access",
+        decision: "deny",
+        reason: EXTENSION_PERMISSION_ACCESS_DENY_REASON,
+        args: {
+          extensionName: "demo-extension",
+          capabilities: "filesystem,network"
+        }
+      }
+    },
+    {
       request: createPermissionRequest({ kind: "something-new" }),
       expected: denied(UNKNOWN_KIND_DENY_REASON),
       expectedAudit: {
@@ -396,5 +435,8 @@ test("tool policy guard permission handler records MCP server and tool names in 
 test("tool policy guard permission handler behaves normally without an audit writer", async () => {
   const { handler } = createPolicySession();
 
-  assert.deepEqual(await handler({ kind: "shell" }, SESSION_CONTEXT), APPROVED);
+  assert.deepEqual(
+    await handler(createPermissionRequest({ kind: "shell" }), SESSION_CONTEXT),
+    APPROVED
+  );
 });

@@ -99,7 +99,9 @@ export class KnowledgeSvc {
           args: localConfig.args === undefined ? [] : [...localConfig.args],
           tools: localConfig.tools === undefined ? ["*"] : [...localConfig.tools],
           ...(localConfig.env === undefined ? {} : { env: { ...localConfig.env } }),
-          ...(localConfig.cwd === undefined ? {} : { cwd: localConfig.cwd }),
+          ...(localConfig.cwd === undefined
+            ? {}
+            : { workingDirectory: localConfig.cwd }),
           ...(localConfig.timeout === undefined ? {} : { timeout: localConfig.timeout })
         };
 
@@ -153,14 +155,16 @@ function mergeContext7Config(
   // rather than appending to it. If override.tools is absent, the built-in default is kept.
   const tools =
     override.tools === undefined
-      ? [...base.tools]
+      ? base.tools === undefined
+        ? undefined
+        : [...base.tools]
       : [...override.tools];
 
   return {
     type: "http",
     // url is always taken from the built-in base; repo-local context7 override cannot change it.
     url: base.url,
-    tools,
+    ...(tools === undefined ? {} : { tools }),
     ...(base.headers === undefined ? {} : { headers: { ...base.headers } }),
     ...(override.timeout === undefined
       ? base.timeout === undefined

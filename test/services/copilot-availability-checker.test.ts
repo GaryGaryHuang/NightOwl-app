@@ -7,7 +7,7 @@ import {
 
 interface AvailabilityClientManagerDoubleOptions {
   startImpl?: () => Promise<void>;
-  pingImpl?: (message?: string) => Promise<{ message: string; timestamp: number }>;
+  pingImpl?: (message?: string) => Promise<{ message: string; timestamp: string }>;
   stopImpl?: () => Promise<unknown>;
   forceStopImpl?: () => Promise<unknown>;
 }
@@ -20,7 +20,7 @@ function createAvailabilityClientManagerDouble(
   clientManager: {
     start(): Promise<void>;
     getClient(): {
-      ping(message?: string): Promise<{ message: string; timestamp: number }>;
+      ping(message?: string): Promise<{ message: string; timestamp: string }>;
     };
     stop(): Promise<unknown>;
     forceStop(): Promise<unknown>;
@@ -49,7 +49,7 @@ function createAvailabilityClientManagerDouble(
               options.pingImpl?.(message) ??
               Promise.resolve({
                 message: message ?? "",
-                timestamp: 0
+                timestamp: "2026-03-24T10:00:00.000Z"
               })
             );
           }

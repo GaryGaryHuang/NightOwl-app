@@ -1,7 +1,7 @@
 // This module pins the Copilot SDK system-prompt section names that NightOwl's
 // review sessions opt to remove (vs. keep) when running in `customize` mode.
 //
-// Source of truth: the `SystemPromptSection` string-literal union exported by
+// Source of truth: the `SystemMessageSection` string-literal union exported by
 // `@github/copilot-sdk` (see `dist/types.d.ts`). The `satisfies` clauses below
 // ensure every name here is a valid SDK section at compile time. If the SDK
 // renames or removes a section, the build fails. If the SDK *adds* a section,
@@ -10,7 +10,7 @@
 // Without that guard, review prompts would silently start including
 // unintended SDK-managed content on an SDK upgrade.
 
-import type { SystemPromptSection } from "@github/copilot-sdk";
+import type { SystemMessageSection } from "@github/copilot-sdk";
 
 /** SDK-managed sections the review session strips from the system prompt. */
 export const REVIEW_REMOVED_SDK_SECTIONS = [
@@ -22,13 +22,14 @@ export const REVIEW_REMOVED_SDK_SECTIONS = [
   "tool_instructions",
   "custom_instructions",
   "last_instructions"
-] as const satisfies readonly SystemPromptSection[];
+] as const satisfies readonly SystemMessageSection[];
 
 /** SDK-managed sections intentionally retained in the review system prompt. */
 export const REVIEW_KEPT_SDK_SECTIONS = [
   "environment_context",
+  "runtime_instructions",
   "safety"
-] as const satisfies readonly SystemPromptSection[];
+] as const satisfies readonly SystemMessageSection[];
 
 export type ReviewRemovedSdkSection = (typeof REVIEW_REMOVED_SDK_SECTIONS)[number];
 export type ReviewKeptSdkSection = (typeof REVIEW_KEPT_SDK_SECTIONS)[number];

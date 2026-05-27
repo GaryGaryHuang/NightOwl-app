@@ -48,6 +48,10 @@ const CUSTOM_TOOL_DENY_REASON =
   "Custom tools are not permitted in review sessions.";
 const HOOK_DENY_REASON =
   "Hook-initiated tool calls are not permitted in review sessions.";
+const EXTENSION_MANAGEMENT_DENY_REASON =
+  "Extension management is not permitted in review sessions.";
+const EXTENSION_PERMISSION_ACCESS_DENY_REASON =
+  "Extension permission access is not permitted in review sessions.";
 const UNKNOWN_KIND_DENY_REASON =
   "Unknown permission kind is not permitted in review sessions.";
 const EMPTY_TOOL_ARGS_DEFERRED_REASON =
@@ -407,6 +411,47 @@ export class ToolPolicyGuard {
     return { tool: "hook", decision: "deny", reason: HOOK_DENY_REASON, args };
   }
 
+  #evaluateExtensionManagement(
+    request: PermissionRequestPayload
+  ): HandlerDecisionRecord {
+    const extensionName =
+      typeof request.extensionName === "string" ? request.extensionName : undefined;
+    const operation =
+      typeof request.operation === "string" ? request.operation : undefined;
+    const args: Record<string, string | undefined> = {};
+    if (extensionName !== undefined) args.extensionName = extensionName;
+    if (operation !== undefined) args.operation = operation;
+
+    return {
+      tool: "extension-management",
+      decision: "deny",
+      reason: EXTENSION_MANAGEMENT_DENY_REASON,
+      args
+    };
+  }
+
+  #evaluateExtensionPermissionAccess(
+    request: PermissionRequestPayload
+  ): HandlerDecisionRecord {
+    const extensionName =
+      typeof request.extensionName === "string" ? request.extensionName : undefined;
+    const capabilities = Array.isArray(request.capabilities)
+      ? request.capabilities.filter((capability): capability is string =>
+          typeof capability === "string"
+        )
+      : [];
+    const args: Record<string, string | undefined> = {};
+    if (extensionName !== undefined) args.extensionName = extensionName;
+    if (capabilities.length > 0) args.capabilities = capabilities.join(",");
+
+    return {
+      tool: "extension-permission-access",
+      decision: "deny",
+      reason: EXTENSION_PERMISSION_ACCESS_DENY_REASON,
+      args
+    };
+  }
+
   // SDK exposes two independent interception paths:
   //   - onPermissionRequest (PermissionHandler): intercepts SDK permission request
   //     events, covering read / write / shell / url / mcp / custom-tool etc.
@@ -437,7 +482,11 @@ export class ToolPolicyGuard {
       mcp: (request) => this.#evaluateMcp(request),
       "custom-tool": (request) => this.#evaluateCustomTool(request),
       memory: (request) => this.#evaluateMemory(request),
-      hook: (request) => this.#evaluateHook(request)
+      hook: (request) => this.#evaluateHook(request),
+      "extension-management": (request) =>
+        this.#evaluateExtensionManagement(request),
+      "extension-permission-access": (request) =>
+        this.#evaluateExtensionPermissionAccess(request)
     } satisfies Record<PermissionRequest["kind"], PermissionEvaluator>;
 
     // Keep lookup string-indexed so unknown future runtime kinds fail closed
@@ -476,7 +525,7 @@ export class ToolPolicyGuard {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
       // Per-call registry: ordered list of string-arg policies. First matching
       // toolName short-circuits. Adding a new pre-tool-use kind requires only
-      // one additional entry. Closures capture `profile` and `input.cwd`.
+      // one additional entry. Closures capture `profile` and `input.workingDirectory`.
       const policies: ReadonlyArray<{
         toolNames: ReadonlySet<string>;
         argName: string;
@@ -495,7 +544,11 @@ export class ToolPolicyGuard {
           toolNames: SHELL_TOOL_NAMES,
           argName: "command",
           evaluate: (command) =>
-            this.#evaluateShellPolicyDecision(command, profile, input.cwd),
+            this.#evaluateShellPolicyDecision(
+              command,
+              profile,
+              input.workingDirectory
+            ),
           failClosedReason: SHELL_POLICY_FAIL_CLOSED_REASON
         }
       ];
@@ -579,6 +632,8 @@ function isPathInsideOrEqualForFeedback(
 export {
   CUSTOM_TOOL_DENY_REASON,
   EMPTY_TOOL_ARGS_DEFERRED_REASON,
+  EXTENSION_MANAGEMENT_DENY_REASON,
+  EXTENSION_PERMISSION_ACCESS_DENY_REASON,
   HOOK_DENY_REASON,
   READ_PATH_INVALID_DENY_REASON,
   READ_PATH_BOUNDARY_DENY_REASON,

@@ -7,7 +7,7 @@ import {
 } from "./copilot-client-shutdown.ts";
 
 interface CopilotAvailabilityProbeLike {
-  ping(message?: string): Promise<{ message: string; timestamp: number }>;
+  ping(message?: string): Promise<{ message: string; timestamp: string }>;
 }
 
 interface CopilotAvailabilityClientLike extends CopilotAvailabilityProbeLike {

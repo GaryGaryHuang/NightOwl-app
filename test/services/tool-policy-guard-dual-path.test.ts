@@ -19,8 +19,9 @@ function createHookInput(
   toolArgs: Record<string, unknown>
 ) {
   return {
-    timestamp: 0,
-    cwd: BASE_PROFILE.repoRoot,
+    sessionId: SESSION_CONTEXT.sessionId,
+    timestamp: new Date(0),
+    workingDirectory: BASE_PROFILE.repoRoot,
     toolName,
     toolArgs
   };

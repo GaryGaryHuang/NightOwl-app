@@ -241,8 +241,9 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when Cha
             async createSession(config: SessionConfig) {
               await config.hooks?.onPreToolUse?.(
                 {
-                  timestamp: 0,
-                  cwd: config.workingDirectory ?? repoRoot,
+                  sessionId: "s1",
+                  timestamp: new Date(0),
+                  workingDirectory: config.workingDirectory ?? repoRoot,
                   toolName: "bash",
                   toolArgs: { command: "git show HEAD:src/app.ts" }
                 } as never,
@@ -320,8 +321,9 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when cha
             async createSession(config: SessionConfig) {
               await config.hooks?.onPreToolUse?.(
                 {
-                  timestamp: 0,
-                  cwd: config.workingDirectory ?? repoRoot,
+                  sessionId: "s1",
+                  timestamp: new Date(0),
+                  workingDirectory: config.workingDirectory ?? repoRoot,
                   toolName: "bash",
                   toolArgs: { command: "git show HEAD:src/app.ts" }
                 } as never,

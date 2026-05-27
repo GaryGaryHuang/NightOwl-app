@@ -25,8 +25,9 @@ function createHookInput(
   cwd = "/workspace/repo"
 ) {
   return {
-    timestamp: 0,
-    cwd,
+    sessionId: SESSION_CONTEXT.sessionId,
+    timestamp: new Date(0),
+    workingDirectory: cwd,
     toolName,
     toolArgs: toolArgs as Record<string, unknown> | undefined
   };

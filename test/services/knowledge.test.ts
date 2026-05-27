@@ -159,7 +159,7 @@ test("KnowledgeSvc preserves supported local custom entry fields across local an
         command: "node",
         args: ["server.js"],
         tools: ["*"],
-        cwd: "/opt/mcp-servers/demo",
+        workingDirectory: "/opt/mcp-servers/demo",
         timeout: 15000
       }
     },
@@ -189,7 +189,7 @@ test("KnowledgeSvc preserves supported local custom entry fields across local an
         command: "node",
         args: ["server.js"],
         tools: ["*"],
-        cwd: "/opt/mcp-servers/demo",
+        workingDirectory: "/opt/mcp-servers/demo",
         timeout: 15000
       }
     }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { SystemPromptSection } from "@github/copilot-sdk";
+import type { SystemMessageSection } from "@github/copilot-sdk";
 
 import {
   buildRemoveAllSectionsConfig,
@@ -12,9 +12,9 @@ import {
 } from "../../src/services/review-system-message-sections.ts";
 
 // Compile-time guard: every SDK section must be classified as either removed or
-// kept. If `@github/copilot-sdk` adds a new `SystemPromptSection`, this line
+// kept. If `@github/copilot-sdk` adds a new `SystemMessageSection`, this line
 // fails to type-check and the maintainer must update the constants.
-type AllSectionsClassified = [SystemPromptSection] extends [
+type AllSectionsClassified = [SystemMessageSection] extends [
   ReviewRemovedSdkSection | ReviewKeptSdkSection
 ]
   ? true
@@ -41,7 +41,7 @@ test("REVIEW_REMOVED_SDK_SECTIONS pins the exact set of removed SDK sections", (
 test("REVIEW_KEPT_SDK_SECTIONS pins the exact set of retained SDK sections", () => {
   assert.deepEqual(
     [...REVIEW_KEPT_SDK_SECTIONS].sort(),
-    ["environment_context", "safety"]
+    ["environment_context", "runtime_instructions", "safety"]
   );
 });
 

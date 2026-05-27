@@ -184,8 +184,9 @@ test("createLocalReviewRunApp emits a progress warning when tool-audit writes fa
             async createSession(config: SessionConfig) {
               await config.hooks?.onPreToolUse?.(
                 {
-                  timestamp: 0,
-                  cwd: repoRoot,
+                  sessionId: "s1",
+                  timestamp: new Date(0),
+                  workingDirectory: repoRoot,
                   toolName: "bash",
                   toolArgs: { command: "git log --oneline" }
                 } as never,

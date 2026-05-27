@@ -46,7 +46,7 @@ export function assertAuditRecord(
 export function createPermissionRequest(
   request: { kind: string } & Record<string, unknown>
 ): PermissionRequest {
-  return request as PermissionRequest;
+  return request as unknown as PermissionRequest;
 }
 
 // Returns both the guard instance and its derived hook/handler so tests can
