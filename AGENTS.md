@@ -119,12 +119,14 @@ These are product safety boundaries that must not be circumvented or relaxed:
 - **Shell composition syntax**: `|`, `&&`, and `;` are allowed only if each command independently complies with the shell allowlist and path boundaries. `||`, background execution, command substitution, redirection, and non-read-only segments are forbidden.
 - **URL retrieval security** (`web_fetch` LLM tool / `url` SDK permission kind): only public HTTPS URLs are allowed; hostname DNS classification and host allowlist/denylist are enabled
 - **Tool audit**: production review sessions send tool decisions (allow/deny) to `tool-audit.jsonl` through best-effort writes; write failures surface diagnostics
-- **Tool policy fail-closed**: if shell or URL policy evaluation itself errors, conservatively deny and log
+- **Tool policy fail-closed**: if shell or URL policy evaluation itself errors, conservatively deny and log; unknown SDK permission kinds are denied until explicitly classified
+- **Extension permissions**: `extension-management` and `extension-permission-access` SDK permission kinds are denied in review sessions
 - **No silent privilege escalation**: do not add new tool permissions through unrelated implementations
 
 ## Copilot SDK Notes
 
-- Using `@github/copilot-sdk@^0.3.0`. Before upgrading, re-verify: runtime imports, session lifecycle, permission hooks (`onPreToolUse`), MCP config types, and test behavior.
+- Using `@github/copilot-sdk@1.0.0-beta.8`. Before upgrading, re-verify: runtime imports, session lifecycle, permission hooks (`onPreToolUse` and `onPermissionRequest`), MCP config types, system message section names, extension permission kinds, and test behavior.
+- Review sessions customize SDK-managed system message sections. Keep every `SystemMessageSection` classified as either removed or intentionally retained; `runtime_instructions` is retained so SDK/runtime notifications remain interpretable by the model.
 
 ## Commit Guidance
 
