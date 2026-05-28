@@ -22,11 +22,15 @@ const JSON_COMPLETION_BLOCK = createPromptBlock("json-completion", [
 
 export const MISSING_INFORMATION_DISCIPLINE_BLOCK = createPromptBlock("missing-information-discipline", [
   "## Missing Information Discipline",
-  "- Treat missing information as a last-resort blocker, not a confidence note.",
-  "- Before recording missing information, try to resolve the question in this order when the current step allows it: current diff and host-injected current-run review state, obvious local repo counterparts and changed tests, obvious local implementations/call sites/contracts, allowed external retrieval, then bounded inference from established code behavior.",
-  "- Record missing information only when all of the following are true: the fact is still unresolved after allowed retrieval, the fact would change the current step's judgment about correctness, reachability, impact, or expected contract, and the current step cannot finish reliably without it.",
-  "- Do not record missing information for facts that affect confidence only, nice-to-have context, future investigation ideas, generic test gaps, or questions that stop mattering after the current analysis.",
-  "- If later analysis shows the question no longer changes the current step's result, remove it instead of carrying it forward."
+  "- Missing information is only for a specific unresolved fact that blocks the current step's required decision; it is not a confidence note.",
+  "- Before recording missing information, resolve the question in this order when the current step allows it:",
+  "  1. Current diff and host-injected current-run review state.",
+  "  2. Obvious local repo counterparts, changed tests, implementations, call sites, and contracts.",
+  "  3. Allowed external retrieval.",
+  "  4. Bounded inference from established code behavior.",
+  "- Record missing information only when all gates pass: the fact is still unresolved after allowed checks, the fact would change the current step's judgment about correctness, reachability, impact, or expected contract, and the current step cannot finish reliably without it.",
+  "- Do not record missing information for confidence-only facts, nice-to-have context, future investigation ideas, or ordinary coverage gaps alone.",
+  "- If the missing fact no longer changes the current step's result, omit it instead of carrying it forward."
 ]);
 
 const MARKDOWN_RESPONSE_FORMAT_BLOCK = createPromptBlock("markdown-response-format", [
