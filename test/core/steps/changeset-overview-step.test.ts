@@ -167,7 +167,10 @@ test("CHANGESET_OVERVIEW_SYSTEM_MESSAGE keeps step identity separate from field 
     CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
     /reviewObjective|userBehavior|behaviorChanges|unresolvedUnknowns|schemaVersion|userContextSSOT|expectedBehaviorLedger/u
   );
-  assert.doesNotMatch(CHANGESET_OVERVIEW_SYSTEM_MESSAGE, /Code Locations & Inline Anchors/u);
+  assert.doesNotMatch(
+    CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
+    /Finding Code Locations & Inline Anchors/u
+  );
 });
 
 test("CHANGESET_OVERVIEW_REVIEW_PROFILE keeps the documented ten minute timeout", () => {

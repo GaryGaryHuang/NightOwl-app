@@ -6,18 +6,12 @@ import {
   type PromptBlock
 } from "./prompt-composition.ts";
 
-const JSON_STRUCTURED_OUTPUT_BLOCK = createPromptBlock("json-structured-output", [
-  "## Structured JSON Output",
-  "- Put assumptions, missing facts, and limitations only in the current step's designated JSON fields.",
-  "- Follow the current step instruction for object shape; do not invent alternate keys or aliases."
-]);
-
-const JSON_COMPLETION_BLOCK = createPromptBlock("json-completion", [
-  "## JSON Completion",
+const JSON_OUTPUT_CONTRACT_BLOCK = createPromptBlock("json-output-contract", [
+  "## JSON Output Contract",
   "- Output exactly one JSON object that begins with `{` and ends with `}`; do not include Markdown, code fences, scratch notes, tool transcripts, or any text outside that object.",
-  "- If context is incomplete or a tool result is unavailable, still return a minimal valid object for the current step and record only material blockers in the step's designated uncertainty fields.",
-  "- Prioritize syntactically complete JSON over exhaustive detail. If the response is getting long, shorten strings or omit lower-signal entries before risking an incomplete object.",
-  "- Close every array and object before finishing the response."
+  "- Follow the current step instruction for object shape; do not invent alternate keys or aliases.",
+  "- Close every array and object before finishing the response.",
+  "- Prioritize syntactically complete JSON over exhaustive detail. If the response is getting long, shorten strings or omit lower-signal entries before risking an incomplete object."
 ]);
 
 export const MISSING_INFORMATION_DISCIPLINE_BLOCK = createPromptBlock("missing-information-discipline", [
@@ -39,23 +33,25 @@ const MARKDOWN_RESPONSE_FORMAT_BLOCK = createPromptBlock("markdown-response-form
 ]);
 
 const FINDING_ANCHOR_SYSTEM_BLOCK = createPromptBlock("finding-anchor-guidance", [
-  "## Code Locations & Inline Anchors",
-  "- For JSON findings, use the smallest reviewed-file `line-range` that lets a reviewer inspect the defective expression, statement, or call site.",
-  "- When the changed line is the accurate issue location, overlap a head-side line from `<review_state>.diffSummary.hunks[].changedHeadLines`; use `headLineStart`, `headLineEnd`, and changed lines instead of guessing.",
-  "- Use `diff-hunk` only when `hunkHeader` exactly matches an actual hunk from `<diff>` or `<review_state>.diffSummary.hunks`.",
-  "- For dependency-path issues outside the changed lines, keep the reviewed-file anchor closest to the changed trigger and include `dependencyPathException` for the external path."
+  "## Finding Code Locations & Inline Anchors",
+  "- For every JSON finding, set `traceability` to a reviewed-file location.",
+  "- Choose the anchor in this order:",
+  "  1. Changed-line defect: use `traceability.kind = \"line-range\"` with `lineStart` and `lineEnd` chosen from head-side line numbers that overlap `<review_state>.diffSummary.hunks[].changedHeadLines`.",
+  "  2. External dependency-path defect: keep `traceability` on the closest reviewed-file trigger; put the external file or symbol only in `dependencyPathException`, not in `traceability`.",
+  "  3. Other reviewed-file defect: use the smallest `line-range` that fully contains the defective expression, statement, or call site.",
+  "  4. Fallback hunk anchor: use `traceability.kind = \"diff-hunk\"` only when a precise `line-range` is not defensible and `hunkHeader` can be copied exactly from `<diff>` or `<review_state>.diffSummary.hunks`.",
+  "- Do not output `headLineStart` or `headLineEnd` as traceability fields; use them only to understand the hunk's head-side span.",
+  "- If exact localization is not defensible, use the closest supportable reviewed-file location, make the evidence basis explicit, and do not invent line numbers."
 ]);
 
 const JSON_STEP_SYSTEM_BLOCKS = [
   ...COMMON_SYSTEM_BLOCKS,
-  JSON_STRUCTURED_OUTPUT_BLOCK,
-  JSON_COMPLETION_BLOCK
+  JSON_OUTPUT_CONTRACT_BLOCK
 ] as const satisfies readonly PromptBlock[];
 
 const JSON_FINDING_STEP_SYSTEM_BLOCKS = [
   ...COMMON_SYSTEM_BLOCKS,
-  JSON_STRUCTURED_OUTPUT_BLOCK,
-  JSON_COMPLETION_BLOCK,
+  JSON_OUTPUT_CONTRACT_BLOCK,
   FINDING_ANCHOR_SYSTEM_BLOCK
 ] as const satisfies readonly PromptBlock[];
 

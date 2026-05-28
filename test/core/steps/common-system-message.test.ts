@@ -15,11 +15,13 @@ import {
 test("common system prompt stays schema-free and globally applicable", () => {
   assert.deepEqual(COMMON_SYSTEM_BLOCK_IDS, [
     "reviewer-role",
+    "instruction-precedence",
     "evidence-traceability",
     "host-artifact-authority",
     "global-uncertainty",
-    "context-retrieval",
     "scope-discipline",
+    "context-retrieval",
+    "repository-inspection",
     "global-response-discipline"
   ]);
 
@@ -32,14 +34,15 @@ test("common system prompt stays schema-free and globally applicable", () => {
 test("JSON step system prompt block order is deterministic and excludes finding anchors", () => {
   assert.deepEqual(JSON_STEP_SYSTEM_BLOCK_IDS, [
     "reviewer-role",
+    "instruction-precedence",
     "evidence-traceability",
     "host-artifact-authority",
     "global-uncertainty",
-    "context-retrieval",
     "scope-discipline",
+    "context-retrieval",
+    "repository-inspection",
     "global-response-discipline",
-    "json-structured-output",
-    "json-completion"
+    "json-output-contract"
   ]);
 
   assert.doesNotMatch(
@@ -51,14 +54,15 @@ test("JSON step system prompt block order is deterministic and excludes finding 
 test("finding JSON system prompt composes anchor guidance only for finding-producing steps", () => {
   assert.deepEqual(JSON_FINDING_STEP_SYSTEM_BLOCK_IDS, [
     "reviewer-role",
+    "instruction-precedence",
     "evidence-traceability",
     "host-artifact-authority",
     "global-uncertainty",
-    "context-retrieval",
     "scope-discipline",
+    "context-retrieval",
+    "repository-inspection",
     "global-response-discipline",
-    "json-structured-output",
-    "json-completion",
+    "json-output-contract",
     "finding-anchor-guidance"
   ]);
 });
@@ -66,11 +70,13 @@ test("finding JSON system prompt composes anchor guidance only for finding-produ
 test("markdown step system prompt composes only markdown-specific blocks", () => {
   assert.deepEqual(MARKDOWN_STEP_SYSTEM_BLOCK_IDS, [
     "reviewer-role",
+    "instruction-precedence",
     "evidence-traceability",
     "host-artifact-authority",
     "global-uncertainty",
-    "context-retrieval",
     "scope-discipline",
+    "context-retrieval",
+    "repository-inspection",
     "global-response-discipline",
     "markdown-response-format"
   ]);
