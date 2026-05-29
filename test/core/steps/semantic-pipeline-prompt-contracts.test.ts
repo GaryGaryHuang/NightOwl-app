@@ -10,6 +10,7 @@ import {
   CANDIDATE_SEVERITIES,
   HYPOTHESIS_CLOSURE_STATUSES,
   LOOP_ACTIONS,
+  SUPPLEMENTAL_LENSES,
   VALIDATION_DECISIONS
 } from "../../../src/core/semantic-review.ts";
 import { CandidateFindingsStep } from "../../../src/core/steps/candidate-findings-step.ts";
@@ -48,7 +49,7 @@ function parseJsonBlock(prompt: string, blockName: string): unknown {
   return JSON.parse(match[1]);
 }
 
-test("CandidateFindingsStep wires ReviewBasis and CandidateFindingsV3 harness contract", () => {
+test("CandidateFindingsStep wires ReviewBasis and CandidateFindings harness contract", () => {
   const step = new CandidateFindingsStep({ promptSerializer: serializer });
   const context = createContext();
   const plan = step.prepare(context);
@@ -84,6 +85,12 @@ test("CandidateFindingsStep wires ReviewBasis and CandidateFindingsV3 harness co
     "triggerCondition",
     "impact",
     "counterEvidence",
+    "findingOrigins",
+    "findingIndex",
+    "kind",
+    "hypothesisIds",
+    "evidenceIds",
+    "lens",
     "hypothesisClosure",
     "hypothesisId",
     "status",
@@ -101,6 +108,9 @@ test("CandidateFindingsStep wires ReviewBasis and CandidateFindingsV3 harness co
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
   for (const value of HYPOTHESIS_CLOSURE_STATUSES) {
+    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
+  }
+  for (const value of SUPPLEMENTAL_LENSES) {
     assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
   }
 });
@@ -182,16 +192,16 @@ function createReviewBasis(): ReviewBasisV1 {
 }
 
 test("SemanticValidationStep wires candidate state and ValidationReport harness contract", () => {
-  const candidatePayload = createCandidateFindingsV3();
+  const candidatePayload = createCandidateFindings();
   const step = new SemanticValidationStep({ promptSerializer: serializer });
   const context = createContext() as SemanticFileReviewContext;
-  context.setCandidateFindingsV3(candidatePayload);
+  context.setCandidateFindings(candidatePayload);
   const plan = step.prepare(context);
 
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
-    candidateFindings: ReturnType<typeof createCandidateFindingsV3>;
+    candidateFindings: ReturnType<typeof createCandidateFindings>;
     approvedFindings: Finding[];
     reviewBasis: ReviewBasisV1 | null;
     validationFeedback: unknown;
@@ -228,10 +238,10 @@ test("SemanticValidationStep wires candidate state and ValidationReport harness 
 });
 
 type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
+  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
 };
 
-function createCandidateFindingsV3() {
+function createCandidateFindings() {
   return {
     result: "FINDINGS_READY",
     findings: [
@@ -245,6 +255,15 @@ function createCandidateFindingsV3() {
         triggerCondition: "nullable input reaches the changed branch",
         impact: "request fails before fallback can run",
         counterEvidence: ["fallback no longer precedes dereference"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: "candidate covers H1"
       }
     ],
     hypothesisClosure: [

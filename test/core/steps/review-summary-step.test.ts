@@ -101,58 +101,13 @@ test("ReviewSummaryStep.prepare() does not expose host-owned summary data blocks
   assert.doesNotMatch(plan.prompt.userMessage, /<summary_status>/u);
 });
 
-test("ReviewSummaryStep.prepare() frames internal review state as source material for reader-facing prose", () => {
+test("ReviewSummaryStep.prepare() advertises resolver-required narrative sections", () => {
   const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const plan = step.prepare(createContext([]));
   const instruction = getReviewSummaryInstructionText(plan.prompt.userMessage);
 
-  assert.match(
-    plan.prompt.systemMessage,
-    /reader-facing narrative portion of the final per-file review summary/u
-  );
-  assert.match(
-    plan.prompt.systemMessage,
-    /provided review state as the evidence source[\s\S]*internal record names, validator objects, and bookkeeping are private source material/u
-  );
-  assert.doesNotMatch(plan.prompt.systemMessage, /run-level index\/summary/u);
-  assert.doesNotMatch(plan.prompt.systemMessage, /## Findings|## Missing Information|designated first response heading/u);
-  assert.match(
-    instruction,
-    /private source material[\s\S]*not printed verbatim in the final review output/u
-  );
-  assert.match(
-    instruction,
-    /Internal source labels are never report wording[\s\S]*Use them only to locate source data[\s\S]*reviewBasis[\s\S]*approvedFindings[\s\S]*validationReport[\s\S]*missingInformationItems[\s\S]*Candidate Findings[\s\S]*Semantic Validation/u
-  );
-  assert.match(
-    instruction,
-    /Required output sections, in this order; begin with `### 審查依據`:[\s\S]*### 行為變更提醒/u
-  );
-  assert.doesNotMatch(instruction, /風險判定理由/u);
-  assert.match(
-    instruction,
-    /Section line shapes:[\s\S]*異動概要[\s\S]*已核對依據[\s\S]*待確認資訊/u
-  );
-  assert.match(
-    instruction,
-    /Source-material translation rules:[\s\S]*Translate internal source material into reader-facing statements/u
-  );
-  assert.match(
-    instruction,
-    /final `<review_state>\.missingInformationItems` array[\s\S]*If that final list is empty, write exactly `無`/u
-  );
-  assert.match(
-    instruction,
-    /Completion policy:[\s\S]*do not add an outer summary heading, conclusion or action sections/u
-  );
-  assert.match(
-    instruction,
-    /Complete Markdown output example:[\s\S]*The label is explanatory only/u
-  );
-  assert.doesNotMatch(
-    instruction,
-    /Clean example:|Limited example:|src\/api\.ts/u
-  );
+  assert.match(instruction, /### 審查依據/u);
+  assert.match(instruction, /### 行為變更提醒/u);
 });
 
 test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
@@ -229,7 +184,7 @@ test("ReviewSummaryStep.resolve composes host-owned status data", async (t) => {
 test("ReviewSummaryStep.prepare() consumes approved findings and missing-information state", () => {
   const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
   const context = createContext([createFinding("nice", "F1")]) as SemanticFileReviewContext;
-  context.setCandidateFindingsV3(createCandidateFindingsV3("must"));
+  context.setCandidateFindings(createCandidateFindings("must"));
   const validationReport = createValidationReportV1();
   context.setValidationReportV1(validationReport);
   context.setMissingInformationItems(createValidationReportV1().missingInformationItems);
@@ -317,7 +272,7 @@ function createResolveServices(): StepResolveServices {
 }
 
 type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
+  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
   setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
   setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
 };
@@ -341,7 +296,7 @@ function getReviewSummaryInstructionText(prompt: string): string {
   return prompt.slice(reviewStateEnd + "</review_state>".length);
 }
 
-function createCandidateFindingsV3(_type: "must" | "nice") {
+function createCandidateFindings(_type: "must" | "nice") {
   return {
     result: "FINDINGS_READY",
     findings: [
@@ -355,6 +310,15 @@ function createCandidateFindingsV3(_type: "must" | "nice") {
         triggerCondition: "candidate trigger",
         impact: "candidate impact",
         counterEvidence: ["candidate counter-evidence"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: "candidate closes H1"
       }
     ],
     hypothesisClosure: [

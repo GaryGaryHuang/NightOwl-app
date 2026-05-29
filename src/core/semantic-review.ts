@@ -10,10 +10,10 @@ export const CANDIDATE_SEVERITIES = ["high", "low"] as const;
 export type CandidateSeverity = (typeof CANDIDATE_SEVERITIES)[number];
 
 /**
- * A Candidate Findings candidate finding. Structurally identical to `Finding` (minus optional fields).
+ * A Candidate Findings candidate finding. Structurally identical to `Finding`.
  * When approved by Semantic Validation, a candidate becomes the final `Finding` directly.
  */
-export type CandidateFindingV3 = Finding;
+export type CandidateFinding = Finding;
 
 export const CANDIDATE_FINDINGS_RESULTS = [
   "FINDINGS_READY",
@@ -42,9 +42,36 @@ export interface CriticalMissingInformation {
   whyItMatters: string;
 }
 
-export interface CandidateFindingsV3 {
+export const SUPPLEMENTAL_LENSES = [
+  "changed_behavior_sweep",
+  "data_flow_sweep",
+  "control_flow_sweep",
+  "dependency_contract_sweep",
+  "test_contract_sweep"
+] as const;
+export type SupplementalLens = (typeof SUPPLEMENTAL_LENSES)[number];
+
+export type FindingOrigin =
+  | {
+      findingIndex: number;
+      kind: "hypothesis";
+      hypothesisIds: string[];
+      evidenceIds: string[];
+      rationale: string;
+    }
+  | {
+      findingIndex: number;
+      kind: "supplemental";
+      lens: SupplementalLens;
+      evidenceIds: string[];
+      rationale: string;
+      relatedHypothesisIds: string[];
+    };
+
+export interface CandidateFindings {
   result: CandidateFindingsResult;
-  findings: CandidateFindingV3[];
+  findings: CandidateFinding[];
+  findingOrigins: FindingOrigin[];
   hypothesisClosure: HypothesisClosure[];
   criticalMissingInformation: CriticalMissingInformation[];
 }
@@ -93,9 +120,9 @@ export interface ValidationReportV1 {
   loopControl: LoopControl;
 }
 
-export function cloneCandidateFindingsV3(
-  payload: CandidateFindingsV3
-): CandidateFindingsV3 {
+export function cloneCandidateFindings(
+  payload: CandidateFindings
+): CandidateFindings {
   return cloneJson(payload);
 }
 
@@ -112,7 +139,7 @@ export function cloneMissingInformationItems(
 }
 
 export function semanticCandidateFingerprint(
-  payload: CandidateFindingsV3
+  payload: CandidateFindings
 ): string {
   const normalized = {
     result: payload.result,
@@ -128,6 +155,7 @@ export function semanticCandidateFingerprint(
       counterEvidence: finding.counterEvidence,
       dependencyPathException: finding.dependencyPathException
     })),
+    findingOrigins: payload.findingOrigins,
     hypothesisClosure: payload.hypothesisClosure,
     criticalMissingInformation: payload.criticalMissingInformation
   };

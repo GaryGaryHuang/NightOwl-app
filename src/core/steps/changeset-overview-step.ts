@@ -24,13 +24,13 @@ export const CHANGESET_OVERVIEW_SYSTEM_MESSAGE = [
   JSON_STEP_SYSTEM_MESSAGE,
   "",
   "## Current Step: Changeset Overview",
-  "- This is a run-level step. Establish a high-level understanding of the overall changeset before per-file review begins.",
-  "- The goal of this step is to produce shared context that will help subsequent per-file review. Focus on scope, cross-file boundaries, observable behavioral changes, and any test-derived expectations that materially affect that review.",
-  "- Keep analysis high-level and high-signal. Do not analyze every file in detail, and do not fill the overview with generic restatements of file names or change statuses.",
-  "- Record behavioral changes as run-level context. If user context states expected behavior or business background, preserve that expectation as review context for subsequent per-file review. Do not emit bug findings or final correctness conclusions in the current step.",
-  "- If changed files have corresponding test file changes, gather the behavioral expectations and boundary conditions those tests reveal as additional context for subsequent per-file review.",
-  "- If <user_context> is provided, read it completely and preserve stated requirements, expected behavior, Root Cause, business decisions, and first-party background in the current step's output fields.",
-  "- If referenced external content cannot be retrieved and the missing content materially affects subsequent per-file review, record the limitation in the current step's output."
+  "- This is the run-level readiness step before per-file review begins.",
+  "- Use this analysis sequence: read all run-level inputs, categorize affected scope, identify cross-file boundaries, extract observable behavior changes, and capture test-derived expectations.",
+  "- Include only information that later per-file steps need; omit per-file detail, generic file-status summaries, and low-value restatements.",
+  "- Group related files by changed area or interaction pattern instead of analyzing every file individually.",
+  "- Preserve user-provided requirements, expected behavior, Root Cause, business decisions, and first-party background as review context for later steps.",
+  "- If material context is unavailable, carry the limitation forward under the current step output contract instead of guessing.",
+  "- Do not convert overview context into bug findings, risk verdicts, or final correctness conclusions."
 ].join("\n");
 
 const CHANGESET_OVERVIEW_INSTRUCTION = [
@@ -126,8 +126,18 @@ export function buildChangesetOverviewRetryRepairPrompt(
     input,
     {
       previousFailure,
-      instruction:
-        "Return a corrected JSON object that satisfies the current output contract. Preserve the same changed_files and user_context inputs; fix only schema violations identified by the previous failure."
+      repairTask:
+        "Regenerate the complete Changeset Overview JSON object after deterministic validation rejected the previous response.",
+      correctionOrder: [
+        "If previousFailure.code is PARSE, first make the response exactly one syntactically complete JSON object: remove Markdown fences, prose, duplicate root objects, trailing text, and incomplete JSON.",
+        "If previousFailure.code is SCHEMA, fix the field indicated by previousFailure.message, previousFailure.offendingPath, previousFailure.allowedValues, or previousFailure.repairHint while preserving valid high-signal content.",
+        "Re-check that the replacement object has the required top-level fields: reviewObjective, userBehavior, missingInformation, overviewMarkdown, behaviorChanges, and unresolvedUnknowns."
+      ],
+      repairConstraints: [
+        "Use the current changed_files_json and user_context blocks as the source inputs; validator_feedback is only error feedback, not review evidence.",
+        "Preserve the same review scope and user-provided expectations unless the previous failure shows they were malformed.",
+        "Return a full replacement JSON object, not a patch, diff, explanation, or analysis note."
+      ]
     }
   );
 }

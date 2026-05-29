@@ -179,11 +179,15 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
       code: string;
       parseStage?: string;
     };
-    instruction: unknown;
+    repairTask: unknown;
+    correctionOrder: unknown;
+    repairConstraints: unknown;
   };
   assert.equal(retryFeedback.previousFailure.code, "PARSE");
   assert.equal(retryFeedback.previousFailure.parseStage, "initial_parse");
-  assert.equal(typeof retryFeedback.instruction, "string");
+  assert.equal(typeof retryFeedback.repairTask, "string");
+  assert.ok(Array.isArray(retryFeedback.correctionOrder));
+  assert.ok(Array.isArray(retryFeedback.repairConstraints));
   assert.equal(logMessages.length, 1);
   assert.match(logMessages[0]!, /Changeset Overview validation failed \(attempt 1, code=PARSE/u);
   assert.match(logMessages[0]!, /stage=initial_parse/u);

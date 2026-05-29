@@ -53,7 +53,7 @@ function serializeSnapshot(
 const serializer = new ReviewStatePromptSerializer();
 
 type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
+  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
   setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
   setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
 };
@@ -130,9 +130,9 @@ test("JSON encoding prevents raw section content from creating XML-ish child blo
   assert.equal(result.includes("</review_state> and"), false);
 });
 
-test("CandidateFindingsV3 populates candidateFindings without promoting approved findings", () => {
+test("CandidateFindings populates candidateFindings without promoting approved findings", () => {
   const ctx = createContext() as SemanticFileReviewContext;
-  ctx.setCandidateFindingsV3(createCandidateFindingsV3());
+  ctx.setCandidateFindings(createCandidateFindings());
 
   const snapshot = serializeSnapshot(ctx, ["candidate-findings"]);
   const candidateFindings = snapshot.candidateFindings;
@@ -142,6 +142,15 @@ test("CandidateFindingsV3 populates candidateFindings without promoting approved
   assert.equal(candidateFindings.findings.length, 1);
   assert.equal(candidateFindings.findings[0].findingId, "F1");
   assert.equal(candidateFindings.findings[0].classification, "confirmed_problem");
+  assert.deepEqual(candidateFindings.findingOrigins, [
+    {
+      findingIndex: 1,
+      kind: "hypothesis",
+      hypothesisIds: ["H1"],
+      evidenceIds: ["E1"],
+      rationale: "candidate covers H1"
+    }
+  ]);
   assert.equal(candidateFindings.hypothesisClosure[0]?.hypothesisId, "H1");
   assert.deepEqual(candidateFindings.criticalMissingInformation, []);
   assert.deepEqual((snapshot as SemanticReviewStateSnapshot).approvedFindings, []);
@@ -245,7 +254,7 @@ test("prior validator feedback is serialized only when requested", () => {
   });
 });
 
-function createCandidateFindingsV3() {
+function createCandidateFindings() {
   return {
     result: "FINDINGS_READY",
     findings: [
@@ -259,6 +268,15 @@ function createCandidateFindingsV3() {
         triggerCondition: "nullable input reaches the changed branch",
         impact: "request fails before fallback can run",
         counterEvidence: ["fallback no longer precedes dereference"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: "candidate covers H1"
       }
     ],
     hypothesisClosure: [

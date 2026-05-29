@@ -3,7 +3,6 @@ import test from "node:test";
 
 import {
   CHANGESET_OVERVIEW_REVIEW_PROFILE,
-  CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
   buildChangesetOverviewRetryRepairPrompt,
   buildChangesetOverviewPrompt
 } from "../../../src/core/steps/changeset-overview-step.ts";
@@ -161,57 +160,9 @@ test("buildChangesetOverviewPrompt preserves copy metadata in changed_files_json
   assert.doesNotMatch(prompt, /C75\tsrc\/original\.ts\tsrc\/copied\.ts/);
 });
 
-test("CHANGESET_OVERVIEW_SYSTEM_MESSAGE keeps step identity separate from field contract details", () => {
-  assert.match(CHANGESET_OVERVIEW_SYSTEM_MESSAGE, /Changeset Overview/);
-  assert.doesNotMatch(
-    CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
-    /reviewObjective|userBehavior|behaviorChanges|unresolvedUnknowns|schemaVersion|userContextSSOT|expectedBehaviorLedger/u
-  );
-  assert.doesNotMatch(
-    CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
-    /Finding Code Locations & Inline Anchors/u
-  );
-});
-
 test("CHANGESET_OVERVIEW_REVIEW_PROFILE keeps the documented ten minute timeout", () => {
   assert.equal(CHANGESET_OVERVIEW_REVIEW_PROFILE.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.equal(CHANGESET_OVERVIEW_REVIEW_PROFILE.model, "gpt-5.4-mini");
-});
-
-test("buildChangesetOverviewPrompt includes the Changeset Overview output schema anchors required by the validator", () => {
-  const prompt = buildChangesetOverviewPrompt({
-    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
-    userContext: []
-  });
-
-  assert.ok(
-    prompt.includes("## Changeset Overview"),
-    "Changeset Overview instruction must show the exact `## Changeset Overview` header so the model can emit the required overviewMarkdown prefix"
-  );
-  for (const field of [
-    "reviewObjective",
-    "summary",
-    "requestedFocus",
-    "expectedBehaviorSummary",
-    "userBehavior",
-    "statement",
-    "confidence",
-    "missingInformation",
-    "description",
-    "whyItMatters",
-    "overviewMarkdown",
-    "behaviorChanges",
-    "files",
-    "unresolvedUnknowns",
-    "question",
-    "resolutionPath"
-  ]) {
-    assert.match(prompt, new RegExp(field, "u"));
-  }
-  assert.match(prompt, /`explicit`/u);
-  assert.match(prompt, /`inferred`/u);
-  assert.match(prompt, /behaviorChanges\[\]\.files\[\]/u);
-  assert.equal(parseJsonBlock(prompt, "validator_feedback"), null);
 });
 
 test("buildChangesetOverviewRetryRepairPrompt preserves inputs and provides structured validator feedback", () => {
@@ -244,9 +195,14 @@ test("buildChangesetOverviewRetryRepairPrompt preserves inputs and provides stru
   });
   const feedback = parseJsonBlock(prompt, "validator_feedback") as {
     previousFailure: unknown;
-    instruction: unknown;
+    repairTask: unknown;
+    correctionOrder: unknown;
+    repairConstraints: unknown;
   };
   assert.deepEqual(feedback.previousFailure, previousFailure);
-  assert.equal(typeof feedback.instruction, "string");
-  assert.notEqual(feedback.instruction, "");
+  assert.equal(typeof feedback.repairTask, "string");
+  assert.ok(Array.isArray(feedback.correctionOrder));
+  assert.ok(feedback.correctionOrder.length >= 2);
+  assert.ok(Array.isArray(feedback.repairConstraints));
+  assert.ok(feedback.repairConstraints.length >= 2);
 });

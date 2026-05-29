@@ -118,33 +118,35 @@ test("FileReviewContext returns defensive ReviewBasisV1 snapshots", () => {
   assert.equal(second.evidenceRefs[0].summary, "review basis state added");
 });
 
-test("FileReviewContext stores CandidateFindingsV3 separately from approved findings", () => {
+test("FileReviewContext stores CandidateFindings separately from approved findings", () => {
   const context = createContext() as SemanticFileReviewContext;
-  const candidatePayload = createCandidateFindingsV3();
+  const candidatePayload = createCandidateFindings();
 
-  context.setCandidateFindingsV3(candidatePayload);
+  context.setCandidateFindings(candidatePayload);
 
   assert.equal(context.getFindings(), undefined);
   assert.equal(
-    context.getCandidateFindingsV3()?.findings[0]?.classification,
+    context.getCandidateFindings()?.findings[0]?.classification,
     "confirmed_problem"
   );
 });
 
-test("FileReviewContext returns defensive CandidateFindingsV3 snapshots", () => {
+test("FileReviewContext returns defensive CandidateFindings snapshots", () => {
   const context = createContext() as SemanticFileReviewContext;
-  const candidatePayload = createCandidateFindingsV3();
+  const candidatePayload = createCandidateFindings();
 
-  context.setCandidateFindingsV3(candidatePayload);
+  context.setCandidateFindings(candidatePayload);
   candidatePayload.findings[0]!.classification = "reasonable_risk";
 
-  const first = context.getCandidateFindingsV3()!;
+  const first = context.getCandidateFindings()!;
   first.findings[0]!.evidence = "MUTATED";
+  first.findingOrigins[0]!.rationale = "MUTATED";
   first.hypothesisClosure[0]!.status = "insufficient_information";
 
-  const second = context.getCandidateFindingsV3()!;
+  const second = context.getCandidateFindings()!;
   assert.equal(second.findings[0]!.classification, "confirmed_problem");
   assert.equal(second.findings[0]!.evidence, "changed branch reads value before fallback; guard runs after dereference");
+  assert.equal(second.findingOrigins[0]!.rationale, "candidate covers H1");
   assert.equal(second.hypothesisClosure[0]!.status, "closed_by_candidate");
 });
 
@@ -276,15 +278,15 @@ function createContext(
 }
 
 type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
-  getCandidateFindingsV3(): ReturnType<typeof createCandidateFindingsV3> | undefined;
+  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
+  getCandidateFindings(): ReturnType<typeof createCandidateFindings> | undefined;
   setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
   getValidationReportV1(): ReturnType<typeof createValidationReportV1> | undefined;
   setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
   getMissingInformationItems(): ReturnType<typeof createValidationReportV1>["missingInformationItems"] | undefined;
 };
 
-function createCandidateFindingsV3() {
+function createCandidateFindings() {
   return {
     result: "FINDINGS_READY",
     findings: [
@@ -298,6 +300,15 @@ function createCandidateFindingsV3() {
         triggerCondition: "nullable input reaches the changed branch",
         impact: "request fails before fallback can run",
         counterEvidence: ["fallback no longer precedes dereference"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: "candidate covers H1"
       }
     ],
     hypothesisClosure: [

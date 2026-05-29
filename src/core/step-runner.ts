@@ -15,21 +15,22 @@ import {
   SEMANTIC_VALIDATION_STEP_ID
 } from "./review-step-ids.ts";
 import type {
-  CandidateFindingsV3,
+  CandidateFindings,
   ValidationReportV1
 } from "./semantic-review.ts";
 import type { StructuredValidationReportEntry } from "./validation-report.ts";
 
 export interface StructuredOutputValidatorLike {
-  validateCandidateFindingsV3WithReport(input: {
+  validateCandidateFindingsWithReport(input: {
     responseText: string;
     reviewBasis: ReviewBasisV1;
+    previousCandidateFindings?: CandidateFindings;
     diffContent?: string;
     filePath?: string;
-  }): { payload: CandidateFindingsV3; report: StructuredValidationReportEntry[] };
+  }): { payload: CandidateFindings; report: StructuredValidationReportEntry[] };
   validateValidationReportV1WithReport(input: {
     responseText: string;
-    candidateFindings: CandidateFindingsV3 | Record<string, unknown>;
+    candidateFindings: CandidateFindings | Record<string, unknown>;
     reviewBasis?: ReviewBasisV1;
     diffContent?: string;
     filePath?: string;
@@ -217,7 +218,7 @@ function schemaIdForStep(stepId: string): string {
     case REVIEW_BASIS_STEP_ID:
       return "ReviewBasisV1";
     case CANDIDATE_FINDINGS_STEP_ID:
-      return "CandidateFindingsV3";
+      return "CandidateFindings";
     case SEMANTIC_VALIDATION_STEP_ID:
       return "ValidationReportV1";
     case REVIEW_SUMMARY_STEP_ID:
@@ -245,7 +246,9 @@ function appendRetryRepairContext(userMessage: string, retryFeedback: string): s
     "",
     "<retry_repair_context>",
     "The previous attempt failed deterministic validation or completion checking.",
-    "Repair the output so it satisfies this step's required format and contract. Do not add unrelated analysis.",
+    "Use this block only as correction feedback for the same current-step inputs; do not treat it as new review evidence.",
+    "Regenerate the complete output for this step. Do not output a patch, diff, partial field list, explanation, or analysis note.",
+    "Fix the named parse, schema, provenance, coverage, or completion issue while preserving valid high-signal content from the current prompt.",
     retryFeedback,
     "</retry_repair_context>"
   ].join("\n");

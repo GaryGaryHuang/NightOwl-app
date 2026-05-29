@@ -5,11 +5,12 @@ import type {
 import type { ReviewBasisV1 } from "./review-basis.ts";
 import type {
   CandidateClassification,
-  CandidateFindingV3,
+  CandidateFinding,
+  CandidateFindings,
   CandidateFindingsResult,
-  CandidateFindingsV3,
   CandidateSeverity,
   CriticalMissingInformation,
+  FindingOrigin,
   HypothesisClosure,
   HypothesisClosureStatus,
   LoopAction,
@@ -17,6 +18,7 @@ import type {
   MissingInformationItem,
   PerFindingValidationResult,
   SemanticGateId,
+  SupplementalLens,
   ValidationDecision,
   ValidationReportV1
 } from "./semantic-review.ts";
@@ -26,9 +28,12 @@ import {
   HYPOTHESIS_CLOSURE_STATUSES as RUNTIME_HYPOTHESIS_CLOSURE_STATUSES,
   LOOP_ACTIONS as RUNTIME_LOOP_ACTIONS,
   SEMANTIC_GATE_IDS as RUNTIME_SEMANTIC_GATE_IDS,
+  SUPPLEMENTAL_LENSES as RUNTIME_SUPPLEMENTAL_LENSES,
   VALIDATION_DECISIONS as RUNTIME_VALIDATION_DECISIONS
 } from "./semantic-review.ts";
 import type { StructuredValidationReportEntry } from "./validation-report.ts";
+
+const MAX_SUPPLEMENTAL_FINDINGS_PER_FILE = 2;
 
 export class StructuredValidationReportError extends Error {
   readonly report: readonly StructuredValidationReportEntry[];
@@ -45,23 +50,30 @@ interface TraceabilityValidationResult {
 }
 
 export class StructuredOutputValidator {
-  validateCandidateFindingsV3WithReport(input: {
+  validateCandidateFindingsWithReport(input: {
     responseText: string;
     reviewBasis: ReviewBasisV1;
+    previousCandidateFindings?: CandidateFindings;
     diffContent?: string;
     filePath?: string;
-  }): { payload: CandidateFindingsV3; report: StructuredValidationReportEntry[] } {
+  }): { payload: CandidateFindings; report: StructuredValidationReportEntry[] } {
     const report: StructuredValidationReportEntry[] = [];
 
     try {
       const record = parseTopLevelObject(
         input.responseText,
-        "top-level payload must be an object with a CandidateFindingsV3 shape"
+        "top-level payload must be an object with a CandidateFindings shape"
       );
-      const payload = validateCandidateFindingsV3Record({
+      const payload = validateCandidateFindingsRecord({
         record,
         reviewBasis: input.reviewBasis
       });
+      if (input.previousCandidateFindings !== undefined) {
+        assertSemanticRerunPreservesCandidateScope({
+          previous: input.previousCandidateFindings,
+          current: payload
+        });
+      }
 
       for (const finding of payload.findings) {
         report.push({
@@ -69,14 +81,14 @@ export class StructuredOutputValidator {
           taxonomy: "OK",
           outcome: "accepted",
           gate: "schema",
-          reason: "passed CandidateFindingsV3 schema validation"
+          reason: "passed CandidateFindings schema validation"
         });
         report.push({
           findingId: finding.findingId,
           taxonomy: "OK",
           outcome: "accepted",
           gate: "semantic",
-          reason: "passed CandidateFindingsV3 semantic gates"
+          reason: "passed CandidateFindings semantic gates"
         });
       }
 
@@ -93,7 +105,7 @@ export class StructuredOutputValidator {
         });
       }
       throw new StructuredValidationReportError(
-        "deterministic validation failed: CandidateFindingsV3 failed validation",
+        "deterministic validation failed: CandidateFindings failed validation",
         report
       );
     }
@@ -101,7 +113,7 @@ export class StructuredOutputValidator {
 
   validateValidationReportV1WithReport(input: {
     responseText: string;
-    candidateFindings: CandidateFindingsV3 | Record<string, unknown>;
+    candidateFindings: CandidateFindings | Record<string, unknown>;
     reviewBasis?: ReviewBasisV1;
     diffContent?: string;
     filePath?: string;
@@ -113,7 +125,7 @@ export class StructuredOutputValidator {
         input.responseText,
         "top-level payload must be an object with a ValidationReportV1 shape"
       );
-      const candidatePayload = coerceCandidateFindingsV3ForValidation({
+      const candidatePayload = coerceCandidateFindingsForValidation({
         input: input.candidateFindings,
         reviewBasis: input.reviewBasis
       });
@@ -172,13 +184,13 @@ function buildValidationReportSemanticFields(
   };
 }
 
-function validateCandidateFindingsV3Record(input: {
+function validateCandidateFindingsRecord(input: {
   record: Record<string, unknown>;
   reviewBasis: ReviewBasisV1;
-}): CandidateFindingsV3 {
+}): CandidateFindings {
   const findings = validateArray(input.record.findings, "findings").map(
     (finding, index) =>
-      validateCandidateFindingV3({
+      validateCandidateFinding({
         input: finding,
         index
       })
@@ -199,11 +211,36 @@ function validateCandidateFindingsV3Record(input: {
     input.reviewBasis
   );
 
+  const findingOrigins = validateArray(
+    input.record.findingOrigins,
+    "findingOrigins"
+  ).map((origin, index) =>
+    validateFindingOrigin({
+      input: origin,
+      index,
+      findingsLength: findings.length,
+      reviewBasis: input.reviewBasis
+    })
+  );
+  assertFindingOriginsCoverFindings({
+    origins: findingOrigins,
+    findingsLength: findings.length
+  });
+  assertSupplementalFindingLimit(findingOrigins);
+  assertFindingOriginsMatchHypothesisClosure({
+    origins: findingOrigins,
+    hypothesisClosure
+  });
+
   const criticalMissingInformation = validateArray(
     input.record.criticalMissingInformation,
     "criticalMissingInformation"
   ).map((item, index) => validateCriticalMissingInformation(item, index));
   assertInsufficientHypothesesHaveCriticalMissingInformation({
+    hypothesisClosure,
+    criticalMissingInformation
+  });
+  assertCriticalMissingInformationAlignment({
     hypothesisClosure,
     criticalMissingInformation
   });
@@ -219,15 +256,16 @@ function validateCandidateFindingsV3Record(input: {
   return {
     result,
     findings,
+    findingOrigins,
     hypothesisClosure,
     criticalMissingInformation
   };
 }
 
-function validateCandidateFindingV3(input: {
+function validateCandidateFinding(input: {
   input: unknown;
   index: number;
-}): CandidateFindingV3 {
+}): CandidateFinding {
   if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
     throw new Error(
       `deterministic validation failed: findings[${input.index}] must be a non-null object`
@@ -288,9 +326,193 @@ function validateCandidateFindingV3(input: {
   };
 }
 
+function validateFindingOrigin(input: {
+  input: unknown;
+  index: number;
+  findingsLength: number;
+  reviewBasis: ReviewBasisV1;
+}): FindingOrigin {
+  if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
+    throw new Error(
+      `deterministic validation failed: findingOrigins[${input.index}] must be a non-null object`
+    );
+  }
+
+  const record = input.input as Record<string, unknown>;
+  const fieldName = `findingOrigins[${input.index}]`;
+  const findingIndex = validatePositiveInteger(
+    record.findingIndex,
+    `${fieldName}.findingIndex`
+  );
+  if (findingIndex > input.findingsLength) {
+    throw new Error(
+      `deterministic validation failed: ${fieldName}.findingIndex references unknown finding index ${findingIndex}`
+    );
+  }
+
+  const kind = validateEnum<"hypothesis" | "supplemental">(
+    record.kind,
+    ["hypothesis", "supplemental"],
+    `${fieldName}.kind`
+  );
+  const evidenceIds = validateReviewBasisEvidenceIds({
+    value: record.evidenceIds,
+    fieldName: `${fieldName}.evidenceIds`,
+    reviewBasis: input.reviewBasis,
+    nonEmpty: true
+  });
+  const rationale = validateStringField(record.rationale, `${fieldName}.rationale`);
+
+  if (kind === "hypothesis") {
+    return {
+      findingIndex,
+      kind,
+      hypothesisIds: validateReviewBasisHypothesisIds({
+        value: record.hypothesisIds,
+        fieldName: `${fieldName}.hypothesisIds`,
+        reviewBasis: input.reviewBasis,
+        nonEmpty: true
+      }),
+      evidenceIds,
+      rationale
+    };
+  }
+
+  return {
+    findingIndex,
+    kind,
+    lens: validateEnum<SupplementalLens>(
+      record.lens,
+      VALID_SUPPLEMENTAL_LENSES,
+      `${fieldName}.lens`
+    ),
+    evidenceIds,
+    rationale,
+    relatedHypothesisIds: validateReviewBasisHypothesisIds({
+      value: record.relatedHypothesisIds,
+      fieldName: `${fieldName}.relatedHypothesisIds`,
+      reviewBasis: input.reviewBasis
+    })
+  };
+}
+
+function validateReviewBasisEvidenceIds(input: {
+  value: unknown;
+  fieldName: string;
+  reviewBasis: ReviewBasisV1;
+  nonEmpty?: boolean;
+}): string[] {
+  const ids = validateStringArray(input.value, input.fieldName, {
+    nonEmpty: input.nonEmpty
+  });
+  const validIds = new Set(input.reviewBasis.evidenceRefs.map((ref) => ref.evidenceId));
+  for (const id of ids) {
+    if (!validIds.has(id)) {
+      throw new Error(
+        `deterministic validation failed: ${input.fieldName} references unknown ReviewBasis evidenceId ${id}`
+      );
+    }
+  }
+  return ids;
+}
+
+function validateReviewBasisHypothesisIds(input: {
+  value: unknown;
+  fieldName: string;
+  reviewBasis: ReviewBasisV1;
+  nonEmpty?: boolean;
+}): string[] {
+  const ids = validateStringArray(input.value, input.fieldName, {
+    nonEmpty: input.nonEmpty
+  });
+  const validIds = new Set(
+    input.reviewBasis.hypothesisLedger.map((hypothesis) => hypothesis.hypothesisId)
+  );
+  for (const id of ids) {
+    if (!validIds.has(id)) {
+      throw new Error(
+        `deterministic validation failed: ${input.fieldName} references unknown ReviewBasis hypothesisId ${id}`
+      );
+    }
+  }
+  return ids;
+}
+
+function assertFindingOriginsCoverFindings(input: {
+  origins: readonly FindingOrigin[];
+  findingsLength: number;
+}): void {
+  const seen = new Set<number>();
+  for (const origin of input.origins) {
+    if (seen.has(origin.findingIndex)) {
+      throw new Error(
+        `deterministic validation failed: findingOrigins contains duplicate findingIndex ${origin.findingIndex}`
+      );
+    }
+    seen.add(origin.findingIndex);
+  }
+
+  for (let findingIndex = 1; findingIndex <= input.findingsLength; findingIndex += 1) {
+    if (!seen.has(findingIndex)) {
+      throw new Error(
+        `deterministic validation failed: findingOrigins is missing origin for findingIndex ${findingIndex}`
+      );
+    }
+  }
+}
+
+function assertSupplementalFindingLimit(
+  origins: readonly FindingOrigin[]
+): void {
+  const supplementalCount = origins.filter(
+    (origin) => origin.kind === "supplemental"
+  ).length;
+  if (supplementalCount > MAX_SUPPLEMENTAL_FINDINGS_PER_FILE) {
+    throw new Error(
+      `deterministic validation failed: supplemental findingOrigins must not exceed ${MAX_SUPPLEMENTAL_FINDINGS_PER_FILE} per file`
+    );
+  }
+}
+
+function assertFindingOriginsMatchHypothesisClosure(input: {
+  origins: readonly FindingOrigin[];
+  hypothesisClosure: readonly HypothesisClosure[];
+}): void {
+  const statusByHypothesis = new Map(
+    input.hypothesisClosure.map((closure) => [closure.hypothesisId, closure.status])
+  );
+  const hypothesisOriginRefs = new Set<string>();
+
+  for (const origin of input.origins) {
+    if (origin.kind !== "hypothesis") {
+      continue;
+    }
+    for (const hypothesisId of origin.hypothesisIds) {
+      const status = statusByHypothesis.get(hypothesisId);
+      if (status !== "closed_by_candidate") {
+        throw new Error(
+          `deterministic validation failed: hypothesis findingOrigin references ${hypothesisId} with status ${status ?? "missing"} instead of closed_by_candidate`
+        );
+      }
+      hypothesisOriginRefs.add(hypothesisId);
+    }
+  }
+
+  for (const closure of input.hypothesisClosure) {
+    if (
+      closure.status === "closed_by_candidate" &&
+      !hypothesisOriginRefs.has(closure.hypothesisId)
+    ) {
+      throw new Error(
+        `deterministic validation failed: ${closure.hypothesisId} is closed_by_candidate but not referenced by findingOrigins hypothesis origin`
+      );
+    }
+  }
+}
+
 function validateValidationReportV1Record(input: {
   record: Record<string, unknown>;
-  candidatePayload: CandidateFindingsV3;
+  candidatePayload: CandidateFindings;
 }): ValidationReportV1 {
   const candidateIds = input.candidatePayload.findings.map((f) => f.findingId);
   const candidateIdSet = new Set(candidateIds);
@@ -426,6 +648,74 @@ function assertInsufficientHypothesesHaveCriticalMissingInformation(input: {
   }
 }
 
+function assertCriticalMissingInformationAlignment(input: {
+  hypothesisClosure: readonly HypothesisClosure[];
+  criticalMissingInformation: readonly CriticalMissingInformation[];
+}): void {
+  if (input.criticalMissingInformation.length === 0) {
+    return;
+  }
+
+  const hasInsufficientHypothesis = input.hypothesisClosure.some(
+    (closure) => closure.status === "insufficient_information"
+  );
+  if (!hasInsufficientHypothesis) {
+    throw new Error(
+      "deterministic validation failed: criticalMissingInformation requires an insufficient_information hypothesisClosure entry"
+    );
+  }
+}
+
+function assertSemanticRerunPreservesCandidateScope(input: {
+  previous: CandidateFindings;
+  current: CandidateFindings;
+}): void {
+  if (input.current.findings.length > input.previous.findings.length) {
+    throw new Error(
+      "deterministic validation failed: semantic rerun CandidateFindings must not introduce more candidates than the previous candidate payload"
+    );
+  }
+
+  if (
+    countSupplementalOrigins(input.current.findingOrigins) >
+    countSupplementalOrigins(input.previous.findingOrigins)
+  ) {
+    throw new Error(
+      "deterministic validation failed: semantic rerun CandidateFindings must not introduce more supplemental candidates than the previous candidate payload"
+    );
+  }
+}
+
+function countSupplementalOrigins(
+  origins: readonly FindingOrigin[]
+): number {
+  return origins.filter((origin) => origin.kind === "supplemental").length;
+}
+
+function assertValidationReportMatchesCandidatePayload(input: {
+  candidatePayload: CandidateFindings;
+  perFindingResults: readonly PerFindingValidationResult[];
+  missingInformationItems: readonly MissingInformationItem[];
+}): void {
+  const hasApproval =
+    input.perFindingResults.some((result) => result.decision === "approve");
+
+  if (input.candidatePayload.result !== "FINDINGS_READY" && hasApproval) {
+    throw new Error(
+      `deterministic validation failed: CandidateFindings result ${input.candidatePayload.result} cannot approve findings`
+    );
+  }
+
+  if (
+    input.candidatePayload.criticalMissingInformation.length > 0 &&
+    input.missingInformationItems.length === 0
+  ) {
+    throw new Error(
+      "deterministic validation failed: CandidateFindings criticalMissingInformation must be represented in ValidationReportV1 missingInformationItems"
+    );
+  }
+}
+
 function validateCriticalMissingInformation(
   input: unknown,
   index: number
@@ -538,31 +828,6 @@ function assertPerFindingResultsCoverCandidates(
   }
 }
 
-function assertValidationReportMatchesCandidatePayload(input: {
-  candidatePayload: CandidateFindingsV3;
-  perFindingResults: readonly PerFindingValidationResult[];
-  missingInformationItems: readonly MissingInformationItem[];
-}): void {
-  const hasApproval =
-    input.perFindingResults.some((result) => result.decision === "approve");
-
-  if (input.candidatePayload.result !== "FINDINGS_READY" && hasApproval) {
-    throw new Error(
-      `deterministic validation failed: CandidateFindingsV3 result ${input.candidatePayload.result} cannot approve findings`
-    );
-  }
-
-  if (
-    input.candidatePayload.result === "INSUFFICIENT_INFORMATION" &&
-    input.candidatePayload.criticalMissingInformation.length > 0 &&
-    input.missingInformationItems.length === 0
-  ) {
-    throw new Error(
-      "deterministic validation failed: CandidateFindingsV3 criticalMissingInformation must be represented in ValidationReportV1 missingInformationItems"
-    );
-  }
-}
-
 function validateMissingInformationItem(
   input: unknown,
   index: number
@@ -602,18 +867,18 @@ function validateLoopControl(input: unknown): { action: LoopAction; reason: stri
   };
 }
 
-function coerceCandidateFindingsV3ForValidation(input: {
-  input: CandidateFindingsV3 | Record<string, unknown>;
+function coerceCandidateFindingsForValidation(input: {
+  input: CandidateFindings | Record<string, unknown>;
   reviewBasis: ReviewBasisV1 | undefined;
-}): CandidateFindingsV3 {
+}): CandidateFindings {
   if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
     throw new Error(
-      "deterministic validation failed: candidateFindings must be CandidateFindingsV3"
+      "deterministic validation failed: candidateFindings must be CandidateFindings"
     );
   }
   if (input.reviewBasis === undefined) {
     throw new Error(
-      "deterministic validation failed: reviewBasis is required to validate complete CandidateFindingsV3 before ValidationReportV1"
+      "deterministic validation failed: reviewBasis is required to validate complete CandidateFindings before ValidationReportV1"
     );
   }
 
@@ -628,7 +893,7 @@ function coerceCandidateFindingsV3ForValidation(input: {
     );
   }
 
-  return validateCandidateFindingsV3Record({
+  return validateCandidateFindingsRecord({
     record: rawRecord,
     reviewBasis: input.reviewBasis
   });
@@ -1024,5 +1289,8 @@ const VALID_VALIDATION_DECISIONS: readonly ValidationDecision[] =
 
 const VALID_SEMANTIC_GATES: readonly SemanticGateId[] =
   RUNTIME_SEMANTIC_GATE_IDS;
+
+const VALID_SUPPLEMENTAL_LENSES: readonly SupplementalLens[] =
+  RUNTIME_SUPPLEMENTAL_LENSES;
 
 const VALID_LOOP_ACTIONS: readonly LoopAction[] = RUNTIME_LOOP_ACTIONS;

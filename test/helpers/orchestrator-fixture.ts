@@ -3,7 +3,7 @@ import type {
   Finding
 } from "../../src/core/file-review-context.ts";
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
-import type { CandidateFindingsV3, ValidationReportV1 } from "../../src/core/semantic-review.ts";
+import type { CandidateFindings, ValidationReportV1 } from "../../src/core/semantic-review.ts";
 import type { StepResult } from "../../src/core/step-runner.ts";
 
 export function buildReviewBasis(filePath: string): ReviewBasisV1 {
@@ -154,7 +154,7 @@ export function buildSuccessfulStepResult(
     return {
       stepId,
       applyTo(targetContext: FileReviewContext) {
-        targetContext.setCandidateFindingsV3(buildCandidateFindingsForFile(filePath));
+        targetContext.setCandidateFindings(buildCandidateFindingsForFile(filePath));
       }
     };
   }
@@ -187,7 +187,7 @@ export function buildSuccessfulStepResult(
   throw new Error(`Unexpected step: ${stepId}`);
 }
 
-function buildCandidateFindingsForFile(filePath: string): CandidateFindingsV3 {
+function buildCandidateFindingsForFile(filePath: string): CandidateFindings {
   return {
     result: "FINDINGS_READY",
     findings: [
@@ -201,6 +201,15 @@ function buildCandidateFindingsForFile(filePath: string): CandidateFindingsV3 {
         triggerCondition: "empty input reaches changed branch",
         impact: "會造成 correctness 問題",
         counterEvidence: ["fallback path no longer precedes changed branch"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: "candidate F1 covers H1"
       }
     ],
     hypothesisClosure: [

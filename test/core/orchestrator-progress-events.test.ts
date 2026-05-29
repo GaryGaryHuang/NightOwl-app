@@ -606,8 +606,8 @@ function buildSemanticLoopStepResult(
     return {
       stepId,
       applyTo(context: FileReviewContext) {
-        (context as SemanticFileReviewContext).setCandidateFindingsV3(
-          createCandidateFindingsV3(
+        (context as SemanticFileReviewContext).setCandidateFindings(
+          createCandidateFindings(
             options.candidateVariant ?? 1,
             options.candidateEvidenceVariant ?? options.candidateVariant ?? 1,
             options.candidateHypothesisClosureVariant ?? options.candidateVariant ?? 1,
@@ -647,7 +647,7 @@ function buildSemanticLoopStepResult(
 }
 
 type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
+  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
   setValidationReportV1(
     report:
       | ReturnType<typeof createRerunValidationReportV1>
@@ -655,7 +655,7 @@ type SemanticFileReviewContext = FileReviewContext & {
   ): void;
 };
 
-function createCandidateFindingsV3(
+function createCandidateFindings(
   variant: number,
   evidenceVariant: number = variant,
   hypothesisClosureVariant: number = variant,
@@ -674,6 +674,15 @@ function createCandidateFindingsV3(
         triggerCondition: `candidate trigger ${variant}`,
         impact: "candidate impact",
         counterEvidence: ["candidate counter-evidence"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: `candidate closes H1 with closure evidence ${hypothesisClosureVariant}`
       }
     ],
     hypothesisClosure: [

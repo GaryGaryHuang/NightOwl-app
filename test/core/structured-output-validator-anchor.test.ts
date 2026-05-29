@@ -16,7 +16,7 @@ const DEFAULT_DIFF = [
   " context-after"
 ].join("\n");
 
-test("StructuredOutputValidator rejects invalid CandidateFindingsV3 traceability payloads", () => {
+test("StructuredOutputValidator rejects invalid CandidateFindings traceability payloads", () => {
   const cases: Array<{
     label: string;
     traceability?: Record<string, unknown>;
@@ -52,7 +52,7 @@ test("StructuredOutputValidator rejects invalid CandidateFindingsV3 traceability
   }
 });
 
-test("StructuredOutputValidator accepts CandidateFindingsV3 line-range outside changed head lines", () => {
+test("StructuredOutputValidator accepts CandidateFindings line-range outside changed head lines", () => {
   const result = validateCandidatePayload(
     createCandidatePayload({
       traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 }
@@ -66,7 +66,7 @@ test("StructuredOutputValidator accepts CandidateFindingsV3 line-range outside c
   });
 });
 
-test("StructuredOutputValidator accepts CandidateFindingsV3 dependency path exception outside changed head lines", () => {
+test("StructuredOutputValidator accepts CandidateFindings dependency path exception outside changed head lines", () => {
   const result = validateCandidatePayload(
     createCandidatePayload({
       traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
@@ -83,7 +83,7 @@ test("StructuredOutputValidator accepts CandidateFindingsV3 dependency path exce
   );
 });
 
-test("StructuredOutputValidator accepts CandidateFindingsV3 line-range on changed head lines", () => {
+test("StructuredOutputValidator accepts CandidateFindings line-range on changed head lines", () => {
   const result = validateCandidatePayload(
     createCandidatePayload({
       traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 }
@@ -97,7 +97,7 @@ test("StructuredOutputValidator accepts CandidateFindingsV3 line-range on change
   });
 });
 
-test("StructuredOutputValidator accepts CandidateFindingsV3 diff-hunk with trimmed header", () => {
+test("StructuredOutputValidator accepts CandidateFindings diff-hunk with trimmed header", () => {
   const result = validateCandidatePayload(
     createCandidatePayload({
       traceability: { kind: "diff-hunk", hunkHeader: `  ${DEFAULT_HUNK_HEADER}  ` }
@@ -111,7 +111,7 @@ test("StructuredOutputValidator accepts CandidateFindingsV3 diff-hunk with trimm
 });
 
 function validateCandidatePayload(payload: Record<string, unknown>) {
-  return new StructuredOutputValidator().validateCandidateFindingsV3WithReport({
+  return new StructuredOutputValidator().validateCandidateFindingsWithReport({
     responseText: JSON.stringify(payload),
     reviewBasis: createReviewBasis(),
     diffContent: DEFAULT_DIFF,
@@ -156,6 +156,15 @@ function createCandidatePayload(
         impact: "request fails before fallback can run",
         counterEvidence: ["fallback no longer precedes dereference"],
         ...findingOverrides
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: "candidate covers H1"
       }
     ],
     hypothesisClosure: [

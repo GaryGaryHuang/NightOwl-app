@@ -2,9 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { FileReviewContext } from "../../src/core/file-review-context.ts";
-import { StructuredOutputValidator } from "../../src/core/structured-output-validator.ts";
 import {
-  createCandidateFindingsV3Resolve,
+  StructuredOutputValidator,
+  StructuredValidationReportError
+} from "../../src/core/structured-output-validator.ts";
+import {
+  createCandidateFindingsResolve,
   createValidationReportV1Resolve
 } from "../../src/core/steps/step-resolve-helpers.ts";
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
@@ -18,10 +21,10 @@ const DEFAULT_CONTEXT = {
   headRef: "feature"
 } as const;
 
-test("createCandidateFindingsV3Resolve stores candidate state without promoting approved findings", async () => {
+test("createCandidateFindingsResolve stores candidate state without promoting approved findings", async () => {
   const context = createContext() as SemanticFileReviewContext;
-  const candidatePayload = createCandidateFindingsV3();
-  const resolve = createCandidateFindingsV3Resolve({
+  const candidatePayload = createCandidateFindings();
+  const resolve = createCandidateFindingsResolve({
     filePath: DEFAULT_CONTEXT.filePath,
     diffContent: DEFAULT_CONTEXT.diffContent,
     reviewBasis: createReviewBasis()
@@ -36,16 +39,75 @@ test("createCandidateFindingsV3Resolve stores candidate state without promoting 
 
   assert.equal(context.getFindings(), undefined);
   assert.deepEqual(
-    context.getCandidateFindingsV3()?.findings.map((candidate) => candidate.findingId),
+    context.getCandidateFindings()?.findings.map((candidate) => candidate.findingId),
     ["F1"]
+  );
+  assert.deepEqual(context.getCandidateFindings()?.findingOrigins, [
+    {
+      findingIndex: 1,
+      kind: "hypothesis",
+      hypothesisIds: ["H1"],
+      evidenceIds: ["E1"],
+      rationale: "candidate covers H1"
+    }
+  ]);
+});
+
+test("createCandidateFindingsResolve enforces prior candidate scope on semantic rerun", async () => {
+  const reviewBasis = createReviewBasis();
+  const previousCandidateFindings =
+    new StructuredOutputValidator().validateCandidateFindingsWithReport({
+      responseText: JSON.stringify(createCandidateFindings()),
+      reviewBasis,
+      diffContent: DEFAULT_CONTEXT.diffContent,
+      filePath: DEFAULT_CONTEXT.filePath
+    }).payload;
+  const candidatePayload = createCandidateFindings();
+  candidatePayload.findings = [
+    candidatePayload.findings[0]!,
+    {
+      ...candidatePayload.findings[0]!,
+      findingId: "F2",
+      title: "new supplemental candidate"
+    }
+  ];
+  candidatePayload.findingOrigins = [
+    candidatePayload.findingOrigins[0]!,
+    {
+      findingIndex: 2,
+      kind: "supplemental",
+      lens: "changed_behavior_sweep",
+      evidenceIds: ["E1"],
+      rationale: "new supplemental candidate added during semantic rerun",
+      relatedHypothesisIds: []
+    }
+  ];
+  const resolve = createCandidateFindingsResolve({
+    filePath: DEFAULT_CONTEXT.filePath,
+    diffContent: DEFAULT_CONTEXT.diffContent,
+    reviewBasis,
+    previousCandidateFindings
+  });
+
+  await assert.rejects(
+    () => resolve(JSON.stringify(candidatePayload), createResolveServices()),
+    (error) => {
+      assert.equal(error instanceof StructuredValidationReportError, true);
+      const reportError = error as StructuredValidationReportError;
+      assert.match(
+        reportError.report.map((entry) => entry.reason ?? "").join("\n"),
+        /semantic rerun.*more candidates/u
+      );
+      return true;
+    }
   );
 });
 
 test("createValidationReportV1Resolve writes approved findings and missing-information state", async () => {
   const context = createContext() as SemanticFileReviewContext;
-  const candidatePayload = createCandidateFindingsV3();
+  const candidatePayload = createCandidateFindings();
   const validationReport = createValidationReportV1();
-  context.setCandidateFindingsV3(candidatePayload);
+  context.setCandidateFindings(candidatePayload);
   const resolve = createValidationReportV1Resolve({
     filePath: DEFAULT_CONTEXT.filePath,
     diffContent: DEFAULT_CONTEXT.diffContent,
@@ -79,8 +141,8 @@ function createContext(): FileReviewContext {
 }
 
 type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindingsV3(payload: ReturnType<typeof createCandidateFindingsV3>): void;
-  getCandidateFindingsV3(): ReturnType<typeof createCandidateFindingsV3> | undefined;
+  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
+  getCandidateFindings(): ReturnType<typeof createCandidateFindings> | undefined;
   setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
   getValidationReportV1(): ReturnType<typeof createValidationReportV1> | undefined;
   setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
@@ -153,7 +215,17 @@ function createReviewBasis(): ReviewBasisV1 {
   };
 }
 
-function createCandidateFindingsV3() {
+function createCandidateFindings() {
+  const findingOrigins: Array<Record<string, unknown>> = [
+    {
+      findingIndex: 1,
+      kind: "hypothesis",
+      hypothesisIds: ["H1"],
+      evidenceIds: ["E1"],
+      rationale: "candidate covers H1"
+    }
+  ];
+
   return {
     findings: [
       {
@@ -168,6 +240,7 @@ function createCandidateFindingsV3() {
         counterEvidence: ["fallback no longer precedes dereference"]
       }
     ],
+    findingOrigins,
     hypothesisClosure: [
       {
         hypothesisId: "H1",

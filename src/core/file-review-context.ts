@@ -6,10 +6,10 @@ import {
   type ReviewBasisV1
 } from "./review-basis.ts";
 import {
-  cloneCandidateFindingsV3,
+  cloneCandidateFindings,
   cloneMissingInformationItems,
   cloneValidationReportV1,
-  type CandidateFindingsV3,
+  type CandidateFindings,
   type MissingInformationItem,
   type ValidationReportV1
 } from "./semantic-review.ts";
@@ -87,7 +87,7 @@ export class FileReviewContext {
   #findingsInsertionIndex?: number;
   #reviewBasis?: ReviewBasisV1;
   #priorValidatorFeedback?: PriorValidatorFeedback;
-  #candidateFindingsV3?: CandidateFindingsV3;
+  #candidateFindings?: CandidateFindings;
   #validationReportV1?: ValidationReportV1;
   #missingInformationItems?: MissingInformationItem[];
 
@@ -139,13 +139,13 @@ export class FileReviewContext {
       : undefined;
   }
 
-  setCandidateFindingsV3(payload: CandidateFindingsV3): void {
-    this.#candidateFindingsV3 = cloneCandidateFindingsV3(payload);
+  setCandidateFindings(payload: CandidateFindings): void {
+    this.#candidateFindings = cloneCandidateFindings(payload);
   }
 
-  getCandidateFindingsV3(): CandidateFindingsV3 | undefined {
-    return this.#candidateFindingsV3
-      ? cloneCandidateFindingsV3(this.#candidateFindingsV3)
+  getCandidateFindings(): CandidateFindings | undefined {
+    return this.#candidateFindings
+      ? cloneCandidateFindings(this.#candidateFindings)
       : undefined;
   }
 

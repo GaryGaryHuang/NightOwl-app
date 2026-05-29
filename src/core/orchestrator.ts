@@ -926,7 +926,7 @@ function markSemanticLoopStopped(
 }
 
 function buildCurrentCandidateFingerprint(context: FileReviewContext): string | undefined {
-  const payload = context.getCandidateFindingsV3();
+  const payload = context.getCandidateFindings();
   return payload ? semanticCandidateFingerprint(payload) : undefined;
 }
 
@@ -954,7 +954,7 @@ function buildSemanticReviewStats(
   context: FileReviewContext,
   semanticValidationCount: number
 ): SemanticReviewStats {
-  const candidatePayload = context.getCandidateFindingsV3();
+  const candidatePayload = context.getCandidateFindings();
   const validationReport = context.getValidationReportV1();
   const missingInformationItems =
     context.getMissingInformationItems() ??

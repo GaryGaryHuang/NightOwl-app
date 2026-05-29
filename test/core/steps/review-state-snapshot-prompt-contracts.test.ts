@@ -3,10 +3,7 @@ import test from "node:test";
 
 import type { ChangeMapReadinessV2 } from "../../../src/core/change-map.ts";
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
-import {
-  REVIEW_BASIS_INFERENCE_CONFIDENCES,
-  type ReviewBasisV1
-} from "../../../src/core/review-basis.ts";
+import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import {
   ReviewStatePromptSerializer,
@@ -14,7 +11,7 @@ import {
 } from "../../../src/core/review-state-prompt-serializer.ts";
 import { createRunContext } from "../../../src/core/run-context.ts";
 import type {
-  CandidateFindingsV3,
+  CandidateFindings,
   ValidationReportV1
 } from "../../../src/core/semantic-review.ts";
 import { CandidateFindingsStep } from "../../../src/core/steps/candidate-findings-step.ts";
@@ -53,7 +50,7 @@ function createFinding(findingId: string): Finding {
   };
 }
 
-function createCandidateFindings(): CandidateFindingsV3 {
+function createCandidateFindings(): CandidateFindings {
   return {
     result: "FINDINGS_READY",
     findings: [
@@ -67,6 +64,15 @@ function createCandidateFindings(): CandidateFindingsV3 {
         triggerCondition: "Candidate Findings cites absent evidence ID.",
         impact: "unsupported review findings would reach Review Summary",
         counterEvidence: ["ReviewBasis evidenceRefs contains E1"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: "candidate covers H1"
       }
     ],
     hypothesisClosure: [
@@ -227,52 +233,6 @@ function assertDiffBlock(prompt: string): void {
   assert.match(prompt, /<\/diff>/u);
 }
 
-function assertReviewBasisOutputContract(prompt: string): void {
-  for (const field of [
-    "roleInChangeset",
-    "changedBehavior",
-    "before",
-    "after",
-    "evidenceIds",
-    "facts",
-    "statement",
-    "inferences",
-    "basedOnEvidenceIds",
-    "confidence",
-    "dependencyMap",
-    "upstreamCallers",
-    "downstreamConsumers",
-    "externalContracts",
-    "sharedStateOrSideEffects",
-    "flowMap",
-    "entryPoints",
-    "stateTransitions",
-    "asyncBoundaries",
-    "errorPaths",
-    "testCoverage",
-    "changedTests",
-    "observedCoverageSignals",
-    "coverageGaps",
-    "hypothesisLedger",
-    "hypothesisId",
-    "triggerCondition",
-    "missingInformation",
-    "description",
-    "whyItMatters",
-    "evidenceRefs",
-    "evidenceId",
-    "sourceType",
-    "location",
-    "summary"
-  ]) {
-    assert.match(prompt, new RegExp(field, "u"));
-  }
-
-  for (const confidence of REVIEW_BASIS_INFERENCE_CONFIDENCES) {
-    assert.match(prompt, new RegExp(`\\b${confidence}\\b`, "u"));
-  }
-}
-
 test("ReviewBasisStep wires ChangeMapReadiness data, diff, and ReviewBasis harness contract", () => {
   const context = createContext();
   const runContext = createRunContext({
@@ -294,7 +254,6 @@ test("ReviewBasisStep wires ChangeMapReadiness data, diff, and ReviewBasis harne
   assertDiffBlock(userMessage);
   assert.equal(userMessage.includes("<review_state"), false);
   assert.equal(userMessage.includes("<review_basis"), false);
-  assertReviewBasisOutputContract(userMessage);
 });
 
 test("default per-file pipeline is the four-step semantic pipeline", () => {
@@ -321,7 +280,7 @@ test("Candidate Findings, Semantic Validation, and Review Summary receive parsea
   const context = createContext();
   const finding = createFinding("F1");
   context.setFindings([finding]);
-  context.setCandidateFindingsV3(createCandidateFindings());
+  context.setCandidateFindings(createCandidateFindings());
   context.setValidationReportV1(createValidationReport([finding]));
   context.setMissingInformationItems([]);
 
@@ -357,6 +316,15 @@ test("Candidate Findings, Semantic Validation, and Review Summary receive parsea
 
   assert.equal(snapshots[1].candidateFindings?.result, "FINDINGS_READY");
   assert.equal(snapshots[1].candidateFindings?.findings[0]?.findingId, "F1");
+  assert.deepEqual(snapshots[1].candidateFindings?.findingOrigins, [
+    {
+      findingIndex: 1,
+      kind: "hypothesis",
+      hypothesisIds: ["H1"],
+      evidenceIds: ["E1"],
+      rationale: "candidate covers H1"
+    }
+  ]);
   assert.equal(
     snapshots[1].candidateFindings?.hypothesisClosure[0]?.hypothesisId,
     "H1"

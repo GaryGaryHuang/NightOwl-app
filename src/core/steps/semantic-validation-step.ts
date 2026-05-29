@@ -10,7 +10,7 @@ import {
   LOOP_ACTIONS,
   SEMANTIC_GATE_IDS,
   VALIDATION_DECISIONS,
-  type CandidateFindingsV3
+  type CandidateFindings
 } from "../semantic-review.ts";
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import {
@@ -21,9 +21,11 @@ import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
 const SEMANTIC_VALIDATION_SYSTEM_ADDITION = [
   "## Current Step: Semantic Validation",
-  "- Validate `<review_state>.candidateFindings` against the diff, `<review_state>.reviewBasis`, candidate finding fields, the semantic gates listed in this step instruction, and `<review_state>.validationFeedback`.",
+  "- Validate `<review_state>.candidateFindings` against the diff, `<review_state>.reviewBasis`, candidate finding fields, findingOrigins provenance, the semantic gates listed in this step instruction, and `<review_state>.validationFeedback`.",
+  "- The candidate payload includes `findings`, `findingOrigins`, `hypothesisClosure`, and `criticalMissingInformation`; validate these fields together as one review claim set.",
   "- This step is a validator, not a bug hunt. Do not search for or create new findings; only approve, require rewrite, drop, or report blocking missing information for the existing candidate set.",
-  "- If a concern is not already represented in `<review_state>.candidateFindings.findings[]`, record it as missing information only when it is a specific user-actionable fact that blocks reliable validation of the current candidate findings."
+  "- Reject candidates whose origin does not match the cited evidence, hypothesis closure, or bounded supplemental scope.",
+  "- On semantic rerun, give corrections for the existing candidate payload without inviting new supplemental hunting."
 ].join("\n");
 
 const SEMANTIC_VALIDATION_INSTRUCTION = [
@@ -48,19 +50,21 @@ const SEMANTIC_VALIDATION_INSTRUCTION = [
   "Validation feedback and rerun validation rules:",
   "0. If `validationFeedback` is present and non-empty in `<review_state>`, this is a semantic rerun.",
   "   - Use prior `failedGates` and `requiredCorrections` only to check whether the current candidate payload repaired the previous validation concerns.",
-  "   - Do not treat `validationFeedback` as a source of new findings or new missing-information items.",
+  "   - Do not treat `validationFeedback` as a source of new findings, a new supplemental sweep, or new missing-information items.",
   "   - If the current candidate still fails a prior correction, fail the matching semantic gate for that candidate.",
   "",
   "Candidate source and semantic gate rules:",
-  "1. Evaluate `<review_state>.candidateFindings` as one payload: `findings`, `hypothesisClosure`, and `criticalMissingInformation` together.",
+  "1. Evaluate `<review_state>.candidateFindings` as one payload: `findings`, `findingOrigins`, `hypothesisClosure`, and `criticalMissingInformation` together.",
   "   - Treat candidate findings as unapproved review claims until this validation step approves them.",
+  "   - Every candidate must have exactly one origin by 1-based `findingOrigins[].findingIndex`.",
   "",
   "2. Apply the semantic gates listed below for every candidate.",
-  "   - `evidence`: the candidate's evidence must be concrete, traceable, and consistent with `<review_state>.reviewBasis.evidenceRefs` and the reviewed code; named identifiers, execution path, and mechanism must be concrete.",
+  "   - `evidence`: the candidate's evidence and origin `evidenceIds` must be concrete, traceable, and consistent with `<review_state>.reviewBasis.evidenceRefs` and the reviewed code; named identifiers, execution path, and mechanism must be concrete.",
   "   - `impact`: the user/system impact must be specific and proportionate to the proven evidence; the candidate's `counterEvidence` must contain substantive checks (not just assertions or restatements); classification and severity must match the proven evidence level.",
   "   - `traceability`: schema must be complete, and the location must be precise enough for a reviewer to inspect; do not fail a candidate solely because it lacks exact changed-line overlap when the reviewed-file location is defensible and inspectable.",
-  "   - `completeness`: the candidate must close or honestly account for the source hypotheses; unresolved contract, trigger, impact, or identifier claims fail this gate only when they prevent reliable approval or rejection.",
-  "   - `scope`: the candidate must not be a duplicate, low-value restatement, or a new bug outside the current candidate set. Reject candidates whose only trigger is a hypothetical future caller, custom test double, hand-written object, or omitted optional parameter that no current repo-supported call site omits.",
+  "   - `completeness`: the candidate must close or honestly account for source hypotheses. A hypothesis-origin candidate must reference only H IDs whose `hypothesisClosure.status` is `closed_by_candidate`; unresolved contract, trigger, impact, or identifier claims fail this gate only when they prevent reliable approval or rejection.",
+  "   - `scope`: the candidate must not be a duplicate, low-value restatement, or a new bug outside the current candidate set. A supplemental-origin candidate must stay within its stated lens and direct changed behavior or evidence-backed path. Reject candidates whose only trigger is a hypothetical future caller, custom test double, hand-written object, or omitted optional parameter that no current repo-supported call site omits.",
+  "   - Provenance mismatch fails the nearest semantic gate: unsupported `evidenceIds` fail `evidence`, invalid hypothesis closure fails `completeness`, and supplemental origin outside bounded scope fails `scope`.",
   "",
   "Candidate outcome rules:",
   "3. Decide each candidate outcome.",
@@ -71,8 +75,9 @@ const SEMANTIC_VALIDATION_INSTRUCTION = [
   "",
   "Semantic rerun rules:",
   "4. Use semantic rerun only for actionable correction.",
-  "   - Set `loopControl.action = \"rerun\"` only when at least one candidate has `rewrite_required` and a rerun can repair it with concrete required corrections.",
+  "   - Set `loopControl.action = \"rerun\"` only when at least one candidate has `rewrite_required` and a rerun can repair it with concrete required corrections to the existing candidate payload or origins.",
   "   - When `loopControl.action = \"rerun\"`, do not set any `perFindingResults[].decision` to `approve`; use `rewrite_required` for repairable candidates and `drop` for candidates that should not continue.",
+  "   - Required corrections must not ask Candidate Findings to hunt for new bugs or run a fresh supplemental sweep.",
   "   - If all candidates are `approve` or `drop`, set `loopControl.action = \"accept\"`.",
   "   - Put corrections in `perFindingResults[].requiredCorrections`.",
   "   - Do not force approval when validation cannot prove the defect.",
@@ -165,7 +170,7 @@ export class SemanticValidationStep implements StepDefinition {
 function buildSemanticValidationUserMessage(
   context: FileReviewContext,
   reviewState: string,
-  candidatePayload: CandidateFindingsV3
+  candidatePayload: CandidateFindings
 ): string {
   return [
     `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
@@ -182,11 +187,11 @@ function buildSemanticValidationUserMessage(
   ].join("\n");
 }
 
-function requireCandidatePayload(context: FileReviewContext): CandidateFindingsV3 {
-  const candidatePayload = context.getCandidateFindingsV3();
+function requireCandidatePayload(context: FileReviewContext): CandidateFindings {
+  const candidatePayload = context.getCandidateFindings();
   if (!candidatePayload) {
     throw new Error(
-      `CandidateFindingsV3 must exist before Semantic Validation for "${context.filePath}"`
+      `CandidateFindings must exist before Semantic Validation for "${context.filePath}"`
     );
   }
   return candidatePayload;

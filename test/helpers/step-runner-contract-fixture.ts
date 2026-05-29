@@ -106,9 +106,10 @@ export function createStructuredTestStep(input: {
         },
         resolve: input.resolve ?? (async (_response: string, _services: StepResolveServices) => {
           return (context: FileReviewContext) => {
-            context.setCandidateFindingsV3({
+            context.setCandidateFindings({
               result: "NO_FINDINGS",
               findings: [],
+              findingOrigins: [],
               hypothesisClosure: [],
               criticalMissingInformation: []
             });

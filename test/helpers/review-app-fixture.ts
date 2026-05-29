@@ -90,6 +90,15 @@ export function buildSessionResponse(
           counterEvidence: ["fallback path is after the changed branch"]
         }
       ],
+      findingOrigins: [
+        {
+          findingIndex: 1,
+          kind: "hypothesis",
+          hypothesisIds: ["H1"],
+          evidenceIds: ["E1"],
+          rationale: "candidate F1 covers H1"
+        }
+      ],
       hypothesisClosure: [
         {
           hypothesisId: "H1",

@@ -7,7 +7,7 @@ import type {
   ReviewBasisV1
 } from "./review-basis.ts";
 import type {
-  CandidateFindingsV3,
+  CandidateFindings,
   MissingInformationItem,
   ValidationReportV1
 } from "./semantic-review.ts";
@@ -35,7 +35,7 @@ export interface ReviewStateSerializeInput {
     | "baseRef"
     | "diffContent"
     | "filePath"
-    | "getCandidateFindingsV3"
+    | "getCandidateFindings"
     | "getFindings"
     | "getMissingInformationItems"
     | "getPriorValidatorFeedback"
@@ -64,7 +64,7 @@ export interface ReviewStateSnapshot {
     hunks: ReviewStateSnapshotHunk[];
   };
   sections: ReviewStateSnapshotSections;
-  candidateFindings: CandidateFindingsV3 | null;
+  candidateFindings: CandidateFindings | null;
   approvedFindings: Finding[];
   missingInformationItems: MissingInformationItem[];
   validationReport: ValidationReportV1 | null;
@@ -95,7 +95,7 @@ export class ReviewStatePromptSerializer {
       input.context.getFindings() ??
       [];
     const candidateFindings =
-      input.context.getCandidateFindingsV3?.() ?? null;
+      input.context.getCandidateFindings?.() ?? null;
     const missingInformationItems =
       input.context.getMissingInformationItems?.() ??
       input.context.getValidationReportV1?.()?.missingInformationItems ??

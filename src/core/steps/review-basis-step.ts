@@ -15,11 +15,16 @@ import {
 
 const REVIEW_BASIS_SYSTEM_ADDITION = [
   "## Current Step: ReviewBasis",
-  "- Build the canonical per-file JSON basis required by the review basis instruction.",
-  "- Keep the basis compact, selective, and high-signal.",
-  "- Treat `hypothesisLedger` as the downstream validation queue, not as assumed defects.",
-  "- Treat the provided `<change_map>` data as authoritative review context for this file.",
-  "- Use the provided `<change_map>`, `<diff>`, local repository context, and allowed external retrieval only when needed to support the structured basis fields."
+  "- This is the per-file evidence-basis step. Build the structured context that Candidate Findings and Semantic Validation will use for this file.",
+  "- Do not produce bug findings, risk verdicts, or final correctness conclusions in this step.",
+  "- Before writing the JSON, follow this execution order: identify this file's role from `<change_map>` and `<diff>`, collect only evidence needed for high-signal basis fields, separate observed facts from bounded inferences, decide whether any evidence-backed validation target belongs in `hypothesisLedger`, then emit the ReviewBasis JSON object.",
+  "- Treat `<change_map>` as authoritative run-level review context, but ground this file's basis in the reviewed diff and retrieved repository evidence.",
+  "- Include only distinct signals needed for downstream review; omit generic file summaries, repeated facts, and low-signal speculation.",
+  "- Treat `hypothesisLedger` as a queue of testable downstream validation targets, not assumed defects.",
+  "- Add a hypothesis only when evidence points to a concrete behavior, contract, reachability, impact, or regression question that later steps can validate.",
+  "- Prefer an empty `hypothesisLedger` over a weak or speculative hypothesis when this file has no evidence-backed validation target.",
+  "- If a material fact is still unavailable after the Missing Information Discipline checks, record it under the current step output contract instead of guessing or turning it into a hypothesis.",
+  "- If `<retry_repair_context>` is appended, treat it only as deterministic validation feedback; regenerate the complete ReviewBasis JSON for the same `<change_map>` and `<diff>`, fixing the named parse/schema issue without adding unrelated breadth."
 ].join("\n");
 
 const REVIEW_BASIS_INSTRUCTION = [

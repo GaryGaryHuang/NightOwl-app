@@ -6,7 +6,7 @@ import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.t
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { ReviewBasisStep } from "../../src/core/steps/review-basis-step.ts";
-import { createCandidateFindingsV3Resolve } from "../../src/core/steps/step-resolve-helpers.ts";
+import { createCandidateFindingsResolve } from "../../src/core/steps/step-resolve-helpers.ts";
 import {
   createReviewSessionFactory,
   createSectionTestStep,
@@ -160,7 +160,7 @@ test("StepRunner records structured validation reports without committing partia
             model: "gpt-5.4-mini",
             timeoutMs: REVIEW_TURN_TIMEOUT_MS
           },
-          resolve: createCandidateFindingsV3Resolve({
+          resolve: createCandidateFindingsResolve({
             filePath: stepContext.filePath,
             diffContent: stepContext.diffContent,
             reviewBasis
@@ -184,9 +184,18 @@ test("StepRunner records structured validation reports without committing partia
   result.applyTo(context);
 
   assert.deepEqual(
-    context.getCandidateFindingsV3()?.findings.map((finding) => finding.findingId),
+    context.getCandidateFindings()?.findings.map((finding) => finding.findingId),
     ["F1"]
   );
+  assert.deepEqual(context.getCandidateFindings()?.findingOrigins, [
+    {
+      findingIndex: 1,
+      kind: "hypothesis",
+      hypothesisIds: ["H1"],
+      evidenceIds: ["E1"],
+      rationale: "F3 validates the hypothesis."
+    }
+  ]);
   assert.equal(context.getFindings(), undefined);
 });
 
@@ -611,6 +620,15 @@ function createCandidatePayload(
         impact: "request fails before fallback can run",
         counterEvidence: ["fallback no longer precedes dereference"],
         ...overrides
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: `${findingId} validates the hypothesis.`
       }
     ],
     hypothesisClosure: [

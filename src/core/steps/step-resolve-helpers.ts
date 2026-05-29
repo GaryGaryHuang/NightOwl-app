@@ -1,25 +1,29 @@
 import type { FileReviewContext } from "../file-review-context.ts";
 import type { ReviewBasisV1 } from "../review-basis.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
-import type { CandidateFindingsV3 } from "../semantic-review.ts";
+import type { CandidateFindings } from "../semantic-review.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
 
-export function createCandidateFindingsV3Resolve(input: {
+export function createCandidateFindingsResolve(input: {
   filePath: string;
   diffContent?: string;
   reviewBasis: ReviewBasisV1;
+  previousCandidateFindings?: CandidateFindings;
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
-    const validated = services.validator.validateCandidateFindingsV3WithReport({
+    const validated = services.validator.validateCandidateFindingsWithReport({
       responseText: response,
       reviewBasis: input.reviewBasis,
+      ...(input.previousCandidateFindings === undefined
+        ? {}
+        : { previousCandidateFindings: input.previousCandidateFindings }),
       filePath: input.filePath,
       ...(input.diffContent === undefined
         ? {}
         : { diffContent: input.diffContent })
     });
     return (targetContext: FileReviewContext) => {
-      targetContext.setCandidateFindingsV3(validated.payload);
+      targetContext.setCandidateFindings(validated.payload);
     };
   };
 }
@@ -28,7 +32,7 @@ export function createValidationReportV1Resolve(input: {
   filePath: string;
   diffContent?: string;
   reviewBasis?: ReviewBasisV1;
-  candidatePayload: CandidateFindingsV3 | Record<string, unknown>;
+  candidatePayload: CandidateFindings | Record<string, unknown>;
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
     const validated = services.validator.validateValidationReportV1WithReport({
@@ -49,7 +53,7 @@ export function createValidationReportV1Resolve(input: {
           .map((r) => r.findingId)
       );
       const candidates = "findings" in input.candidatePayload
-        ? (input.candidatePayload as CandidateFindingsV3).findings
+        ? (input.candidatePayload as CandidateFindings).findings
         : [];
       targetContext.setFindings(
         candidates.filter((f) => approvedIds.has(f.findingId))

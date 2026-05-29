@@ -62,9 +62,9 @@ function runSemanticCase(
   const reviewBasis = createReviewBasis();
   const candidatePayload = createCandidatePayload(corpusCase.scenario);
 
-  let candidateResult: ReturnType<typeof validator.validateCandidateFindingsV3WithReport>;
+  let candidateResult: ReturnType<typeof validator.validateCandidateFindingsWithReport>;
   try {
-    candidateResult = validator.validateCandidateFindingsV3WithReport({
+    candidateResult = validator.validateCandidateFindingsWithReport({
       responseText: JSON.stringify(candidatePayload),
       reviewBasis,
       diffContent: DEFAULT_DIFF,
@@ -184,15 +184,6 @@ function createReviewBasis(): ReviewBasisV1 {
 }
 
 function createCandidatePayload(scenario: SemanticScenario) {
-  const criticalMissingInformation =
-    scenario === "overclaim" || scenario === "repeated-stop"
-      ? [
-          {
-            description: "Need callback threading and stale-result guard proof.",
-            whyItMatters: "Without it the concurrency claim is under-proven."
-          }
-        ]
-      : [];
   return {
     findings: [
       {
@@ -204,6 +195,17 @@ function createCandidatePayload(scenario: SemanticScenario) {
         triggerCondition: "two search callbacks complete out of order",
         impact: "high severity search result corruption is alleged",
         counterEvidence: ["request ID guard not proven"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: [
+          scenario === "hypothesis-id-mismatch" ? "H404" : "H1"
+        ],
+        evidenceIds: ["E1"],
+        rationale: "candidate addresses stale callback"
       }
     ],
     hypothesisClosure:
@@ -235,6 +237,8 @@ function createCandidatePayload(scenario: SemanticScenario) {
                 rationale: "candidate addresses stale callback"
               },
               scenario === "retired-contradiction"
+                || scenario === "overclaim"
+                || scenario === "repeated-stop"
                 ? {
                     hypothesisId: "H2",
                     status: "rejected_by_evidence",
@@ -246,7 +250,7 @@ function createCandidatePayload(scenario: SemanticScenario) {
                     rationale: "counter-evidence is not enough to approve"
                   }
             ],
-    criticalMissingInformation
+    criticalMissingInformation: []
   };
 }
 

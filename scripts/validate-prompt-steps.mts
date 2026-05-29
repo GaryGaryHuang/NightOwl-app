@@ -354,11 +354,11 @@ function summarizeSemantic(
   run: number,
   context: FileReviewContext
 ): SemanticRunSummary {
-  const candidatePayload = context.getCandidateFindingsV3();
+  const candidatePayload = context.getCandidateFindings();
   const validationReport = context.getValidationReportV1();
   const summary = context.getSection("summary");
   if (!candidatePayload) {
-    throw new Error(`CandidateFindingsV3 missing for ${context.filePath}`);
+    throw new Error(`CandidateFindings missing for ${context.filePath}`);
   }
   if (!validationReport) {
     throw new Error(`ValidationReportV1 missing for ${context.filePath}`);

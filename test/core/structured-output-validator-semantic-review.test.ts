@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { CandidateFindings } from "../../src/core/semantic-review.ts";
 import {
   StructuredOutputValidator,
   StructuredValidationReportError
@@ -33,11 +34,21 @@ interface SemanticReportEntry {
 
 interface CandidateValidationResult {
   readonly payload: {
+    readonly result: string;
     readonly findings: readonly {
       readonly findingId: string;
       readonly classification: string;
       readonly severity: string;
       readonly traceability?: unknown;
+    }[];
+    readonly findingOrigins: readonly {
+      readonly findingIndex: number;
+      readonly kind: string;
+      readonly hypothesisIds?: readonly string[];
+      readonly lens?: string;
+      readonly evidenceIds: readonly string[];
+      readonly rationale: string;
+      readonly relatedHypothesisIds?: readonly string[];
     }[];
     readonly hypothesisClosure: readonly { readonly hypothesisId: string }[];
     readonly criticalMissingInformation: readonly unknown[];
@@ -159,11 +170,39 @@ function hypothesisClosure(
   };
 }
 
-function candidateFindingsV3(
+function hypothesisFindingOrigin(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    findingIndex: 1,
+    kind: "hypothesis",
+    hypothesisIds: ["H1"],
+    evidenceIds: ["E1"],
+    rationale: "candidate covers H1",
+    ...overrides
+  };
+}
+
+function supplementalFindingOrigin(
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    findingIndex: 1,
+    kind: "supplemental",
+    lens: "changed_behavior_sweep",
+    evidenceIds: ["E1"],
+    rationale: "changed behavior exposes a directly reviewed issue",
+    relatedHypothesisIds: [],
+    ...overrides
+  };
+}
+
+function candidateFindings(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
     findings: [candidateFinding()],
+    findingOrigins: [hypothesisFindingOrigin()],
     hypothesisClosure: [
       hypothesisClosure(),
       hypothesisClosure({
@@ -212,19 +251,28 @@ function missingInformationItem(
 }
 
 function validateCandidateFindings(
-  payload: Record<string, unknown> = candidateFindingsV3(),
-  reviewBasis: ReviewBasisV1 = createReviewBasis()
+  payload: Record<string, unknown> = candidateFindings(),
+  reviewBasis: ReviewBasisV1 = createReviewBasis(),
+  previousCandidateFindings?: CandidateFindings
 ): CandidateValidationResult {
-  return validateCandidateFindingsText(JSON.stringify(payload), reviewBasis);
+  return validateCandidateFindingsText(
+    JSON.stringify(payload),
+    reviewBasis,
+    previousCandidateFindings
+  );
 }
 
 function validateCandidateFindingsText(
   responseText: string,
-  reviewBasis: ReviewBasisV1 = createReviewBasis()
+  reviewBasis: ReviewBasisV1 = createReviewBasis(),
+  previousCandidateFindings?: CandidateFindings
 ): CandidateValidationResult {
-  return new StructuredOutputValidator().validateCandidateFindingsV3WithReport({
+  return new StructuredOutputValidator().validateCandidateFindingsWithReport({
     responseText,
     reviewBasis,
+    ...(previousCandidateFindings === undefined
+      ? {}
+      : { previousCandidateFindings }),
     diffContent: DEFAULT_DIFF,
     filePath: reviewBasis.filePath
   });
@@ -232,20 +280,20 @@ function validateCandidateFindingsText(
 
 function validateValidationReport(
   payload: Record<string, unknown> = validationReportV1(),
-  candidateFindings: Record<string, unknown> = candidateFindingsV3(),
+  candidatePayload: Record<string, unknown> = candidateFindings(),
   reviewBasis: ReviewBasisV1 = createReviewBasis()
 ): ValidationReportResult {
-  return validateValidationReportText(JSON.stringify(payload), candidateFindings, reviewBasis);
+  return validateValidationReportText(JSON.stringify(payload), candidatePayload, reviewBasis);
 }
 
 function validateValidationReportText(
   responseText: string,
-  candidateFindings: Record<string, unknown> = candidateFindingsV3(),
+  candidatePayload: Record<string, unknown> = candidateFindings(),
   reviewBasis: ReviewBasisV1 = createReviewBasis()
 ): ValidationReportResult {
   return new StructuredOutputValidator().validateValidationReportV1WithReport({
     responseText,
-    candidateFindings,
+    candidateFindings: candidatePayload,
     reviewBasis,
     diffContent: DEFAULT_DIFF,
     filePath: reviewBasis.filePath
@@ -271,7 +319,7 @@ function reportReasons(error: StructuredValidationReportError): string {
   return error.report.map((entry) => entry.reason ?? "").join("\n");
 }
 
-test("validateCandidateFindingsV3WithReport accepts evidence-chain candidates tied to ReviewBasisV1", () => {
+test("validateCandidateFindingsWithReport accepts evidence-chain candidates tied to ReviewBasisV1", () => {
   const result = validateCandidateFindings();
 
   assert.equal(result.payload.findings.length, 1);
@@ -282,14 +330,23 @@ test("validateCandidateFindingsV3WithReport accepts evidence-chain candidates ti
     result.payload.hypothesisClosure.map((entry) => entry.hypothesisId),
     ["H1", "H2"]
   );
+  assert.deepEqual(result.payload.findingOrigins, [
+    {
+      findingIndex: 1,
+      kind: "hypothesis",
+      hypothesisIds: ["H1"],
+      evidenceIds: ["E1"],
+      rationale: "candidate covers H1"
+    }
+  ]);
   assert.equal(
     result.report.find((entry) => entry.findingId === "F1")?.outcome,
     "accepted"
   );
 });
 
-test("validateCandidateFindingsV3WithReport repairs fenced or prose-wrapped single JSON objects", () => {
-  const payload = JSON.stringify(candidateFindingsV3());
+test("validateCandidateFindingsWithReport repairs fenced or prose-wrapped single JSON objects", () => {
+  const payload = JSON.stringify(candidateFindings());
 
   assert.equal(
     validateCandidateFindingsText(`\uFEFF\`\`\`json\n${payload}\n\`\`\``).payload.findings[0]?.findingId,
@@ -301,10 +358,10 @@ test("validateCandidateFindingsV3WithReport repairs fenced or prose-wrapped sing
   );
 });
 
-test("validateCandidateFindingsV3WithReport ignores non-contract extra fields", () => {
+test("validateCandidateFindingsWithReport ignores non-contract extra fields", () => {
   const result = validateCandidateFindings(
-    candidateFindingsV3({
-      schemaVersion: 3,
+    candidateFindings({
+      extraEnvelopeMetadata: "ignored",
       findings: [
         candidateFinding({
           priority: "must",
@@ -333,8 +390,8 @@ test("validateCandidateFindingsV3WithReport ignores non-contract extra fields", 
   assert.equal(result.payload.findings[0]?.classification, "confirmed_problem");
 });
 
-test("validateCandidateFindingsV3WithReport normalizes safe small-model formatting drift", () => {
-  const payload = candidateFindingsV3({
+test("validateCandidateFindingsWithReport normalizes safe small-model formatting drift", () => {
+  const payload = candidateFindings({
     findings: [
       candidateFinding({
         traceability: {
@@ -356,7 +413,7 @@ test("validateCandidateFindingsV3WithReport normalizes safe small-model formatti
   assert.deepEqual(result.payload.criticalMissingInformation, []);
 });
 
-test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis semantic violations", () => {
+test("validateCandidateFindingsWithReport rejects schema and ReviewBasis semantic violations", () => {
   const invalidCases: readonly {
     readonly label: string;
     readonly payload: Record<string, unknown>;
@@ -364,56 +421,56 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
   }[] = [
     {
       label: "invalid classification",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         findings: [candidateFinding({ classification: "unsupported_bug" })]
       }),
       reason: /classification.*confirmed_problem.*reasonable_risk/u
     },
     {
       label: "invalid severity",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         findings: [candidateFinding({ severity: "medium" })]
       }),
       reason: /severity.*high.*low/u
     },
     {
       label: "confirmed problem requires trigger condition",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         findings: [candidateFinding({ triggerCondition: "" })]
       }),
       reason: /triggerCondition/u
     },
     {
       label: "confirmed problem requires impact",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         findings: [candidateFinding({ impact: "" })]
       }),
       reason: /impact/u
     },
     {
       label: "confirmed problem requires counter-evidence",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         findings: [candidateFinding({ counterEvidence: [] })]
       }),
       reason: /counterEvidence/u
     },
     {
       label: "confirmed problem requires evidence",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         findings: [candidateFinding({ evidence: "" })]
       }),
       reason: /evidence/u
     },
     {
       label: "hypothesis closure must cover every ReviewBasis hypothesis",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         hypothesisClosure: [hypothesisClosure({ hypothesisId: "H1" })]
       }),
       reason: /H2.*hypothesisClosure/u
     },
     {
       label: "hypothesis closure must not duplicate a ReviewBasis hypothesis",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         hypothesisClosure: [
           hypothesisClosure({ hypothesisId: "H1" }),
           hypothesisClosure({
@@ -433,7 +490,7 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
     {
       label: "criticalMissingInformation must remain explicit",
       payload: (() => {
-        const payload = candidateFindingsV3();
+        const payload = candidateFindings();
         delete payload.criticalMissingInformation;
         return payload;
       })(),
@@ -441,8 +498,9 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
     },
     {
       label: "insufficient closures must preserve blocking missing information",
-      payload: candidateFindingsV3({
+      payload: candidateFindings({
         findings: [],
+        findingOrigins: [],
         hypothesisClosure: [
           hypothesisClosure({
             hypothesisId: "H1",
@@ -458,12 +516,379 @@ test("validateCandidateFindingsV3WithReport rejects schema and ReviewBasis seman
         criticalMissingInformation: []
       }),
       reason: /insufficient_information.*criticalMissingInformation/u
+    },
+    {
+      label: "critical missing information requires insufficient closure",
+      payload: candidateFindings({
+        findings: [],
+        findingOrigins: [],
+        hypothesisClosure: [
+          hypothesisClosure({
+            hypothesisId: "H1",
+            status: "rejected_by_evidence",
+            rationale: "H1 rejected by reviewed evidence"
+          }),
+          hypothesisClosure({
+            hypothesisId: "H2",
+            status: "rejected_by_evidence",
+            rationale: "fallback no longer closes the nullable-input path"
+          })
+        ],
+        criticalMissingInformation: [
+          missingInformationItem()
+        ]
+      }),
+      reason: /criticalMissingInformation.*insufficient_information/u
     }
   ];
 
   for (const testCase of invalidCases) {
     const error = captureStructuredValidationReportError(
       () => validateCandidateFindings(testCase.payload)
+    );
+
+    assert.match(reportReasons(error), testCase.reason, testCase.label);
+  }
+});
+
+test("validateCandidateFindingsWithReport allows findings with separate blocking missing information", () => {
+  const result = validateCandidateFindings(
+    candidateFindings({
+      hypothesisClosure: [
+        hypothesisClosure(),
+        hypothesisClosure({
+          hypothesisId: "H2",
+          status: "insufficient_information",
+          rationale: "H2 still needs an external contract"
+        })
+      ],
+      criticalMissingInformation: [
+        missingInformationItem()
+      ]
+    })
+  );
+
+  assert.equal(result.payload.result, "FINDINGS_READY");
+  assert.equal(result.payload.findings.length, 1);
+  assert.equal(result.payload.criticalMissingInformation.length, 1);
+});
+
+test("validateCandidateFindingsWithReport rejects invalid finding provenance", () => {
+  const invalidCases: readonly {
+    readonly label: string;
+    readonly payload: Record<string, unknown>;
+    readonly reason: RegExp;
+  }[] = [
+    {
+      label: "findingOrigins must be explicit",
+      payload: (() => {
+        const payload = candidateFindings();
+        delete payload.findingOrigins;
+        return payload;
+      })(),
+      reason: /findingOrigins.*array/u
+    },
+    {
+      label: "each finding needs an origin",
+      payload: candidateFindings({
+        findings: [
+          candidateFinding(),
+          candidateFinding({ title: "second candidate" })
+        ],
+        findingOrigins: [hypothesisFindingOrigin()]
+      }),
+      reason: /findingOrigins.*2|findingIndex.*2/u
+    },
+    {
+      label: "finding origins cannot duplicate a finding index",
+      payload: candidateFindings({
+        findingOrigins: [
+          hypothesisFindingOrigin(),
+          supplementalFindingOrigin({
+            lens: "data_flow_sweep",
+            rationale: "duplicate origin for the same candidate"
+          })
+        ]
+      }),
+      reason: /findingIndex.*1.*more than once|duplicate.*findingIndex/u
+    },
+    {
+      label: "findingIndex must reference an emitted finding",
+      payload: candidateFindings({
+        findingOrigins: [
+          hypothesisFindingOrigin({ findingIndex: 2 })
+        ]
+      }),
+      reason: /findingIndex.*2|out of range/u
+    },
+    {
+      label: "hypothesis origins cannot reference unknown hypotheses",
+      payload: candidateFindings({
+        findingOrigins: [
+          hypothesisFindingOrigin({ hypothesisIds: ["H404"] })
+        ]
+      }),
+      reason: /H404.*hypothesisId|unknown.*H404/u
+    },
+    {
+      label: "hypothesis origins require closed_by_candidate closure",
+      payload: candidateFindings({
+        findingOrigins: [hypothesisFindingOrigin()],
+        hypothesisClosure: [
+          hypothesisClosure({
+            hypothesisId: "H1",
+            status: "rejected_by_evidence",
+            rationale: "H1 rejected by reviewed evidence"
+          }),
+          hypothesisClosure({
+            hypothesisId: "H2",
+            status: "rejected_by_evidence",
+            rationale: "fallback no longer closes the nullable-input path"
+          })
+        ]
+      }),
+      reason: /H1.*closed_by_candidate|closed_by_candidate.*H1/u
+    },
+    {
+      label: "closed_by_candidate closures require a hypothesis origin",
+      payload: candidateFindings({
+        findingOrigins: [
+          supplementalFindingOrigin({
+            relatedHypothesisIds: ["H1"]
+          })
+        ]
+      }),
+      reason: /H1.*findingOrigins|closed_by_candidate.*origin/u
+    },
+    {
+      label: "supplemental origins require a known lens",
+      payload: candidateFindings({
+        findingOrigins: [
+          supplementalFindingOrigin({
+            lens: "repo_wide_guessing"
+          })
+        ],
+        hypothesisClosure: [
+          hypothesisClosure({
+            hypothesisId: "H1",
+            status: "rejected_by_evidence",
+            rationale: "H1 rejected by reviewed evidence"
+          }),
+          hypothesisClosure({
+            hypothesisId: "H2",
+            status: "rejected_by_evidence",
+            rationale: "fallback no longer closes the nullable-input path"
+          })
+        ]
+      }),
+      reason: /lens.*changed_behavior_sweep|repo_wide_guessing/u
+    },
+    {
+      label: "supplemental origins must reference ReviewBasis evidence",
+      payload: candidateFindings({
+        findingOrigins: [
+          supplementalFindingOrigin({
+            evidenceIds: ["E404"]
+          })
+        ],
+        hypothesisClosure: [
+          hypothesisClosure({
+            hypothesisId: "H1",
+            status: "rejected_by_evidence",
+            rationale: "H1 rejected by reviewed evidence"
+          }),
+          hypothesisClosure({
+            hypothesisId: "H2",
+            status: "rejected_by_evidence",
+            rationale: "fallback no longer closes the nullable-input path"
+          })
+        ]
+      }),
+      reason: /E404.*evidenceId|unknown.*E404/u
+    },
+    {
+      label: "supplemental findings are capped per file",
+      payload: candidateFindings({
+        findings: [
+          candidateFinding({ title: "first supplemental" }),
+          candidateFinding({ title: "second supplemental" }),
+          candidateFinding({ title: "third supplemental" })
+        ],
+        findingOrigins: [
+          supplementalFindingOrigin({ findingIndex: 1 }),
+          supplementalFindingOrigin({
+            findingIndex: 2,
+            lens: "data_flow_sweep"
+          }),
+          supplementalFindingOrigin({
+            findingIndex: 3,
+            lens: "control_flow_sweep"
+          })
+        ],
+        hypothesisClosure: [
+          hypothesisClosure({
+            hypothesisId: "H1",
+            status: "rejected_by_evidence",
+            rationale: "H1 rejected by reviewed evidence"
+          }),
+          hypothesisClosure({
+            hypothesisId: "H2",
+            status: "rejected_by_evidence",
+            rationale: "fallback no longer closes the nullable-input path"
+          })
+        ]
+      }),
+      reason: /supplemental.*2|more than 2/u
+    }
+  ];
+
+  for (const testCase of invalidCases) {
+    const error = captureStructuredValidationReportError(
+      () => validateCandidateFindings(testCase.payload)
+    );
+
+    assert.match(reportReasons(error), testCase.reason, testCase.label);
+  }
+});
+
+test("validateCandidateFindingsWithReport rejects semantic reruns that introduce new candidate scope", () => {
+  const previous = validateCandidateFindings().payload as CandidateFindings;
+  const validRepair = validateCandidateFindings(
+    candidateFindings(),
+    createReviewBasis(),
+    previous
+  );
+  assert.equal(validRepair.payload.findings[0]?.findingId, "F1");
+
+  const changedHypothesisRepair = validateCandidateFindings(
+    candidateFindings({
+      findingOrigins: [
+        hypothesisFindingOrigin({
+          hypothesisIds: ["H2"]
+        })
+      ],
+      hypothesisClosure: [
+        hypothesisClosure({
+          hypothesisId: "H1",
+          status: "rejected_by_evidence",
+          rationale: "H1 rejected during repair"
+        }),
+        hypothesisClosure({
+          hypothesisId: "H2",
+          status: "closed_by_candidate",
+          rationale: "H2 now matches the corrected candidate evidence"
+        })
+      ]
+    }),
+    createReviewBasis(),
+    previous
+  );
+  assert.deepEqual(changedHypothesisRepair.payload.findingOrigins[0]?.hypothesisIds, ["H2"]);
+
+  const previousSupplemental = validateCandidateFindings(
+    candidateFindings({
+      findingOrigins: [
+        supplementalFindingOrigin({
+          rationale: "previous candidate came from a supplemental sweep"
+        })
+      ],
+      hypothesisClosure: [
+        hypothesisClosure({
+          hypothesisId: "H1",
+          status: "rejected_by_evidence",
+          rationale: "H1 rejected by reviewed evidence"
+        }),
+        hypothesisClosure({
+          hypothesisId: "H2",
+          status: "rejected_by_evidence",
+          rationale: "fallback no longer closes the nullable-input path"
+        })
+      ]
+    })
+  ).payload as CandidateFindings;
+  const repairedSupplemental = validateCandidateFindings(
+    candidateFindings({
+      findingOrigins: [
+        supplementalFindingOrigin({
+          lens: "data_flow_sweep",
+          relatedHypothesisIds: ["H1"],
+          rationale: "repair preserves candidate count while correcting provenance metadata"
+        })
+      ],
+      hypothesisClosure: [
+        hypothesisClosure({
+          hypothesisId: "H1",
+          status: "rejected_by_evidence",
+          rationale: "H1 rejected by reviewed evidence"
+        }),
+        hypothesisClosure({
+          hypothesisId: "H2",
+          status: "rejected_by_evidence",
+          rationale: "fallback no longer closes the nullable-input path"
+        })
+      ]
+    }),
+    createReviewBasis(),
+    previousSupplemental
+  );
+  assert.equal(repairedSupplemental.payload.findingOrigins[0]?.kind, "supplemental");
+  assert.equal(repairedSupplemental.payload.findingOrigins[0]?.lens, "data_flow_sweep");
+
+  const invalidCases: readonly {
+    readonly label: string;
+    readonly payload: Record<string, unknown>;
+    readonly reason: RegExp;
+  }[] = [
+    {
+      label: "semantic rerun cannot add candidate count",
+      payload: candidateFindings({
+        findings: [
+          candidateFinding(),
+          candidateFinding({ title: "new supplemental candidate" })
+        ],
+        findingOrigins: [
+          hypothesisFindingOrigin(),
+          supplementalFindingOrigin({
+            findingIndex: 2,
+            lens: "data_flow_sweep",
+            rationale: "new candidate added on rerun"
+          })
+        ]
+      }),
+      reason: /semantic rerun.*more candidates/u
+    },
+    {
+      label: "semantic rerun cannot introduce more supplemental candidates",
+      payload: candidateFindings({
+        findingOrigins: [
+          supplementalFindingOrigin({
+            rationale: "supplemental finding added during rerun"
+          })
+        ],
+        hypothesisClosure: [
+          hypothesisClosure({
+            hypothesisId: "H1",
+            status: "rejected_by_evidence",
+            rationale: "H1 rejected by reviewed evidence"
+          }),
+          hypothesisClosure({
+            hypothesisId: "H2",
+            status: "rejected_by_evidence",
+            rationale: "fallback no longer closes the nullable-input path"
+          })
+        ]
+      }),
+      reason: /semantic rerun.*more supplemental candidates/u
+    }
+  ];
+
+  for (const testCase of invalidCases) {
+    const error = captureStructuredValidationReportError(
+      () => validateCandidateFindings(
+        testCase.payload,
+        createReviewBasis(),
+        previous
+      )
     );
 
     assert.match(reportReasons(error), testCase.reason, testCase.label);
@@ -545,12 +970,33 @@ test("validateValidationReportV1WithReport normalizes safe optional report metad
 });
 
 test("validateValidationReportV1WithReport enforces candidate coverage and approved finding consistency", () => {
-  const twoCandidates = candidateFindingsV3({
+  const twoCandidates = candidateFindings({
     findings: [
       candidateFinding(),
       candidateFinding({
         title: "second finding"
       })
+    ],
+    findingOrigins: [
+      hypothesisFindingOrigin(),
+      supplementalFindingOrigin({
+        findingIndex: 2,
+        lens: "changed_behavior_sweep",
+        rationale: "second candidate comes from a bounded changed behavior sweep"
+      })
+    ]
+  });
+  const findingsWithMissingInformation = candidateFindings({
+    hypothesisClosure: [
+      hypothesisClosure(),
+      hypothesisClosure({
+        hypothesisId: "H2",
+        status: "insufficient_information",
+        rationale: "H2 still needs an external contract"
+      })
+    ],
+    criticalMissingInformation: [
+      missingInformationItem()
     ]
   });
   const invalidCases: readonly {
@@ -596,6 +1042,12 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
       reason: /findings.*array/u
     },
     {
+      label: "critical missing information must surface in validation report",
+      payload: validationReportV1(),
+      candidates: findingsWithMissingInformation,
+      reason: /criticalMissingInformation.*missingInformationItems/u
+    },
+    {
       label: "missingInformationItems must remain explicit",
       payload: (() => {
         const payload = validationReportV1();
@@ -610,7 +1062,7 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
     const error = captureStructuredValidationReportError(
       () => validateValidationReport(
         testCase.payload,
-        testCase.candidates ?? candidateFindingsV3()
+        testCase.candidates ?? candidateFindings()
       )
     );
 

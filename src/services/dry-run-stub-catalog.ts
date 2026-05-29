@@ -204,7 +204,7 @@ const STUB_REVIEW_BASIS = buildDryRunReviewBasisResponse(
   '<diff path="dry-run.ts" base="main" head="HEAD">\n</diff>'
 );
 
-const STUB_CANDIDATE_FINDINGS = '{"findings": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "dry-run stub has no findings"}], "criticalMissingInformation": []}';
+const STUB_CANDIDATE_FINDINGS = '{"findings": [], "findingOrigins": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "dry-run stub has no findings"}], "criticalMissingInformation": []}';
 
 const STUB_SEMANTIC_VALIDATION = '{"perFindingResults": [], "missingInformationItems": [], "loopControl": {"action": "accept", "reason": "dry-run stub has no candidates"}}';
 
