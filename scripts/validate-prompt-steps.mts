@@ -45,7 +45,6 @@ interface ScriptConfig {
 interface ChangesetOverviewRunSummary {
   run: number;
   behaviorChangeCount: number;
-  unresolvedUnknownCount: number;
   missingInformationCount: number;
   overviewHash: string;
   objectiveSummary: string;
@@ -324,7 +323,6 @@ function summarizeChangesetOverview(run: number, runContext: RunContext): Change
   return {
     run,
     behaviorChangeCount: overview.behaviorChanges.length,
-    unresolvedUnknownCount: overview.unresolvedUnknowns.length,
     missingInformationCount: overview.missingInformation.length,
     overviewHash: sha256(overview.overviewMarkdown),
     objectiveSummary: overview.reviewObjective.summary

@@ -410,7 +410,6 @@ function buildValidChangesetOverviewChangeMapJson(): string {
         description: "review flow updates shared run context",
         files: paths,
       }
-    ],
-    unresolvedUnknowns: []
+    ]
   });
 }

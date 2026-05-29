@@ -118,8 +118,7 @@ function createChangeMap(
         description: "app changed",
         files: ["src/app.ts"]
       }
-    ],
-    unresolvedUnknowns: []
+    ]
   };
 }
 

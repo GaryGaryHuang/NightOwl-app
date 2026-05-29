@@ -2,8 +2,7 @@ import {
   EXPECTED_BEHAVIOR_CONFIDENCES,
   type ChangeMapReadinessV2,
   type ExpectedBehaviorConfidence,
-  type ReadinessBehaviorChangeEntry,
-  type ReadinessUnresolvedUnknownEntry
+  type ReadinessBehaviorChangeEntry
 } from "./change-map.ts";
 
 export type ChangesetOverviewValidationCode =
@@ -103,14 +102,10 @@ function validateChangeMapReadinessV2(
   const userBehavior = validateUserBehavior(obj.userBehavior);
   const missingInformation = validateMissingInformation(obj.missingInformation);
   const behaviorChanges = validateReadinessBehaviorChanges(obj.behaviorChanges);
-  const unresolvedUnknowns = validateReadinessUnresolvedUnknowns(
-    obj.unresolvedUnknowns
-  );
   const reviewObjective = validateReviewObjective(obj.reviewObjective, {
     behaviorChanges,
     missingInformation,
     overviewMarkdown: obj.overviewMarkdown,
-    unresolvedUnknowns,
     userBehavior
   });
   const overviewMarkdown = validateOverviewMarkdown({
@@ -125,8 +120,7 @@ function validateChangeMapReadinessV2(
     userBehavior,
     missingInformation,
     overviewMarkdown,
-    behaviorChanges,
-    unresolvedUnknowns
+    behaviorChanges
   });
 }
 
@@ -355,32 +349,6 @@ function ensurePlainObject(value: unknown, label: string): Record<string, unknow
   return value as Record<string, unknown>;
 }
 
-function validateReadinessUnresolvedUnknowns(
-  value: unknown
-): readonly ReadinessUnresolvedUnknownEntry[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return value.flatMap((rawEntry) => {
-    const entry = asPlainRecord(rawEntry);
-    if (!entry) {
-      return [];
-    }
-
-    const question = optionalNonEmptyString(entry.question);
-    if (!question) {
-      return [];
-    }
-    return {
-      question,
-      resolutionPath:
-        optionalNonEmptyString(entry.resolutionPath) ??
-        "Clarify this question before relying on the affected review assumption."
-    };
-  });
-}
-
 function validateOverviewMarkdown(input: {
   value: unknown;
   reviewObjective: ChangeMapReadinessV2["reviewObjective"];
@@ -425,7 +393,6 @@ function validateReviewObjective(
     behaviorChanges: readonly ReadinessBehaviorChangeEntry[];
     missingInformation: ChangeMapReadinessV2["missingInformation"];
     overviewMarkdown: unknown;
-    unresolvedUnknowns: readonly ReadinessUnresolvedUnknownEntry[];
     userBehavior: ChangeMapReadinessV2["userBehavior"];
   }
 ): ChangeMapReadinessV2["reviewObjective"] {
@@ -436,8 +403,7 @@ function validateReviewObjective(
     summarizeOverviewMarkdown(fallback.overviewMarkdown) ??
     fallback.behaviorChanges[0]?.description ??
     fallback.userBehavior[0]?.statement ??
-    fallback.missingInformation[0]?.description ??
-    fallback.unresolvedUnknowns[0]?.question;
+    fallback.missingInformation[0]?.description;
   if (!summary) {
     throw new ChangesetOverviewOutputValidationError(
       "SCHEMA",

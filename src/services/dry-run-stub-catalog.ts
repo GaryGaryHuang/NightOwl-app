@@ -49,8 +49,7 @@ export function buildDryRunChangesetOverviewResponse(prompt: string): string {
             description: "Dry-run stub.",
             files: changedPaths
           }
-        ],
-    unresolvedUnknowns: []
+        ]
   });
 }
 

@@ -224,8 +224,7 @@ test("StepRunner fails ReviewBasisStep after three parse failures without fallba
             "ExampleApp/src/main/java/com/example/recognition/viewmodel/MusicRecognitionViewModel.kt"
           ]
         }
-      ],
-      unresolvedUnknowns: []
+      ]
     }
   });
   const runner = new StepRunner({

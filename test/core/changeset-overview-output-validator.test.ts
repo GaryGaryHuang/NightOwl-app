@@ -44,7 +44,6 @@ function makeValidV2(overrides: Record<string, unknown> = {}): string {
         files: ["src/app.ts"]
       }
     ],
-    unresolvedUnknowns: [],
     ...overrides
   });
 }
@@ -111,22 +110,6 @@ test("ChangesetOverviewOutputValidator accepts behaviorChanges with extra fields
   assert.equal(changeMap.behaviorChanges[0]?.files[0], "src/not-in-changeset.ts");
 });
 
-test("ChangesetOverviewOutputValidator accepts unresolvedUnknowns with extra fields", () => {
-  const changeMap = validateV2(
-    makeValidV2({
-      unresolvedUnknowns: [
-        {
-          question: "API 版本？",
-          blocksFinding: true,
-          resolutionPath: "查 package.json"
-        }
-      ]
-    })
-  );
-
-  assert.equal(changeMap.unresolvedUnknowns[0]?.question, "API 版本？");
-});
-
 test("ChangesetOverviewOutputValidator returns a deeply frozen ChangeMapReadinessV2", () => {
   const changeMap = validateV2(makeValidV2());
 
@@ -139,7 +122,6 @@ test("ChangesetOverviewOutputValidator returns a deeply frozen ChangeMapReadines
   assert.ok(Object.isFrozen(changeMap.missingInformation));
   assert.ok(Object.isFrozen(changeMap.behaviorChanges));
   assert.ok(Object.isFrozen(changeMap.behaviorChanges[0]?.files));
-  assert.ok(Object.isFrozen(changeMap.unresolvedUnknowns));
 
   assert.throws(() => {
     (changeMap.behaviorChanges as unknown as { push: (entry: unknown) => void }).push({});
@@ -239,13 +221,12 @@ test("ChangesetOverviewOutputValidator normalizes overviewMarkdown presentation 
   assert.equal(missingHeader.overviewMarkdown, "## Changeset Overview\nScope: feature");
 });
 
-test("ChangesetOverviewOutputValidator allows empty behaviorChanges and unresolvedUnknowns", () => {
+test("ChangesetOverviewOutputValidator allows empty behaviorChanges", () => {
   const changeMap = validateV2(
-    makeValidV2({ behaviorChanges: [], unresolvedUnknowns: [] })
+    makeValidV2({ behaviorChanges: [] })
   );
 
   assert.equal(changeMap.behaviorChanges.length, 0);
-  assert.equal(changeMap.unresolvedUnknowns.length, 0);
 });
 
 test("ChangesetOverviewOutputValidator defaults invalid userBehavior confidence to inferred", () => {
@@ -271,7 +252,6 @@ test("ChangesetOverviewOutputValidator defaults missing optional arrays to empty
       reviewObjective: {
         summary: "Review prompt harness redesign"
       },
-      unresolvedUnknowns: undefined,
       userBehavior: undefined
     })
   );
@@ -280,7 +260,6 @@ test("ChangesetOverviewOutputValidator defaults missing optional arrays to empty
   assert.deepEqual(changeMap.reviewObjective.expectedBehaviorSummary, []);
   assert.deepEqual(changeMap.behaviorChanges, []);
   assert.deepEqual(changeMap.missingInformation, []);
-  assert.deepEqual(changeMap.unresolvedUnknowns, []);
   assert.deepEqual(changeMap.userBehavior, []);
 });
 
@@ -296,10 +275,6 @@ test("ChangesetOverviewOutputValidator drops malformed optional entries and pres
         "not an object",
         { description: "Need SDK contract" }
       ],
-      unresolvedUnknowns: [
-        {},
-        { question: "Which API version is used?" }
-      ],
       userBehavior: [
         [],
         { statement: "Expected behavior is stated" }
@@ -312,7 +287,6 @@ test("ChangesetOverviewOutputValidator drops malformed optional entries and pres
     files: ["src/app.ts"]
   });
   assert.ok((changeMap.missingInformation[0]?.whyItMatters.length ?? 0) > 0);
-  assert.ok((changeMap.unresolvedUnknowns[0]?.resolutionPath.length ?? 0) > 0);
   assert.equal(changeMap.userBehavior[0]?.confidence, "inferred");
 });
 

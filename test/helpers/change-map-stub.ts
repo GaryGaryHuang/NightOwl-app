@@ -23,7 +23,6 @@ export function stubChangeMap(
     ),
     missingInformation: Object.freeze(overrides.missingInformation ?? []),
     overviewMarkdown,
-    behaviorChanges: Object.freeze(overrides.behaviorChanges ?? []),
-    unresolvedUnknowns: Object.freeze(overrides.unresolvedUnknowns ?? [])
+    behaviorChanges: Object.freeze(overrides.behaviorChanges ?? [])
   }) as ChangeMapReadinessV2;
 }

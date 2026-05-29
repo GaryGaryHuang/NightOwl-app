@@ -15,8 +15,7 @@ function makeChangeMap(overviewMarkdown: string): ChangeMapReadinessV2 {
     userBehavior: Object.freeze([]),
     missingInformation: Object.freeze([]),
     overviewMarkdown,
-    behaviorChanges: Object.freeze([]),
-    unresolvedUnknowns: Object.freeze([])
+    behaviorChanges: Object.freeze([])
   }) as ChangeMapReadinessV2;
 }
 

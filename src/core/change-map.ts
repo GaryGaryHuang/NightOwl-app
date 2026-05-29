@@ -10,11 +10,6 @@ export interface ReadinessBehaviorChangeEntry {
   readonly files: readonly string[];
 }
 
-export interface ReadinessUnresolvedUnknownEntry {
-  readonly question: string;
-  readonly resolutionPath: string;
-}
-
 export const EXPECTED_BEHAVIOR_CONFIDENCES = ["explicit", "inferred"] as const;
 export type ExpectedBehaviorConfidence =
   (typeof EXPECTED_BEHAVIOR_CONFIDENCES)[number];
@@ -42,7 +37,6 @@ export interface ChangeMapReadinessV2 {
   readonly missingInformation: readonly MissingInformationEntry[];
   readonly overviewMarkdown: string;
   readonly behaviorChanges: readonly ReadinessBehaviorChangeEntry[];
-  readonly unresolvedUnknowns: readonly ReadinessUnresolvedUnknownEntry[];
 }
 
 export type ChangeMapReadiness = ChangeMapReadinessV2;

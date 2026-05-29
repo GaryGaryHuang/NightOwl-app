@@ -38,8 +38,7 @@ function buildChangeMapJson(options: ChangeMapJsonOptions = {}): string {
               files: paths
             }
           ]
-    ),
-    unresolvedUnknowns: []
+    )
   });
 }
 
@@ -274,8 +273,7 @@ test("ChangesetOverviewRunner normalizes invalid Changeset Overview confidence w
     userBehavior: [{ statement: "x", confidence: "wrong" }],
     missingInformation: [],
     overviewMarkdown: "## Changeset Overview\n- 調整範圍：feature",
-    behaviorChanges: [],
-    unresolvedUnknowns: []
+    behaviorChanges: []
   });
   const runner = new ChangesetOverviewRunner({
     reviewSessionFactory: {
