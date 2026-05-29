@@ -29,7 +29,6 @@
     "test/core/step-runner-error-wrapping.test.ts",
     "test/core/step-runner-retry.test.ts",
     "test/core/steps/changeset-overview-step.test.ts",
-    "test/core/steps/common-system-message.test.ts",
     "test/core/steps/review-state-snapshot-prompt-contracts.test.ts",
     "test/core/steps/review-summary-step.test.ts",
     "test/core/steps/semantic-pipeline-prompt-contracts.test.ts",

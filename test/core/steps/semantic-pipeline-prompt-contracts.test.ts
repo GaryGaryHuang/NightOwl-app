@@ -5,14 +5,9 @@ import { FileReviewContext, type Finding } from "../../../src/core/file-review-c
 import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import { ReviewStatePromptSerializer } from "../../../src/core/review-state-prompt-serializer.ts";
-import {
-  CANDIDATE_CLASSIFICATIONS,
-  CANDIDATE_SEVERITIES,
-  HYPOTHESIS_CLOSURE_STATUSES,
-  LOOP_ACTIONS,
-  SUPPLEMENTAL_LENSES,
-  VALIDATION_DECISIONS
-} from "../../../src/core/semantic-review.ts";
+import type { ValidationReportV1 } from "../../../src/core/semantic-review.ts";
+import type { StepResolveServices } from "../../../src/core/step-runner.ts";
+import { StructuredOutputValidator } from "../../../src/core/structured-output-validator.ts";
 import { CandidateFindingsStep } from "../../../src/core/steps/candidate-findings-step.ts";
 import { SemanticValidationStep } from "../../../src/core/steps/semantic-validation-step.ts";
 
@@ -49,7 +44,7 @@ function parseJsonBlock(prompt: string, blockName: string): unknown {
   return JSON.parse(match[1]);
 }
 
-test("CandidateFindingsStep wires ReviewBasis and CandidateFindings harness contract", () => {
+test("CandidateFindingsStep wires ReviewBasis and CandidateFindings harness contract", async () => {
   const step = new CandidateFindingsStep({ promptSerializer: serializer });
   const context = createContext();
   const plan = step.prepare(context);
@@ -75,44 +70,15 @@ test("CandidateFindingsStep wires ReviewBasis and CandidateFindings harness cont
   assert.equal(reviewState.validationFeedback, null);
   assert.equal(reviewState.candidateFindings, null);
 
-  for (const field of [
-    "findings",
-    "classification",
-    "severity",
-    "title",
-    "traceability",
-    "evidence",
-    "triggerCondition",
-    "impact",
-    "counterEvidence",
-    "findingOrigins",
-    "findingIndex",
-    "kind",
-    "hypothesisIds",
-    "evidenceIds",
-    "lens",
-    "hypothesisClosure",
-    "hypothesisId",
-    "status",
-    "rationale",
-    "criticalMissingInformation",
-    "description",
-    "whyItMatters"
-  ]) {
-    assert.match(plan.prompt.userMessage, new RegExp(field, "u"));
-  }
-  for (const value of CANDIDATE_CLASSIFICATIONS) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
-  for (const value of CANDIDATE_SEVERITIES) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
-  for (const value of HYPOTHESIS_CLOSURE_STATUSES) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
-  for (const value of SUPPLEMENTAL_LENSES) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
+  const candidatePayload = createCandidateFindings();
+  const applyTo = await plan.resolve(
+    JSON.stringify(candidatePayload),
+    createResolveServices()
+  );
+  applyTo(context);
+
+  assert.deepEqual(context.getCandidateFindings(), candidatePayload);
+  assert.equal(context.getFindings(), undefined);
 });
 
 test("CandidateFindingsStep fails before prompt construction without ReviewBasis", () => {
@@ -191,7 +157,7 @@ function createReviewBasis(): ReviewBasisV1 {
   };
 }
 
-test("SemanticValidationStep wires candidate state and ValidationReport harness contract", () => {
+test("SemanticValidationStep wires candidate state and ValidationReport harness contract", async () => {
   const candidatePayload = createCandidateFindings();
   const step = new SemanticValidationStep({ promptSerializer: serializer });
   const context = createContext() as SemanticFileReviewContext;
@@ -214,27 +180,16 @@ test("SemanticValidationStep wires candidate state and ValidationReport harness 
   assert.equal(plan.prompt.userMessage.includes("<candidate_findings"), false);
   assert.match(plan.prompt.userMessage, /<candidate_ids>\n\["F1"\]\n<\/candidate_ids>/u);
 
-  for (const field of [
-    "perFindingResults",
-    "findingId",
-    "decision",
-    "failedGates",
-    "requiredCorrections",
-    "reason",
-    "missingInformationItems",
-    "description",
-    "whyItMatters",
-    "loopControl",
-    "action"
-  ]) {
-    assert.match(plan.prompt.userMessage, new RegExp(field, "u"));
-  }
-  for (const value of VALIDATION_DECISIONS) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
-  for (const value of LOOP_ACTIONS) {
-    assert.match(plan.prompt.userMessage, new RegExp(`"${value}"`, "u"));
-  }
+  const validationReport = createValidationReport();
+  const applyTo = await plan.resolve(
+    JSON.stringify(validationReport),
+    createResolveServices()
+  );
+  applyTo(context);
+
+  assert.deepEqual(context.getValidationReportV1(), validationReport);
+  assert.deepEqual(context.getMissingInformationItems(), []);
+  assert.deepEqual(context.getFindings(), candidatePayload.findings);
 });
 
 type SemanticFileReviewContext = FileReviewContext & {
@@ -274,5 +229,27 @@ function createCandidateFindings() {
       }
     ],
     criticalMissingInformation: []
+  };
+}
+
+function createValidationReport(): ValidationReportV1 {
+  return {
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "approve",
+        failedGates: [],
+        requiredCorrections: [],
+        reason: "semantic gates passed"
+      }
+    ],
+    missingInformationItems: [],
+    loopControl: { action: "accept", reason: "semantic gates passed" }
+  };
+}
+
+function createResolveServices(): StepResolveServices {
+  return {
+    validator: new StructuredOutputValidator()
   };
 }

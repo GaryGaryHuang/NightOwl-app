@@ -21,11 +21,10 @@ import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
 const SEMANTIC_VALIDATION_SYSTEM_ADDITION = [
   "## Current Step: Semantic Validation",
-  "- Validate `<review_state>.candidateFindings` against the diff, `<review_state>.reviewBasis`, candidate finding fields, findingOrigins provenance, the semantic gates listed in this step instruction, and `<review_state>.validationFeedback`.",
-  "- The candidate payload includes `findings`, `findingOrigins`, `hypothesisClosure`, and `criticalMissingInformation`; validate these fields together as one review claim set.",
-  "- This step is a validator, not a bug hunt. Do not search for or create new findings; only approve, require rewrite, drop, or report blocking missing information for the existing candidate set.",
-  "- Reject candidates whose origin does not match the cited evidence, hypothesis closure, or bounded supplemental scope.",
-  "- On semantic rerun, give corrections for the existing candidate payload without inviting new supplemental hunting."
+  "- Task: adjudicate only the existing `<review_state>.candidateFindings` payload; do not discover, author, or broaden findings.",
+  "- Critical rule: validate `findings`, `findingOrigins`, `hypothesisClosure`, and `criticalMissingInformation` together as one claim set before any candidate can be approved.",
+  "- Decision rule: evidence, provenance, hypothesis closure, and scope must support the same defect claim; otherwise reject or require repair according to the step instruction.",
+  "- Rerun rule: on semantic rerun, validate repairs to the current payload only; do not request a fresh supplemental sweep."
 ].join("\n");
 
 const SEMANTIC_VALIDATION_INSTRUCTION = [
