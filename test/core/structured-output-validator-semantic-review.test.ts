@@ -105,11 +105,6 @@ function createReviewBasis(overrides: Partial<ReviewBasisV1> = {}): ReviewBasisV
       asyncBoundaries: [],
       errorPaths: ["validator rejects missing evidence"]
     },
-    testCoverage: {
-      changedTests: ["test/core/review-basis-validator.test.ts"],
-      observedCoverageSignals: ["validator tests"],
-      coverageGaps: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

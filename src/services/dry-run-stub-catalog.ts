@@ -74,7 +74,7 @@ export function buildDryRunReviewBasisResponse(prompt: string): string {
       {
         statement: "Dry-run can continue to validation with a structured basis.",
         basedOnEvidenceIds: ["E1"],
-        confidence: "medium"
+        confidence: "low"
       }
     ],
     dependencyMap: {
@@ -88,11 +88,6 @@ export function buildDryRunReviewBasisResponse(prompt: string): string {
       stateTransitions: [],
       asyncBoundaries: [],
       errorPaths: []
-    },
-    testCoverage: {
-      changedTests: [],
-      observedCoverageSignals: [],
-      coverageGaps: []
     },
     hypothesisLedger: [
       {

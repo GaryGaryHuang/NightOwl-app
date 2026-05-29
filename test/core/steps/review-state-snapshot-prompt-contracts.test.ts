@@ -158,11 +158,6 @@ function createReviewBasis(): ReviewBasisV1 {
       asyncBoundaries: [],
       errorPaths: ["validator rejects missing evidence"]
     },
-    testCoverage: {
-      changedTests: ["test/core/steps/review-state-snapshot-prompt-contracts.test.ts"],
-      observedCoverageSignals: ["prompt snapshot tests"],
-      coverageGaps: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

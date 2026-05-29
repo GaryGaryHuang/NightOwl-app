@@ -133,11 +133,6 @@ function createReviewBasis(): ReviewBasisV1 {
       asyncBoundaries: [],
       errorPaths: ["validator rejects missing evidence"]
     },
-    testCoverage: {
-      changedTests: [],
-      observedCoverageSignals: [],
-      coverageGaps: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

@@ -380,11 +380,6 @@ function createReviewBasis(): ReviewBasisV1 {
       asyncBoundaries: [],
       errorPaths: ["validator rejects missing evidence"]
     },
-    testCoverage: {
-      changedTests: ["test/core/file-review-context.test.ts"],
-      observedCoverageSignals: ["context tests"],
-      coverageGaps: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

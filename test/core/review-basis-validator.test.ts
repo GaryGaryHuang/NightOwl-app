@@ -43,11 +43,6 @@ function makeValidReviewBasis(overrides: Record<string, unknown> = {}): string {
       asyncBoundaries: [],
       errorPaths: ["validator rejects missing evidence"]
     },
-    testCoverage: {
-      changedTests: ["test/core/review-basis-validator.test.ts"],
-      observedCoverageSignals: ["validator tests"],
-      coverageGaps: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",
@@ -137,6 +132,20 @@ test("ReviewBasisValidator defaults invalid inference confidence to low", () => 
         statement: "bad confidence",
         basedOnEvidenceIds: ["E1"],
         confidence: "very_high"
+      }
+    ]
+  }));
+
+  assert.equal(result.value.inferences[0]?.confidence, "low");
+});
+
+test("ReviewBasisValidator normalizes retired medium inference confidence to low", () => {
+  const result = validateOk(makeValidReviewBasis({
+    inferences: [
+      {
+        statement: "retired confidence",
+        basedOnEvidenceIds: ["E1"],
+        confidence: "medium"
       }
     ]
   }));

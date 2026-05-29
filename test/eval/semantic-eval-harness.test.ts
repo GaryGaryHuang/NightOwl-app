@@ -148,11 +148,6 @@ function createReviewBasis(): ReviewBasisV1 {
       asyncBoundaries: ["callback dispatch"],
       errorPaths: []
     },
-    testCoverage: {
-      changedTests: [],
-      observedCoverageSignals: [],
-      coverageGaps: ["No callback-threading proof."]
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

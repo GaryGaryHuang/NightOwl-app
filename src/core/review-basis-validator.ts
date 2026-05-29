@@ -10,7 +10,6 @@ import {
   type ReviewBasisInference,
   type ReviewBasisInferenceConfidence,
   type ReviewBasisMissingInformation,
-  type ReviewBasisTestCoverage,
   type ReviewBasisV1
 } from "./review-basis.ts";
 
@@ -66,7 +65,6 @@ export class ReviewBasisValidator {
     );
     const dependencyMap = validateDependencyMap(obj.dependencyMap);
     const flowMap = validateFlowMap(obj.flowMap);
-    const testCoverage = validateTestCoverage(obj.testCoverage);
     const hypothesisLedger = validateHypotheses(obj.hypothesisLedger, diagnostics);
     const missingInformation = validateMissingInformation(
       obj.missingInformation,
@@ -85,8 +83,7 @@ export class ReviewBasisValidator {
         flowMap,
         hypothesisLedger,
         inferences,
-        missingInformation,
-        testCoverage
+        missingInformation
       })
     ) {
       return fail(
@@ -105,7 +102,6 @@ export class ReviewBasisValidator {
       inferences,
       dependencyMap,
       flowMap,
-      testCoverage,
       hypothesisLedger,
       missingInformation,
       evidenceRefs
@@ -286,19 +282,6 @@ function validateFlowMap(value: unknown): ReviewBasisFlowMap {
   };
 }
 
-function validateTestCoverage(value: unknown): ReviewBasisTestCoverage {
-  const empty: ReviewBasisTestCoverage = { changedTests: [], observedCoverageSignals: [], coverageGaps: [] };
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return empty;
-  }
-  const obj = value as Record<string, unknown>;
-  return {
-    changedTests: toStringArray(obj.changedTests),
-    observedCoverageSignals: toStringArray(obj.observedCoverageSignals),
-    coverageGaps: toStringArray(obj.coverageGaps)
-  };
-}
-
 function validateHypotheses(
   value: unknown,
   diagnostics: ReviewBasisValidationDiagnostic[]
@@ -361,7 +344,6 @@ function hasReviewBasisContent(input: {
   hypothesisLedger: readonly ReviewBasisHypothesis[];
   inferences: readonly ReviewBasisInference[];
   missingInformation: readonly ReviewBasisMissingInformation[];
-  testCoverage: ReviewBasisTestCoverage;
 }): boolean {
   return [
     input.changedBehavior,
@@ -377,10 +359,7 @@ function hasReviewBasisContent(input: {
     input.flowMap.entryPoints,
     input.flowMap.stateTransitions,
     input.flowMap.asyncBoundaries,
-    input.flowMap.errorPaths,
-    input.testCoverage.changedTests,
-    input.testCoverage.observedCoverageSignals,
-    input.testCoverage.coverageGaps
+    input.flowMap.errorPaths
   ].some((entries) => entries.length > 0);
 }
 

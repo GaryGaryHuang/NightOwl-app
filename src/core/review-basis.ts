@@ -1,6 +1,5 @@
 export const REVIEW_BASIS_INFERENCE_CONFIDENCES = [
   "high",
-  "medium",
   "low"
 ] as const;
 
@@ -38,12 +37,6 @@ export interface ReviewBasisFlowMap {
   readonly errorPaths: readonly string[];
 }
 
-export interface ReviewBasisTestCoverage {
-  readonly changedTests: readonly string[];
-  readonly observedCoverageSignals: readonly string[];
-  readonly coverageGaps: readonly string[];
-}
-
 export interface ReviewBasisHypothesis {
   readonly hypothesisId: string;
   readonly statement: string;
@@ -70,7 +63,6 @@ export interface ReviewBasisV1 {
   readonly inferences: readonly ReviewBasisInference[];
   readonly dependencyMap: ReviewBasisDependencyMap;
   readonly flowMap: ReviewBasisFlowMap;
-  readonly testCoverage: ReviewBasisTestCoverage;
   readonly hypothesisLedger: readonly ReviewBasisHypothesis[];
   readonly missingInformation: readonly ReviewBasisMissingInformation[];
   readonly evidenceRefs: readonly ReviewBasisEvidenceRef[];
@@ -110,11 +102,6 @@ export function cloneReviewBasis(input: ReviewBasisV1): ReviewBasisV1 {
       stateTransitions: [...input.flowMap.stateTransitions],
       asyncBoundaries: [...input.flowMap.asyncBoundaries],
       errorPaths: [...input.flowMap.errorPaths]
-    },
-    testCoverage: {
-      changedTests: [...input.testCoverage.changedTests],
-      observedCoverageSignals: [...input.testCoverage.observedCoverageSignals],
-      coverageGaps: [...input.testCoverage.coverageGaps]
     },
     hypothesisLedger: input.hypothesisLedger.map((entry) => ({
       hypothesisId: entry.hypothesisId,

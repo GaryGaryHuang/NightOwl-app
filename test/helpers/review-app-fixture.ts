@@ -37,7 +37,7 @@ export function buildSessionResponse(
         {
           statement: "The changed branch may affect fallback behavior.",
           basedOnEvidenceIds: ["E1"],
-          confidence: "medium"
+          confidence: "low"
         }
       ],
       dependencyMap: {
@@ -51,11 +51,6 @@ export function buildSessionResponse(
         stateTransitions: [],
         asyncBoundaries: [],
         errorPaths: []
-      },
-      testCoverage: {
-        changedTests: [],
-        observedCoverageSignals: [],
-        coverageGaps: []
       },
       hypothesisLedger: [
         {

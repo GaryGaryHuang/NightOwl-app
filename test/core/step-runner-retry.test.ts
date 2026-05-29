@@ -579,11 +579,6 @@ function createReviewBasis(): ReviewBasisV1 {
       asyncBoundaries: [],
       errorPaths: ["validator rejects missing evidence"]
     },
-    testCoverage: {
-      changedTests: ["test/core/step-runner-retry.test.ts"],
-      observedCoverageSignals: ["retry test"],
-      coverageGaps: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

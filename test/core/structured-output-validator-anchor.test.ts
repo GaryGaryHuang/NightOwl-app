@@ -214,11 +214,6 @@ function createReviewBasis(): ReviewBasisV1 {
       asyncBoundaries: [],
       errorPaths: ["validator rejects missing evidence"]
     },
-    testCoverage: {
-      changedTests: ["test/core/structured-output-validator-anchor.test.ts"],
-      observedCoverageSignals: ["traceability shape validator tests"],
-      coverageGaps: []
-    },
     hypothesisLedger: [
       {
         hypothesisId: "H1",

@@ -27,7 +27,7 @@ export function buildReviewBasis(filePath: string): ReviewBasisV1 {
       {
         statement: "The changed branch may affect fallback behavior.",
         basedOnEvidenceIds: ["E1"],
-        confidence: "medium"
+        confidence: "low"
       }
     ],
     dependencyMap: {
@@ -41,11 +41,6 @@ export function buildReviewBasis(filePath: string): ReviewBasisV1 {
       stateTransitions: [],
       asyncBoundaries: [],
       errorPaths: []
-    },
-    testCoverage: {
-      changedTests: [],
-      observedCoverageSignals: [],
-      coverageGaps: []
     },
     hypothesisLedger: [
       {
