@@ -2,7 +2,7 @@ import type {
   DependencyPathException,
   FindingTraceability
 } from "./file-review-context.ts";
-import type { ReviewBasisV1 } from "./review-basis.ts";
+import type { ReviewBasis } from "./review-basis.ts";
 import type {
   CandidateClassification,
   CandidateFinding,
@@ -52,7 +52,7 @@ interface TraceabilityValidationResult {
 export class StructuredOutputValidator {
   validateCandidateFindingsWithReport(input: {
     responseText: string;
-    reviewBasis: ReviewBasisV1;
+    reviewBasis: ReviewBasis;
     previousCandidateFindings?: CandidateFindings;
     diffContent?: string;
     filePath?: string;
@@ -114,7 +114,7 @@ export class StructuredOutputValidator {
   validateValidationReportV1WithReport(input: {
     responseText: string;
     candidateFindings: CandidateFindings | Record<string, unknown>;
-    reviewBasis?: ReviewBasisV1;
+    reviewBasis?: ReviewBasis;
     diffContent?: string;
     filePath?: string;
   }): { payload: ValidationReportV1; report: StructuredValidationReportEntry[] } {
@@ -186,7 +186,7 @@ function buildValidationReportSemanticFields(
 
 function validateCandidateFindingsRecord(input: {
   record: Record<string, unknown>;
-  reviewBasis: ReviewBasisV1;
+  reviewBasis: ReviewBasis;
 }): CandidateFindings {
   const findings = validateArray(input.record.findings, "findings").map(
     (finding, index) =>
@@ -330,7 +330,7 @@ function validateFindingOrigin(input: {
   input: unknown;
   index: number;
   findingsLength: number;
-  reviewBasis: ReviewBasisV1;
+  reviewBasis: ReviewBasis;
 }): FindingOrigin {
   if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
     throw new Error(
@@ -399,7 +399,7 @@ function validateFindingOrigin(input: {
 function validateReviewBasisEvidenceIds(input: {
   value: unknown;
   fieldName: string;
-  reviewBasis: ReviewBasisV1;
+  reviewBasis: ReviewBasis;
   nonEmpty?: boolean;
 }): string[] {
   const ids = validateStringArray(input.value, input.fieldName, {
@@ -419,7 +419,7 @@ function validateReviewBasisEvidenceIds(input: {
 function validateReviewBasisHypothesisIds(input: {
   value: unknown;
   fieldName: string;
-  reviewBasis: ReviewBasisV1;
+  reviewBasis: ReviewBasis;
   nonEmpty?: boolean;
 }): string[] {
   const ids = validateStringArray(input.value, input.fieldName, {
@@ -580,7 +580,7 @@ function validateLoopControlAlignment(input: {
 function validateHypothesisClosure(
   input: unknown,
   index: number,
-  reviewBasis: ReviewBasisV1
+  reviewBasis: ReviewBasis
 ): HypothesisClosure {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(
@@ -594,7 +594,7 @@ function validateHypothesisClosure(
   );
   if (!reviewBasis.hypothesisLedger.some((h) => h.hypothesisId === hypothesisId)) {
     throw new Error(
-      `deterministic validation failed: ${hypothesisId} is not present in ReviewBasisV1 hypothesisLedger`
+      `deterministic validation failed: ${hypothesisId} is not present in ReviewBasis hypothesisLedger`
     );
   }
   return {
@@ -613,7 +613,7 @@ function validateHypothesisClosure(
 
 function assertHypothesisClosureCoversReviewBasis(
   closures: readonly HypothesisClosure[],
-  reviewBasis: ReviewBasisV1
+  reviewBasis: ReviewBasis
 ): void {
   const closureIds = new Set<string>();
   for (const closure of closures) {
@@ -869,7 +869,7 @@ function validateLoopControl(input: unknown): { action: LoopAction; reason: stri
 
 function coerceCandidateFindingsForValidation(input: {
   input: CandidateFindings | Record<string, unknown>;
-  reviewBasis: ReviewBasisV1 | undefined;
+  reviewBasis: ReviewBasis | undefined;
 }): CandidateFindings {
   if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
     throw new Error(

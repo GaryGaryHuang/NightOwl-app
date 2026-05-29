@@ -10,7 +10,7 @@ import {
   type ReviewBasisInference,
   type ReviewBasisInferenceConfidence,
   type ReviewBasisMissingInformation,
-  type ReviewBasisV1
+  type ReviewBasis
 } from "./review-basis.ts";
 
 export type ReviewBasisValidationCode = "PARSE" | "SCHEMA";
@@ -21,7 +21,7 @@ export interface ReviewBasisValidationDiagnostic {
 }
 
 export type ReviewBasisValidationResult =
-  | { readonly ok: true; readonly value: ReviewBasisV1 }
+  | { readonly ok: true; readonly value: ReviewBasis }
   | { readonly ok: false; readonly diagnostics: readonly ReviewBasisValidationDiagnostic[] };
 
 const ALLOWED_INFERENCE_CONFIDENCES: ReadonlySet<string> = new Set(
@@ -94,7 +94,7 @@ export class ReviewBasisValidator {
     const roleInChangeset =
       rawRoleInChangeset ?? `Changed file under review: ${filePath}`;
 
-    const basis: ReviewBasisV1 = {
+    const basis: ReviewBasis = {
       filePath,
       roleInChangeset,
       changedBehavior,

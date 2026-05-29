@@ -2,11 +2,11 @@ import type {
   FileReviewContext,
   Finding
 } from "../../src/core/file-review-context.ts";
-import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../src/core/review-basis.ts";
 import type { CandidateFindings, ValidationReportV1 } from "../../src/core/semantic-review.ts";
 import type { StepResult } from "../../src/core/step-runner.ts";
 
-export function buildReviewBasis(filePath: string): ReviewBasisV1 {
+export function buildReviewBasis(filePath: string): ReviewBasis {
   return {
     filePath,
     roleInChangeset: `${filePath} participates in the reviewed change.`,

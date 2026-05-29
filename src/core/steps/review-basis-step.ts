@@ -28,7 +28,7 @@ const REVIEW_BASIS_SYSTEM_ADDITION = [
 ].join("\n");
 
 const REVIEW_BASIS_INSTRUCTION = [
-  "Produce the ReviewBasisV1 JSON object for this file from the inputs above.",
+  "Produce the ReviewBasis JSON object for this file from the inputs above.",
   "",
   "Input contract:",
   "- `<change_map>` is authoritative run-level review context. Use it for intended changeset behavior, user context, and this file's role; do not treat it as file-level proof by itself.",

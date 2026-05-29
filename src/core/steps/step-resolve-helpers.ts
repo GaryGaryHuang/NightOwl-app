@@ -1,5 +1,5 @@
 import type { FileReviewContext } from "../file-review-context.ts";
-import type { ReviewBasisV1 } from "../review-basis.ts";
+import type { ReviewBasis } from "../review-basis.ts";
 import type { ReviewSectionKey } from "../review-section-contract.ts";
 import type { CandidateFindings } from "../semantic-review.ts";
 import type { StepExecutionPlan } from "../step-runner.ts";
@@ -7,7 +7,7 @@ import type { StepExecutionPlan } from "../step-runner.ts";
 export function createCandidateFindingsResolve(input: {
   filePath: string;
   diffContent?: string;
-  reviewBasis: ReviewBasisV1;
+  reviewBasis: ReviewBasis;
   previousCandidateFindings?: CandidateFindings;
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {
@@ -31,7 +31,7 @@ export function createCandidateFindingsResolve(input: {
 export function createValidationReportV1Resolve(input: {
   filePath: string;
   diffContent?: string;
-  reviewBasis?: ReviewBasisV1;
+  reviewBasis?: ReviewBasis;
   candidatePayload: CandidateFindings | Record<string, unknown>;
 }): StepExecutionPlan["resolve"] {
   return async (response, services) => {

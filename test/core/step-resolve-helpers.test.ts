@@ -10,7 +10,7 @@ import {
   createCandidateFindingsResolve,
   createValidationReportV1Resolve
 } from "../../src/core/steps/step-resolve-helpers.ts";
-import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../src/core/review-basis.ts";
 import type { StepResolveServices } from "../../src/core/step-runner.ts";
 
 const DEFAULT_CONTEXT = {
@@ -155,7 +155,7 @@ function createResolveServices(): StepResolveServices {
   };
 }
 
-function createReviewBasis(): ReviewBasisV1 {
+function createReviewBasis(): ReviewBasis {
   return {
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",

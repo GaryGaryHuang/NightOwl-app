@@ -4,7 +4,7 @@ import type {
   PriorValidatorFeedback,
   ReviewBasisEvidenceRef,
   ReviewBasisHypothesis,
-  ReviewBasisV1
+  ReviewBasis
 } from "./review-basis.ts";
 import type {
   CandidateFindings,
@@ -68,7 +68,7 @@ export interface ReviewStateSnapshot {
   approvedFindings: Finding[];
   missingInformationItems: MissingInformationItem[];
   validationReport: ValidationReportV1 | null;
-  reviewBasis: ReviewBasisV1 | null;
+  reviewBasis: ReviewBasis | null;
   evidenceRefs: ReviewBasisEvidenceRef[];
   hypothesisLedger: ReviewBasisHypothesis[];
   validationFeedback: PriorValidatorFeedback | null;

@@ -6,7 +6,7 @@ import {
   type FileReviewContextInput,
   type Finding
 } from "../../src/core/file-review-context.ts";
-import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../src/core/review-basis.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
   filePath: "src/app.ts",
@@ -93,7 +93,7 @@ test("FileReviewContext getFindingsInsertionIndex returns undefined when setFind
   assert.equal(context.getFindingsInsertionIndex(), undefined);
 });
 
-test("FileReviewContext stores ReviewBasisV1 separately from prose sections", () => {
+test("FileReviewContext stores ReviewBasis separately from prose sections", () => {
   const context = createContext();
   const basis = createReviewBasis();
 
@@ -104,7 +104,7 @@ test("FileReviewContext stores ReviewBasisV1 separately from prose sections", ()
   assert.equal(context.getSection("overview"), undefined);
 });
 
-test("FileReviewContext returns defensive ReviewBasisV1 snapshots", () => {
+test("FileReviewContext returns defensive ReviewBasis snapshots", () => {
   const context = createContext();
   const basis = createReviewBasis();
 
@@ -344,7 +344,7 @@ function createValidationReportV1() {
   };
 }
 
-function createReviewBasis(): ReviewBasisV1 {
+function createReviewBasis(): ReviewBasis {
   return {
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",

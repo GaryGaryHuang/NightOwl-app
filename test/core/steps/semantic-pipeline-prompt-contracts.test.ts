@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
-import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../../src/core/review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import { ReviewStatePromptSerializer } from "../../../src/core/review-state-prompt-serializer.ts";
 import type { ValidationReportV1 } from "../../../src/core/semantic-review.ts";
@@ -51,8 +51,8 @@ test("CandidateFindingsStep wires ReviewBasis and CandidateFindings harness cont
   const expectedReviewBasis = createReviewBasis();
   const reviewBasisBlock = parseJsonBlock(plan.prompt.userMessage, "review_basis");
   const reviewState = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
-    reviewBasis: ReviewBasisV1 | null;
-    hypothesisLedger: ReviewBasisV1["hypothesisLedger"];
+    reviewBasis: ReviewBasis | null;
+    hypothesisLedger: ReviewBasis["hypothesisLedger"];
     validationFeedback: unknown;
     candidateFindings: unknown;
   };
@@ -97,7 +97,7 @@ test("CandidateFindingsStep fails before prompt construction without ReviewBasis
   );
 });
 
-function createReviewBasis(): ReviewBasisV1 {
+function createReviewBasis(): ReviewBasis {
   return {
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",
@@ -164,7 +164,7 @@ test("SemanticValidationStep wires candidate state and ValidationReport harness 
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
     candidateFindings: ReturnType<typeof createCandidateFindings>;
     approvedFindings: Finding[];
-    reviewBasis: ReviewBasisV1 | null;
+    reviewBasis: ReviewBasis | null;
     validationFeedback: unknown;
   };
 

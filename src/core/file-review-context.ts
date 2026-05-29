@@ -3,7 +3,7 @@ import {
   clonePriorValidatorFeedback,
   cloneReviewBasis,
   type PriorValidatorFeedback,
-  type ReviewBasisV1
+  type ReviewBasis
 } from "./review-basis.ts";
 import {
   cloneCandidateFindings,
@@ -85,7 +85,7 @@ export class FileReviewContext {
   #findings?: Finding[];
   #interruption?: ReviewInterruption;
   #findingsInsertionIndex?: number;
-  #reviewBasis?: ReviewBasisV1;
+  #reviewBasis?: ReviewBasis;
   #priorValidatorFeedback?: PriorValidatorFeedback;
   #candidateFindings?: CandidateFindings;
   #validationReportV1?: ValidationReportV1;
@@ -121,11 +121,11 @@ export class FileReviewContext {
     return this.#findingsInsertionIndex;
   }
 
-  setReviewBasis(reviewBasis: ReviewBasisV1): void {
+  setReviewBasis(reviewBasis: ReviewBasis): void {
     this.#reviewBasis = cloneReviewBasis(reviewBasis);
   }
 
-  getReviewBasis(): ReviewBasisV1 | undefined {
+  getReviewBasis(): ReviewBasis | undefined {
     return this.#reviewBasis ? cloneReviewBasis(this.#reviewBasis) : undefined;
   }
 

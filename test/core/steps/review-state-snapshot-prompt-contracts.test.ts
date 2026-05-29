@@ -3,7 +3,7 @@ import test from "node:test";
 
 import type { ChangeMapReadiness } from "../../../src/core/change-map.ts";
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
-import type { ReviewBasisV1 } from "../../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../../src/core/review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../../src/core/review-runtime-contract.ts";
 import {
   ReviewStatePromptSerializer,
@@ -122,7 +122,7 @@ function createChangeMap(
   };
 }
 
-function createReviewBasis(): ReviewBasisV1 {
+function createReviewBasis(): ReviewBasis {
   return {
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",

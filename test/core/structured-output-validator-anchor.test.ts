@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../src/core/review-basis.ts";
 import {
   StructuredOutputValidator,
   StructuredValidationReportError
@@ -178,7 +178,7 @@ function createCandidatePayload(
   };
 }
 
-function createReviewBasis(): ReviewBasisV1 {
+function createReviewBasis(): ReviewBasis {
   return {
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",

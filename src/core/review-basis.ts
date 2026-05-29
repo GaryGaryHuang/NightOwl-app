@@ -55,7 +55,7 @@ export interface ReviewBasisEvidenceRef {
   readonly summary: string;
 }
 
-export interface ReviewBasisV1 {
+export interface ReviewBasis {
   readonly filePath: string;
   readonly roleInChangeset: string;
   readonly changedBehavior: readonly ReviewBasisChangedBehavior[];
@@ -73,7 +73,7 @@ export interface PriorValidatorFeedback {
   readonly requiredCorrections: readonly string[];
 }
 
-export function cloneReviewBasis(input: ReviewBasisV1): ReviewBasisV1 {
+export function cloneReviewBasis(input: ReviewBasis): ReviewBasis {
   return {
     filePath: input.filePath,
     roleInChangeset: input.roleInChangeset,

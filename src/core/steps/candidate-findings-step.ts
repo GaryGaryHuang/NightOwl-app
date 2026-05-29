@@ -3,7 +3,7 @@ import {
   CANDIDATE_FINDINGS_STEP_ID,
   REVIEW_BASIS_STEP_ID
 } from "../review-step-ids.ts";
-import type { ReviewBasisV1 } from "../review-basis.ts";
+import type { ReviewBasis } from "../review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import {
   CANDIDATE_CLASSIFICATIONS,
@@ -204,7 +204,7 @@ function buildCandidateFindingsUserMessage(
   ].join("\n");
 }
 
-function requireReviewBasis(context: FileReviewContext): ReviewBasisV1 {
+function requireReviewBasis(context: FileReviewContext): ReviewBasis {
   const reviewBasis = context.getReviewBasis();
   if (!reviewBasis) {
     throw new Error(

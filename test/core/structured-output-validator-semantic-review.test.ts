@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../src/core/review-basis.ts";
 import type { CandidateFindings } from "../../src/core/semantic-review.ts";
 import {
   StructuredOutputValidator,
@@ -69,7 +69,7 @@ interface ValidationReportResult {
   readonly report: readonly SemanticReportEntry[];
 }
 
-function createReviewBasis(overrides: Partial<ReviewBasisV1> = {}): ReviewBasisV1 {
+function createReviewBasis(overrides: Partial<ReviewBasis> = {}): ReviewBasis {
   return {
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",
@@ -247,7 +247,7 @@ function missingInformationItem(
 
 function validateCandidateFindings(
   payload: Record<string, unknown> = candidateFindings(),
-  reviewBasis: ReviewBasisV1 = createReviewBasis(),
+  reviewBasis: ReviewBasis = createReviewBasis(),
   previousCandidateFindings?: CandidateFindings
 ): CandidateValidationResult {
   return validateCandidateFindingsText(
@@ -259,7 +259,7 @@ function validateCandidateFindings(
 
 function validateCandidateFindingsText(
   responseText: string,
-  reviewBasis: ReviewBasisV1 = createReviewBasis(),
+  reviewBasis: ReviewBasis = createReviewBasis(),
   previousCandidateFindings?: CandidateFindings
 ): CandidateValidationResult {
   return new StructuredOutputValidator().validateCandidateFindingsWithReport({
@@ -276,7 +276,7 @@ function validateCandidateFindingsText(
 function validateValidationReport(
   payload: Record<string, unknown> = validationReportV1(),
   candidatePayload: Record<string, unknown> = candidateFindings(),
-  reviewBasis: ReviewBasisV1 = createReviewBasis()
+  reviewBasis: ReviewBasis = createReviewBasis()
 ): ValidationReportResult {
   return validateValidationReportText(JSON.stringify(payload), candidatePayload, reviewBasis);
 }
@@ -284,7 +284,7 @@ function validateValidationReport(
 function validateValidationReportText(
   responseText: string,
   candidatePayload: Record<string, unknown> = candidateFindings(),
-  reviewBasis: ReviewBasisV1 = createReviewBasis()
+  reviewBasis: ReviewBasis = createReviewBasis()
 ): ValidationReportResult {
   return new StructuredOutputValidator().validateValidationReportV1WithReport({
     responseText,
@@ -314,7 +314,7 @@ function reportReasons(error: StructuredValidationReportError): string {
   return error.report.map((entry) => entry.reason ?? "").join("\n");
 }
 
-test("validateCandidateFindingsWithReport accepts evidence-chain candidates tied to ReviewBasisV1", () => {
+test("validateCandidateFindingsWithReport accepts evidence-chain candidates tied to ReviewBasis", () => {
   const result = validateCandidateFindings();
 
   assert.equal(result.payload.findings.length, 1);

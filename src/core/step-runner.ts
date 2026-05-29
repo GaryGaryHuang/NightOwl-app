@@ -7,7 +7,7 @@ import {
   StructuredOutputValidator,
   StructuredValidationReportError
 } from "./structured-output-validator.ts";
-import type { ReviewBasisV1 } from "./review-basis.ts";
+import type { ReviewBasis } from "./review-basis.ts";
 import {
   CANDIDATE_FINDINGS_STEP_ID,
   REVIEW_BASIS_STEP_ID,
@@ -23,7 +23,7 @@ import type { StructuredValidationReportEntry } from "./validation-report.ts";
 export interface StructuredOutputValidatorLike {
   validateCandidateFindingsWithReport(input: {
     responseText: string;
-    reviewBasis: ReviewBasisV1;
+    reviewBasis: ReviewBasis;
     previousCandidateFindings?: CandidateFindings;
     diffContent?: string;
     filePath?: string;
@@ -31,7 +31,7 @@ export interface StructuredOutputValidatorLike {
   validateValidationReportV1WithReport(input: {
     responseText: string;
     candidateFindings: CandidateFindings | Record<string, unknown>;
-    reviewBasis?: ReviewBasisV1;
+    reviewBasis?: ReviewBasis;
     diffContent?: string;
     filePath?: string;
   }): { payload: ValidationReportV1; report: StructuredValidationReportEntry[] };
@@ -216,7 +216,7 @@ export class StepRunner {
 function schemaIdForStep(stepId: string): string {
   switch (stepId) {
     case REVIEW_BASIS_STEP_ID:
-      return "ReviewBasisV1";
+      return "ReviewBasis";
     case CANDIDATE_FINDINGS_STEP_ID:
       return "CandidateFindings";
     case SEMANTIC_VALIDATION_STEP_ID:

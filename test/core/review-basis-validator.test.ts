@@ -75,7 +75,7 @@ function validateFail(responseText: string): ReviewBasisValidationResult & { ok:
   return result as ReviewBasisValidationResult & { ok: false };
 }
 
-test("ReviewBasisValidator accepts a complete ReviewBasisV1", () => {
+test("ReviewBasisValidator accepts a complete ReviewBasis", () => {
   const result = validateOk(makeValidReviewBasis());
 
   assert.equal(result.value.filePath, FILE_PATH);

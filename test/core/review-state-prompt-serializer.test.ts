@@ -7,7 +7,7 @@ import {
   type ReviewStateBlock,
   type ReviewStateSnapshot
 } from "../../src/core/review-state-prompt-serializer.ts";
-import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../src/core/review-basis.ts";
 
 function createContext(): FileReviewContext {
   return new FileReviewContext({
@@ -312,7 +312,7 @@ function createValidationReportV1() {
   };
 }
 
-function createReviewBasis(): ReviewBasisV1 {
+function createReviewBasis(): ReviewBasis {
   return {
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",

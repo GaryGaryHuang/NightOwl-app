@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { StepRunner } from "../../src/core/step-runner.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
-import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../src/core/review-basis.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { ReviewBasisStep } from "../../src/core/steps/review-basis-step.ts";
 import { createCandidateFindingsResolve } from "../../src/core/steps/step-resolve-helpers.ts";
@@ -543,7 +543,7 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
   assert.equal((retryInfos[1] as { attempt: number }).attempt, 1);
 });
 
-function createReviewBasis(): ReviewBasisV1 {
+function createReviewBasis(): ReviewBasis {
   return {
     filePath: "src/app.ts",
     roleInChangeset: "Owns review prompt harness state handoff.",

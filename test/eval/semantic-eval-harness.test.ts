@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import type { ReviewBasisV1 } from "../../src/core/review-basis.ts";
+import type { ReviewBasis } from "../../src/core/review-basis.ts";
 import { StructuredOutputValidator, StructuredValidationReportError } from "../../src/core/structured-output-validator.ts";
 
 type SemanticScenario =
@@ -118,7 +118,7 @@ const DEFAULT_DIFF = [
   " context"
 ].join("\n");
 
-function createReviewBasis(): ReviewBasisV1 {
+function createReviewBasis(): ReviewBasis {
   return {
     filePath: "AsyncResultController.kt",
     roleInChangeset: "Reviews search callback state propagation.",
