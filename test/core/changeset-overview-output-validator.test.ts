@@ -6,13 +6,13 @@ import {
   ChangesetOverviewOutputValidator
 } from "../../src/core/changeset-overview-output-validator.ts";
 import {
-  type ChangeMapReadinessV2,
+  type ChangeMapReadiness,
   normalizeChangesetEntriesForChangeMap
 } from "../../src/core/change-map.ts";
 
 const expectedUserContext = ["Root Cause: context loss before Candidate Findings"];
 
-function makeValidV2(overrides: Record<string, unknown> = {}): string {
+function makeValidChangeMap(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     reviewObjective: {
       summary: "Review prompt harness redesign",
@@ -48,10 +48,10 @@ function makeValidV2(overrides: Record<string, unknown> = {}): string {
   });
 }
 
-function validateV2(
+function validateChangeMap(
   responseText: string,
   userContext: readonly string[] = expectedUserContext
-): ChangeMapReadinessV2 {
+): ChangeMapReadiness {
   return new ChangesetOverviewOutputValidator().validate({
     responseText,
     userContext
@@ -80,7 +80,7 @@ function expectFailure(
 }
 
 test("ChangesetOverviewOutputValidator accepts valid output and injects userContext from host", () => {
-  const changeMap = validateV2(makeValidV2());
+  const changeMap = validateChangeMap(makeValidChangeMap());
 
   assert.deepEqual(changeMap.userContext, expectedUserContext);
   assert.equal(changeMap.userBehavior[0]?.statement, "Candidate findings must cite evidence refs");
@@ -90,13 +90,13 @@ test("ChangesetOverviewOutputValidator accepts valid output and injects userCont
 });
 
 test("ChangesetOverviewOutputValidator ignores unknown top-level fields", () => {
-  const changeMap = validateV2(makeValidV2({ changedFiles: [], schemaVersion: 2 }));
+  const changeMap = validateChangeMap(makeValidChangeMap({ changedFiles: [], schemaVersion: 2 }));
   assert.ok(changeMap.reviewObjective);
 });
 
 test("ChangesetOverviewOutputValidator accepts behaviorChanges with extra fields and any file paths", () => {
-  const changeMap = validateV2(
-    makeValidV2({
+  const changeMap = validateChangeMap(
+    makeValidChangeMap({
       behaviorChanges: [
         {
           description: "references a file not in changeset",
@@ -110,8 +110,8 @@ test("ChangesetOverviewOutputValidator accepts behaviorChanges with extra fields
   assert.equal(changeMap.behaviorChanges[0]?.files[0], "src/not-in-changeset.ts");
 });
 
-test("ChangesetOverviewOutputValidator returns a deeply frozen ChangeMapReadinessV2", () => {
-  const changeMap = validateV2(makeValidV2());
+test("ChangesetOverviewOutputValidator returns a deeply frozen ChangeMapReadiness", () => {
+  const changeMap = validateChangeMap(makeValidChangeMap());
 
   assert.ok(Object.isFrozen(changeMap));
   assert.ok(Object.isFrozen(changeMap.reviewObjective));
@@ -158,11 +158,11 @@ test("ChangesetOverviewOutputValidator rejects invalid JSON with PARSE diagnosti
 test("ChangesetOverviewOutputValidator syntax-repairs code fences and harmless prose around JSON", () => {
   const validator = new ChangesetOverviewOutputValidator();
   const fenced = validator.validateDetailed({
-    responseText: ["```json", makeValidV2(), "```"].join("\n"),
+    responseText: ["```json", makeValidChangeMap(), "```"].join("\n"),
     userContext: expectedUserContext
   });
   const extracted = validator.validateDetailed({
-    responseText: ["Here is the result:", makeValidV2(), "Done."].join("\n"),
+    responseText: ["Here is the result:", makeValidChangeMap(), "Done."].join("\n"),
     userContext: expectedUserContext
   });
 
@@ -175,7 +175,7 @@ test("ChangesetOverviewOutputValidator rejects ambiguous or truncated JSON witho
   const multiple = expectFailure(
     () =>
       validator.validate({
-        responseText: [makeValidV2(), makeValidV2()].join("\n"),
+        responseText: [makeValidChangeMap(), makeValidChangeMap()].join("\n"),
         userContext: expectedUserContext
       }),
     "PARSE",
@@ -206,13 +206,13 @@ test("ChangesetOverviewOutputValidator rejects non-object payload", () => {
 });
 
 test("ChangesetOverviewOutputValidator normalizes overviewMarkdown presentation drift", () => {
-  const extraSpace = validateV2(makeValidV2({
+  const extraSpace = validateChangeMap(makeValidChangeMap({
     overviewMarkdown: " ## Changeset Overview\nx"
   }));
-  const lowercase = validateV2(makeValidV2({
+  const lowercase = validateChangeMap(makeValidChangeMap({
     overviewMarkdown: "## changeset overview\nx"
   }));
-  const missingHeader = validateV2(makeValidV2({
+  const missingHeader = validateChangeMap(makeValidChangeMap({
     overviewMarkdown: "Scope: feature"
   }));
 
@@ -222,16 +222,16 @@ test("ChangesetOverviewOutputValidator normalizes overviewMarkdown presentation 
 });
 
 test("ChangesetOverviewOutputValidator allows empty behaviorChanges", () => {
-  const changeMap = validateV2(
-    makeValidV2({ behaviorChanges: [] })
+  const changeMap = validateChangeMap(
+    makeValidChangeMap({ behaviorChanges: [] })
   );
 
   assert.equal(changeMap.behaviorChanges.length, 0);
 });
 
 test("ChangesetOverviewOutputValidator defaults invalid userBehavior confidence to inferred", () => {
-  const changeMap = validateV2(
-    makeValidV2({
+  const changeMap = validateChangeMap(
+    makeValidChangeMap({
       userBehavior: [
         {
           statement: "Candidate findings must cite evidence refs",
@@ -245,8 +245,8 @@ test("ChangesetOverviewOutputValidator defaults invalid userBehavior confidence 
 });
 
 test("ChangesetOverviewOutputValidator defaults missing optional arrays to empty arrays", () => {
-  const changeMap = validateV2(
-    makeValidV2({
+  const changeMap = validateChangeMap(
+    makeValidChangeMap({
       behaviorChanges: undefined,
       missingInformation: undefined,
       reviewObjective: {
@@ -264,8 +264,8 @@ test("ChangesetOverviewOutputValidator defaults missing optional arrays to empty
 });
 
 test("ChangesetOverviewOutputValidator drops malformed optional entries and preserves usable fields", () => {
-  const changeMap = validateV2(
-    makeValidV2({
+  const changeMap = validateChangeMap(
+    makeValidChangeMap({
       behaviorChanges: [
         null,
         { files: ["src/missing-description.ts"] },
@@ -293,7 +293,7 @@ test("ChangesetOverviewOutputValidator drops malformed optional entries and pres
 test("ChangesetOverviewOutputValidator rejects an empty object with no usable review context", () => {
   expectFailure(
     () =>
-      validateV2(
+      validateChangeMap(
         JSON.stringify({})
       ),
     "SCHEMA"

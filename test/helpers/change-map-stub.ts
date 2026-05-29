@@ -1,14 +1,14 @@
-import type { ChangeMapReadinessV2 } from "../../src/core/change-map.ts";
+import type { ChangeMapReadiness } from "../../src/core/change-map.ts";
 
 /**
- * Build a minimal `ChangeMapReadinessV2` for tests that stub Changeset Overview with
+ * Build a minimal `ChangeMapReadiness` for tests that stub Changeset Overview with
  * a Markdown string only. Defaults to empty structured arrays; callers can
  * override per test.
  */
 export function stubChangeMap(
   overviewMarkdown: string,
-  overrides: Partial<Omit<ChangeMapReadinessV2, "overviewMarkdown">> = {}
-): ChangeMapReadinessV2 {
+  overrides: Partial<Omit<ChangeMapReadiness, "overviewMarkdown">> = {}
+): ChangeMapReadiness {
   return Object.freeze({
     reviewObjective: Object.freeze(
       overrides.reviewObjective ?? {
@@ -24,5 +24,5 @@ export function stubChangeMap(
     missingInformation: Object.freeze(overrides.missingInformation ?? []),
     overviewMarkdown,
     behaviorChanges: Object.freeze(overrides.behaviorChanges ?? [])
-  }) as ChangeMapReadinessV2;
+  }) as ChangeMapReadiness;
 }

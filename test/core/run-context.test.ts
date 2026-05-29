@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import type { ChangeMapReadinessV2 } from "../../src/core/change-map.ts";
+import type { ChangeMapReadiness } from "../../src/core/change-map.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 
-function makeChangeMap(overviewMarkdown: string): ChangeMapReadinessV2 {
+function makeChangeMap(overviewMarkdown: string): ChangeMapReadiness {
   return Object.freeze({
     reviewObjective: Object.freeze({
       summary: "Test review context.",
@@ -16,10 +16,10 @@ function makeChangeMap(overviewMarkdown: string): ChangeMapReadinessV2 {
     missingInformation: Object.freeze([]),
     overviewMarkdown,
     behaviorChanges: Object.freeze([])
-  }) as ChangeMapReadinessV2;
+  }) as ChangeMapReadiness;
 }
 
-test("createRunContext exposes the ChangeMapReadinessV2 as changesetOverview by reference", () => {
+test("createRunContext exposes the ChangeMapReadiness as changesetOverview by reference", () => {
   const changeMap = makeChangeMap("## Changeset Overview\n- x\n");
   const ctx = createRunContext({
     changesetOverview: changeMap,
@@ -52,7 +52,7 @@ test("changesetOverviewMarkdown appends a trailing newline without mutating the 
   assert.equal(
     ctx.changesetOverview.overviewMarkdown,
     overviewMarkdown,
-    "createRunContext must not mutate the source ChangeMapReadinessV2.overviewMarkdown"
+    "createRunContext must not mutate the source ChangeMapReadiness.overviewMarkdown"
   );
 });
 

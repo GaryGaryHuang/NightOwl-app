@@ -9,7 +9,7 @@ export interface RunContext {
   /**
    * Trailing-`\n` normalized projection of `changesetOverview.overviewMarkdown`
    * for downstream prompts/sinks. Always ends with exactly one `\n` whenever
-    * the source `overviewMarkdown` is non-empty. The underlying Changeset Overview V2 artifact is
+   * the source `overviewMarkdown` is non-empty. The underlying Changeset Overview artifact is
    * never mutated — its deep-frozen contract is preserved.
    */
   readonly changesetOverviewMarkdown: string;
@@ -21,7 +21,7 @@ export interface RunContext {
  *
  * Invariant: `changesetOverviewMarkdown` always ends with `\n`. If
  * `changesetOverview.overviewMarkdown` does not end with one, a single `\n` is appended
- * for the projection only; the source Changeset Overview V2 artifact is left untouched.
+ * for the projection only; the source Changeset Overview artifact is left untouched.
  */
 export function createRunContext(input: {
   changesetOverview: ChangeMapReadiness;

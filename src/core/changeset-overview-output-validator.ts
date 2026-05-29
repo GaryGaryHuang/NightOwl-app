@@ -1,6 +1,6 @@
 import {
   EXPECTED_BEHAVIOR_CONFIDENCES,
-  type ChangeMapReadinessV2,
+  type ChangeMapReadiness,
   type ExpectedBehaviorConfidence,
   type ReadinessBehaviorChangeEntry
 } from "./change-map.ts";
@@ -63,7 +63,7 @@ export interface ChangesetOverviewJsonParseMetadata {
 }
 
 export interface ChangesetOverviewOutputValidationResult {
-  readonly changeMap: ChangeMapReadinessV2;
+  readonly changeMap: ChangeMapReadiness;
   readonly parseMetadata: ChangesetOverviewJsonParseMetadata;
 }
 
@@ -74,14 +74,14 @@ const ALLOWED_EXPECTED_BEHAVIOR_CONFIDENCES: ReadonlySet<string> = new Set(
 const OVERVIEW_MARKDOWN_PREFIX = "## Changeset Overview";
 
 /**
- * Deterministic structural validator for Changeset Overview's `ChangeMapReadinessV2` output.
+ * Deterministic structural validator for Changeset Overview's `ChangeMapReadiness` output.
  *
  * Pure function (no I/O, no LLM). Throws `ChangesetOverviewOutputValidationError` with a
  * taxonomy code on any failure so the runner's existing retry path can react
  * uniformly to blank, parse, and schema failures.
  */
 export class ChangesetOverviewOutputValidator {
-  validate(input: ChangesetOverviewOutputValidatorInput): ChangeMapReadinessV2 {
+  validate(input: ChangesetOverviewOutputValidatorInput): ChangeMapReadiness {
     return this.validateDetailed(input).changeMap;
   }
 
@@ -89,16 +89,16 @@ export class ChangesetOverviewOutputValidator {
     const { value: parsed, metadata: parseMetadata } = parseJson(input.responseText);
     const obj = ensurePlainObject(parsed, "top-level payload");
 
-    const changeMap = validateChangeMapReadinessV2(obj, input);
+    const changeMap = validateChangeMapReadiness(obj, input);
 
     return { changeMap, parseMetadata };
   }
 }
 
-function validateChangeMapReadinessV2(
+function validateChangeMapReadiness(
   obj: Record<string, unknown>,
   input: ChangesetOverviewOutputValidatorInput
-): ChangeMapReadinessV2 {
+): ChangeMapReadiness {
   const userBehavior = validateUserBehavior(obj.userBehavior);
   const missingInformation = validateMissingInformation(obj.missingInformation);
   const behaviorChanges = validateReadinessBehaviorChanges(obj.behaviorChanges);
@@ -351,7 +351,7 @@ function ensurePlainObject(value: unknown, label: string): Record<string, unknow
 
 function validateOverviewMarkdown(input: {
   value: unknown;
-  reviewObjective: ChangeMapReadinessV2["reviewObjective"];
+  reviewObjective: ChangeMapReadiness["reviewObjective"];
   behaviorChanges: readonly ReadinessBehaviorChangeEntry[];
 }): string {
   const value = optionalNonEmptyString(input.value);
@@ -371,7 +371,7 @@ function validateOverviewMarkdown(input: {
 }
 
 function buildOverviewMarkdownFallback(
-  reviewObjective: ChangeMapReadinessV2["reviewObjective"],
+  reviewObjective: ChangeMapReadiness["reviewObjective"],
   behaviorChanges: readonly ReadinessBehaviorChangeEntry[]
 ): string {
   const behaviorSummary = behaviorChanges[0]?.description ?? "none recorded";
@@ -391,11 +391,11 @@ function validateReviewObjective(
   value: unknown,
   fallback: {
     behaviorChanges: readonly ReadinessBehaviorChangeEntry[];
-    missingInformation: ChangeMapReadinessV2["missingInformation"];
+    missingInformation: ChangeMapReadiness["missingInformation"];
     overviewMarkdown: unknown;
-    userBehavior: ChangeMapReadinessV2["userBehavior"];
+    userBehavior: ChangeMapReadiness["userBehavior"];
   }
-): ChangeMapReadinessV2["reviewObjective"] {
+): ChangeMapReadiness["reviewObjective"] {
   const obj = asPlainRecord(value);
 
   const summary =
@@ -431,7 +431,7 @@ function summarizeOverviewMarkdown(value: unknown): string | undefined {
 
 function validateUserBehavior(
   value: unknown
-): ChangeMapReadinessV2["userBehavior"] {
+): ChangeMapReadiness["userBehavior"] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -454,7 +454,7 @@ function validateUserBehavior(
 
 function validateMissingInformation(
   value: unknown
-): ChangeMapReadinessV2["missingInformation"] {
+): ChangeMapReadiness["missingInformation"] {
   if (!Array.isArray(value)) {
     return [];
   }

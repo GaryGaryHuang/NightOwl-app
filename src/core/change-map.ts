@@ -1,6 +1,6 @@
 import type { ReviewChangesetEntry } from "../providers/review-source-provider.ts";
 
-/** Changeset Overview's V2 run-level contract plus host-normalized changeset descriptors. */
+/** Changeset Overview's run-level contract plus host-normalized changeset descriptors. */
 
 export const CHANGE_MAP_STATUSES = ["A", "M", "D", "R"] as const;
 export type ChangeMapStatus = (typeof CHANGE_MAP_STATUSES)[number];
@@ -30,7 +30,7 @@ export interface MissingInformationEntry {
   readonly whyItMatters: string;
 }
 
-export interface ChangeMapReadinessV2 {
+export interface ChangeMapReadiness {
   readonly reviewObjective: ReviewObjective;
   readonly userContext: readonly string[];
   readonly userBehavior: readonly UserBehaviorEntry[];
@@ -38,8 +38,6 @@ export interface ChangeMapReadinessV2 {
   readonly overviewMarkdown: string;
   readonly behaviorChanges: readonly ReadinessBehaviorChangeEntry[];
 }
-
-export type ChangeMapReadiness = ChangeMapReadinessV2;
 
 export interface ExpectedChangedFileDescriptor {
   readonly originalStatus: ReviewChangesetEntry["status"];

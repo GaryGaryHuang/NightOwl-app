@@ -58,7 +58,7 @@ function parseJsonBlock(prompt: string, blockName: string): unknown {
   return JSON.parse(match[1]);
 }
 
-test("ChangesetOverviewRunner produces a RunContext from a valid Changeset Overview ChangeMapReadinessV2 response", async () => {
+test("ChangesetOverviewRunner produces a RunContext from a valid Changeset Overview ChangeMapReadiness response", async () => {
   const prompts: string[] = [];
   const profiles: unknown[] = [];
   const runner = new ChangesetOverviewRunner({
