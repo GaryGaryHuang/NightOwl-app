@@ -46,7 +46,7 @@ const REVIEW_BASIS_INSTRUCTION = [
   "- Treat changed tests or relevant repository tests as evidence only when they define expected behavior, contract, trigger, reachability, impact, or a downstream validation target; record material test-derived signals in `facts` or `inferences` with `E*` evidence.",
   "- Use `hypothesisLedger` as the downstream validation queue, not a defect list. Each `triggerCondition` must name the concrete code path, input, state, or runtime condition later steps can test.",
   "- If local evidence leaves an unresolved but material correctness, reachability, impact, or contract question that downstream steps can still test from repo context, add a low-confidence `inferences` entry and an `H*` hypothesis instead of `missingInformation` or an empty `hypothesisLedger`.",
-  "- Use `missingInformation` only when allowed local checks and permitted external retrieval cannot resolve the fact, downstream validation cannot test the question locally, and the unresolved fact would change a ReviewBasis field, `hypothesisLedger`, a downstream Candidate Findings or Semantic Validation target, or final must/nice-to-have classification.",
+  "- Use `missingInformation` only when all three of the following hold: (a) allowed local checks and permitted external retrieval cannot resolve the fact; (b) downstream validation cannot test the question locally; (c) the unresolved fact would change a ReviewBasis field, `hypothesisLedger`, a downstream Candidate Findings or Semantic Validation target, or final must/nice-to-have classification.",
   "- Use `evidenceRefs` only for evidence cited by high-signal `changedBehavior`, `facts`, or `inferences` entries.",
   "",
   "Entry construction rules:",
