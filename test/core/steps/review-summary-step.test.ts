@@ -298,7 +298,6 @@ function getReviewSummaryInstructionText(prompt: string): string {
 
 function createCandidateFindings(_type: "must" | "nice") {
   return {
-    result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F-raw-candidate",

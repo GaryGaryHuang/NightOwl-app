@@ -103,7 +103,6 @@ test("StepRunner does not consume retry budget or run deterministic validation w
         validateCalls += 1;
         return {
           payload: {
-            result: "NO_FINDINGS",
             findings: [],
             findingOrigins: [],
             hypothesisClosure: [],

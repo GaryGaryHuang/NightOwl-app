@@ -288,7 +288,6 @@ type SemanticFileReviewContext = FileReviewContext & {
 
 function createCandidateFindings() {
   return {
-    result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F1",

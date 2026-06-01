@@ -7,7 +7,6 @@ import type {
   CandidateClassification,
   CandidateFinding,
   CandidateFindings,
-  CandidateFindingsResult,
   CandidateSeverity,
   CriticalMissingInformation,
   FindingOrigin,
@@ -245,16 +244,7 @@ function validateCandidateFindingsRecord(input: {
     criticalMissingInformation
   });
 
-  // Auto-derive result
-  const result: CandidateFindingsResult =
-    findings.length > 0
-      ? "FINDINGS_READY"
-      : criticalMissingInformation.length > 0
-        ? "INSUFFICIENT_INFORMATION"
-        : "NO_FINDINGS";
-
   return {
-    result,
     findings,
     findingOrigins,
     hypothesisClosure,
@@ -697,15 +687,6 @@ function assertValidationReportMatchesCandidatePayload(input: {
   perFindingResults: readonly PerFindingValidationResult[];
   missingInformationItems: readonly MissingInformationItem[];
 }): void {
-  const hasApproval =
-    input.perFindingResults.some((result) => result.decision === "approve");
-
-  if (input.candidatePayload.result !== "FINDINGS_READY" && hasApproval) {
-    throw new Error(
-      `deterministic validation failed: CandidateFindings result ${input.candidatePayload.result} cannot approve findings`
-    );
-  }
-
   if (
     input.candidatePayload.criticalMissingInformation.length > 0 &&
     input.missingInformationItems.length === 0
@@ -883,7 +864,7 @@ function coerceCandidateFindingsForValidation(input: {
   }
 
   // Strip auto-generated fields before re-validation
-  const { result, ...rawRecord } = input.input as Record<string, unknown>;
+  const rawRecord = { ...(input.input as Record<string, unknown>) };
   if (Array.isArray(rawRecord.findings)) {
     rawRecord.findings = (rawRecord.findings as Record<string, unknown>[]).map(
       (f) => {

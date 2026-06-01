@@ -62,9 +62,9 @@ function runSemanticCase(
   const reviewBasis = createReviewBasis();
   const candidatePayload = createCandidatePayload(corpusCase.scenario);
 
-  let candidateResult: ReturnType<typeof validator.validateCandidateFindingsWithReport>;
+  let candidateValidationResult: ReturnType<typeof validator.validateCandidateFindingsWithReport>;
   try {
-    candidateResult = validator.validateCandidateFindingsWithReport({
+    candidateValidationResult = validator.validateCandidateFindingsWithReport({
       responseText: JSON.stringify(candidatePayload),
       reviewBasis,
       diffContent: DEFAULT_DIFF,
@@ -82,7 +82,7 @@ function runSemanticCase(
   const validationPayload = createValidationReportPayload(corpusCase.scenario);
   const validationResult = validator.validateValidationReportV1WithReport({
     responseText: JSON.stringify(validationPayload),
-    candidateFindings: candidateResult.payload,
+    candidateFindings: candidateValidationResult.payload,
     reviewBasis,
     diffContent: DEFAULT_DIFF,
     filePath: reviewBasis.filePath
@@ -92,7 +92,7 @@ function runSemanticCase(
     .filter((r: { decision: string }) => r.decision === "approve")
     .map((r: { findingId: string }) => r.findingId);
   const firstDecision = validationResult.payload.perFindingResults[0]?.decision;
-  const candidateFindings = (candidateResult.payload as { findings?: Array<{ findingId: string; classification: string; severity: string }> }).findings ?? [];
+  const candidateFindings = (candidateValidationResult.payload as { findings?: Array<{ findingId: string; classification: string; severity: string }> }).findings ?? [];
   const highSeverityApproved = approvedFindingIds.some(
     (id: string) => candidateFindings.some(
       (f) => f.findingId === id && f.classification === "confirmed_problem" && f.severity === "high"

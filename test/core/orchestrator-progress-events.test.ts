@@ -662,7 +662,6 @@ function createCandidateFindings(
   criticalMissingInformationVariant?: number
 ) {
   return {
-    result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F1",

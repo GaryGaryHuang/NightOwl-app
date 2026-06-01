@@ -184,7 +184,6 @@ export function buildSuccessfulStepResult(
 
 function buildCandidateFindingsForFile(filePath: string): CandidateFindings {
   return {
-    result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F1",

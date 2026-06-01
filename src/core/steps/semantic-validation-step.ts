@@ -92,7 +92,7 @@ const SEMANTIC_VALIDATION_INSTRUCTION = [
   "",
   "Validation report completion policy:",
   "- If there are no candidates, return `perFindingResults: []` and set `loopControl.action` to `accept`; never use `rerun` when `perFindingResults` is empty.",
-  "- If there are no candidates but `candidateFindings.result` is `INSUFFICIENT_INFORMATION`, apply the missing-information rules in section 5 to `candidateFindings.criticalMissingInformation` and keep `loopControl.action` as `accept`.",
+  "- If there are no candidates but `<review_state>.candidateFindings.criticalMissingInformation` is non-empty, apply the missing-information rules in section 5 and keep `loopControl.action` as `accept`.",
   "",
   "Complete JSON output examples:",
   "Example labels are explanatory only; output only the JSON object.",

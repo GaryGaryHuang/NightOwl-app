@@ -34,7 +34,6 @@ interface SemanticReportEntry {
 
 interface CandidateValidationResult {
   readonly payload: {
-    readonly result: string;
     readonly findings: readonly {
       readonly findingId: string;
       readonly classification: string;
@@ -356,6 +355,7 @@ test("validateCandidateFindingsWithReport repairs fenced or prose-wrapped single
 test("validateCandidateFindingsWithReport ignores non-contract extra fields", () => {
   const result = validateCandidateFindings(
     candidateFindings({
+      result: "FINDINGS_READY",
       extraEnvelopeMetadata: "ignored",
       findings: [
         candidateFinding({
@@ -383,6 +383,7 @@ test("validateCandidateFindingsWithReport ignores non-contract extra fields", ()
 
   assert.equal(result.payload.findings[0]?.findingId, "F1");
   assert.equal(result.payload.findings[0]?.classification, "confirmed_problem");
+  assert.equal("result" in result.payload, false);
 });
 
 test("validateCandidateFindingsWithReport normalizes safe small-model formatting drift", () => {
@@ -563,7 +564,6 @@ test("validateCandidateFindingsWithReport allows findings with separate blocking
     })
   );
 
-  assert.equal(result.payload.result, "FINDINGS_READY");
   assert.equal(result.payload.findings.length, 1);
   assert.equal(result.payload.criticalMissingInformation.length, 1);
 });

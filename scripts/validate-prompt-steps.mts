@@ -65,7 +65,6 @@ interface BasisRunSummary {
 interface SemanticRunSummary {
   run: number;
   filePath: string;
-  candidateResult: string;
   candidateFindingCount: number;
   candidateMissingInformationCount: number;
   validationAction: string;
@@ -368,7 +367,6 @@ function summarizeSemantic(
   return {
     run,
     filePath: context.filePath,
-    candidateResult: candidatePayload.result,
     candidateFindingCount: candidatePayload.findings.length,
     candidateMissingInformationCount:
       candidatePayload.criticalMissingInformation.length,

@@ -15,14 +15,6 @@ export type CandidateSeverity = (typeof CANDIDATE_SEVERITIES)[number];
  */
 export type CandidateFinding = Finding;
 
-export const CANDIDATE_FINDINGS_RESULTS = [
-  "FINDINGS_READY",
-  "NO_FINDINGS",
-  "INSUFFICIENT_INFORMATION"
-] as const;
-export type CandidateFindingsResult =
-  (typeof CANDIDATE_FINDINGS_RESULTS)[number];
-
 export const HYPOTHESIS_CLOSURE_STATUSES = [
   "closed_by_candidate",
   "rejected_by_evidence",
@@ -69,7 +61,6 @@ export type FindingOrigin =
     };
 
 export interface CandidateFindings {
-  result: CandidateFindingsResult;
   findings: CandidateFinding[];
   findingOrigins: FindingOrigin[];
   hypothesisClosure: HypothesisClosure[];
@@ -142,7 +133,6 @@ export function semanticCandidateFingerprint(
   payload: CandidateFindings
 ): string {
   const normalized = {
-    result: payload.result,
     findings: payload.findings.map((finding) => ({
       findingId: finding.findingId,
       classification: finding.classification,

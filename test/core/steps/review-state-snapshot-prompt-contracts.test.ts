@@ -52,7 +52,6 @@ function createFinding(findingId: string): Finding {
 
 function createCandidateFindings(): CandidateFindings {
   return {
-    result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F1",
@@ -308,8 +307,9 @@ test("Candidate Findings, Semantic Validation, and Review Summary receive parsea
     });
   });
 
-  assert.equal(snapshots[1].candidateFindings?.result, "FINDINGS_READY");
-  assert.equal(snapshots[1].candidateFindings?.findings[0]?.findingId, "F1");
+  assert.ok(snapshots[1].candidateFindings);
+  assert.equal("result" in snapshots[1].candidateFindings, false);
+  assert.equal(snapshots[1].candidateFindings.findings[0]?.findingId, "F1");
   assert.deepEqual(snapshots[1].candidateFindings?.findingOrigins, [
     {
       findingIndex: 1,

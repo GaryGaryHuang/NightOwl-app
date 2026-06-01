@@ -138,7 +138,7 @@ test("CandidateFindings populates candidateFindings without promoting approved f
   const candidateFindings = snapshot.candidateFindings;
 
   assert.ok(candidateFindings);
-  assert.equal(candidateFindings.result, "FINDINGS_READY");
+  assert.equal("result" in candidateFindings, false);
   assert.equal(candidateFindings.findings.length, 1);
   assert.equal(candidateFindings.findings[0].findingId, "F1");
   assert.equal(candidateFindings.findings[0].classification, "confirmed_problem");
@@ -256,7 +256,6 @@ test("prior validator feedback is serialized only when requested", () => {
 
 function createCandidateFindings() {
   return {
-    result: "FINDINGS_READY",
     findings: [
       {
         findingId: "F1",
