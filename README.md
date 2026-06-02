@@ -17,8 +17,9 @@ The generated reports can serve as a starting point for self-review or human rev
 ### Prerequisites
 
 - Node.js ≥ 22.18.0
-- Standard review runs and `review --check` require a [GitHub Copilot](https://github.com/features/copilot) subscription and an authenticated [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli) — run `/login` on first launch
-- `review --dry-run` does not require Copilot CLI authentication or a Copilot subscription
+- Copilot mode is the default for standard review runs. It requires a [GitHub Copilot](https://github.com/features/copilot) subscription and an authenticated [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli) — run `/login` on first launch
+- BYOK mode uses a configured provider credential from environment variables instead of a Copilot subscription
+- `review --dry-run` does not require Copilot CLI authentication, BYOK credentials, or a Copilot subscription
 
 ### Installation
 
@@ -37,6 +38,8 @@ review --check
 ```
 
 Prints `GitHub Copilot is available.` on success.
+
+`review --check` is currently a Copilot availability check. It does not validate BYOK provider credentials.
 
 ## Usage
 
@@ -92,6 +95,9 @@ Place an optional configuration file at `<repo_root>/.nightowl/reviewconfig.json
 ```json
 {
   "maxConcurrentFiles": 5,
+  "modelProvider": {
+    "kind": "copilot"
+  },
   "mcpServers": {},
   "webFetchAllowedHosts": ["docs.example.com", "*.github.com"],
   "webFetchDeniedHosts": ["internal.corp.com"]
@@ -101,9 +107,54 @@ Place an optional configuration file at `<repo_root>/.nightowl/reviewconfig.json
 | Field | Default | Description |
 |-------|---------|-------------|
 | `maxConcurrentFiles` | `5` | Number of files processed in parallel |
+| `modelProvider` | Copilot mode with `gpt-5.4-mini` | Review model provider configuration |
 | `mcpServers` | `{}` | Additional [MCP](https://modelcontextprotocol.io/) servers the AI agent can access during review |
 | `webFetchAllowedHosts` | — | Hosts the AI agent may fetch from via HTTPS during review |
 | `webFetchDeniedHosts` | — | Hosts blocked from AI agent HTTPS fetches; deny rules override allow rules |
+
+### Model Provider
+
+By default, NightOwl uses Copilot mode with `gpt-5.4-mini` and no custom SDK provider.
+
+Use explicit Copilot mode to keep Copilot authentication while overriding the model:
+
+```json
+{
+  "modelProvider": {
+    "kind": "copilot",
+    "model": "gpt-5.4-mini"
+  }
+}
+```
+
+Use BYOK mode to send review sessions through a configured provider:
+
+```json
+{
+  "modelProvider": {
+    "kind": "byok",
+    "type": "openai",
+    "baseUrl": "https://api.openai.com/v1",
+    "model": "gpt-5.4-mini",
+    "apiKeyEnv": "OPENAI_API_KEY"
+  }
+}
+```
+
+BYOK fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `kind` | Yes | Must be `byok` for BYOK mode |
+| `type` | Yes | Provider type: `openai`, `azure`, or `anthropic` |
+| `baseUrl` | Yes | Provider API endpoint URL |
+| `model` | Yes | Model name used for every review session |
+| `apiKeyEnv` | One credential required | Environment variable name containing the provider API key |
+| `bearerTokenEnv` | One credential required | Environment variable name containing a bearer token; takes precedence over `apiKeyEnv` when both are configured |
+| `wireApi` | No | OpenAI/Azure wire API: `completions` or `responses` |
+| `azure.apiVersion` | No | Azure API version when using `type: "azure"` |
+
+Never put secret values in `.nightowl/reviewconfig.json` — store them in environment variables (e.g. `OPENAI_API_KEY`) and set only the variable name in the config.
 
 File filtering uses `<repo_root>/.nightowl/reviewignore` (`.gitignore` syntax).
 

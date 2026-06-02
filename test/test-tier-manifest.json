@@ -35,6 +35,7 @@
     "test/core/structured-output-validator-anchor.test.ts",
     "test/core/structured-output-validator-semantic-review.test.ts",
     "test/core/web-fetch-hostname-normalization.test.ts",
+    "test/docs/readme-model-provider.test.ts",
     "test/providers/local-git-provider-unit.test.ts",
     "test/providers/local-review-source-snapshot-provider.test.ts",
     "test/providers/resolve-output-write-failure-assessment.test.ts",
