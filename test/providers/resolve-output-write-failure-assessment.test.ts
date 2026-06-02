@@ -44,10 +44,6 @@ test("resolveOutputWriteFailureAssessment normalizes ReviewOutputBoundaryError e
 
   assert.deepEqual(result, { faultScope: "single-file-output-fault" });
   assert.deepEqual(observedInput?.failureEvidence, {
-    kind: "review-output-boundary-error",
-    operation: "publishFileReview",
-    message: "note write failed",
-    outputPath: "/tmp/review/files/src__app.ts.md",
     causeCode: "ENAMETOOLONG",
     causePath: "/tmp/review/files/src__app.ts.md"
   });

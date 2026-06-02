@@ -6,8 +6,6 @@ import {
   readRequiredField
 } from "./review-config-parse-helpers.ts";
 
-export type { ReviewConfigModelProvider } from "./review-config-provider.ts";
-
 const COPILOT_ALLOWED_KEYS: ReadonlySet<string> = new Set([
   "kind",
   "model"

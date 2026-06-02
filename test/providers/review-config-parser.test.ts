@@ -30,10 +30,31 @@ test("parseReviewConfig rejects unknown top-level keys", () => {
 });
 
 test("parseReviewConfig surfaces representative leaf validation failures through the top-level parser", () => {
-  assert.throws(
-    () => parseReviewConfig(JSON.stringify({ maxConcurrentFiles: 0 })),
-    /maxConcurrentFiles/u
-  );
+  for (const { input, expectedMessage } of [
+    { input: { maxConcurrentFiles: 0 }, expectedMessage: /maxConcurrentFiles/u },
+    { input: { maxConcurrentFiles: -1 }, expectedMessage: /maxConcurrentFiles/u },
+    { input: { maxConcurrentFiles: 2.5 }, expectedMessage: /maxConcurrentFiles/u },
+    { input: { maxConcurrentFiles: "5" }, expectedMessage: /maxConcurrentFiles/u },
+    {
+      input: { webFetchAllowedHosts: "docs.example.com" },
+      expectedMessage: /webFetchAllowedHosts/u
+    },
+    {
+      input: { webFetchAllowedHosts: ["https://docs.example.com"] },
+      expectedMessage: /webFetchAllowedHosts/u
+    },
+    {
+      input: { webFetchAllowedHosts: ["*docs.example.com"] },
+      expectedMessage: /webFetchAllowedHosts/u
+    },
+    { input: { webFetchDeniedHosts: [""] }, expectedMessage: /webFetchDeniedHosts/u },
+    {
+      input: { webFetchDeniedHosts: ["127.0.0.1"] },
+      expectedMessage: /webFetchDeniedHosts/u
+    }
+  ]) {
+    assert.throws(() => parseReviewConfig(JSON.stringify(input)), expectedMessage);
+  }
 });
 
 test("parseReviewConfig accepts a representative fully-populated config", () => {
@@ -55,8 +76,8 @@ test("parseReviewConfig accepts a representative fully-populated config", () => 
             timeout: 20000
           }
         },
-        webFetchAllowedHosts: ["docs.example.com"],
-        webFetchDeniedHosts: ["internal.example.com"]
+        webFetchAllowedHosts: [" Docs.Example.com ", "*.API.Example.com"],
+        webFetchDeniedHosts: [" Internal.Example.com "]
       })
     ),
     buildExpectedReviewConfig({
@@ -75,7 +96,7 @@ test("parseReviewConfig accepts a representative fully-populated config", () => 
           timeout: 20000
         }
       },
-      webFetchAllowedHosts: ["docs.example.com"],
+      webFetchAllowedHosts: ["docs.example.com", "*.api.example.com"],
       webFetchDeniedHosts: ["internal.example.com"]
     })
   );

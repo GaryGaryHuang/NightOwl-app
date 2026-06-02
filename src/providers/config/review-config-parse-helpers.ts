@@ -41,14 +41,6 @@ export function readPositiveInteger(value: unknown): number {
   return value;
 }
 
-export function readNonEmptyString(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw invalidReviewConfigError();
-  }
-
-  return value;
-}
-
 export function readNonBlankString(value: unknown): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw invalidReviewConfigError();

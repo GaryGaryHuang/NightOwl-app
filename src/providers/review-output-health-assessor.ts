@@ -1,19 +1,10 @@
-import type { ReviewOutputBoundaryOperation, ReviewOutputTarget } from "./review-output-sink.ts";
+import type { ReviewOutputTarget } from "./review-output-sink.ts";
 
 export type OutputWriteFaultScope =
   | "single-file-output-fault"
   | "shared-output-target-fault";
 
-export type OutputWriteFailureEvidenceKind =
-  | "review-output-boundary-error"
-  | "error"
-  | "non-error";
-
 export interface OutputWriteFailureEvidence {
-  kind: OutputWriteFailureEvidenceKind;
-  message: string;
-  operation?: ReviewOutputBoundaryOperation;
-  outputPath?: string;
   causeCode?: string;
   causePath?: string;
 }

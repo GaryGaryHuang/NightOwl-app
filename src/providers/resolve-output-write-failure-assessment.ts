@@ -33,9 +33,8 @@ export async function resolveOutputWriteFailureAssessment(
 function createOutputWriteFailureEvidence(
   error: unknown
 ): OutputWriteFailureEvidence {
-  const boundaryError =
-    error instanceof ReviewOutputBoundaryError ? error : undefined;
-  const underlyingError = boundaryError?.cause ?? error;
+  const underlyingError =
+    error instanceof ReviewOutputBoundaryError ? error.cause ?? error : error;
   const causeCode =
     isErrnoException(underlyingError) && typeof underlyingError.code === "string"
       ? underlyingError.code
@@ -45,31 +44,9 @@ function createOutputWriteFailureEvidence(
       ? path.resolve(underlyingError.path)
       : undefined;
 
-  if (boundaryError) {
-    return {
-      kind: "review-output-boundary-error",
-      message: boundaryError.message,
-      operation: boundaryError.operation,
-      outputPath: boundaryError.outputPath,
-      causeCode,
-      causePath
-    };
-  }
-
-  if (error instanceof Error) {
-    return {
-      kind: "error",
-      message: error.message,
-      causeCode,
-      causePath
-    };
-  }
-
   return {
-    kind: "non-error",
-    message: String(error),
-    causeCode,
-    causePath
+    ...(causeCode === undefined ? {} : { causeCode }),
+    ...(causePath === undefined ? {} : { causePath })
   };
 }
 

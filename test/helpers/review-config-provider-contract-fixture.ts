@@ -1,9 +1,9 @@
 import type { ReviewMcpServers } from "../../src/core/review-mcp-server-config.ts";
 import { LocalReviewConfigProvider } from "../../src/providers/config/local-review-config-provider.ts";
 import type {
-  ReviewConfig
+  ReviewConfig,
+  ReviewConfigModelProvider
 } from "../../src/providers/config/review-config-provider.ts";
-import type { ReviewConfigModelProvider } from "../../src/providers/config/review-config-model-provider-parser.ts";
 import { createReviewRepoFixture } from "./git-fixture.ts";
 
 export function createReviewConfigProviderFixture() {

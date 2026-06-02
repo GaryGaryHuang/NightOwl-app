@@ -46,11 +46,8 @@ test("LocalOutputWriteHealthAssessor classifies isolated note-path write failure
   try {
     assert.deepEqual(
       await assessorFixture.assess({
-        kind: "review-output-boundary-error",
-        message: "name too long",
         causeCode: "ENAMETOOLONG",
-        causePath: assessorFixture.noteFilePath,
-        outputPath: assessorFixture.noteFilePath
+        causePath: assessorFixture.noteFilePath
       }),
       { faultScope: "single-file-output-fault" }
     );
@@ -65,11 +62,8 @@ test("LocalOutputWriteHealthAssessor refuses to downgrade single-file-like error
   try {
     assert.deepEqual(
       await assessorFixture.assess({
-        kind: "review-output-boundary-error",
-        message: "name too long",
         causeCode: "ENAMETOOLONG",
-        causePath: assessorFixture.fixture.outputTarget.filesPath,
-        outputPath: assessorFixture.fixture.outputTarget.filesPath
+        causePath: assessorFixture.fixture.outputTarget.filesPath
       }),
       { faultScope: "shared-output-target-fault" }
     );
@@ -84,11 +78,8 @@ test("LocalOutputWriteHealthAssessor classifies shared-target write failures con
   try {
     assert.deepEqual(
       await assessorFixture.assess({
-        kind: "review-output-boundary-error",
-        message: "disk full",
         causeCode: "ENOSPC",
-        causePath: assessorFixture.noteFilePath,
-        outputPath: assessorFixture.noteFilePath
+        causePath: assessorFixture.noteFilePath
       }),
       { faultScope: "shared-output-target-fault" }
     );
@@ -109,11 +100,8 @@ test("LocalOutputWriteHealthAssessor refuses to downgrade when shared output dir
 
     assert.deepEqual(
       await assessorFixture.assess({
-        kind: "review-output-boundary-error",
-        message: "name too long",
         causeCode: "ENAMETOOLONG",
-        causePath: assessorFixture.noteFilePath,
-        outputPath: assessorFixture.noteFilePath
+        causePath: assessorFixture.noteFilePath
       }),
       { faultScope: "shared-output-target-fault" }
     );
