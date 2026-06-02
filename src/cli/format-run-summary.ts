@@ -1,6 +1,6 @@
 import type { ReviewRunSummary } from "../core/orchestrator.ts";
 
-export const LOCAL_REVIEW_RUN_HEADER = "Review run completed.";
+const LOCAL_REVIEW_RUN_HEADER = "Review run completed.";
 
 export function formatLocalReviewRunSummary(result: ReviewRunSummary): string {
   const header = result.dryRun

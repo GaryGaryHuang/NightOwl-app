@@ -19,7 +19,6 @@ test("CliProgressReporter renders an initialized metadata block and rewrites a s
     plannedFileCount: 2
   });
 
-  reporter.handleEvent({ type: "phase-changed", phase: "reviewing" });
   reporter.handleEvent({
     type: "file-claimed",
     filePath: "src/app.ts",
@@ -44,24 +43,12 @@ test("CliProgressReporter renders an initialized metadata block and rewrites a s
   assert.doesNotMatch(stdout.writes.at(-1) ?? "", /phase/u);
 });
 
-test("CliProgressReporter does not render a pre-planning live line before initialized metadata is available", () => {
-  const stdout = createFakeStdout({ isTTY: true });
-  const reporter = new CliProgressReporter({ stdout });
-
-  reporter.handleEvent({ type: "phase-changed", phase: "changeset-overview" });
-  reporter.handleEvent({ type: "phase-changed", phase: "planning" });
-
-  assert.deepEqual(stdout.logs, []);
-  assert.deepEqual(stdout.writes, []);
-});
-
 test("CliProgressReporter keeps only three most-recent active files and counts skipped files as resolved progress", () => {
   const { stdout, reporter } = createInitializedReporter({
     isTTY: true,
     plannedFileCount: 5
   });
 
-  reporter.handleEvent({ type: "phase-changed", phase: "reviewing" });
   claimFiles(reporter, [
     [1, "src/a.ts"],
     [2, "src/b.ts"],
@@ -93,7 +80,6 @@ test("CliProgressReporter keeps the TTY live line within one terminal row", () =
     plannedFileCount: 42
   });
 
-  reporter.handleEvent({ type: "phase-changed", phase: "reviewing" });
   claimFiles(reporter, [
     [
       1,
@@ -123,7 +109,6 @@ test("CliProgressReporter pins skipped-file events above the TTY live line and k
     plannedFileCount: 2
   });
 
-  reporter.handleEvent({ type: "phase-changed", phase: "reviewing" });
   claimFiles(reporter, [
     [1, "src/app.ts"],
     [2, "src/lib.ts"]
@@ -151,7 +136,6 @@ test("CliProgressReporter pins tool-audit warnings above the TTY live line and k
     plannedFileCount: 2
   });
 
-  reporter.handleEvent({ type: "phase-changed", phase: "reviewing" });
   reporter.handleEvent({
     type: "file-claimed",
     filePath: "src/app.ts",
@@ -181,7 +165,6 @@ test("CliProgressReporter falls back to append-only snapshots when stdout is not
     "Progress 0/2 | active 0"
   ]);
 
-  reporter.handleEvent({ type: "phase-changed", phase: "reviewing" });
   reporter.handleEvent({
     type: "file-claimed",
     filePath: "src/app.ts",
@@ -339,8 +322,6 @@ function createInitializedReporter(options: {
   const stdout = createFakeStdout(options);
   const reporter = new CliProgressReporter({ stdout });
 
-  reporter.handleEvent({ type: "phase-changed", phase: "changeset-overview" });
-  reporter.handleEvent({ type: "phase-changed", phase: "planning" });
   reporter.handleEvent({
     type: "run-initialized",
     repoRoot: REPO_ROOT,

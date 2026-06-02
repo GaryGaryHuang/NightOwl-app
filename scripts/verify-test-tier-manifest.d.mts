@@ -1,7 +1,18 @@
-export declare const CANONICAL_TIERS: readonly string[];
+export declare const CANONICAL_TIERS: readonly ["unit", "integration", "e2e"];
+
+type ScriptLogger = {
+  log(message: string): void;
+  error(message: string): void;
+};
+
+type TestTierManifest = {
+  unit: string[];
+  integration: string[];
+  e2e: string[];
+};
 
 export interface TestTierManifestEvaluationResult {
-  tierLists: Record<string, string[]>;
+  tierLists: TestTierManifest;
   allSchemaViolations: string[];
   sortOrderViolations: string[];
   pathFormatViolations: string[];
@@ -23,5 +34,5 @@ export declare function evaluateTestTierManifest(input: {
 }): TestTierManifestEvaluationResult;
 
 export declare function loadVerifiedTestTierManifest(options?: {
-  logger?: { log(message: string): void; error(message: string): void };
-}): Record<string, string[]>;
+  logger?: ScriptLogger;
+}): TestTierManifest;

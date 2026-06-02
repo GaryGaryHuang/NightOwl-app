@@ -5,64 +5,59 @@ import {
 import { formatLocalReviewRunSummary } from "./cli/format-run-summary.ts";
 import { CliProgressReporter, type CliProgressStdout } from "./cli/progress-reporter.ts";
 import { CliUsageError, parseReviewCommand } from "./cli/parser.ts";
-import type { RunRequest } from "./core/run-request.ts";
 import { ReviewRunInterruptedError } from "./core/orchestrator.ts";
-import {
-  CopilotAvailabilityChecker
-} from "./services/copilot-availability-checker.ts";
-
-interface AvailabilityChecker {
-  check(): Promise<void>;
-}
+import { CopilotAvailabilityChecker } from "./services/copilot-availability-checker.ts";
 
 export interface CliRuntime {
   app?: ReviewApp;
-  availabilityChecker?: AvailabilityChecker;
+  availabilityChecker?: { check(): Promise<void> };
   progressReporter?: CliProgressReporter;
   stdout?: CliProgressStdout;
   stderr?: Pick<typeof console, "error">;
   workingDirectory?: string;
 }
 
-interface ResolvedCliRuntime {
-  app: ReviewApp;
-  availabilityChecker: AvailabilityChecker;
-  progressReporter: CliProgressReporter;
-  stdout: CliProgressStdout;
-  stderr: Pick<typeof console, "error">;
-}
-
-/**
- * Thin CLI entrypoint: parse args, run the app, and translate failures into exit codes.
- *
- * progressReporter.finalize() is invoked once in the finally block. It is
- * idempotent and clears any pending TTY live line before stdout/stderr writes
- * complete in the surrounding shell.
- */
 export async function runCli(
   argv: string[],
   runtime: CliRuntime = {}
 ): Promise<number> {
-  let resolvedRuntime: ResolvedCliRuntime | undefined;
+  const stderr = runtime.stderr ?? console;
+  let progressReporter = runtime.progressReporter;
 
   try {
-    resolvedRuntime = createDefaultCliRuntime(runtime);
     const command = parseReviewCommand(argv);
+    const stdout =
+      progressReporter?.stdout ?? runtime.stdout ?? createProcessCliStdout();
 
     if (command.kind === "check") {
-      await resolvedRuntime.availabilityChecker.check();
-      resolvedRuntime.stdout.log("GitHub Copilot is available.");
+      const availabilityChecker =
+        runtime.availabilityChecker ?? new CopilotAvailabilityChecker();
+      await availabilityChecker.check();
+      stdout.log("GitHub Copilot is available.");
       return 0;
     }
 
     const request = command.request;
-    resolvedRuntime.stdout.log(formatStartupFeedback(request));
-    const result = await resolvedRuntime.app.run(request);
-    resolvedRuntime.stdout.log(formatLocalReviewRunSummary(result));
+    let app = runtime.app;
+    if (app === undefined) {
+      progressReporter ??= new CliProgressReporter({ stdout });
+      const reviewProgressReporter = progressReporter;
+      app = createLocalReviewRunApp({
+        workingDirectory: runtime.workingDirectory ?? process.cwd(),
+        onProgressEvent(event) {
+          reviewProgressReporter.handleEvent(event);
+        }
+      });
+    }
+
+    const prefix = request.dryRun ? "[DRY RUN] " : "";
+    stdout.log(
+      `${prefix}Starting review run for ${request.baseRef}...${request.headRef}.`
+    );
+    const result = await app.run(request);
+    stdout.log(formatLocalReviewRunSummary(result));
     return 0;
   } catch (error) {
-    const stderr = resolvedRuntime?.stderr ?? runtime.stderr ?? console;
-
     if (error instanceof CliUsageError) {
       stderr.error(error.message);
       return 1;
@@ -86,39 +81,8 @@ export async function runCli(
     stderr.error(message);
     return 2;
   } finally {
-    resolvedRuntime?.progressReporter.finalize();
+    progressReporter?.finalize();
   }
-}
-
-/**
- * Build the production runtime, while letting tests inject fakes.
- */
-export function createDefaultCliRuntime(
-  runtime: CliRuntime = {}
-): ResolvedCliRuntime {
-  const stdout = runtime.progressReporter?.stdout ?? runtime.stdout ?? createProcessCliStdout();
-  const progressReporter = runtime.progressReporter ?? new CliProgressReporter({ stdout });
-
-  return {
-    app:
-      runtime.app ??
-      createLocalReviewRunApp({
-        workingDirectory: runtime.workingDirectory ?? process.cwd(),
-        onProgressEvent(event) {
-          progressReporter.handleEvent(event);
-        }
-      }),
-    availabilityChecker:
-      runtime.availabilityChecker ?? new CopilotAvailabilityChecker(),
-    progressReporter,
-    stdout,
-    stderr: runtime.stderr ?? console
-  };
-}
-
-function formatStartupFeedback(request: RunRequest): string {
-  const prefix = request.dryRun ? "[DRY RUN] " : "";
-  return `${prefix}Starting review run for ${request.baseRef}...${request.headRef}.`;
 }
 
 function createProcessCliStdout(): CliProgressStdout {

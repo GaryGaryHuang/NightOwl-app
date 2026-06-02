@@ -12,7 +12,6 @@ import {
 } from "../../src/core/orchestrator.ts";
 import type { RunRequest } from "../../src/core/run-request.ts";
 import {
-  createDefaultCliRuntime,
   runCli,
   type CliRuntime
 } from "../../src/index.ts";
@@ -130,21 +129,6 @@ test("runCli emits startup feedback after parsing and before the app completes",
     renderExpectedStartup(),
     formatLocalReviewRunSummary(result)
   ]);
-});
-
-test("createDefaultCliRuntime uses a writable process-backed stdout when no stdout override is provided", () => {
-  const runtime = createDefaultCliRuntime({
-    app: {
-      async run() {
-        throw new Error("unused");
-      }
-    }
-  });
-
-  assert.equal(typeof runtime.stdout.log, "function");
-  assert.equal(typeof runtime.stdout.write, "function");
-  assert.equal(runtime.stdout.isTTY, process.stdout.isTTY);
-  assert.equal(runtime.progressReporter.stdout, runtime.stdout);
 });
 
 test("runCli startup feedback stays distinct from the completed-run success header", async () => {

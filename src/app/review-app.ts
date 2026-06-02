@@ -23,18 +23,15 @@ import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
 import type { OutputWriteHealthAssessor } from "../providers/review-output-health-assessor.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
-import { KnowledgeSvc } from "../services/knowledge.ts";
 import {
   CopilotClientManager,
   type ClientManagerLike
 } from "../services/copilot-client-manager.ts";
 import type { ToolAuditWriteFailure } from "../services/tool-audit-writer.ts";
 import type { WebFetchHostnameClassifier } from "../services/tool-policy/web-fetch-hostname-classifier.ts";
-import { DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS } from "../services/copilot-client-shutdown.ts";
 import {
   DryRunRunDepsBuilder,
-  ProductionRunDepsBuilder,
-  type RunDepsBuilder
+  ProductionRunDepsBuilder
 } from "./run-deps-builder.ts";
 import { RunLifecycleManager } from "./run-lifecycle-manager.ts";
 
@@ -43,8 +40,6 @@ export interface CreateLocalReviewRunAppOptions {
   clientManager?: ClientManagerLike;
   context7ApiKey?: string;
   outputSink?: ReviewOutputSink;
-  successfulSnapshotOutputHealthAssessor?: OutputWriteHealthAssessor;
-  knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   reviewConfigProvider?: ReviewConfigProvider;
   reviewFileFilter?: ReviewFileFilter;
   reviewSourceSnapshotProvider?: ReviewSourceSnapshotProvider;
@@ -52,9 +47,7 @@ export interface CreateLocalReviewRunAppOptions {
   stepRunner?: Pick<StepRunner, "run">;
   workingDirectory: string;
   timestampProvider?: () => string;
-  gracefulShutdownTimeoutMs?: number;
   webFetchHostnameClassifier?: WebFetchHostnameClassifier;
-  webFetchHostnameClassificationTimeoutMs?: number;
   onProgressEvent?: RunProgressEventHandler;
   perFileStepsFactory?: ReviewPerFileStepsFactory;
 }
@@ -91,9 +84,7 @@ export function createLocalReviewRunApp(
         | Awaited<ReturnType<ReviewSourceSnapshotProvider["createSnapshot"]>>
         | undefined;
 
-      const setupLifecycleManager = new RunLifecycleManager({
-        gracefulShutdownTimeoutMs: sharedDefaults.gracefulShutdownTimeoutMs
-      });
+      const setupLifecycleManager = new RunLifecycleManager();
 
       try {
         result = await setupLifecycleManager.run(async (signal) => {
@@ -127,9 +118,12 @@ export function createLocalReviewRunApp(
           throwIfInterrupted(signal);
 
           const isDryRun = request.dryRun === true;
-          const builder = createRunDepsBuilder(isDryRun, options, sharedDefaults, {
-            workingDirectory: runSnapshot.reviewSourceRoot
-          });
+          const builder = createRunDepsBuilder(
+            isDryRun,
+            options,
+            sharedDefaults,
+            runSnapshot.reviewSourceRoot
+          );
           const deps = builder.build(reviewConfig);
           flush = deps.flush;
 
@@ -236,7 +230,6 @@ interface SharedDefaults {
   outputSink: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor: OutputWriteHealthAssessor;
   reviewConfigProvider: ReviewConfigProvider;
-  gracefulShutdownTimeoutMs: number;
 }
 
 function resolveSharedDefaults(
@@ -250,13 +243,9 @@ function resolveSharedDefaults(
       options.reviewSourceSnapshotProvider ??
       new LocalReviewSourceSnapshotProvider(),
     outputSink: options.outputSink ?? new LocalWorkspaceProvider(),
-    successfulSnapshotOutputHealthAssessor:
-      options.successfulSnapshotOutputHealthAssessor ??
-      new LocalOutputWriteHealthAssessor(),
+    successfulSnapshotOutputHealthAssessor: new LocalOutputWriteHealthAssessor(),
     reviewConfigProvider:
-      options.reviewConfigProvider ?? new LocalReviewConfigProvider(),
-    gracefulShutdownTimeoutMs:
-      options.gracefulShutdownTimeoutMs ?? DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS
+      options.reviewConfigProvider ?? new LocalReviewConfigProvider()
   };
 }
 
@@ -264,8 +253,8 @@ function createRunDepsBuilder(
   isDryRun: boolean,
   options: CreateLocalReviewRunAppOptions,
   shared: SharedDefaults,
-  runOptions: { workingDirectory: string }
-): RunDepsBuilder {
+  workingDirectory: string
+): ProductionRunDepsBuilder | DryRunRunDepsBuilder {
   const sharedDeps = {
     changesetOverviewRunner: options.changesetOverviewRunner,
     outputSink: shared.outputSink,
@@ -274,28 +263,21 @@ function createRunDepsBuilder(
     reviewFileFilter: shared.reviewFileFilter,
     sourceProvider: shared.sourceProvider,
     stepRunner: options.stepRunner,
-    workingDirectory: runOptions.workingDirectory,
+    workingDirectory,
     timestampProvider: options.timestampProvider,
     onProgressEvent: options.onProgressEvent,
     perFileStepsFactory: options.perFileStepsFactory
   };
 
   if (isDryRun) {
-    return new DryRunRunDepsBuilder({
-      ...sharedDeps,
-      gracefulShutdownTimeoutMs: shared.gracefulShutdownTimeoutMs
-    });
+    return new DryRunRunDepsBuilder(sharedDeps);
   }
 
   return new ProductionRunDepsBuilder({
     ...sharedDeps,
     clientManager: shared.clientManager,
-    knowledgeSvc: options.knowledgeSvc,
     context7ApiKey: options.context7ApiKey,
     webFetchHostnameClassifier: options.webFetchHostnameClassifier,
-    webFetchHostnameClassificationTimeoutMs:
-      options.webFetchHostnameClassificationTimeoutMs,
-    gracefulShutdownTimeoutMs: shared.gracefulShutdownTimeoutMs,
     onToolAuditWriteFailure: (failure) => {
       options.onProgressEvent?.({
         type: "tool-audit-write-failed",

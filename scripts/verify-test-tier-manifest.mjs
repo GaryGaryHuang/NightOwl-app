@@ -5,8 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 export const CANONICAL_TIERS = ["unit", "integration", "e2e"];
 const MANIFEST_VERIFICATION_ERROR_MESSAGE = "test-tier-manifest verification failed";
 
-const currentFilePath = fileURLToPath(import.meta.url);
-const repoRoot = path.resolve(path.dirname(currentFilePath), "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(repoRoot, "test", "test-tier-manifest.json");
 const testDir = path.join(repoRoot, "test");
 const helpersDir = path.join(repoRoot, "test", "helpers");
@@ -111,7 +110,7 @@ function validateManifest(manifest) {
     tierLists[tier] = value;
 
     const sorted = [...value].sort((left, right) => left.localeCompare(right));
-    if (value.length !== sorted.length || value.some((entry, index) => entry !== sorted[index])) {
+    if (value.some((entry, index) => entry !== sorted[index])) {
       sortOrderViolations.push(
         `Tier \"${tier}\" must be sorted lexicographically.`
       );
@@ -207,7 +206,7 @@ export function evaluateTestTierManifest({ manifest, parseViolations = [], diskF
   };
 }
 
-function reportManifestVerification(result, logger = console) {
+function reportManifestVerification(result, logger) {
   logger.error(`✗ ${MANIFEST_VERIFICATION_ERROR_MESSAGE}:`);
   printViolations("Manifest schema violations", result.allSchemaViolations, logger);
   printViolations("Manifest sort-order violations", result.sortOrderViolations, logger);

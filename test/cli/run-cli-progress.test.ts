@@ -106,14 +106,12 @@ async function runCliWithLiveProgress(
 }
 
 function emitReviewingProgress(progressReporter: CliProgressReporter): void {
-  progressReporter.handleEvent({ type: "phase-changed", phase: "changeset-overview" });
   progressReporter.handleEvent({
     type: "run-initialized",
     repoRoot: REPO_ROOT,
     outputTarget: createOutputTarget({ basePath: REVIEW_BASE_PATH }),
     plannedFileCount: 2
   });
-  progressReporter.handleEvent({ type: "phase-changed", phase: "reviewing" });
   progressReporter.handleEvent({
     type: "file-claimed",
     filePath: "src/app.ts",

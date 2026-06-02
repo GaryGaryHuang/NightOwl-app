@@ -94,7 +94,7 @@ test("runTestTierCommand exits 1 without spawning or re-throwing when manifest v
     }
   });
   assert.equal(spawnFailureExit, 1);
-  assert.deepEqual(loggedErrors, [spawnError]);
+  assert.deepEqual(loggedErrors, ["spawn ENOENT"]);
 });
 
 test("runTestTierCommand spawns the manifest-defined files for a tier and concatenates all tiers in canonical order for 'all'", () => {

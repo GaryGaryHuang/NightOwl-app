@@ -24,7 +24,7 @@ export class RunLifecycleManager {
   readonly #signalSource: SignalSource;
   readonly #gracefulShutdownTimeoutMs: number;
 
-  constructor(options: RunLifecycleManagerOptions) {
+  constructor(options: RunLifecycleManagerOptions = {}) {
     this.#clientManager = options.clientManager;
     this.#signalSource = options.signalSource ?? process;
     this.#gracefulShutdownTimeoutMs =
@@ -32,12 +32,11 @@ export class RunLifecycleManager {
   }
 
   async run<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
-    let clientStarted = false;
     let hasPrimaryError = false;
+    const clientManager = this.#clientManager;
 
-    if (this.#clientManager) {
-      await this.#clientManager.start();
-      clientStarted = true;
+    if (clientManager) {
+      await clientManager.start();
     }
 
     const controller = new AbortController();
@@ -59,10 +58,10 @@ export class RunLifecycleManager {
     } finally {
       this.#signalSource.off("SIGINT", handleSigint);
       this.#signalSource.off("SIGTERM", handleSigterm);
-      if (clientStarted) {
+      if (clientManager) {
         try {
           await stopClientManagerWithTimeout(
-            this.#clientManager!,
+            clientManager,
             this.#gracefulShutdownTimeoutMs
           );
         } catch (cleanupError) {

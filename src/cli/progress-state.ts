@@ -46,9 +46,6 @@ export function reduceProgressEvent(
   event: RunProgressEvent
 ): { state: CliProgressState; instruction: ProgressRenderInstruction } {
   switch (event.type) {
-    case "phase-changed":
-      return { state: current, instruction: {} };
-
     case "run-initialized":
       return {
         state: {
@@ -133,13 +130,12 @@ export function reduceProgressEvent(
 
     default: {
       const unsupportedEvent: never = event;
+      const eventType = String((unsupportedEvent as { type?: unknown }).type);
       return {
         state: current,
         instruction: {
           appendMessage: progressContractWarning(
-            `ignored unsupported progress event type: ${String(
-          (event as { type?: unknown }).type
-            )}`
+            `ignored unsupported progress event type: ${eventType}`
           )
         }
       };
@@ -147,7 +143,7 @@ export function reduceProgressEvent(
   }
 }
 
-export function withClaimedFile(
+function withClaimedFile(
   current: CliProgressState,
   filePath: string,
   claimOrder: number
@@ -187,7 +183,7 @@ export function withClaimedFile(
   };
 }
 
-export function withProgressedFile(
+function withProgressedFile(
   current: CliProgressState,
   filePath: string
 ): ProgressStateTransition {
@@ -202,19 +198,11 @@ export function withProgressedFile(
     };
   }
 
-  return withActiveFileProgress(current, filePath, existing.claimOrder);
-}
-
-export function withActiveFileProgress(
-  current: CliProgressState,
-  filePath: string,
-  claimOrder: number
-): ProgressStateTransition {
   const activeFiles = new Map(current.activeFiles);
   const nextEventSeq = current.eventSeq + 1;
 
   activeFiles.set(filePath, {
-    claimOrder,
+    claimOrder: existing.claimOrder,
     lastProgressSeq: nextEventSeq
   });
 
@@ -227,7 +215,7 @@ export function withActiveFileProgress(
   };
 }
 
-export function withResolvedOutcome(
+function withResolvedOutcome(
   current: CliProgressState,
   filePath: string,
   outcome: "completed" | "skipped"
@@ -266,7 +254,7 @@ export function createProgressSnapshot(state: CliProgressState): ProgressSnapsho
   };
 }
 
-export function buildActiveFileSummary(
+function buildActiveFileSummary(
   activeFiles: Map<string, ActiveFileState>
 ): string {
   const orderedFiles = [...activeFiles.entries()]

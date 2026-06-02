@@ -12,7 +12,7 @@ const REVIEW_RUN_USAGE =
 const CHECK_USAGE = "review --check";
 const USAGE = `${REVIEW_RUN_USAGE}\n${CHECK_USAGE}`;
 
-export type ParsedReviewCommand =
+type ParsedReviewCommand =
   | { kind: "check" }
   | { kind: "run"; request: RunRequest };
 
@@ -23,11 +23,8 @@ interface ParsedRunTokens {
   dryRun: boolean;
 }
 
-/**
- * Parse the review command into the RunRequest consumed by the app layer.
- */
 export function parseReviewCommand(argv: string[]): ParsedReviewCommand {
-  if (isCheckMode(argv)) {
+  if (argv.includes("--check")) {
     return { kind: "check" };
   }
 
@@ -35,10 +32,6 @@ export function parseReviewCommand(argv: string[]): ParsedReviewCommand {
     kind: "run",
     request: buildRunRequest(validateRunTokens(scanRunTokens(argv)))
   };
-}
-
-function isCheckMode(argv: string[]): boolean {
-  return argv.includes("--check");
 }
 
 function scanRunTokens(argv: string[]): ParsedRunTokens {

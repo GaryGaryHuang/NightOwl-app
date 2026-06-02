@@ -39,10 +39,6 @@ export interface RunDeps {
   flush(): Promise<void>;
 }
 
-export interface RunDepsBuilder {
-  build(reviewConfig: ReviewConfig): RunDeps;
-}
-
 export interface RunDepsSharedOptions {
   changesetOverviewRunner?: Pick<ChangesetOverviewRunner, "run">;
   outputSink: ReviewOutputSink;
@@ -58,16 +54,9 @@ export interface RunDepsSharedOptions {
 
 export interface ProductionRunDepsBuilderOptions extends RunDepsSharedOptions {
   clientManager: ClientManagerLike;
-  knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   context7ApiKey?: string;
   webFetchHostnameClassifier?: WebFetchHostnameClassifier;
-  webFetchHostnameClassificationTimeoutMs?: number;
-  gracefulShutdownTimeoutMs: number;
   onToolAuditWriteFailure?: (failure: ToolAuditWriteFailure) => void;
-}
-
-export interface DryRunDepsBuilderOptions extends RunDepsSharedOptions {
-  gracefulShutdownTimeoutMs: number;
 }
 
 interface ToolAuditLifecycle {
@@ -79,11 +68,7 @@ interface ToolAuditLifecycle {
   flush(): Promise<void>;
 }
 
-const noopToolAuditLifecycle: ToolAuditLifecycle = {
-  flush: async () => {}
-};
-
-export class ProductionRunDepsBuilder implements RunDepsBuilder {
+export class ProductionRunDepsBuilder {
   readonly #options: ProductionRunDepsBuilderOptions;
 
   constructor(options: ProductionRunDepsBuilderOptions) {
@@ -95,18 +80,14 @@ export class ProductionRunDepsBuilder implements RunDepsBuilder {
     const toolAuditLifecycle = createProductionToolAuditLifecycle(
       options.onToolAuditWriteFailure
     );
-    const knowledgeSvc =
-      options.knowledgeSvc ??
-      new KnowledgeSvc({
-        context7ApiKey: options.context7ApiKey ?? process.env.CONTEXT7_API_KEY,
-        userMcpServers: reviewConfig.mcpServers
-      });
+    const knowledgeSvc = new KnowledgeSvc({
+      context7ApiKey: options.context7ApiKey ?? process.env.CONTEXT7_API_KEY,
+      userMcpServers: reviewConfig.mcpServers
+    });
     const toolPolicyGuard = new ToolPolicyGuard({
       hostnameClassifier: options.webFetchHostnameClassifier,
       webFetchAllowedHosts: reviewConfig.webFetchAllowedHosts,
-      webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts,
-      webFetchHostnameClassificationTimeoutMs:
-        options.webFetchHostnameClassificationTimeoutMs
+      webFetchDeniedHosts: reviewConfig.webFetchDeniedHosts
     });
     const reviewSessionFactory = new ReviewSessionFactory({
       clientManager: options.clientManager,
@@ -128,8 +109,7 @@ export class ProductionRunDepsBuilder implements RunDepsBuilder {
     });
 
     const lifecycleManager = new RunLifecycleManager({
-      clientManager: options.clientManager,
-      gracefulShutdownTimeoutMs: options.gracefulShutdownTimeoutMs
+      clientManager: options.clientManager
     });
 
     return {
@@ -140,10 +120,10 @@ export class ProductionRunDepsBuilder implements RunDepsBuilder {
   }
 }
 
-export class DryRunRunDepsBuilder implements RunDepsBuilder {
-  readonly #options: DryRunDepsBuilderOptions;
+export class DryRunRunDepsBuilder {
+  readonly #options: RunDepsSharedOptions;
 
-  constructor(options: DryRunDepsBuilderOptions) {
+  constructor(options: RunDepsSharedOptions) {
     this.#options = options;
   }
 
@@ -159,14 +139,10 @@ export class DryRunRunDepsBuilder implements RunDepsBuilder {
       onRunLevelFailureOutputTargetReady: undefined
     });
 
-    const lifecycleManager = new RunLifecycleManager({
-      gracefulShutdownTimeoutMs: options.gracefulShutdownTimeoutMs
-    });
-
     return {
       orchestrator,
-      lifecycleManager,
-      flush: noopToolAuditLifecycle.flush
+      lifecycleManager: new RunLifecycleManager(),
+      flush: async () => {}
     };
   }
 }
@@ -241,7 +217,6 @@ function formatStepRetryDiagnostic(info: {
   model?: string;
   promptHash?: string;
   schemaId?: string;
-  outputBaseDir?: string;
 }): string {
   const fields = [
     `file=${info.filePath}`,
@@ -249,7 +224,6 @@ function formatStepRetryDiagnostic(info: {
     info.model === undefined ? undefined : `model=${info.model}`,
     info.promptHash === undefined ? undefined : `promptHash=${info.promptHash}`,
     info.schemaId === undefined ? undefined : `schema=${info.schemaId}`,
-    info.outputBaseDir === undefined ? undefined : `outputBaseDir=${info.outputBaseDir}`,
     `cause=${JSON.stringify(info.cause)}`
   ].filter((field): field is string => field !== undefined);
 

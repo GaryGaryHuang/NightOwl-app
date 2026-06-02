@@ -9,14 +9,10 @@ export interface CliProgressStdout {
   write?(chunk: string): boolean;
 }
 
-interface CliSurfaceState {
-  hasLiveLine: boolean;
-}
-
 export class CliProgressRenderer {
   readonly #stdout: CliProgressStdout;
   readonly #isTTY: boolean;
-  #surface: CliSurfaceState = { hasLiveLine: false };
+  #hasLiveLine = false;
 
   constructor(stdout: CliProgressStdout) {
     this.#stdout = stdout;
@@ -28,12 +24,12 @@ export class CliProgressRenderer {
   }
 
   finalize(): void {
-    if (!this.#isTTY || !this.#surface.hasLiveLine) {
+    if (!this.#isTTY || !this.#hasLiveLine) {
       return;
     }
 
     this.#stdout.write?.(CLEAR_LINE);
-    this.#surface = { hasLiveLine: false };
+    this.#hasLiveLine = false;
   }
 
   applyInstruction(
@@ -53,9 +49,9 @@ export class CliProgressRenderer {
     snapshot: ProgressSnapshot,
     message: string
   ): void {
-    if (this.#isTTY && this.#surface.hasLiveLine) {
+    if (this.#isTTY && this.#hasLiveLine) {
       this.#stdout.write?.(CLEAR_LINE);
-      this.#surface = { hasLiveLine: false };
+      this.#hasLiveLine = false;
     }
 
     this.#stdout.log(message);
@@ -93,7 +89,7 @@ export class CliProgressRenderer {
     }
 
     this.#stdout.write?.(`${CLEAR_LINE}${this.#buildLiveLine(snapshot)}`);
-    this.#surface = { hasLiveLine: true };
+    this.#hasLiveLine = true;
   }
 
   #buildLiveLine(snapshot: ProgressSnapshot): string {

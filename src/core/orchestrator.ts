@@ -179,11 +179,6 @@ export class ReviewOrchestrator {
     request: RunRequest,
     options?: ReviewOrchestratorRunOptions
   ): Promise<ReviewRunSummary> {
-    this.#emitProgressEvent({
-      type: "phase-changed",
-      phase: CHANGESET_OVERVIEW_STEP_ID
-    });
-
     const startPath = path.resolve(this.#workingDirectory, request.repoPath ?? ".");
     const repoRoot = await this.#sourceProvider.resolveRepoRoot(startPath);
     const outputRepoRoot = options?.outputRepoRoot ?? repoRoot;
@@ -221,10 +216,6 @@ export class ReviewOrchestrator {
       { once: true }
     );
 
-    this.#emitProgressEvent({
-      type: "phase-changed",
-      phase: "planning"
-    });
     abortGuard.throwIfAborted();
 
     const changedFiles = await this.#sourceProvider.getChangedFiles(
@@ -268,10 +259,6 @@ export class ReviewOrchestrator {
       abortGuard
     });
 
-    this.#emitProgressEvent({
-      type: "phase-changed",
-      phase: "reviewing"
-    });
     abortGuard.throwIfAborted();
 
     // Per-file steps receive progressively built review state via <review_state> so each step builds on prior output.

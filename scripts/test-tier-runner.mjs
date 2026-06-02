@@ -9,9 +9,7 @@ import {
 } from "./verify-test-tier-manifest.mjs";
 
 const VALID_TIERS = new Set([...CANONICAL_TIERS, "all"]);
-
-const currentFilePath = fileURLToPath(import.meta.url);
-const repoRoot = path.resolve(path.dirname(currentFilePath), "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export function runTestTierCommand({
   args = process.argv.slice(2),
@@ -30,11 +28,12 @@ export function runTestTierCommand({
     return 1;
   }
 
-  const resolvedLoadManifest = loadManifest ?? (() => loadVerifiedTestTierManifest({ logger }));
-
   let manifest;
   try {
-    manifest = resolvedLoadManifest();
+    manifest =
+      loadManifest === undefined
+        ? loadVerifiedTestTierManifest({ logger })
+        : loadManifest();
   } catch (error) {
     if (error instanceof ManifestVerificationError) {
       return 1;
@@ -43,8 +42,8 @@ export function runTestTierCommand({
     throw error;
   }
 
-  const tiers = tier === "all" ? CANONICAL_TIERS : [tier];
-  const files = tiers.flatMap((t) => manifest[t]);
+  const files = (tier === "all" ? CANONICAL_TIERS : [tier])
+    .flatMap((t) => manifest[t]);
 
   if (files.length === 0) {
     logger.error(
@@ -65,7 +64,7 @@ export function runTestTierCommand({
   );
 
   if (result.error) {
-    logger.error(result.error);
+    logger.error(result.error.message);
     return 1;
   }
 

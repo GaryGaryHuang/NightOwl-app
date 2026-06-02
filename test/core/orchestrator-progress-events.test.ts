@@ -107,12 +107,9 @@ describe("ReviewOrchestrator progress events", () => {
     assert.equal(result.skippedFileCount, 1);
   });
 
-  test("event sequence covers all phases, per-file steps, skip, and finalize", () => {
+  test("event sequence covers per-file steps, skip, and finalize", () => {
     assert.deepEqual(events, [
-      "phase:changeset-overview",
-      "phase:planning",
       "initialized:2:/workspace/repo/.nightowl/review/feature-branch_03131430",
-      "phase:reviewing",
       "claimed:1:src/app.ts",
       "progress:src/app.ts:review-basis",
       "progress:src/app.ts:candidate-findings",
@@ -664,8 +661,6 @@ test("ReviewOrchestrator honors Semantic Validation missing-critical-contract st
  */
 function renderProgressEvent(event: RunProgressEvent): string {
   switch (event.type) {
-    case "phase-changed":
-      return `phase:${event.phase}`;
     case "run-initialized":
       return `initialized:${event.plannedFileCount}:${event.outputTarget.basePath}`;
     case "file-claimed":

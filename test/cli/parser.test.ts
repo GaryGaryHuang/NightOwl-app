@@ -3,15 +3,14 @@ import test from "node:test";
 
 import {
   CliUsageError,
-  parseReviewCommand,
-  type ParsedReviewCommand
+  parseReviewCommand
 } from "../../src/cli/parser.ts";
 
 test("parseReviewCommand parses run arguments", () => {
   const cases: Array<{
     name: string;
     argv: string[];
-    expected: ParsedReviewCommand;
+    expected: ReturnType<typeof parseReviewCommand>;
   }> = [
     {
       name: "base and head refs",

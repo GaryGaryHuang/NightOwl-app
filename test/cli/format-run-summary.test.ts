@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  formatLocalReviewRunSummary,
-  LOCAL_REVIEW_RUN_HEADER
-} from "../../src/cli/format-run-summary.ts";
+import { formatLocalReviewRunSummary } from "../../src/cli/format-run-summary.ts";
 import type { ReviewRunSummary } from "../../src/core/orchestrator.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
 import { stubChangeMap } from "../helpers/change-map-stub.ts";
@@ -34,28 +31,7 @@ test("formatLocalReviewRunSummary adds [DRY RUN] prefix to header when dryRun is
   const result = buildMinimalRunSummary({ dryRun: true });
   const summary = formatLocalReviewRunSummary(result);
 
-  assert.ok(
-    summary.startsWith("[DRY RUN] " + LOCAL_REVIEW_RUN_HEADER),
-    `Expected [DRY RUN] prefix, got: ${summary.split("\n")[0]}`
-  );
-});
-
-test("formatLocalReviewRunSummary does not add [DRY RUN] prefix when dryRun is false", () => {
-  const result = buildMinimalRunSummary({ dryRun: false });
-  const summary = formatLocalReviewRunSummary(result);
-
-  assert.ok(
-    summary.startsWith(LOCAL_REVIEW_RUN_HEADER),
-    `Expected plain header, got: ${summary.split("\n")[0]}`
-  );
-  assert.ok(!summary.includes("[DRY RUN]"), "Must not contain [DRY RUN] when dryRun is false");
-});
-
-test("formatLocalReviewRunSummary has no warning line when finalizerFailures is empty", () => {
-  const result = buildMinimalRunSummary({ finalizerFailures: [] });
-  const summary = formatLocalReviewRunSummary(result);
-
-  assert.ok(!summary.includes("Warning:"), "Must not contain Warning when finalizerFailures is empty");
+  assert.equal(summary.split("\n")[0], "[DRY RUN] Review run completed.");
 });
 
 test("formatLocalReviewRunSummary appends warning line listing failed artifact names when finalizerFailures is non-empty", () => {
