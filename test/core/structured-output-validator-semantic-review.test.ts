@@ -1068,7 +1068,7 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
           perFindingResult({
             decision: "rewrite_required",
             failedGates: ["impact"],
-            requiredCorrections: "Prove concrete user impact or convert to missing information.",
+            requiredCorrections: "Prove concrete user impact from existing candidate evidence.",
             reason: "impact is asserted but not proven"
           })
         ],
@@ -1086,7 +1086,7 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
     if (testCase.action === "rerun") {
       assert.deepEqual(result.payload.perFindingResults[0]?.failedGates, ["impact"]);
       assert.deepEqual(result.payload.perFindingResults[0]?.requiredCorrections, [
-        "Prove concrete user impact or convert to missing information."
+        "Prove concrete user impact from existing candidate evidence."
       ]);
       assert.equal(result.payload.loopControl.reason, "semantic rerun requested");
     }

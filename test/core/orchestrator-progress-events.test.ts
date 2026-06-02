@@ -709,7 +709,7 @@ function createRerunValidationReportV1() {
         findingId: "F1",
         decision: "rewrite_required",
         failedGates: ["impact"],
-        requiredCorrections: ["Prove impact or convert to missing information."],
+        requiredCorrections: ["Prove impact from existing candidate evidence."],
         reason: "impact is unsupported"
       }
     ],
