@@ -12,46 +12,80 @@ NightOwl is a local code review CLI powered by the [GitHub Copilot SDK](https://
 
 The generated reports can serve as a starting point for self-review or human review.
 
-## Quick Start
+---
 
-### Prerequisites
+## Getting Started
 
-- Node.js ≥ 22.18.0
-- Copilot mode is the default for standard review runs. It requires a [GitHub Copilot](https://github.com/features/copilot) subscription and an authenticated [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli) — run `/login` on first launch
-- BYOK mode uses a configured provider credential from environment variables instead of a Copilot subscription
-- `review --dry-run` does not require Copilot CLI authentication, BYOK credentials, or a Copilot subscription
+This section gets you from zero to your first review report. If you only want to try NightOwl without setting up Copilot, jump to [step 4](#4-run-your-first-review) and use `--dry-run`.
 
-### Installation
+### 1. Check prerequisites
 
-Install from a published npm package or package artifact so the `review` executable is available:
+- **Node.js ≥ 22.18.0** (`node --version` to confirm)
+- For real reviews, one of:
+  - **Copilot mode (default)** — a [GitHub Copilot](https://github.com/features/copilot) subscription and an authenticated [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli)
+  - **BYOK mode** — a provider API key (OpenAI, Azure, or Anthropic) supplied via an environment variable. See [Model Provider](#model-provider)
+
+### 2. Install the `review` command
+
+NightOwl is not yet published to a public registry, so the supported path today is building from source:
+
+```bash
+git clone https://github.com/GaryGaryHuang/NightOwl-app.git
+cd NightOwl-app
+npm install        # Install dependencies
+npm run build      # Produce dist/
+npm link           # Make the `review` command available on your PATH
+```
+
+Once a package or tarball is available, you can instead install it globally:
 
 ```bash
 npm install -g <package-or-tarball>
 ```
 
-For development from a source checkout, use `npm link` instead (see [Development](#development)).
+### 3. Authenticate (Copilot mode only)
 
-### Verify Setup
+Copilot mode is the default and requires a signed-in [Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli). Sign in once:
+
+```bash
+copilot auth login
+```
+
+Then verify NightOwl can reach Copilot:
 
 ```bash
 review --check
 ```
 
-Prints `GitHub Copilot is available.` on success.
+This prints `GitHub Copilot is available.` on success.
 
-`review --check` is currently a Copilot availability check. It does not validate BYOK provider credentials.
+> `review --check` only validates Copilot availability. It does **not** validate BYOK credentials, and it is **not** required before `--dry-run`.
+
+### 4. Run your first review
+
+```bash
+review main feature-branch
+```
+
+NightOwl prints progress to the terminal and writes the report under `.nightowl/review/<session_id>/` inside the repository. Open `index.md` in that folder to read the review.
+
+---
 
 ## Usage
 
 ```bash
 review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
+review --check
 ```
+
+`base_ref` and `head_ref` are required; NightOwl reviews the changes from `base_ref` to `head_ref`.
 
 | Flag | Description |
 |------|-------------|
 | `--repo <path>` | Path to the Git repository (default: current working directory) |
-| `--context <value>` | Requirement or background context passed into the review (e.g. PR description, root cause, expected behavior, spec links). Repeatable |
-| `--dry-run` | Run the full pipeline with deterministic local responses instead of calling GitHub Copilot |
+| `--context <value>` | Background context for the review (PR description, root cause, expected behavior, spec links). Repeatable |
+| `--dry-run` | Run the pipeline locally without calling GitHub Copilot |
+| `--check` | Check that GitHub Copilot is available, then exit |
 
 **Examples:**
 
@@ -61,6 +95,17 @@ review main HEAD --repo /path/to/repo
 review main HEAD --context "Performance optimization PR" --context "https://link-to-spec"
 review main feature-branch --dry-run
 ```
+
+Providing `--context` is recommended: NightOwl feeds it into the review as source-of-truth background (stated requirements, expected behavior, root cause, business context), which produces more relevant findings.
+
+### Review Modes
+
+| Mode | How to enable | Requires | Use it for |
+|------|---------------|----------|------------|
+| **Copilot** (default) | nothing — it's the default | Copilot subscription + authenticated Copilot CLI | Normal reviews |
+| **BYOK** | set `modelProvider.kind: "byok"` in config | A provider API key in an env var | Using your own OpenAI/Azure/Anthropic credentials |
+
+---
 
 ## Review Output
 
@@ -75,22 +120,22 @@ Successful files: 2
 Skipped files: 1
 ```
 
-In an interactive terminal, a `Progress ...` line is redrawn in place during the run and cleared before the final summary. In non-interactive output, NightOwl appends significant progress snapshots, skipped-file messages, warnings, and review diagnostics as separate lines. In dry-run mode, the startup line and final completion header are prefixed with `[DRY RUN]`.
-
 ### Output Artifacts
 
 Each run produces output under `<repo_root>/.nightowl/review/<session_id>/`:
 
 | File | Description |
 |------|-------------|
+| `index.md` | **Start here.** Landing page with review overview, change context, and grouped per-file note links |
 | `files/*.md` | Structured review notes for each file selected for review |
 | `changeset-overview.md` | Run-level overview of the reviewed changeset |
-| `index.md` | Landing page with review overview, change context, and grouped per-file note links |
 | `tool-audit.jsonl` | Best-effort tool usage audit log for allow/deny decisions |
+
+---
 
 ## Configuration
 
-Place an optional configuration file at `<repo_root>/.nightowl/reviewconfig.json`:
+All configuration is optional. Place a configuration file at `<repo_root>/.nightowl/reviewconfig.json`:
 
 ```json
 {
@@ -112,9 +157,9 @@ Place an optional configuration file at `<repo_root>/.nightowl/reviewconfig.json
 | `webFetchAllowedHosts` | — | Hosts the AI agent may fetch from via HTTPS during review |
 | `webFetchDeniedHosts` | — | Hosts blocked from AI agent HTTPS fetches; deny rules override allow rules |
 
-### Model Provider
+To exclude files from review, add a `<repo_root>/.nightowl/reviewignore` file using `.gitignore` syntax.
 
-By default, NightOwl uses Copilot mode with `gpt-5.4-mini` and no custom SDK provider.
+### Model Provider
 
 Use explicit Copilot mode to keep Copilot authentication while overriding the model:
 
@@ -154,9 +199,9 @@ BYOK fields:
 | `wireApi` | No | OpenAI/Azure wire API: `completions` or `responses` |
 | `azure.apiVersion` | No | Azure API version when using `type: "azure"` |
 
-Never put secret values in `.nightowl/reviewconfig.json` — store them in environment variables (e.g. `OPENAI_API_KEY`) and set only the variable name in the config.
+> **Never** put secret values in `.nightowl/reviewconfig.json`. Store them in environment variables (e.g. `OPENAI_API_KEY`) and set only the variable **name** in the config (`apiKeyEnv` / `bearerTokenEnv`).
 
-File filtering uses `<repo_root>/.nightowl/reviewignore` (`.gitignore` syntax).
+---
 
 ## How It Works
 
@@ -168,9 +213,13 @@ NightOwl runs a three-stage review pipeline:
 
 Each per-file step attempt runs in its own Copilot SDK session and must pass deterministic validation before NightOwl uses the result. Per-file steps use three total attempts; if a step fails after those attempts, the file is skipped.
 
+---
+
 ## Development
 
-TypeScript (strict mode, ESM). Tests use the Node.js built-in test runner (`node:test`).
+> This section is for contributors building on or extending NightOwl. If you just want to run reviews, see [Getting Started](#getting-started).
+
+NightOwl is written in TypeScript (strict mode, ESM). Tests use the Node.js built-in test runner (`node:test`).
 
 ```bash
 npm install          # Install dependencies
@@ -191,7 +240,7 @@ Run a single test file:
 npm run build && node --test test/core/orchestrator-bounded-concurrency.test.ts
 ```
 
-Run locally without building:
+Run locally without building (uses the source entry point directly):
 
 ```bash
 npm run review -- main feature-branch
@@ -199,7 +248,7 @@ npm run review -- main feature-branch
 
 See [TESTING.md](https://github.com/GaryGaryHuang/NightOwl-app/blob/main/TESTING.md) for tier decision criteria, test patterns, fixture catalog, and manifest maintenance rules.
 
-## Architecture
+### Architecture
 
 ```
 src/
