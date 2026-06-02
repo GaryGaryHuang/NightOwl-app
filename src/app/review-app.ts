@@ -83,15 +83,13 @@ export function createLocalReviewRunApp(
         request.repoPath ?? "."
       );
       const repoRoot = await sharedDefaults.sourceProvider.resolveRepoRoot(startPath);
-      const snapshot = await sharedDefaults.reviewSourceSnapshotProvider.createSnapshot({
-        repoRoot,
-        baseRef: request.baseRef,
-        headRef: request.headRef
-      });
 
       let flush: () => Promise<void> = async () => {};
       let result: ReviewRunSummary | undefined;
       let primaryError: unknown;
+      let snapshot:
+        | Awaited<ReturnType<ReviewSourceSnapshotProvider["createSnapshot"]>>
+        | undefined;
 
       const setupLifecycleManager = new RunLifecycleManager({
         gracefulShutdownTimeoutMs: sharedDefaults.gracefulShutdownTimeoutMs
@@ -101,26 +99,36 @@ export function createLocalReviewRunApp(
         result = await setupLifecycleManager.run(async (signal) => {
           throwIfInterrupted(signal);
 
-          if (snapshot.isDirty) {
+          const reviewConfig =
+            await sharedDefaults.reviewConfigProvider.loadReviewConfig(
+              repoRoot
+            );
+
+          throwIfInterrupted(signal);
+
+          const runSnapshot =
+            await sharedDefaults.reviewSourceSnapshotProvider.createSnapshot({
+              repoRoot,
+              baseRef: request.baseRef,
+              headRef: request.headRef
+            });
+          snapshot = runSnapshot;
+
+          throwIfInterrupted(signal);
+
+          if (runSnapshot.isDirty) {
             options.onProgressEvent?.({
               type: "run-warning",
               message:
-                "Repository has uncommitted changes; review uses the resolved head snapshot, so uncommitted changes are ignored."
+                "Repository has uncommitted changes; source review uses the resolved head snapshot, while repo-local NightOwl runtime config is read from the working tree."
             });
           }
 
           throwIfInterrupted(signal);
 
-          const reviewConfig =
-            await sharedDefaults.reviewConfigProvider.loadReviewConfig(
-              snapshot.reviewSourceRoot
-            );
-
-          throwIfInterrupted(signal);
-
           const isDryRun = request.dryRun === true;
           const builder = createRunDepsBuilder(isDryRun, options, sharedDefaults, {
-            workingDirectory: snapshot.reviewSourceRoot
+            workingDirectory: runSnapshot.reviewSourceRoot
           });
           const deps = builder.build(reviewConfig);
           flush = deps.flush;
@@ -136,8 +144,8 @@ export function createLocalReviewRunApp(
             deps.orchestrator.run(reviewSourceRequest, {
               signal: runSignal,
               outputRepoRoot: repoRoot,
-              sourceBaseRef: snapshot.resolvedBaseRef,
-              sourceHeadRef: snapshot.resolvedHeadRef
+              sourceBaseRef: runSnapshot.resolvedBaseRef,
+              sourceHeadRef: runSnapshot.resolvedHeadRef
             })
           );
         });
@@ -159,10 +167,12 @@ export function createLocalReviewRunApp(
       }
 
       let cleanupError: unknown;
-      try {
-        await snapshot.cleanup();
-      } catch (error) {
-        cleanupError = error;
+      if (snapshot !== undefined) {
+        try {
+          await snapshot.cleanup();
+        } catch (error) {
+          cleanupError = error;
+        }
       }
 
       if (primaryError !== undefined) {

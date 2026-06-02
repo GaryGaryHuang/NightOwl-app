@@ -32,7 +32,6 @@ describe("dry-run integration", () => {
     fixture.writeFile(".nightowl/reviewconfig.json", "{\"maxConcurrentFiles\":1}\n");
     fixture.commitAll("add nightowl config");
     fixture.writeFile(".nightowl/reviewignore", "\n");
-    fixture.writeFile(".nightowl/reviewconfig.json", "not json\n");
 
     clientManagerStartCalls = 0;
     clientManagerStopCalls = 0;
@@ -80,8 +79,8 @@ describe("dry-run integration", () => {
     assert.equal(result.skippedFileCount, 0, "dry-run should skip no files");
     assert.equal(
       result.successfulFileCount,
-      2,
-      "dry-run should use committed snapshot reviewignore and ignore live uncommitted edits"
+      3,
+      "dry-run should apply live repo-local reviewignore while reviewing committed source content"
     );
   });
 
@@ -98,7 +97,7 @@ describe("dry-run integration", () => {
     assert.equal(content.trim(), "", "tool-audit.jsonl must be empty in dry-run");
   });
 
-  test("dry-run uses committed snapshot config/reviewignore while warning about ignored dirty changes", () => {
+  test("dry-run applies repo-local reviewignore while warning about source snapshot review", () => {
     const noteFiles = readdirSync(result.outputTarget.filesPath);
 
     assert.ok(
@@ -107,16 +106,17 @@ describe("dry-run integration", () => {
     );
     assert.equal(
       noteFiles.some((fileName) => fileName.includes("dist")),
-      false,
-      "live uncommitted reviewignore changes must not affect file planning"
+      true,
+      "live repo-local reviewignore changes should affect file planning"
     );
     assert.ok(
       events.some(
         (event) =>
           event.type === "run-warning" &&
-          /uncommitted changes are ignored/iu.test(event.message)
+          /source review uses the resolved head snapshot/iu.test(event.message) &&
+          /runtime config is read from the working tree/iu.test(event.message)
       ),
-      "dirty working tree should emit a transient warning"
+      "dirty working tree should describe source snapshot and runtime config behavior"
     );
   });
 

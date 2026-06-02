@@ -18,18 +18,19 @@ import type { ReviewFileFilter } from "../../src/providers/review-file-filter.ts
 /**
  * Snapshot cleanup guarantee tests.
  *
- * Verifies that snapshot.cleanup() is always called after a review run
- * regardless of where the failure occurs in the pipeline. These tests
- * exercise the error-handling lifecycle in review-app.ts, not snapshot
- * routing semantics (which are owned by review-app-source-snapshot.test.ts).
+ * Verifies that snapshot creation is avoided before runtime config succeeds,
+ * and that snapshot.cleanup() is called once a snapshot exists. These tests
+ * exercise the error-handling lifecycle in review-app.ts, not snapshot routing
+ * semantics (which are owned by review-app-source-snapshot.test.ts).
  */
 
 interface CleanupCallRecorder {
+  createCount: number;
   cleanupCount: number;
 }
 
 function createCleanupCallRecorder(): CleanupCallRecorder {
-  return { cleanupCount: 0 };
+  return { createCount: 0, cleanupCount: 0 };
 }
 
 function createSnapshotProvider(options: {
@@ -41,6 +42,7 @@ function createSnapshotProvider(options: {
 }) {
   return {
     async createSnapshot(): Promise<ReviewSourceSnapshot> {
+      options.calls.createCount += 1;
       return {
         originalRepoRoot: options.originalRoot,
         reviewSourceRoot: options.snapshotRoot,
@@ -163,7 +165,7 @@ const RUN_REQUEST = {
 
 // --- Cleanup guarantee: errors before orchestration ---
 
-test("createLocalReviewRunApp cleans up the snapshot if config loading fails", async () => {
+test("createLocalReviewRunApp does not create a snapshot if config loading fails", async () => {
   const calls = createCleanupCallRecorder();
   const primaryError = new Error("invalid snapshot config");
   const app = createLocalReviewRunApp({
@@ -183,7 +185,8 @@ test("createLocalReviewRunApp cleans up the snapshot if config loading fails", a
   });
 
   await assert.rejects(() => app.run(RUN_REQUEST), primaryError);
-  assert.equal(calls.cleanupCount, 1);
+  assert.equal(calls.createCount, 0);
+  assert.equal(calls.cleanupCount, 0);
 });
 
 test("createLocalReviewRunApp cleans up the snapshot if the dirty warning progress callback fails", async () => {
@@ -211,7 +214,7 @@ test("createLocalReviewRunApp cleans up the snapshot if the dirty warning progre
   assert.equal(calls.cleanupCount, 1);
 });
 
-test("createLocalReviewRunApp cleans up the snapshot if interrupted during snapshot config loading", async () => {
+test("createLocalReviewRunApp does not create a snapshot if interrupted during config loading", async () => {
   const calls = createCleanupCallRecorder();
   let clientStartCalls = 0;
   const app = createLocalReviewRunApp({
@@ -245,7 +248,8 @@ test("createLocalReviewRunApp cleans up the snapshot if interrupted during snaps
     (error: unknown) =>
       error instanceof ReviewRunInterruptedError && error.signal === "SIGINT"
   );
-  assert.equal(calls.cleanupCount, 1);
+  assert.equal(calls.createCount, 0);
+  assert.equal(calls.cleanupCount, 0);
   assert.equal(clientStartCalls, 0);
 });
 
@@ -275,6 +279,40 @@ test("createLocalReviewRunApp does not call cleanup when snapshot creation itsel
   await assert.rejects(() => app.run(RUN_REQUEST), missingRefError);
   assert.equal(outputInitializeCalls, 0);
   assert.equal(calls.cleanupCount, 0);
+});
+
+test("createLocalReviewRunApp cleans up the snapshot if interrupted during snapshot creation", async () => {
+  const calls = createCleanupCallRecorder();
+  const app = createLocalReviewRunApp({
+    workingDirectory: "/workspace/repo",
+    sourceProvider: createMinimalSourceProvider("/tmp/nightowl-source-snapshot"),
+    reviewSourceSnapshotProvider: {
+      async createSnapshot(): Promise<ReviewSourceSnapshot> {
+        calls.createCount += 1;
+        process.emit("SIGINT", "SIGINT");
+        return {
+          originalRepoRoot: "/workspace/repo",
+          reviewSourceRoot: "/tmp/nightowl-source-snapshot",
+          resolvedBaseRef: "base-sha",
+          resolvedHeadRef: "head-sha",
+          isDirty: false,
+          async cleanup() {
+            calls.cleanupCount += 1;
+          }
+        };
+      }
+    },
+    reviewConfigProvider: createRecordingConfigProvider(),
+    clientManager: createUnusedClientManager()
+  });
+
+  await assert.rejects(
+    () => app.run(RUN_REQUEST),
+    (error: unknown) =>
+      error instanceof ReviewRunInterruptedError && error.signal === "SIGINT"
+  );
+  assert.equal(calls.createCount, 1);
+  assert.equal(calls.cleanupCount, 1);
 });
 
 // --- Cleanup guarantee: errors during orchestration ---

@@ -233,7 +233,7 @@ export class ReviewOrchestrator {
       sourceHeadRef
     );
     const reviewableFiles = await this.#reviewFileFilter.filterReviewableFiles(
-      repoRoot,
+      outputRepoRoot,
       changedFiles
     );
     const outputTarget = buildOutputTarget({

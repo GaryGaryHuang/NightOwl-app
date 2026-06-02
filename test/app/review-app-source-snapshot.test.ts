@@ -30,7 +30,9 @@ import { createSingleStepFactory, createUnusedClientManager } from "../helpers/r
  * Snapshot source routing tests.
  *
  * Verifies that when a review source snapshot is active:
- *  - All source-reading operations target the snapshot root
+ *  - Runtime config is read from the original repo root
+ *  - Review file filtering reads repo-local rules from the original repo root
+ *  - Source-reading operations target the snapshot root
  *  - All output-writing operations target the original repo root
  *  - Resolved refs (not user-facing refs) are forwarded to providers
  *  - Snapshot implementation details do not leak into user-facing artifacts
@@ -101,9 +103,9 @@ test("createLocalReviewRunApp reviews the resolved head snapshot while keeping a
     dryRun: false
   });
 
-  // Source-reading operations target the snapshot root with resolved refs
-  assert.equal(calls.configRoots.at(0), snapshotRoot);
-  assert.equal(calls.filterInputs.at(0)?.repoRoot, snapshotRoot);
+  // Runtime config remains repo-local, while source-reading operations target the snapshot root.
+  assert.equal(calls.configRoots.at(0), originalRoot);
+  assert.equal(calls.filterInputs.at(0)?.repoRoot, originalRoot);
   assert.deepEqual(calls.changedFileCalls.at(0), {
     repoRoot: snapshotRoot,
     baseRef: "base-sha",
@@ -148,7 +150,8 @@ test("createLocalReviewRunApp reviews the resolved head snapshot while keeping a
     events.some(
       (event) =>
         event.type === "run-warning" &&
-        /uncommitted changes are ignored/iu.test(event.message)
+        /source review uses the resolved head snapshot/iu.test(event.message) &&
+        /runtime config is read from the working tree/iu.test(event.message)
     ),
     "dirty working tree should produce a transient progress warning"
   );
@@ -290,10 +293,10 @@ test("createLocalReviewRunApp maps absolute repoPath requests onto the snapshot 
     dryRun: false
   });
 
-  assert.equal(calls.configRoots.at(0), snapshotRoot);
+  assert.equal(calls.configRoots.at(0), originalRoot);
   assert.equal(calls.changesetOverviewInputs.at(0)?.repoRoot, snapshotRoot);
   assert.equal(calls.changesetOverviewInputs.at(0)?.workingDirectory, snapshotRoot);
-  assert.equal(calls.filterInputs.at(0)?.repoRoot, snapshotRoot);
+  assert.equal(calls.filterInputs.at(0)?.repoRoot, originalRoot);
   assert.equal(calls.stepInputs.at(0)?.repoRoot, snapshotRoot);
   assert.equal(calls.stepInputs.at(0)?.workingDirectory, snapshotRoot);
 });
