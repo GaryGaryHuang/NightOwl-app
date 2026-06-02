@@ -4,10 +4,9 @@ import type {
 } from "./file-review-context.ts";
 import type { ReviewBasis } from "./review-basis.ts";
 import type {
-  CandidateClassification,
   CandidateFinding,
   CandidateFindings,
-  CandidateSeverity,
+  CandidatePriority,
   CriticalMissingInformation,
   FindingOrigin,
   HypothesisClosure,
@@ -22,8 +21,7 @@ import type {
   ValidationReportV1
 } from "./semantic-review.ts";
 import {
-  CANDIDATE_CLASSIFICATIONS as RUNTIME_CANDIDATE_CLASSIFICATIONS,
-  CANDIDATE_SEVERITIES as RUNTIME_CANDIDATE_SEVERITIES,
+  CANDIDATE_PRIORITIES as RUNTIME_CANDIDATE_PRIORITIES,
   HYPOTHESIS_CLOSURE_STATUSES as RUNTIME_HYPOTHESIS_CLOSURE_STATUSES,
   LOOP_ACTIONS as RUNTIME_LOOP_ACTIONS,
   SEMANTIC_GATE_IDS as RUNTIME_SEMANTIC_GATE_IDS,
@@ -263,22 +261,11 @@ function validateCandidateFinding(input: {
   }
 
   const record = input.input as Record<string, unknown>;
-  const classification = validateEnum<CandidateClassification>(
-    record.classification,
-    VALID_CANDIDATE_CLASSIFICATIONS,
-    "classification"
+  const priority = validateEnum<CandidatePriority>(
+    record.priority,
+    VALID_CANDIDATE_PRIORITIES,
+    "priority"
   );
-  const severity = validateEnum<CandidateSeverity>(
-    record.severity,
-    VALID_CANDIDATE_SEVERITIES,
-    "severity"
-  );
-
-  if (classification === "reasonable_risk" && severity !== "low") {
-    throw new Error(
-      "deterministic validation failed: 'reasonable_risk' classification requires severity 'low'"
-    );
-  }
 
   const dependencyPathException = validateDependencyPathException(
     record.dependencyPathException,
@@ -297,13 +284,12 @@ function validateCandidateFinding(input: {
   const counterEvidence = validateStringArray(
     record.counterEvidence,
     "counterEvidence",
-    { nonEmpty: classification === "confirmed_problem" }
+    { nonEmpty: true }
   );
 
   return {
     findingId: "", // placeholder; overwritten by caller
-    classification,
-    severity,
+    priority,
     title: validateStringField(record.title, "title"),
     traceability: traceabilityResult.traceability,
     evidence,
@@ -1256,11 +1242,8 @@ function extractSingleRootObject(
   return { status: "single", text: value.slice(span.start, span.end) };
 }
 
-const VALID_CANDIDATE_CLASSIFICATIONS: readonly CandidateClassification[] =
-  RUNTIME_CANDIDATE_CLASSIFICATIONS;
-
-const VALID_CANDIDATE_SEVERITIES: readonly CandidateSeverity[] =
-  RUNTIME_CANDIDATE_SEVERITIES;
+const VALID_CANDIDATE_PRIORITIES: readonly CandidatePriority[] =
+  RUNTIME_CANDIDATE_PRIORITIES;
 
 const VALID_HYPOTHESIS_CLOSURE_STATUSES: readonly HypothesisClosureStatus[] =
   RUNTIME_HYPOTHESIS_CLOSURE_STATUSES;

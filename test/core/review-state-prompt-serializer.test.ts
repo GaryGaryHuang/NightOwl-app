@@ -20,12 +20,10 @@ function createContext(): FileReviewContext {
 }
 
 function createFinding(findingId: string, type: "must" | "nice" = "must"): Finding {
-  const classification = type === "must" ? "confirmed_problem" : "reasonable_risk";
-  const severity = type === "must" ? "high" : "low";
+  const priority = type === "must" ? "must_fix" : "nice_to_have";
   return {
     findingId,
-    classification,
-    severity,
+    priority,
     title: `${type} finding ${findingId}`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
     evidence: "concrete evidence",
@@ -141,7 +139,7 @@ test("CandidateFindings populates candidateFindings without promoting approved f
   assert.equal("result" in candidateFindings, false);
   assert.equal(candidateFindings.findings.length, 1);
   assert.equal(candidateFindings.findings[0].findingId, "F1");
-  assert.equal(candidateFindings.findings[0].classification, "confirmed_problem");
+  assert.equal(candidateFindings.findings[0].priority, "must_fix");
   assert.deepEqual(candidateFindings.findingOrigins, [
     {
       findingIndex: 1,
@@ -259,8 +257,7 @@ function createCandidateFindings() {
     findings: [
       {
         findingId: "F1",
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: "guard moved after dereference",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
         evidence: "changed branch reads value before fallback",

@@ -39,8 +39,7 @@ function createContext(): FileReviewContext {
 function createFinding(findingId: string): Finding {
   return {
     findingId,
-    classification: "confirmed_problem",
-    severity: "high",
+    priority: "must_fix",
     title: `finding ${findingId}`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
     evidence: "concrete evidence",
@@ -55,8 +54,7 @@ function createCandidateFindings(): CandidateFindings {
     findings: [
       {
         findingId: "F1",
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: "candidate F1",
         traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
         evidence: "review basis state added; candidate evidence is validated against ReviewBasis evidence refs",

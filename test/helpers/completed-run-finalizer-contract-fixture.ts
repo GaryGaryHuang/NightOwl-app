@@ -20,12 +20,10 @@ export function createFinding(
   idSuffix: number,
   input: { title?: string } = {}
 ): Finding {
-  const classification = type === "must" ? "confirmed_problem" : "reasonable_risk";
-  const severity = type === "must" ? "high" : "low";
+  const priority = type === "must" ? "must_fix" : "nice_to_have";
   return {
     findingId: `${type}-${idSuffix}`,
-    classification,
-    severity,
+    priority,
     title: input.title ?? `${type} finding`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
     evidence: "concrete code evidence",
@@ -86,8 +84,8 @@ function createRiskSnapshot(
   findings: readonly Finding[],
   semanticReview?: Partial<SemanticReviewStats>
 ): RiskSnapshot {
-  const mustCount = findings.filter((f) => f.classification === "confirmed_problem" && f.severity === "high").length;
-  const niceCount = findings.filter((f) => !(f.classification === "confirmed_problem" && f.severity === "high")).length;
+  const mustCount = findings.filter((f) => f.priority === "must_fix").length;
+  const niceCount = findings.filter((f) => f.priority === "nice_to_have").length;
   return {
     schemaVersion: 1,
     derivedRiskLevel: mustCount > 0 ? "High" : niceCount > 0 ? "Low" : "None",

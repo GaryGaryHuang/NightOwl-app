@@ -6,8 +6,7 @@ import {
 import type { ReviewBasis } from "../review-basis.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../review-runtime-contract.ts";
 import {
-  CANDIDATE_CLASSIFICATIONS,
-  CANDIDATE_SEVERITIES,
+  CANDIDATE_PRIORITIES,
   HYPOTHESIS_CLOSURE_STATUSES,
   SUPPLEMENTAL_LENSES
 } from "../semantic-review.ts";
@@ -32,7 +31,7 @@ const CANDIDATE_FINDINGS_SYSTEM_ADDITION = [
   "- Treat the supplemental sweep as an exception, not a second review pass. Skip it unless a high-signal deviation is already fully evidenced by directly changed behavior or the same reviewed evidence-backed path; do not broaden repository exploration, and emit at most two supplemental candidates.",
   "- Each candidate must carry provenance that distinguishes whether it closes a ledger hypothesis or comes from the supplemental sweep. If a candidate materially resolves a ledger hypothesis, record it as hypothesis-origin; supplemental origins are only for findings independent of ledger closure.",
   "- Reserve `criticalMissingInformation` for unresolved facts that still determine whether a candidate exists or materially change trigger, reachability, impact, or required contract after the `Missing Information Discipline` checks; do not use it as the default fallback for incomplete proof or as a caveat on an emitted candidate.",
-  "- Use `reasonable_risk` only when mechanism, reachable trigger, and observable impact are proven, and the expected contract is locally bounded enough to explain why the behavior is risky. If a missing contract or product-intent fact would change whether the behavior is a problem, close the item as `insufficient_information` or omit the candidate.",
+  "- Use `nice_to_have` only when mechanism, reachable trigger, and observable impact are proven, and the expected contract is locally bounded enough to explain why the behavior is still actionable. If a missing contract or product-intent fact would change whether the behavior is a problem, close the item as `insufficient_information` or omit the candidate.",
   "- Before output, drop or close without a candidate any entry that is weakly supported, not credibly reachable, redundant, too speculative, or inconsistent with its evidence, provenance, hypothesis closure, or scope.",
   "- Do not report candidates based on theoretical speculation, weak inference, or implausible edge conditions. Do not force a candidate for every hypothesis.",
   "- If `<retry_repair_context>` is appended, treat it only as deterministic validation feedback; regenerate the complete CandidateFindings JSON for the same diff, ReviewBasis, and review state, fixing the named schema/provenance/closure issue without running new bug hunting."
@@ -82,8 +81,8 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "- `criticalMissingInformation`: `{ description, whyItMatters }` objects.",
   "",
   "Entry field rules - concrete object examples are below; apply these constraints to every matching entry:",
-  "- `findings[]` classification and severity: `classification` is one of " + formatQuotedValues(CANDIDATE_CLASSIFICATIONS) + "; `severity` is one of " + formatQuotedValues(CANDIDATE_SEVERITIES) + ". `reasonable_risk` requires `severity` \"low\"; `confirmed_problem` may use \"high\" or \"low\".",
-  "- `findings[]` text fields: `title`, `evidence`, `triggerCondition`, and `impact` are non-empty strings, and `counterEvidence` is a non-empty array of strings (for `reasonable_risk`, state the residual uncertainty there).",
+  "- `findings[]` priority: `priority` is one of " + formatQuotedValues(CANDIDATE_PRIORITIES) + ". Use `must_fix` only for evidence-backed defects that should block merge; use `nice_to_have` for lower-priority but still actionable evidence-backed findings.",
+  "- `findings[]` text fields: `title`, `evidence`, `triggerCondition`, and `impact` are non-empty strings, and `counterEvidence` is a non-empty array of strings (for `nice_to_have`, state the residual uncertainty there).",
   "- `findings[]` omit `findingId`; it is assigned downstream.",
   "- `findings[].traceability`: either `{ \"kind\": \"line-range\", \"lineStart\", \"lineEnd\" }` with positive integers where `lineEnd >= lineStart`, or `{ \"kind\": \"diff-hunk\", \"hunkHeader\" }`; prefer `line-range` anchored to the reviewed diff.",
   "- `findingOrigins[]` hypothesis entry: `{ \"findingIndex\", \"kind\": \"hypothesis\", \"hypothesisIds\", \"evidenceIds\", \"rationale\" }` with non-empty `hypothesisIds`, non-empty `evidenceIds`, and a non-empty `rationale`.",
@@ -100,11 +99,11 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "- supplemental limit: at most two supplemental `findingOrigins` entries per file.",
   "",
   "Complete JSON output examples - labels are explanatory only; output only the JSON object:",
-  "Findings ready - confirmed_problem closing a hypothesis:",
-  `{"findings": [{"classification": "confirmed_problem", "severity": "high", "title": "problem title", "traceability": {"kind": "line-range", "lineStart": 1, "lineEnd": 9}, "evidence": "guard runs after dereference", "triggerCondition": "nullable input", "impact": "request fails", "counterEvidence": ["fallback checked"]}], "findingOrigins": [{"findingIndex": 1, "kind": "hypothesis", "hypothesisIds": ["H1"], "evidenceIds": ["E1"], "rationale": "candidate covers the hypothesis"}], "hypothesisClosure": [{"hypothesisId": "H1", "status": "closed_by_candidate", "rationale": "candidate covers the hypothesis"}], "criticalMissingInformation": []}`,
+  "Findings ready - must_fix closing a hypothesis:",
+  `{"findings": [{"priority": "must_fix", "title": "problem title", "traceability": {"kind": "line-range", "lineStart": 1, "lineEnd": 9}, "evidence": "guard runs after dereference", "triggerCondition": "nullable input", "impact": "request fails", "counterEvidence": ["fallback checked"]}], "findingOrigins": [{"findingIndex": 1, "kind": "hypothesis", "hypothesisIds": ["H1"], "evidenceIds": ["E1"], "rationale": "candidate covers the hypothesis"}], "hypothesisClosure": [{"hypothesisId": "H1", "status": "closed_by_candidate", "rationale": "candidate covers the hypothesis"}], "criticalMissingInformation": []}`,
   "",
-  "Supplemental finding - reasonable_risk from a sweep:",
-  `{"findings": [{"classification": "reasonable_risk", "severity": "low", "title": "changed branch can drop partial result", "traceability": {"kind": "line-range", "lineStart": 20, "lineEnd": 28}, "evidence": "changed branch returns before preserving partial result", "triggerCondition": "timeout after partial data arrives", "impact": "caller receives empty result instead of partial data", "counterEvidence": ["no fallback restores partial data"]}], "findingOrigins": [{"findingIndex": 1, "kind": "supplemental", "lens": "control_flow_sweep", "evidenceIds": ["E2"], "rationale": "directly changed control path exposes the deviation", "relatedHypothesisIds": []}], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "changed path preserves the expected contract for H1"}], "criticalMissingInformation": []}`,
+  "Supplemental finding - nice_to_have from a sweep:",
+  `{"findings": [{"priority": "nice_to_have", "title": "changed branch can drop partial result", "traceability": {"kind": "line-range", "lineStart": 20, "lineEnd": 28}, "evidence": "changed branch returns before preserving partial result", "triggerCondition": "timeout after partial data arrives", "impact": "caller receives empty result instead of partial data", "counterEvidence": ["no fallback restores partial data"]}], "findingOrigins": [{"findingIndex": 1, "kind": "supplemental", "lens": "control_flow_sweep", "evidenceIds": ["E2"], "rationale": "directly changed control path exposes the deviation", "relatedHypothesisIds": []}], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "changed path preserves the expected contract for H1"}], "criticalMissingInformation": []}`,
   "",
   "No findings - every hypothesis closed by evidence:",
   `{"findings": [], "findingOrigins": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "changed path preserves fallback"}], "criticalMissingInformation": []}`,

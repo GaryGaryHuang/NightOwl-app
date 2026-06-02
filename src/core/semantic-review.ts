@@ -1,13 +1,10 @@
 import type { Finding } from "./file-review-context.ts";
 
-export const CANDIDATE_CLASSIFICATIONS = [
-  "confirmed_problem",
-  "reasonable_risk"
+export const CANDIDATE_PRIORITIES = [
+  "must_fix",
+  "nice_to_have"
 ] as const;
-export type CandidateClassification = (typeof CANDIDATE_CLASSIFICATIONS)[number];
-
-export const CANDIDATE_SEVERITIES = ["high", "low"] as const;
-export type CandidateSeverity = (typeof CANDIDATE_SEVERITIES)[number];
+export type CandidatePriority = (typeof CANDIDATE_PRIORITIES)[number];
 
 /**
  * A Candidate Findings candidate finding. Structurally identical to `Finding`.
@@ -135,8 +132,7 @@ export function semanticCandidateFingerprint(
   const normalized = {
     findings: payload.findings.map((finding) => ({
       findingId: finding.findingId,
-      classification: finding.classification,
-      severity: finding.severity,
+      priority: finding.priority,
       title: finding.title,
       traceability: finding.traceability,
       evidence: finding.evidence,

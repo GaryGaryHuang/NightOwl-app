@@ -22,7 +22,7 @@ interface SemanticCorpusCase {
     candidateRejected?: boolean;
     decision?: string;
     taxonomy?: string;
-    mustNotApproveHighSeverityConfirmedProblem?: boolean;
+    mustNotApproveMustFixPriority?: boolean;
   };
 }
 
@@ -92,10 +92,10 @@ function runSemanticCase(
     .filter((r: { decision: string }) => r.decision === "approve")
     .map((r: { findingId: string }) => r.findingId);
   const firstDecision = validationResult.payload.perFindingResults[0]?.decision;
-  const candidateFindings = (candidateValidationResult.payload as { findings?: Array<{ findingId: string; classification: string; severity: string }> }).findings ?? [];
-  const highSeverityApproved = approvedFindingIds.some(
+  const candidateFindings = (candidateValidationResult.payload as { findings?: Array<{ findingId: string; priority: string }> }).findings ?? [];
+  const mustFixApproved = approvedFindingIds.some(
     (id: string) => candidateFindings.some(
-      (f) => f.findingId === id && f.classification === "confirmed_problem" && f.severity === "high"
+      (f) => f.findingId === id && f.priority === "must_fix"
     )
   );
 
@@ -104,8 +104,8 @@ function runSemanticCase(
     ...(corpusCase.expected.decision === undefined || firstDecision === undefined
       ? {}
       : { decision: firstDecision }),
-    ...(corpusCase.expected.mustNotApproveHighSeverityConfirmedProblem
-      ? { mustNotApproveHighSeverityConfirmedProblem: !highSeverityApproved }
+    ...(corpusCase.expected.mustNotApproveMustFixPriority
+      ? { mustNotApproveMustFixPriority: !mustFixApproved }
       : {})
   };
 }
@@ -182,13 +182,12 @@ function createCandidatePayload(scenario: SemanticScenario) {
   return {
     findings: [
       {
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: "requestToken concurrency overclaim",
         traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 },
         evidence: "requestToken changes before callback at AsyncResultController.kt:21",
         triggerCondition: "two search callbacks complete out of order",
-        impact: "high severity search result corruption is alleged",
+        impact: "must-fix priority search result corruption is alleged",
         counterEvidence: ["request ID guard not proven"]
       }
     ],

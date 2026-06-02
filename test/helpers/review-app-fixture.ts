@@ -75,8 +75,7 @@ export function buildSessionResponse(
     return JSON.stringify({
       findings: [
         {
-          classification: "confirmed_problem",
-          severity: "high",
+          priority: "must_fix",
           title: "問題標題",
           traceability: lineRangeTraceability(1, 1),
           evidence: "新分支略過 fallback at src/app.ts:1",

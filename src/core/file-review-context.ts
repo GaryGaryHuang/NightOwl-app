@@ -55,8 +55,7 @@ export interface DependencyPathException {
 
 export interface Finding {
   findingId: string;
-  classification: "confirmed_problem" | "reasonable_risk";
-  severity: "high" | "low";
+  priority: "must_fix" | "nice_to_have";
   title: string;
   traceability: FindingTraceability;
   evidence: string;

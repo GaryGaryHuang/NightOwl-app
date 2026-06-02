@@ -2,7 +2,7 @@ import type { Finding } from "./file-review-context.ts";
 
 export type RiskLevel = "High" | "Low" | "None";
 
-// Shared severity ordering for run-level outputs: must-fix findings rank above nice-to-haves, then no findings.
+// Shared priority ordering for run-level outputs: must-fix findings rank above nice-to-haves, then no findings.
 export const RISK_ORDER: Record<RiskLevel, number> = {
   High: 0,
   Low: 1,
@@ -10,18 +10,18 @@ export const RISK_ORDER: Record<RiskLevel, number> = {
 };
 
 export function countMustFindings(findings: Finding[] | undefined): number {
-  return findings?.filter((f) => f.classification === "confirmed_problem" && f.severity === "high").length ?? 0;
+  return findings?.filter((f) => f.priority === "must_fix").length ?? 0;
 }
 
 export function countNiceFindings(findings: Finding[] | undefined): number {
-  return findings?.filter((f) => !(f.classification === "confirmed_problem" && f.severity === "high")).length ?? 0;
+  return findings?.filter((f) => f.priority === "nice_to_have").length ?? 0;
 }
 
 /**
  * Collapse finalized findings into the priority bucket used for run-level ordering.
  *
- * Any accepted confirmed_problem/high finding escalates the file to High;
- * remaining findings (confirmed_problem/low or reasonable_risk) map to Low;
+ * Any accepted must_fix finding escalates the file to High;
+ * nice_to_have findings map to Low;
  * and no accepted findings maps to None.
  */
 export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel {
@@ -29,7 +29,7 @@ export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel 
     return "None";
   }
 
-  if (findings.some((f) => f.classification === "confirmed_problem" && f.severity === "high")) {
+  if (findings.some((f) => f.priority === "must_fix")) {
     return "High";
   }
 

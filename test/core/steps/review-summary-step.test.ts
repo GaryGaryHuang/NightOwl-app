@@ -30,12 +30,10 @@ function createFinding(
   type: "must" | "nice",
   findingId: string
 ): Finding {
-  const classification = type === "must" ? "confirmed_problem" : "reasonable_risk";
-  const severity = type === "must" ? "high" : "low";
+  const priority = type === "must" ? "must_fix" : "nice_to_have";
   return {
     findingId,
-    classification,
-    severity,
+    priority,
     title: `${type} finding`,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
     evidence: "concrete evidence",
@@ -301,8 +299,7 @@ function createCandidateFindings(_type: "must" | "nice") {
     findings: [
       {
         findingId: "F-raw-candidate",
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: "raw candidate must not shape Review Summary",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
         evidence: "candidate evidence",

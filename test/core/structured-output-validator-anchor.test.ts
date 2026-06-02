@@ -147,8 +147,7 @@ function createCandidatePayload(
   return {
     findings: [
       {
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: "guard moved after dereference",
         traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 },
         evidence: "changed branch reads value before fallback; guard runs after dereference",

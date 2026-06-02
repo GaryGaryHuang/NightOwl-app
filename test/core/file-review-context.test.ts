@@ -126,8 +126,8 @@ test("FileReviewContext stores CandidateFindings separately from approved findin
 
   assert.equal(context.getFindings(), undefined);
   assert.equal(
-    context.getCandidateFindings()?.findings[0]?.classification,
-    "confirmed_problem"
+    context.getCandidateFindings()?.findings[0]?.priority,
+    "must_fix"
   );
 });
 
@@ -136,7 +136,7 @@ test("FileReviewContext returns defensive CandidateFindings snapshots", () => {
   const candidatePayload = createCandidateFindings();
 
   context.setCandidateFindings(candidatePayload);
-  candidatePayload.findings[0]!.classification = "reasonable_risk";
+  candidatePayload.findings[0]!.priority = "nice_to_have";
 
   const first = context.getCandidateFindings()!;
   first.findings[0]!.evidence = "MUTATED";
@@ -144,7 +144,7 @@ test("FileReviewContext returns defensive CandidateFindings snapshots", () => {
   first.hypothesisClosure[0]!.status = "insufficient_information";
 
   const second = context.getCandidateFindings()!;
-  assert.equal(second.findings[0]!.classification, "confirmed_problem");
+  assert.equal(second.findings[0]!.priority, "must_fix");
   assert.equal(second.findings[0]!.evidence, "changed branch reads value before fallback; guard runs after dereference");
   assert.equal(second.findingOrigins[0]!.rationale, "candidate covers H1");
   assert.equal(second.hypothesisClosure[0]!.status, "closed_by_candidate");
@@ -204,8 +204,7 @@ test("FileReviewContext setFindings deep-clones nested finding fields so mutatio
 
   const original: Finding = {
     findingId: "F1",
-    classification: "confirmed_problem",
-    severity: "high",
+    priority: "must_fix",
     title: "leak test",
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 2 },
     evidence: "concrete evidence",
@@ -242,8 +241,7 @@ test("FileReviewContext getFindings returns defensively cloned copies", () => {
   context.setFindings([
     {
       findingId: "F1",
-      classification: "confirmed_problem",
-      severity: "high",
+      priority: "must_fix",
       title: "defensive clone",
       traceability: { kind: "line-range", lineStart: 1, lineEnd: 2 },
       evidence: "concrete evidence",
@@ -291,8 +289,7 @@ function createCandidateFindings() {
     findings: [
       {
         findingId: "F1",
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: "guard moved after dereference",
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
         evidence: "changed branch reads value before fallback; guard runs after dereference",

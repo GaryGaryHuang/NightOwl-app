@@ -25,8 +25,7 @@ function createContext(): FileReviewContext {
 function makeMustFinding(title: string): Finding {
   return {
     findingId: "F1",
-    classification: "confirmed_problem",
-    severity: "high",
+    priority: "must_fix",
     title,
     traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
     evidence: "test-evidence",
@@ -39,8 +38,7 @@ function makeMustFinding(title: string): Finding {
 function makeNiceFinding(title: string): Finding {
   return {
     findingId: "F2",
-    classification: "reasonable_risk",
-    severity: "low",
+    priority: "nice_to_have",
     title,
     traceability: { kind: "diff-hunk", hunkHeader: "@@ -1,3 +1,3 @@" },
     evidence: "test-evidence",
@@ -130,8 +128,8 @@ function assertFindingsTitlesInOrder(
   assertTextContainsInOrder(
     text,
     findings.map((finding) => {
-      const severity = finding.type === "must" ? "high" : "low";
-      return `- [${severity}] ${finding.title}`;
+      const priority = finding.type === "must" ? "must_fix" : "nice_to_have";
+      return `- [${priority}] ${finding.title}`;
     })
   );
 }
@@ -439,24 +437,21 @@ test("Finalizer renders traceability formats correctly", () => {
   const findings: Finding[] = [
     {
       findingId: "F1",
-      classification: "confirmed_problem",
-      severity: "high",
+      priority: "must_fix",
       title: "line-range-single",
       traceability: { kind: "line-range", lineStart: 42, lineEnd: 42 },
       evidence: "e", triggerCondition: "t", impact: "i", counterEvidence: []
     },
     {
       findingId: "F2",
-      classification: "confirmed_problem",
-      severity: "high",
+      priority: "must_fix",
       title: "line-range-multi",
       traceability: { kind: "line-range", lineStart: 10, lineEnd: 20 },
       evidence: "e", triggerCondition: "t", impact: "i", counterEvidence: []
     },
     {
       findingId: "F3",
-      classification: "confirmed_problem",
-      severity: "high",
+      priority: "must_fix",
       title: "diff-hunk",
       traceability: { kind: "diff-hunk", hunkHeader: "@@ -5,7 +5,7 @@" },
       evidence: "e", triggerCondition: "t", impact: "i", counterEvidence: []

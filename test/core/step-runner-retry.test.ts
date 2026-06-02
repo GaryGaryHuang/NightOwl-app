@@ -139,7 +139,7 @@ test("StepRunner records structured validation reports without committing partia
         reviewAttempts += 1;
         if (reviewAttempts === 1) {
           return JSON.stringify(createCandidatePayload("F2", {
-            classification: "unsupported_claim"
+            priority: "unsupported_claim"
           }));
         }
 
@@ -178,7 +178,7 @@ test("StepRunner records structured validation reports without committing partia
   assert.match(prompts[1] ?? "", /Structured validation report:/u);
   assert.match(prompts[1] ?? "", /findingId=<payload>/u);
   assert.match(prompts[1] ?? "", /taxonomy=SEMANTIC/u);
-  assert.match(prompts[1] ?? "", /classification/u);
+  assert.match(prompts[1] ?? "", /priority/u);
   assert.equal(context.getFindings(), undefined);
 
   result.applyTo(context);
@@ -605,8 +605,7 @@ function createCandidatePayload(
   return {
     findings: [
       {
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: "guard moved after dereference",
         traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
         evidence: "changed branch reads value before fallback at src/app.ts:1",

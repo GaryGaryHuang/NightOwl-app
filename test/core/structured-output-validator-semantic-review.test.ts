@@ -36,8 +36,7 @@ interface CandidateValidationResult {
   readonly payload: {
     readonly findings: readonly {
       readonly findingId: string;
-      readonly classification: string;
-      readonly severity: string;
+      readonly priority: string;
       readonly traceability?: unknown;
     }[];
     readonly findingOrigins: readonly {
@@ -139,8 +138,7 @@ function candidateFinding(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
   return {
-    classification: "confirmed_problem",
-    severity: "high",
+    priority: "must_fix",
     title: "nullable input dereferences before fallback",
     traceability: lineRangeTraceability(21, 22),
     evidence: "changed branch reads input.value before checking for null; guard was moved after dereference",
@@ -318,8 +316,7 @@ test("validateCandidateFindingsWithReport accepts evidence-chain candidates tied
 
   assert.equal(result.payload.findings.length, 1);
   assert.equal(result.payload.findings[0]!.findingId, "F1");
-  assert.equal(result.payload.findings[0]!.classification, "confirmed_problem");
-  assert.equal(result.payload.findings[0]!.severity, "high");
+  assert.equal(result.payload.findings[0]!.priority, "must_fix");
   assert.deepEqual(
     result.payload.hypothesisClosure.map((entry) => entry.hypothesisId),
     ["H1", "H2"]
@@ -359,7 +356,7 @@ test("validateCandidateFindingsWithReport ignores non-contract extra fields", ()
       extraEnvelopeMetadata: "ignored",
       findings: [
         candidateFinding({
-          priority: "must",
+          priorityHint: "must",
           traceability: {
             ...lineRangeTraceability(21, 22),
             extraAnchorHint: "ignored"
@@ -382,7 +379,7 @@ test("validateCandidateFindingsWithReport ignores non-contract extra fields", ()
   );
 
   assert.equal(result.payload.findings[0]?.findingId, "F1");
-  assert.equal(result.payload.findings[0]?.classification, "confirmed_problem");
+  assert.equal(result.payload.findings[0]?.priority, "must_fix");
   assert.equal("result" in result.payload, false);
 });
 
@@ -416,42 +413,35 @@ test("validateCandidateFindingsWithReport rejects schema and ReviewBasis semanti
     readonly reason: RegExp;
   }[] = [
     {
-      label: "invalid classification",
+      label: "invalid priority",
       payload: candidateFindings({
-        findings: [candidateFinding({ classification: "unsupported_bug" })]
+        findings: [candidateFinding({ priority: "unsupported_bug" })]
       }),
-      reason: /classification.*confirmed_problem.*reasonable_risk/u
+      reason: /priority.*must_fix.*nice_to_have/u
     },
     {
-      label: "invalid severity",
-      payload: candidateFindings({
-        findings: [candidateFinding({ severity: "medium" })]
-      }),
-      reason: /severity.*high.*low/u
-    },
-    {
-      label: "confirmed problem requires trigger condition",
+      label: "finding requires trigger condition",
       payload: candidateFindings({
         findings: [candidateFinding({ triggerCondition: "" })]
       }),
       reason: /triggerCondition/u
     },
     {
-      label: "confirmed problem requires impact",
+      label: "finding requires impact",
       payload: candidateFindings({
         findings: [candidateFinding({ impact: "" })]
       }),
       reason: /impact/u
     },
     {
-      label: "confirmed problem requires counter-evidence",
+      label: "finding requires counter-evidence",
       payload: candidateFindings({
         findings: [candidateFinding({ counterEvidence: [] })]
       }),
       reason: /counterEvidence/u
     },
     {
-      label: "confirmed problem requires evidence",
+      label: "finding requires evidence",
       payload: candidateFindings({
         findings: [candidateFinding({ evidence: "" })]
       }),

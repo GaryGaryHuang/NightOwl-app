@@ -28,7 +28,7 @@ function makeValidChangeMap(overrides: Record<string, unknown> = {}): string {
     missingInformation: [
       {
         description: "No live media SDK callback contract",
-        whyItMatters: "severity classification would be blocked"
+        whyItMatters: "priority decision would be blocked"
       }
     ],
     overviewMarkdown: [
@@ -85,7 +85,7 @@ test("ChangesetOverviewOutputValidator accepts valid output and injects userCont
   assert.deepEqual(changeMap.userContext, expectedUserContext);
   assert.equal(changeMap.userBehavior[0]?.statement, "Candidate findings must cite evidence refs");
   assert.equal(changeMap.userBehavior[0]?.confidence, "explicit");
-  assert.equal(changeMap.missingInformation[0]?.whyItMatters, "severity classification would be blocked");
+  assert.equal(changeMap.missingInformation[0]?.whyItMatters, "priority decision would be blocked");
   assert.equal(changeMap.behaviorChanges[0]?.files[0], "src/app.ts");
 });
 

@@ -90,12 +90,10 @@ export function buildSummaryResponse(
 }
 
 export function createFinding(type: "must" | "nice", title: string): Finding {
-  const classification = type === "must" ? "confirmed_problem" : "reasonable_risk";
-  const severity = type === "must" ? "high" : "low";
+  const priority = type === "must" ? "must_fix" : "nice_to_have";
   return {
     findingId: "F1",
-    classification,
-    severity,
+    priority,
     title,
     traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
     evidence: "concrete code evidence",
@@ -187,8 +185,7 @@ function buildCandidateFindingsForFile(filePath: string): CandidateFindings {
     findings: [
       {
         findingId: "F1",
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: `${filePath} candidate`,
         traceability: { kind: "line-range", lineStart: 1, lineEnd: 1 },
         evidence: "reviewed diff evidence; fallback guard is skipped",

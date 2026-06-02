@@ -74,8 +74,7 @@ test("buildRiskSnapshot derivedRiskLevel matches deriveFileRiskLevel", () => {
     assert.equal(
       snapshot.derivedRiskLevel,
       deriveFileRiskLevel(findings),
-      `Mismatch for findings: ${JSON.stringify(findings.map((f) => f.classification))}`
+      `Mismatch for findings: ${JSON.stringify(findings.map((f) => f.priority))}`
     );
   }
 });
-

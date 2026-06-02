@@ -123,16 +123,16 @@ function renderFindingsSection(
     return ["## Findings", "- 無"].join("\n");
   }
 
-  const highFindings = findings.filter((f) => f.classification === "confirmed_problem" && f.severity === "high");
-  const otherFindings = findings.filter((f) => !(f.classification === "confirmed_problem" && f.severity === "high"));
-  const statsLine = `${highFindings.length} must-fix issue(s), ${otherFindings.length} nice-to-have suggestion(s).`;
+  const mustFindings = findings.filter((f) => f.priority === "must_fix");
+  const niceFindings = findings.filter((f) => f.priority === "nice_to_have");
+  const statsLine = `${mustFindings.length} must-fix issue(s), ${niceFindings.length} nice-to-have suggestion(s).`;
 
-  // Keep high-severity findings ahead so the rendered note is stable and severity-ordered.
+  // Keep must-fix findings ahead so the rendered note is stable and priority-ordered.
   return [
     "## Findings",
     statsLine,
-    ...[...highFindings, ...otherFindings].flatMap((finding) => [
-      `- [${finding.severity}] ${finding.title}`,
+    ...[...mustFindings, ...niceFindings].flatMap((finding) => [
+      `- [${finding.priority}] ${finding.title}`,
       `  - Traceability: ${formatTraceability(finding.traceability)}`,
       `  - Evidence：${finding.evidence}`,
       `  - Trigger Condition：${finding.triggerCondition}`,

@@ -665,8 +665,7 @@ function createCandidateFindings(
     findings: [
       {
         findingId: "F1",
-        classification: "confirmed_problem",
-        severity: "high",
+        priority: "must_fix",
         title: `unsupported claim ${variant}`,
         traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
         evidence: `candidate evidence ${evidenceVariant}`,
