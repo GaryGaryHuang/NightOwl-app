@@ -2,7 +2,7 @@
 
 > **Status:** Early development (v0.1.0) — APIs, output formats, and the command-line interface may change.
 
-NightOwl is a local code review CLI powered by the [GitHub Copilot SDK](https://www.npmjs.com/package/@github/copilot-sdk). It drives an AI agent to automatically perform structured code reviews on Git changes and produce traceable Markdown review reports.
+NightOwl is a local code review CLI powered by the [GitHub Copilot SDK](https://github.com/github/copilot-sdk). It drives an AI agent to automatically perform structured code reviews on Git changes and produce traceable Markdown review reports.
 
 ## Why NightOwl?
 
