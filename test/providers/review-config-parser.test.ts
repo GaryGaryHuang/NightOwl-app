@@ -41,6 +41,13 @@ test("parseReviewConfig accepts a representative fully-populated config", () => 
     parseReviewConfig(
       JSON.stringify({
         maxConcurrentFiles: 3,
+        modelProvider: {
+          kind: "byok",
+          type: "openai",
+          baseUrl: "https://llm-gateway.example.com/v1",
+          model: "company-review",
+          apiKeyEnv: "NIGHTOWL_OPENAI_API_KEY"
+        },
         mcpServers: {
           context7: {
             type: "http",
@@ -54,6 +61,13 @@ test("parseReviewConfig accepts a representative fully-populated config", () => 
     ),
     buildExpectedReviewConfig({
       maxConcurrentFiles: 3,
+      modelProvider: {
+        kind: "byok",
+        type: "openai",
+        baseUrl: "https://llm-gateway.example.com/v1",
+        model: "company-review",
+        apiKeyEnv: "NIGHTOWL_OPENAI_API_KEY"
+      },
       mcpServers: {
         context7: {
           type: "context7",

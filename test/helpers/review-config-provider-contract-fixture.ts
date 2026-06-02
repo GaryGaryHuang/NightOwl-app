@@ -3,6 +3,7 @@ import { LocalReviewConfigProvider } from "../../src/providers/config/local-revi
 import type {
   ReviewConfig
 } from "../../src/providers/config/review-config-provider.ts";
+import type { ReviewConfigModelProvider } from "../../src/providers/config/review-config-model-provider-parser.ts";
 import { createReviewRepoFixture } from "./git-fixture.ts";
 
 export function createReviewConfigProviderFixture() {
@@ -42,12 +43,16 @@ export function createReviewConfigProviderFixture() {
 export function buildExpectedReviewConfig(input: {
   maxConcurrentFiles?: number;
   mcpServers?: ReviewMcpServers;
+  modelProvider?: ReviewConfigModelProvider;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
 } = {}): ReviewConfig {
   return {
     maxConcurrentFiles: input.maxConcurrentFiles ?? 5,
     mcpServers: input.mcpServers ?? {},
+    ...(input.modelProvider === undefined
+      ? {}
+      : { modelProvider: input.modelProvider }),
     ...(input.webFetchAllowedHosts === undefined
       ? {}
       : { webFetchAllowedHosts: input.webFetchAllowedHosts }),

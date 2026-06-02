@@ -13,6 +13,7 @@ import type { KnowledgeSvc } from "./knowledge.ts";
 import { buildRemoveAllSectionsConfig } from "./review-system-message-sections.ts";
 import { ToolPolicyGuard } from "./tool-policy/tool-policy-guard.ts";
 import type { ToolAuditSink } from "./tool-audit-writer.ts";
+import type { ResolvedReviewSessionModelProvider } from "./review-model-provider-resolver.ts";
 
 export interface ReviewSessionProfile {
   stepId?: string;
@@ -54,6 +55,7 @@ export interface ReviewSessionFactoryOptions {
     getClient(): Pick<CopilotClientLike, "createSession">;
   };
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
+  modelProvider?: ResolvedReviewSessionModelProvider;
   toolPolicyGuard: ToolPolicyGuard;
   auditWriterProvider?: () => ToolAuditSink | undefined;
 }
@@ -64,12 +66,14 @@ export interface ReviewSessionFactoryOptions {
 export class ReviewSessionFactory implements ReviewSessionFactoryLike {
   readonly #clientManager: ReviewSessionFactoryOptions["clientManager"];
   readonly #knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
+  readonly #modelProvider?: ResolvedReviewSessionModelProvider;
   readonly #toolPolicyGuard: ToolPolicyGuard;
   readonly #auditWriterProvider?: () => ToolAuditSink | undefined;
 
   constructor(options: ReviewSessionFactoryOptions) {
     this.#clientManager = options.clientManager;
     this.#knowledgeSvc = options.knowledgeSvc;
+    this.#modelProvider = options.modelProvider;
     this.#toolPolicyGuard = options.toolPolicyGuard;
     this.#auditWriterProvider = options.auditWriterProvider;
   }
@@ -97,7 +101,10 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
           auditWriter
         )
       },
-      model: profile.model,
+      model: this.#modelProvider?.model ?? profile.model,
+      ...(this.#modelProvider?.mode === "byok"
+        ? { provider: this.#modelProvider.provider }
+        : {}),
       reasoningEffort: "high",
       streaming: REVIEW_STREAMING_ENABLED,
       systemMessage: {

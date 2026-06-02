@@ -6,6 +6,9 @@ import {
   ReviewSessionFactory,
   type ReviewSessionFactoryOptions
 } from "../../src/services/review-session-factory.ts";
+import type {
+  ResolvedReviewSessionModelProvider
+} from "../../src/services/review-model-provider-resolver.ts";
 import {
   ToolPolicyGuard,
   type ToolPolicyGuardOptions
@@ -65,7 +68,7 @@ function createReviewSessionFactoryHarness(
   options: Partial<
     Pick<
       ReviewSessionFactoryOptions,
-      "knowledgeSvc" | "toolPolicyGuard" | "auditWriterProvider"
+      "knowledgeSvc" | "toolPolicyGuard" | "auditWriterProvider" | "modelProvider"
     >
   > = {}
 ) {
@@ -92,6 +95,9 @@ function createReviewSessionFactoryHarness(
             : {};
         }
       },
+    ...(options.modelProvider === undefined
+      ? {}
+      : { modelProvider: options.modelProvider }),
     ...(options.auditWriterProvider === undefined
       ? {}
       : { auditWriterProvider: options.auditWriterProvider })
@@ -214,6 +220,50 @@ test("ReviewSessionFactory builds the base review session config from the profil
   assert.equal(config.streaming, false);
   assert.equal(config.onEvent, undefined);
   assert.equal(config.workingDirectory, "/workspace/repo");
+  assert.equal(config.provider, undefined);
+});
+
+test("ReviewSessionFactory applies explicit Copilot model override without SDK provider", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "copilot",
+    model: "gpt-4.1"
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "gpt-4.1");
+  assert.equal(config.provider, undefined);
+});
+
+test("ReviewSessionFactory includes BYOK provider config and configured model", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "byok",
+    model: "company-review",
+    provider: {
+      type: "openai",
+      baseUrl: "https://llm-gateway.example.com/v1",
+      apiKey: "sk-test"
+    }
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "company-review");
+  assert.deepEqual(config.provider, {
+    type: "openai",
+    baseUrl: "https://llm-gateway.example.com/v1",
+    apiKey: "sk-test"
+  });
 });
 
 test("ReviewSessionFactory injects MCP servers only when KnowledgeSvc returns them for the resolved knowledge mode", async () => {

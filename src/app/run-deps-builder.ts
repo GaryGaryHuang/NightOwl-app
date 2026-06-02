@@ -25,6 +25,7 @@ import {
   type ToolAuditOutputTarget,
   type ToolAuditSink
 } from "../services/tool-audit-writer.ts";
+import { resolveReviewSessionModelProvider } from "../services/review-model-provider-resolver.ts";
 import type { WebFetchHostnameClassifier } from "../services/tool-policy/web-fetch-hostname-classifier.ts";
 import {
   DryRunReviewSessionFactory
@@ -110,6 +111,9 @@ export class ProductionRunDepsBuilder implements RunDepsBuilder {
     const reviewSessionFactory = new ReviewSessionFactory({
       clientManager: options.clientManager,
       knowledgeSvc,
+      modelProvider: resolveReviewSessionModelProvider(
+        reviewConfig.modelProvider
+      ),
       toolPolicyGuard,
       auditWriterProvider: toolAuditLifecycle.auditWriterProvider
     });

@@ -7,6 +7,141 @@ import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { isChangesetOverviewSystemMessage } from "../helpers/review-app-fixture.ts";
 
+test("createLocalReviewRunApp preserves default Copilot session behavior when modelProvider is omitted", async () => {
+  const fixture = createReviewRepoFixture();
+
+  try {
+    const sessionConfigs: SessionConfig[] = [];
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              sessionConfigs.push(config);
+              throw new Error("abort after first session config");
+            }
+          };
+        }
+      },
+      outputSink: defineOutputSinkDouble({
+        async initializeRun() {
+          return this;
+        },
+        async publishFileReview() {},
+        async publishArtifact() {}
+      })
+    });
+
+    await assert.rejects(
+      () =>
+        app.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: [],
+          dryRun: false
+        }),
+      /abort after first session config/u
+    );
+
+    const changesetOverviewConfig = sessionConfigs.find((config) =>
+      isChangesetOverviewSystemMessage(config.systemMessage)
+    );
+    assert.ok(changesetOverviewConfig, "Changeset Overview session should be attempted");
+    assert.equal(changesetOverviewConfig.model, "gpt-5.4-mini");
+    assert.equal(changesetOverviewConfig.provider, undefined);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test("createLocalReviewRunApp passes repo BYOK modelProvider to real review sessions", async () => {
+  const fixture = createReviewRepoFixture();
+  const previousApiKey = process.env.NIGHTOWL_TEST_OPENAI_API_KEY;
+
+  try {
+    process.env.NIGHTOWL_TEST_OPENAI_API_KEY = "sk-test";
+    fixture.writeFile(
+      ".nightowl/reviewconfig.json",
+      JSON.stringify({
+        modelProvider: {
+          kind: "byok",
+          type: "openai",
+          baseUrl: "https://llm-gateway.example.com/v1",
+          model: "company-review",
+          apiKeyEnv: "NIGHTOWL_TEST_OPENAI_API_KEY"
+        }
+      })
+    );
+    fixture.commitAll("add byok review config");
+
+    const sessionConfigs: SessionConfig[] = [];
+    const app = createLocalReviewRunApp({
+      workingDirectory: fixture.repoDir,
+      clientManager: {
+        async start() {},
+        async stop() {},
+        async forceStop() {},
+        getClient() {
+          return {
+            async start() {},
+            async stop() {},
+            async forceStop() {},
+            async createSession(config: SessionConfig) {
+              sessionConfigs.push(config);
+              throw new Error("abort after first BYOK session config");
+            }
+          };
+        }
+      },
+      outputSink: defineOutputSinkDouble({
+        async initializeRun() {
+          return this;
+        },
+        async publishFileReview() {},
+        async publishArtifact() {}
+      })
+    });
+
+    await assert.rejects(
+      () =>
+        app.run({
+          baseRef: "main",
+          headRef: "feature-branch",
+          repoPath: "./packages/app",
+          userContext: [],
+          dryRun: false
+        }),
+      /abort after first BYOK session config/u
+    );
+
+    const changesetOverviewConfig = sessionConfigs.find((config) =>
+      isChangesetOverviewSystemMessage(config.systemMessage)
+    );
+    assert.ok(changesetOverviewConfig, "Changeset Overview session should be attempted");
+    assert.equal(changesetOverviewConfig.model, "company-review");
+    assert.deepEqual(changesetOverviewConfig.provider, {
+      type: "openai",
+      baseUrl: "https://llm-gateway.example.com/v1",
+      apiKey: "sk-test"
+    });
+  } finally {
+    if (previousApiKey === undefined) {
+      delete process.env.NIGHTOWL_TEST_OPENAI_API_KEY;
+    } else {
+      process.env.NIGHTOWL_TEST_OPENAI_API_KEY = previousApiKey;
+    }
+    fixture.cleanup();
+  }
+});
+
 test("createLocalReviewRunApp fails before client startup, Changeset Overview, and output initialization when review config is invalid", async () => {
   const fixture = createReviewRepoFixture();
 

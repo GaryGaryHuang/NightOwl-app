@@ -7,6 +7,7 @@ import {
   invalidReviewConfigError,
   isPlainObject
 } from "./review-config-parse-helpers.ts";
+import { resolveModelProviderFromConfigObject } from "./review-config-model-provider-parser.ts";
 import { resolveMcpServersFromConfigObject } from "./review-config-mcp-parser.ts";
 import {
   resolveWebFetchAllowedHostsFromConfigObject,
@@ -18,6 +19,7 @@ import {
 const RECOGNIZED_CONFIG_KEYS: { [K in keyof Required<ReviewConfig>]: true } = {
   maxConcurrentFiles: true,
   mcpServers: true,
+  modelProvider: true,
   webFetchAllowedHosts: true,
   webFetchDeniedHosts: true
 };
@@ -68,10 +70,14 @@ function resolveTopLevelReviewConfig(
     resolveWebFetchAllowedHostsFromConfigObject(configObject);
   const webFetchDeniedHosts =
     resolveWebFetchDeniedHostsFromConfigObject(configObject);
+  const modelProvider = resolveModelProviderFromConfigObject(configObject);
 
   return {
     maxConcurrentFiles: resolveMaxConcurrentFilesFromConfigObject(configObject),
     mcpServers: resolveMcpServersFromConfigObject(configObject),
+    ...(modelProvider === undefined
+      ? {}
+      : { modelProvider }),
     ...(webFetchAllowedHosts === undefined
       ? {}
       : { webFetchAllowedHosts }),
