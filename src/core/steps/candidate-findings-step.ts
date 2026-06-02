@@ -82,13 +82,14 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "- `criticalMissingInformation`: `{ description, whyItMatters }` objects.",
   "",
   "Entry field rules - concrete object examples are below; apply these constraints to every matching entry:",
+  "- `findings[]` key order: write each finding as `title`, `traceability`, `evidence`, `triggerCondition`, `impact`, `counterEvidence`, then `priority` last, so the merge-blocking judgment follows the proof fields instead of leading them.",
   "- `findings[]` priority: `priority` is one of " + formatQuotedValues(CANDIDATE_PRIORITIES) + ". Use `must_fix` only for evidence-backed defects that should block merge; use `nice_to_have` for lower-priority but still actionable evidence-backed findings.",
   "- `findings[]` text fields: `title`, `evidence`, `triggerCondition`, and `impact` are non-empty strings, and `counterEvidence` is a non-empty array of strings (for `nice_to_have`, state the residual uncertainty there).",
   "- `findings[]` omit `findingId`; it is assigned downstream.",
   "- `findings[].traceability`: either `{ \"kind\": \"line-range\", \"lineStart\", \"lineEnd\" }` with positive integers where `lineEnd >= lineStart`, or `{ \"kind\": \"diff-hunk\", \"hunkHeader\" }`; prefer `line-range` anchored to the reviewed diff.",
   "- `findingOrigins[]` hypothesis entry: `{ \"findingIndex\", \"kind\": \"hypothesis\", \"hypothesisIds\", \"evidenceIds\", \"rationale\" }` with non-empty `hypothesisIds`, non-empty `evidenceIds`, and a non-empty `rationale`.",
   "- `findingOrigins[]` supplemental entry: `{ \"findingIndex\", \"kind\": \"supplemental\", \"lens\", \"evidenceIds\", \"rationale\", \"relatedHypothesisIds\" }`; `lens` is one of " + formatQuotedValues(SUPPLEMENTAL_LENSES) + "; `evidenceIds` and `rationale` are non-empty; `relatedHypothesisIds` is an array that may be empty.",
-  "- `hypothesisClosure[]`: `{ \"hypothesisId\", \"status\", \"rationale\" }`; `status` is one of " + formatQuotedValues(HYPOTHESIS_CLOSURE_STATUSES) + ".",
+  "- `hypothesisClosure[]`: `{ \"hypothesisId\", \"rationale\", \"status\" }`; write `rationale` before `status` so the closure justification precedes the status decision; `status` is one of " + formatQuotedValues(HYPOTHESIS_CLOSURE_STATUSES) + ".",
   "- `criticalMissingInformation[]`: `{ \"description\", \"whyItMatters\" }`, both non-empty strings.",
   "",
   "Cross-reference invariants - verify all of these before output:",
@@ -102,16 +103,16 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "",
   "Complete JSON output examples - labels are explanatory only; output only the JSON object:",
   "Findings ready - must_fix closing a hypothesis:",
-  `{"findings": [{"priority": "must_fix", "title": "problem title", "traceability": {"kind": "line-range", "lineStart": 1, "lineEnd": 9}, "evidence": "guard runs after dereference", "triggerCondition": "nullable input", "impact": "request fails", "counterEvidence": ["fallback checked"]}], "findingOrigins": [{"findingIndex": 1, "kind": "hypothesis", "hypothesisIds": ["H1"], "evidenceIds": ["E1"], "rationale": "candidate covers the hypothesis"}], "hypothesisClosure": [{"hypothesisId": "H1", "status": "closed_by_candidate", "rationale": "candidate covers the hypothesis"}], "criticalMissingInformation": []}`,
+  `{"findings": [{"title": "problem title", "traceability": {"kind": "line-range", "lineStart": 1, "lineEnd": 9}, "evidence": "guard runs after dereference", "triggerCondition": "nullable input", "impact": "request fails", "counterEvidence": ["fallback checked"], "priority": "must_fix"}], "findingOrigins": [{"findingIndex": 1, "kind": "hypothesis", "hypothesisIds": ["H1"], "evidenceIds": ["E1"], "rationale": "candidate covers the hypothesis"}], "hypothesisClosure": [{"hypothesisId": "H1", "rationale": "candidate covers the hypothesis", "status": "closed_by_candidate"}], "criticalMissingInformation": []}`,
   "",
   "Supplemental finding - nice_to_have from a sweep:",
-  `{"findings": [{"priority": "nice_to_have", "title": "changed branch can drop partial result", "traceability": {"kind": "line-range", "lineStart": 20, "lineEnd": 28}, "evidence": "changed branch returns before preserving partial result", "triggerCondition": "timeout after partial data arrives", "impact": "caller receives empty result instead of partial data", "counterEvidence": ["no fallback restores partial data"]}], "findingOrigins": [{"findingIndex": 1, "kind": "supplemental", "lens": "control_flow_sweep", "evidenceIds": ["E2"], "rationale": "directly changed control path exposes the deviation", "relatedHypothesisIds": []}], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "changed path preserves the expected contract for H1"}], "criticalMissingInformation": []}`,
+  `{"findings": [{"title": "changed branch can drop partial result", "traceability": {"kind": "line-range", "lineStart": 20, "lineEnd": 28}, "evidence": "changed branch returns before preserving partial result", "triggerCondition": "timeout after partial data arrives", "impact": "caller receives empty result instead of partial data", "counterEvidence": ["no fallback restores partial data"], "priority": "nice_to_have"}], "findingOrigins": [{"findingIndex": 1, "kind": "supplemental", "lens": "control_flow_sweep", "evidenceIds": ["E2"], "rationale": "directly changed control path exposes the deviation", "relatedHypothesisIds": []}], "hypothesisClosure": [{"hypothesisId": "H1", "rationale": "changed path preserves the expected contract for H1", "status": "rejected_by_evidence"}], "criticalMissingInformation": []}`,
   "",
   "No findings - every hypothesis closed by evidence:",
-  `{"findings": [], "findingOrigins": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "changed path preserves fallback"}], "criticalMissingInformation": []}`,
+  `{"findings": [], "findingOrigins": [], "hypothesisClosure": [{"hypothesisId": "H1", "rationale": "changed path preserves fallback", "status": "rejected_by_evidence"}], "criticalMissingInformation": []}`,
   "",
   "Insufficient information - blocked hypothesis with criticalMissingInformation:",
-  `{"findings": [], "findingOrigins": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "insufficient_information", "rationale": "specific missing contract blocks validation"}], "criticalMissingInformation": [{"description": "Need null contract.", "whyItMatters": "Expected behavior is unclear."}]}`
+  `{"findings": [], "findingOrigins": [], "hypothesisClosure": [{"hypothesisId": "H1", "rationale": "specific missing contract blocks validation", "status": "insufficient_information"}], "criticalMissingInformation": [{"description": "Need null contract.", "whyItMatters": "Expected behavior is unclear."}]}`
 ].join("\n");
 
 interface CandidateFindingsStepOptions {
