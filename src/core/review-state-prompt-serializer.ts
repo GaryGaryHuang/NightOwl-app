@@ -36,6 +36,7 @@ export interface ReviewStateSerializeInput {
     | "diffContent"
     | "filePath"
     | "getCandidateFindings"
+    | "getAccumulatedApprovedFindings"
     | "getFindings"
     | "getMissingInformationItems"
     | "getPriorValidatorFeedback"
@@ -93,6 +94,7 @@ export class ReviewStatePromptSerializer {
     );
     const approvedFindings =
       input.context.getFindings() ??
+      input.context.getAccumulatedApprovedFindings?.() ??
       [];
     const candidateFindings =
       input.context.getCandidateFindings?.() ?? null;

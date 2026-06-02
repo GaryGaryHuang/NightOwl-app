@@ -11,6 +11,7 @@ import {
   cloneValidationReportV1,
   type CandidateFindings,
   type MissingInformationItem,
+  type PerFindingValidationResult,
   type ValidationReportV1
 } from "./semantic-review.ts";
 
@@ -89,6 +90,7 @@ export class FileReviewContext {
   #candidateFindings?: CandidateFindings;
   #validationReportV1?: ValidationReportV1;
   #missingInformationItems?: MissingInformationItem[];
+  #accumulatedApprovedFindings: Finding[] = [];
 
   constructor(input: FileReviewContextInput) {
     this.filePath = input.filePath;
@@ -110,7 +112,7 @@ export class FileReviewContext {
     return [...this.#sections.entries()];
   }
 
-  // Findings are replaced wholesale, not merged, because Semantic Validation produces the complete final set.
+  // Final findings are replaced wholesale after Semantic Validation commits the complete set.
   setFindings(findings: Finding[]): void {
     this.#findings = findings.map(cloneFinding);
     this.#findingsInsertionIndex ??= this.#sections.size;
@@ -172,6 +174,18 @@ export class FileReviewContext {
     return this.#findings?.map(cloneFinding);
   }
 
+  addAccumulatedApprovedFindings(findings: readonly Finding[]): void {
+    this.#accumulatedApprovedFindings.push(...findings.map(cloneFinding));
+  }
+
+  getAccumulatedApprovedFindings(): Finding[] {
+    return renumberFindings(this.#accumulatedApprovedFindings);
+  }
+
+  finalizeAccumulatedApprovedFindings(): void {
+    this.setFindings(this.getAccumulatedApprovedFindings());
+  }
+
   markInterrupted(stepId: string, reason: string): void {
     this.#interruption = { stepId, reason };
   }
@@ -179,6 +193,23 @@ export class FileReviewContext {
   getInterruption(): ReviewInterruption | undefined {
     return this.#interruption ? { ...this.#interruption } : undefined;
   }
+}
+
+export function clonePerFindingValidationResult(
+  result: PerFindingValidationResult
+): PerFindingValidationResult {
+  return {
+    ...result,
+    failedGates: [...result.failedGates],
+    requiredCorrections: [...result.requiredCorrections]
+  };
+}
+
+export function renumberFindings(findings: readonly Finding[]): Finding[] {
+  return findings.map((finding, index) => ({
+    ...cloneFinding(finding),
+    findingId: `F${index + 1}`
+  }));
 }
 
 function cloneFinding(finding: Finding): Finding {

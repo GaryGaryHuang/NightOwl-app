@@ -266,6 +266,37 @@ test("FileReviewContext getFindings returns defensively cloned copies", () => {
   assert.equal(second[0]!.dependencyPathException!.dependencyAnchor.symbol, "helper");
 });
 
+test("FileReviewContext accumulates approved findings host-side and finalizes them with fresh IDs", () => {
+  const context = createContext();
+  const first = createFinding("F7");
+  const second = createFinding("F1");
+  second.title = "second approved finding";
+
+  context.addAccumulatedApprovedFindings([first]);
+  context.addAccumulatedApprovedFindings([second]);
+  first.title = "MUTATED";
+
+  const accumulated = context.getAccumulatedApprovedFindings();
+  accumulated[0]!.title = "MUTATED_AGAIN";
+
+  assert.equal(context.getFindings(), undefined);
+  assert.deepEqual(
+    context.getAccumulatedApprovedFindings().map((finding) => finding.findingId),
+    ["F1", "F2"]
+  );
+  assert.equal(
+    context.getAccumulatedApprovedFindings()[0]?.title,
+    "guard moved after dereference"
+  );
+
+  context.finalizeAccumulatedApprovedFindings();
+
+  assert.deepEqual(
+    context.getFindings()?.map((finding) => finding.findingId),
+    ["F1", "F2"]
+  );
+});
+
 function createContext(
   overrides: Partial<FileReviewContextInput> = {}
 ): FileReviewContext {
@@ -315,6 +346,15 @@ function createCandidateFindings() {
       }
     ],
     criticalMissingInformation: []
+  };
+}
+
+function createFinding(findingId: string): Finding {
+  const base = createCandidateFindings().findings[0]!;
+  return {
+    ...base,
+    priority: base.priority as Finding["priority"],
+    findingId
   };
 }
 

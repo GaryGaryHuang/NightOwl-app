@@ -11,7 +11,12 @@ function extractSignalName(reason: unknown): "SIGINT" | "SIGTERM" | undefined {
 }
 
 import type { ChangesetOverviewRunner } from "./changeset-overview-runner.ts";
-import { FileReviewContext } from "./file-review-context.ts";
+import {
+  clonePerFindingValidationResult,
+  FileReviewContext,
+  renumberFindings,
+  type Finding
+} from "./file-review-context.ts";
 import { DEFAULT_MAX_CONCURRENT_FILES } from "./max-concurrent-files.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
 import { renderReviewNote, type ReviewNoteRenderer } from "./finalizers/review-note-finalizer.ts";
@@ -39,6 +44,9 @@ import {
 } from "./review-step-ids.ts";
 import {
   semanticCandidateFingerprint,
+  type CandidateFindings,
+  type FindingOrigin,
+  type PerFindingValidationResult,
   type ValidationReportV1
 } from "./semantic-review.ts";
 import { ReviewBasisStep } from "./steps/review-basis-step.ts";
@@ -637,6 +645,7 @@ export class ReviewOrchestrator {
 
     let semanticRerunCount = 0;
     let semanticValidationCount = 0;
+    const cumulativeTerminalValidationResults: PerFindingValidationResult[] = [];
     const semanticCandidateFingerprints = new Set<string>();
     const candidateFindingsStepIndex = input.steps.findIndex(
       (step) => step.stepId === CANDIDATE_FINDINGS_STEP_ID
@@ -695,6 +704,9 @@ export class ReviewOrchestrator {
       result.applyTo(fileContext);
       if (step.stepId === SEMANTIC_VALIDATION_STEP_ID) {
         semanticValidationCount += 1;
+        applySemanticValidationRound(fileContext, {
+          cumulativeTerminalValidationResults
+        });
       }
 
       if (input.abortGuard.isAborted) {
@@ -738,7 +750,8 @@ export class ReviewOrchestrator {
           const missingInformationItems = fileContext.getMissingInformationItems() ?? [];
           markSemanticLoopStopped(fileContext, {
             reason: "Candidate Findings repeated an unsupported candidate without new evidence.",
-            missingInformationItems
+            missingInformationItems,
+            cumulativeTerminalValidationResults
           });
           continue;
         }
@@ -759,7 +772,8 @@ export class ReviewOrchestrator {
         const missingInformationItems = fileContext.getMissingInformationItems() ?? [];
         markSemanticLoopStopped(fileContext, {
           reason: "Semantic Validation requested another Candidate Findings rerun after the semantic rerun budget was exhausted.",
-          missingInformationItems
+          missingInformationItems,
+          cumulativeTerminalValidationResults
         });
       }
     }
@@ -798,6 +812,9 @@ export class ReviewOrchestrator {
     semanticValidationCount: number;
   }): Promise<void> {
     input.fileContext.markInterrupted(input.stepId, input.reason);
+    if (input.fileContext.getAccumulatedApprovedFindings().length > 0) {
+      input.fileContext.finalizeAccumulatedApprovedFindings();
+    }
 
     try {
       await input.outputPublisher.publishFileReview({
@@ -909,11 +926,13 @@ function markSemanticLoopStopped(
   input: {
     reason: string;
     missingInformationItems: ValidationReportV1["missingInformationItems"];
+    cumulativeTerminalValidationResults: readonly PerFindingValidationResult[];
   }
 ): void {
-  const currentReport = context.getValidationReportV1();
   const stoppedReport: ValidationReportV1 = {
-    perFindingResults: currentReport?.perFindingResults ?? [],
+    perFindingResults: renumberPerFindingResults(
+      input.cumulativeTerminalValidationResults
+    ),
     missingInformationItems: input.missingInformationItems,
     loopControl: {
       action: "accept",
@@ -922,7 +941,7 @@ function markSemanticLoopStopped(
   };
 
   context.setValidationReportV1(stoppedReport);
-  context.setFindings([]);
+  context.finalizeAccumulatedApprovedFindings();
 }
 
 function buildCurrentCandidateFingerprint(context: FileReviewContext): string | undefined {
@@ -940,14 +959,168 @@ function buildPriorValidatorFeedbackFromValidationReport(
 
   return {
     failedGates: [
-      ...new Set(report.perFindingResults.flatMap((result) => result.failedGates))
+      ...new Set(
+        report.perFindingResults
+          .filter((result) => result.decision === "rewrite_required")
+          .flatMap((result) => result.failedGates)
+      )
     ],
     requiredCorrections: [
       ...new Set(
-        report.perFindingResults.flatMap((result) => result.requiredCorrections)
+        report.perFindingResults
+          .filter((result) => result.decision === "rewrite_required")
+          .flatMap((result) => result.requiredCorrections)
       )
     ]
   };
+}
+
+function applySemanticValidationRound(
+  context: FileReviewContext,
+  input: {
+    cumulativeTerminalValidationResults: PerFindingValidationResult[];
+  }
+): void {
+  const currentReport = context.getValidationReportV1();
+  const currentPayload = context.getCandidateFindings();
+  if (!currentReport || !currentPayload) {
+    return;
+  }
+
+  const currentCandidatesById = new Map(
+    currentPayload.findings.map((finding) => [finding.findingId, finding])
+  );
+  const terminalResults = currentReport.perFindingResults.filter(
+    (result) => result.decision !== "rewrite_required"
+  );
+  input.cumulativeTerminalValidationResults.push(
+    ...terminalResults.map(clonePerFindingValidationResult)
+  );
+
+  const approvedFindings = terminalResults
+    .filter((result) => result.decision === "approve")
+    .map((result) => currentCandidatesById.get(result.findingId))
+    .filter((finding): finding is Finding => finding !== undefined);
+  context.addAccumulatedApprovedFindings(approvedFindings);
+
+  const rewriteResults = currentReport.perFindingResults.filter(
+    (result) => result.decision === "rewrite_required"
+  );
+  context.setValidationReportV1({
+    perFindingResults: renumberPerFindingResults([
+      ...input.cumulativeTerminalValidationResults,
+      ...rewriteResults
+    ]),
+    missingInformationItems: currentReport.missingInformationItems,
+    loopControl: currentReport.loopControl
+  });
+
+  if (currentReport.loopControl.action === "rerun") {
+    context.setCandidateFindings(
+      buildActiveRewriteCandidateFindings(currentPayload, rewriteResults)
+    );
+    return;
+  }
+
+  context.finalizeAccumulatedApprovedFindings();
+}
+
+function buildActiveRewriteCandidateFindings(
+  payload: CandidateFindings,
+  rewriteResults: readonly PerFindingValidationResult[]
+): CandidateFindings {
+  const rewriteIds = new Set(rewriteResults.map((result) => result.findingId));
+  const selected = payload.findings
+    .map((finding, index) => ({
+      finding,
+      originalFindingIndex: index + 1
+    }))
+    .filter(({ finding }) => rewriteIds.has(finding.findingId));
+  const findingIndexMap = new Map(
+    selected.map(({ originalFindingIndex }, index) => [
+      originalFindingIndex,
+      index + 1
+    ])
+  );
+  const hypothesisClosure = buildActiveHypothesisClosure(
+    payload,
+    findingIndexMap
+  );
+
+  return {
+    findings: renumberFindings(selected.map(({ finding }) => finding)),
+    findingOrigins: payload.findingOrigins.flatMap((origin) => {
+      const findingIndex = findingIndexMap.get(origin.findingIndex);
+      return findingIndex === undefined
+        ? []
+        : [cloneFindingOriginWithIndex(origin, findingIndex)];
+    }),
+    hypothesisClosure,
+    criticalMissingInformation: hypothesisClosure.some(
+      (closure) => closure.status === "insufficient_information"
+    )
+      ? payload.criticalMissingInformation.map((item) => ({ ...item }))
+      : []
+  };
+}
+
+function buildActiveHypothesisClosure(
+  payload: CandidateFindings,
+  findingIndexMap: ReadonlyMap<number, number>
+): CandidateFindings["hypothesisClosure"] {
+  const activeHypothesisIds = new Set(
+    payload.findingOrigins
+      .filter((origin) => findingIndexMap.has(origin.findingIndex))
+      .flatMap((origin) =>
+        origin.kind === "hypothesis" ? origin.hypothesisIds : []
+      )
+  );
+
+  return payload.hypothesisClosure.map((closure) => {
+    if (
+      closure.status === "closed_by_candidate" &&
+      !activeHypothesisIds.has(closure.hypothesisId)
+    ) {
+      return {
+        hypothesisId: closure.hypothesisId,
+        status: "rejected_by_evidence",
+        rationale: "Handled by a terminal semantic decision outside the active rerun payload."
+      };
+    }
+
+    return { ...closure };
+  });
+}
+
+function cloneFindingOriginWithIndex(
+  origin: FindingOrigin,
+  findingIndex: number
+): FindingOrigin {
+  return origin.kind === "hypothesis"
+    ? {
+        findingIndex,
+        kind: origin.kind,
+        hypothesisIds: [...origin.hypothesisIds],
+        evidenceIds: [...origin.evidenceIds],
+        rationale: origin.rationale
+      }
+    : {
+        findingIndex,
+        kind: origin.kind,
+        lens: origin.lens,
+        evidenceIds: [...origin.evidenceIds],
+        rationale: origin.rationale,
+        relatedHypothesisIds: [...origin.relatedHypothesisIds]
+      };
+}
+
+function renumberPerFindingResults(
+  results: readonly PerFindingValidationResult[]
+): PerFindingValidationResult[] {
+  return results.map((result, index) => ({
+    ...clonePerFindingValidationResult(result),
+    findingId: `F${index + 1}`
+  }));
 }
 
 function buildSemanticReviewStats(

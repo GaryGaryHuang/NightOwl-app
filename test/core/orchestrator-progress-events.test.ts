@@ -214,6 +214,135 @@ test("ReviewOrchestrator caps semantic Candidate Findings reruns at two before c
   assert.deepEqual(reviewSummaryMissingInformationIds, []);
 });
 
+test("ReviewOrchestrator accumulates approved candidates while rerunning only active rewrites", async () => {
+  const stepEvents: string[] = [];
+  let candidateFindingsAttempt = 0;
+  let semanticValidationAttempt = 0;
+  let reviewSummaryFindingTitles: string[] = [];
+  let reviewSummaryDecisions: string[] = [];
+  const orchestrator = new ReviewOrchestrator({
+    workingDirectory: "/workspace/repo",
+    timestampProvider: () => "03131437",
+    maxConcurrentFiles: 1,
+    sourceProvider: createOneFileSourceProvider(),
+    reviewFileFilter: {
+      async filterReviewableFiles(_repoRoot: string, files: string[]) {
+        return files;
+      }
+    },
+    changesetOverviewRunner: {
+      async run() {
+        return createRunContext({
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
+          userContext: []
+        });
+      }
+    },
+    outputSink: defineOutputSinkDouble({
+      async initializeRun() {
+        return this;
+      },
+      async publishFileReview() {},
+      async publishArtifact() {}
+    }),
+    stepRunner: {
+      async run({ step, context }) {
+        stepEvents.push(step.stepId);
+        if (step.stepId === "review-basis") {
+          return {
+            stepId: step.stepId,
+            applyTo(targetContext: FileReviewContext) {
+              targetContext.setReviewBasis(buildReviewBasis(targetContext.filePath));
+            }
+          };
+        }
+
+        if (step.stepId === "candidate-findings") {
+          candidateFindingsAttempt += 1;
+          if (candidateFindingsAttempt === 2) {
+            assert.equal(context.getFindings(), undefined);
+            assert.deepEqual(
+              context.getAccumulatedApprovedFindings().map((finding) => finding.title),
+              ["already proven candidate"]
+            );
+            assert.deepEqual(
+              context.getCandidateFindings()?.findings.map((finding) => [
+                finding.findingId,
+                finding.title
+              ]),
+              [["F1", "candidate needing repair"]]
+            );
+          }
+          return {
+            stepId: step.stepId,
+            applyTo(targetContext: FileReviewContext) {
+              (targetContext as SemanticFileReviewContext).setCandidateFindings(
+                candidateFindingsAttempt === 1
+                  ? createMixedCandidateFindings()
+                  : createRepairedCandidateFindings()
+              );
+            }
+          };
+        }
+
+        if (step.stepId === "semantic-validation") {
+          semanticValidationAttempt += 1;
+          return {
+            stepId: step.stepId,
+            applyTo(targetContext: FileReviewContext) {
+              (targetContext as SemanticFileReviewContext).setValidationReportV1(
+                semanticValidationAttempt === 1
+                  ? createMixedRerunValidationReportV1()
+                  : createAcceptValidationReportV1()
+              );
+            }
+          };
+        }
+
+        if (step.stepId === "review-summary") {
+          reviewSummaryFindingTitles =
+            context.getFindings()?.map((finding) => finding.title) ?? [];
+          reviewSummaryDecisions =
+            context.getValidationReportV1()?.perFindingResults.map(
+              (result) => result.decision
+            ) ?? [];
+          return {
+            stepId: step.stepId,
+            applyTo(targetContext: FileReviewContext) {
+              targetContext.setSection("summary", "## Summary\n### 審查結論\n- 已驗證的結果：must-fix 2；nice-to-have 0\n- 審查限制：無\n\n### 審查依據\n- 異動概要：無\n- 已核對依據：無\n- 待確認資訊：無\n### 行為變更提醒\n- 無行為變更");
+            }
+          };
+        }
+
+        throw new Error(`Unexpected step ${step.stepId}`);
+      }
+    }
+  });
+
+  const result = await orchestrator.run({
+    baseRef: "main",
+    headRef: "feature-branch",
+    repoPath: ".",
+    userContext: [],
+    dryRun: false
+  });
+
+  assert.equal(result.successfulFileCount, 1);
+  assert.deepEqual(stepEvents, [
+    "review-basis",
+    "candidate-findings",
+    "semantic-validation",
+    "candidate-findings",
+    "semantic-validation",
+    "review-summary"
+  ]);
+  assert.deepEqual(reviewSummaryFindingTitles, [
+    "already proven candidate",
+    "repaired candidate"
+  ]);
+  assert.deepEqual(reviewSummaryDecisions, ["approve", "approve"]);
+});
+
 test("ReviewOrchestrator stops repeated unsupported semantic claims without spending all reruns", async () => {
   const stepEvents: string[] = [];
   let reviewSummaryLoopAction: string | undefined;
@@ -406,7 +535,7 @@ test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings ch
   ]);
 });
 
-test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings changes only critical missing information", async () => {
+test("ReviewOrchestrator stops repeated semantic rerun when only inactive critical missing information changes", async () => {
   const stepEvents: string[] = [];
   let candidateFindingsAttempt = 0;
   const orchestrator = new ReviewOrchestrator({
@@ -460,8 +589,6 @@ test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings ch
   assert.equal(result.successfulFileCount, 1);
   assert.deepEqual(stepEvents, [
     "review-basis",
-    "candidate-findings",
-    "semantic-validation",
     "candidate-findings",
     "semantic-validation",
     "candidate-findings",
@@ -647,11 +774,18 @@ function buildSemanticLoopStepResult(
 }
 
 type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
+  setCandidateFindings(
+    payload:
+      | ReturnType<typeof createCandidateFindings>
+      | ReturnType<typeof createMixedCandidateFindings>
+      | ReturnType<typeof createRepairedCandidateFindings>
+  ): void;
   setValidationReportV1(
     report:
       | ReturnType<typeof createRerunValidationReportV1>
       | ReturnType<typeof createStopValidationReportV1>
+      | ReturnType<typeof createMixedRerunValidationReportV1>
+      | ReturnType<typeof createAcceptValidationReportV1>
   ): void;
 };
 
@@ -702,6 +836,93 @@ function createCandidateFindings(
   };
 }
 
+function createMixedCandidateFindings() {
+  return {
+    findings: [
+      {
+        findingId: "F1",
+        priority: "must_fix",
+        title: "already proven candidate",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        evidence: "candidate evidence 1",
+        triggerCondition: "candidate trigger 1",
+        impact: "candidate impact 1",
+        counterEvidence: ["candidate counter-evidence 1"]
+      },
+      {
+        findingId: "F2",
+        priority: "must_fix",
+        title: "candidate needing repair",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        evidence: "candidate evidence 2",
+        triggerCondition: "candidate trigger 2",
+        impact: "candidate impact needs repair",
+        counterEvidence: ["candidate counter-evidence 2"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "hypothesis",
+        hypothesisIds: ["H1"],
+        evidenceIds: ["E1"],
+        rationale: "candidate 1 closes H1"
+      },
+      {
+        findingIndex: 2,
+        kind: "supplemental",
+        lens: "changed_behavior_sweep",
+        evidenceIds: ["E1"],
+        rationale: "candidate 2 needs repair",
+        relatedHypothesisIds: ["H1"]
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "closed_by_candidate",
+        rationale: "candidate 1 validates the hypothesis"
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}
+
+function createRepairedCandidateFindings() {
+  return {
+    findings: [
+      {
+        findingId: "F1",
+        priority: "must_fix",
+        title: "repaired candidate",
+        traceability: { kind: "line-range" as const, lineStart: 1, lineEnd: 1 },
+        evidence: "repaired candidate evidence",
+        triggerCondition: "repaired candidate trigger",
+        impact: "repaired candidate impact",
+        counterEvidence: ["repaired counter-evidence"]
+      }
+    ],
+    findingOrigins: [
+      {
+        findingIndex: 1,
+        kind: "supplemental",
+        lens: "changed_behavior_sweep",
+        evidenceIds: ["E1"],
+        rationale: "candidate 2 was repaired",
+        relatedHypothesisIds: ["H1"]
+      }
+    ],
+    hypothesisClosure: [
+      {
+        hypothesisId: "H1",
+        status: "rejected_by_evidence",
+        rationale: "H1 was already handled by a terminal semantic decision"
+      }
+    ],
+    criticalMissingInformation: []
+  };
+}
+
 function createRerunValidationReportV1() {
   return {
     perFindingResults: [
@@ -717,6 +938,51 @@ function createRerunValidationReportV1() {
     loopControl: {
       action: "rerun",
       reason: "Candidate Findings must repair machine-actionable evidence gaps"
+    }
+  };
+}
+
+function createMixedRerunValidationReportV1() {
+  return {
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "approve",
+        failedGates: [],
+        requiredCorrections: [],
+        reason: "all gates passed"
+      },
+      {
+        findingId: "F2",
+        decision: "rewrite_required",
+        failedGates: ["impact"],
+        requiredCorrections: ["Prove impact from existing candidate evidence."],
+        reason: "impact is unsupported"
+      }
+    ],
+    missingInformationItems: [],
+    loopControl: {
+      action: "rerun",
+      reason: "one active candidate still needs repair"
+    }
+  };
+}
+
+function createAcceptValidationReportV1() {
+  return {
+    perFindingResults: [
+      {
+        findingId: "F1",
+        decision: "approve",
+        failedGates: [],
+        requiredCorrections: [],
+        reason: "all gates passed after repair"
+      }
+    ],
+    missingInformationItems: [],
+    loopControl: {
+      action: "accept",
+      reason: "all active candidates passed"
     }
   };
 }

@@ -184,7 +184,7 @@ test("SemanticValidationStep wires candidate state and ValidationReport harness 
 
   assert.deepEqual(context.getValidationReportV1(), validationReport);
   assert.deepEqual(context.getMissingInformationItems(), []);
-  assert.deepEqual(context.getFindings(), candidatePayload.findings);
+  assert.equal(context.getFindings(), undefined);
 });
 
 type SemanticFileReviewContext = FileReviewContext & {

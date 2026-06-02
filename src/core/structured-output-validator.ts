@@ -533,12 +533,6 @@ function validateLoopControlAlignment(input: {
 }): void {
   const hasRewrite = input.perFindingResults.some((r) => r.decision === "rewrite_required");
   if (input.loopControl.action === "rerun") {
-    const hasApproval = input.perFindingResults.some((r) => r.decision === "approve");
-    if (hasApproval) {
-      throw new Error(
-        "deterministic validation failed: rerun ValidationReportV1 must not approve findings before semantic validation accepts them"
-      );
-    }
     if (!hasRewrite) {
       throw new Error(
         "deterministic validation failed: rerun requires at least one rewrite_required decision"

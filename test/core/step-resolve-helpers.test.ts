@@ -103,7 +103,7 @@ test("createCandidateFindingsResolve enforces prior candidate scope on semantic 
   );
 });
 
-test("createValidationReportV1Resolve writes approved findings and missing-information state", async () => {
+test("createValidationReportV1Resolve writes validation report without promoting findings", async () => {
   const context = createContext() as SemanticFileReviewContext;
   const candidatePayload = createCandidateFindings();
   const validationReport = createValidationReportV1();
@@ -122,10 +122,7 @@ test("createValidationReportV1Resolve writes approved findings and missing-infor
 
   applyTo(context);
 
-  assert.deepEqual(
-    context.getFindings()?.map((finding) => finding.findingId),
-    ["F1"]
-  );
+  assert.equal(context.getFindings(), undefined);
   assert.equal(context.getValidationReportV1()?.loopControl.action, "accept");
   assert.deepEqual(context.getMissingInformationItems(), [
     {

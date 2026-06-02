@@ -325,7 +325,7 @@ test("Candidate Findings, Semantic Validation, and Review Summary receive parsea
     snapshots[1].candidateFindings?.criticalMissingInformation,
     []
   );
-  assert.deepEqual(snapshots[1].approvedFindings, []);
+  assert.equal(snapshots[1].approvedFindings[0].findingId, "F1");
   assert.equal(
     snapshots[2].reviewBasis?.roleInChangeset,
     "Owns review prompt harness state handoff."

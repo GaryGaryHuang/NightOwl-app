@@ -44,6 +44,7 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "- `<diff>` is the canonical reviewed-file change input. Ground reviewed-file traceability and changed-code causality in this diff or in current code reached from it.",
   "- `<review_basis>` supplies the ledger hypotheses to validate and the only reportable evidence IDs, defined in `<review_basis>.evidenceRefs[]`.",
   "- `<review_state>` carries this file's current-run state, including prior `candidateFindings` and `validationFeedback`.",
+  "- `<review_state>.approvedFindings`, when present, is read-only host-approved context from earlier Semantic Validation rounds. Use it only to avoid duplicates or conflicts; do not edit it, re-emit it, or treat it as active repair work.",
   "- You may re-trace a material path with current code or tool evidence, but report only evidence IDs that exist in `<review_basis>.evidenceRefs[]`.",
   "",
   "Field roles:",
@@ -55,7 +56,7 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "Step 1 - Select the pass mode:",
   "- Read `<review_state>.validationFeedback` first to pick the branch: absent or empty means first pass; present and non-empty means semantic rerun.",
   "- First pass: close every ledger hypothesis, then run at most one bounded supplemental sweep.",
-  "- Semantic rerun: start from prior `<review_state>.candidateFindings`, repair or drop those candidates only, and treat `validationFeedback.failedGates` and `validationFeedback.requiredCorrections` as aggregate repair constraints.",
+  "- Semantic rerun: start from prior `<review_state>.candidateFindings`, which contains only active `rewrite_required` candidates, repair or drop those candidates only, and treat `validationFeedback.failedGates` and `validationFeedback.requiredCorrections` as aggregate repair constraints.",
   "- A semantic rerun adds no candidates, runs no supplemental sweep, and never swaps a dropped candidate for a new claim or keeps one only because it existed before.",
   "",
   "Step 2 - Build entries and closures:",
@@ -63,7 +64,7 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "- Closure decision: a finding closes its hypothesis as `closed_by_candidate`; otherwise close as `rejected_by_evidence` when evidence preserves expected behavior or disproves the risk, or `insufficient_information` when `Missing Information Discipline` gates still block the decision. A closure entry does not require a finding.",
   "- For each finding that closes a hypothesis, add a hypothesis origin referencing the closed H ID and its supporting `E*` evidence IDs.",
   "- Supplemental sweep, first pass only: after every hypothesis has a closure, emit at most two high-signal candidates from directly changed behavior or the same evidence-backed path (data flow, control flow, dependency contract, or contract-defining tests), each with a supplemental origin and no new hypothesis.",
-  "- Semantic rerun: apply corrections only to prior candidates, origins, and closures; if a correction cannot hold within a candidate's scope, drop it and keep its hypothesis closure honest.",
+  "- Semantic rerun: apply corrections only to active rewrite candidates, origins, and closures; if a correction cannot hold within a candidate's scope, drop it and keep its hypothesis closure honest.",
   "",
   "Step 3 - Apply speculation and missing-information guardrails:",
   "- Do not emit a candidate whose only trigger is a hypothetical future implementation, a custom test double, hand-written object construction, or an omitted optional argument with no current repo call site.",
@@ -93,6 +94,7 @@ const CANDIDATE_FINDINGS_INSTRUCTION = [
   "Cross-reference invariants - verify all of these before output:",
   "- ID sources: use H IDs only from `<review_basis>.hypothesisLedger[].hypothesisId` and evidence IDs only from `<review_basis>.evidenceRefs[].evidenceId`; H IDs appear only in `hypothesisClosure[].hypothesisId`, `findingOrigins[].hypothesisIds`, and `findingOrigins[].relatedHypothesisIds`.",
   "- findings to origins: exactly one `findingOrigins` entry per finding, linked by 1-based `findingIndex` to the finding's position in `findings`; no duplicate or missing index.",
+  "- duplicate control: if an active rewrite candidate duplicates or conflicts with `<review_state>.approvedFindings`, drop or omit the active candidate instead of preserving it for another rerun.",
   "- closure coverage: exactly one `hypothesisClosure` entry per ledger hypothesis, with no duplicates.",
   "- hypothesis origins to closure: every H ID in a hypothesis origin must have `status` \"closed_by_candidate\", and every \"closed_by_candidate\" closure must be referenced by a hypothesis origin.",
   "- missing information: any \"insufficient_information\" closure requires at least one `criticalMissingInformation` item, and `criticalMissingInformation` stays empty unless such a closure exists.",
@@ -150,6 +152,7 @@ export class CandidateFindingsStep implements StepDefinition {
             include: [
               REVIEW_BASIS_STEP_ID,
               CANDIDATE_FINDINGS_STEP_ID,
+              "approved-findings",
               "validation-feedback"
             ]
           })

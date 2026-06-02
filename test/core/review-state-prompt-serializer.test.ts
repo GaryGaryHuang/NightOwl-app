@@ -166,6 +166,26 @@ test("approved findings populate approvedFindings when requested", () => {
   assert.equal((snapshot as SemanticReviewStateSnapshot).approvedFindings[0].findingId, "F1");
 });
 
+test("accumulated approved findings populate approvedFindings before final rendering", () => {
+  const ctx = createContext();
+  ctx.addAccumulatedApprovedFindings([
+    createFinding("F7"),
+    createFinding("F1", "nice")
+  ]);
+
+  const snapshot = serializeSnapshot(ctx, ["approved-findings"]);
+
+  assert.equal(ctx.getFindings(), undefined);
+  assert.deepEqual(
+    snapshot.approvedFindings.map((finding) => finding.findingId),
+    ["F1", "F2"]
+  );
+  assert.deepEqual(
+    snapshot.approvedFindings.map((finding) => finding.priority),
+    ["must_fix", "nice_to_have"]
+  );
+});
+
 test("missing-information items are serialized only when requested", () => {
   const ctx = createContext() as SemanticFileReviewContext;
   ctx.setMissingInformationItems(createValidationReportV1().missingInformationItems);

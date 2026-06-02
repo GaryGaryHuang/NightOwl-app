@@ -47,17 +47,6 @@ export function createValidationReportV1Resolve(input: {
     return (targetContext: FileReviewContext) => {
       targetContext.setValidationReportV1(validated.payload);
       targetContext.setMissingInformationItems(validated.payload.missingInformationItems);
-      const approvedIds = new Set(
-        validated.payload.perFindingResults
-          .filter((r) => r.decision === "approve")
-          .map((r) => r.findingId)
-      );
-      const candidates = "findings" in input.candidatePayload
-        ? (input.candidatePayload as CandidateFindings).findings
-        : [];
-      targetContext.setFindings(
-        candidates.filter((f) => approvedIds.has(f.findingId))
-      );
     };
   };
 }

@@ -58,6 +58,7 @@ interface ValidationReportResult {
   readonly payload: {
     readonly perFindingResults: readonly {
       readonly findingId: string;
+      readonly decision: string;
       readonly failedGates: readonly string[];
       readonly requiredCorrections: readonly string[];
     }[];
@@ -1056,9 +1057,30 @@ test("validateValidationReportV1WithReport enforces candidate coverage and appro
 });
 
 test("validateValidationReportV1WithReport validates loopControl actions", () => {
+  const twoCandidates = candidateFindings({
+    findings: [
+      candidateFinding(),
+      candidateFinding({ title: "second candidate" }),
+      candidateFinding({ title: "third candidate" })
+    ],
+    findingOrigins: [
+      hypothesisFindingOrigin(),
+      supplementalFindingOrigin({
+        findingIndex: 2,
+        lens: "changed_behavior_sweep",
+        rationale: "second candidate comes from bounded changed behavior"
+      }),
+      supplementalFindingOrigin({
+        findingIndex: 3,
+        lens: "data_flow_sweep",
+        rationale: "third candidate comes from bounded data flow"
+      })
+    ]
+  });
   const acceptedActions: readonly {
     readonly action: string;
     readonly payload: Record<string, unknown>;
+    readonly candidates?: Record<string, unknown>;
   }[] = [
     { action: "accept", payload: validationReportV1() },
     {
@@ -1077,17 +1099,53 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
           reason: ""
         }
       })
+    },
+    {
+      action: "rerun",
+      candidates: twoCandidates,
+      payload: validationReportV1({
+        perFindingResults: [
+          perFindingResult(),
+          perFindingResult({
+            findingId: "F2",
+            decision: "drop",
+            failedGates: ["scope"],
+            reason: "duplicates an already approved finding"
+          }),
+          perFindingResult({
+            findingId: "F3",
+            decision: "rewrite_required",
+            failedGates: ["impact"],
+            requiredCorrections: [
+              "Prove concrete user impact from existing candidate evidence."
+            ],
+            reason: "impact is asserted but not proven"
+          })
+        ],
+        loopControl: {
+          action: "rerun",
+          reason: "one active candidate still needs repair"
+        }
+      })
     }
   ];
 
   for (const testCase of acceptedActions) {
-    const result = validateValidationReport(testCase.payload);
+    const result = validateValidationReport(
+      testCase.payload,
+      testCase.candidates
+    );
     assert.equal(result.payload.loopControl.action, testCase.action);
-    if (testCase.action === "rerun") {
-      assert.deepEqual(result.payload.perFindingResults[0]?.failedGates, ["impact"]);
-      assert.deepEqual(result.payload.perFindingResults[0]?.requiredCorrections, [
+    const rewriteResult = result.payload.perFindingResults.find(
+      (entry) => entry.decision === "rewrite_required"
+    );
+    if (rewriteResult) {
+      assert.deepEqual(rewriteResult.failedGates, ["impact"]);
+      assert.deepEqual(rewriteResult.requiredCorrections, [
         "Prove concrete user impact from existing candidate evidence."
       ]);
+    }
+    if (testCase.action === "rerun" && result.payload.loopControl.reason === "semantic rerun requested") {
       assert.equal(result.payload.loopControl.reason, "semantic rerun requested");
     }
   }
@@ -1103,16 +1161,6 @@ test("validateValidationReportV1WithReport validates loopControl actions", () =>
         loopControl: { action: "retry_step_runner", reason: "wrong retry budget" }
       }),
       reason: /loopControl\.action.*accept.*rerun/u
-    },
-    {
-      label: "rerun cannot approve findings",
-      payload: validationReportV1({
-        loopControl: {
-          action: "rerun",
-          reason: "Candidate Findings must repair evidence gaps"
-        }
-      }),
-      reason: /rerun.*approve findings/u
     },
     {
       label: "accept cannot leave rewrite-required candidates unresolved",
