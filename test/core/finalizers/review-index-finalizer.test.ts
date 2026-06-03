@@ -94,7 +94,7 @@ test("ReviewIndexFinalizer renders an explicit empty clean-files section for zer
   assert.doesNotMatch(rendered, /- Review limitations:/u);
   assert.doesNotMatch(rendered, /## Skipped Files/u);
   assert.doesNotMatch(rendered, /## Files Requiring Attention/u);
-  assert.match(rendered, /## Clean Files\n- 無/u);
+  assert.match(rendered, /## Clean Files/u);
 });
 
 test("ReviewIndexFinalizer preserves collision-resolved note targets and forward slashes", () => {

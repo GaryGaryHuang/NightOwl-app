@@ -2,7 +2,7 @@ import type { ProviderConfig } from "@github/copilot-sdk";
 
 import type { ReviewConfigModelProvider } from "../providers/config/review-config-provider.ts";
 
-export type ReviewModelProviderEnvironment = Record<string, string | undefined>;
+type ReviewModelProviderEnvironment = Record<string, string | undefined>;
 
 export type ResolvedReviewSessionModelProvider =
   | {

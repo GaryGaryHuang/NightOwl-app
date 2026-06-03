@@ -53,7 +53,7 @@ export function renderReviewIndex(input: ReviewIndexRenderInput): string {
     ].filter((section): section is string => section !== undefined);
 
     if (!skippedSection && reviewedFileSections.length === 0) {
-      reviewedFileSections.push(["## Clean Files", "- 無"].join("\n"));
+      reviewedFileSections.push(["## Clean Files", "- None"].join("\n"));
     }
 
     return [

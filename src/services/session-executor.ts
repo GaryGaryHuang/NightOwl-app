@@ -18,13 +18,6 @@ export interface SessionLike {
 export { SessionTurnAbortedError } from "../core/session-turn-aborted-error.ts";
 import { SessionTurnAbortedError } from "../core/session-turn-aborted-error.ts";
 
-const TurnState = {
-  Idle: 0,
-  Running: 1,
-  Settled: 2
-} as const;
-type TurnState = (typeof TurnState)[keyof typeof TurnState];
-
 const SESSION_EXECUTOR_REUSE_ERROR =
   "SessionExecutor instances are single-use; create a new executor for each turn.";
 const SESSION_ABORT_WAIT_TIMEOUT_MS = 1000;
@@ -47,7 +40,7 @@ export class SessionExecutor {
     }
     this.#used = true;
 
-    let state: TurnState = TurnState.Idle;
+    let isRunning = false;
     let abortRequested = false;
     let abortPromise: Promise<void> | undefined;
     let rejectOnAbort: (() => void) | undefined;
@@ -56,7 +49,7 @@ export class SessionExecutor {
       rejectOnAbort = () => reject(new SessionTurnAbortedError());
     });
     const requestAbort = (): void => {
-      if (state !== TurnState.Running || abortRequested) {
+      if (!isRunning || abortRequested) {
         return;
       }
 
@@ -71,7 +64,7 @@ export class SessionExecutor {
       }
 
       signal?.addEventListener("abort", requestAbort, { once: true });
-      state = TurnState.Running;
+      isRunning = true;
 
       sendPromise = this.#session.sendAndWait(
         { prompt },
@@ -80,7 +73,7 @@ export class SessionExecutor {
       const response = await (signal
         ? Promise.race([sendPromise, abortSignalPromise])
         : sendPromise);
-      state = TurnState.Settled;
+      isRunning = false;
 
       if (abortRequested || signal?.aborted) {
         throw new SessionTurnAbortedError();
@@ -91,7 +84,7 @@ export class SessionExecutor {
 
       return content ? content : undefined;
     } catch (error) {
-      state = TurnState.Settled;
+      isRunning = false;
 
       if (abortRequested || signal?.aborted) {
         throw new SessionTurnAbortedError();
@@ -99,7 +92,7 @@ export class SessionExecutor {
 
       throw error;
     } finally {
-      state = TurnState.Settled;
+      isRunning = false;
       signal?.removeEventListener("abort", requestAbort);
       if (sendPromise) {
         void sendPromise.catch(() => {});

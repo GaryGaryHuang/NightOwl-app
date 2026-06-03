@@ -2,11 +2,13 @@ import {
   type SessionConfig
 } from "@github/copilot-sdk";
 
-import type { ReviewKnowledgeMode } from "../core/review-knowledge-mode.ts";
 import {
   REVIEW_STREAMING_ENABLED
 } from "../core/review-runtime-contract.ts";
-import type { ReviewSessionFactoryLike } from "../core/session-factory-contracts.ts";
+import type {
+  ReviewSessionFactoryLike,
+  ReviewSessionProfileLike
+} from "../core/session-factory-contracts.ts";
 import type { CopilotClientLike } from "./copilot-client-manager.ts";
 import { SessionExecutor } from "./session-executor.ts";
 import type { KnowledgeSvc } from "./knowledge.ts";
@@ -15,22 +17,7 @@ import { ToolPolicyGuard } from "./tool-policy/tool-policy-guard.ts";
 import type { ToolAuditSink } from "./tool-audit-writer.ts";
 import type { ResolvedReviewSessionModelProvider } from "./review-model-provider-resolver.ts";
 
-export interface ReviewSessionProfile {
-  stepId?: string;
-  knowledgeMode: ReviewKnowledgeMode;
-  model: string;
-  outputBaseDir: string;
-  /** Review source boundary; snapshot-backed local runs use the detached source root. */
-  repoRoot: string;
-  /** Host output metadata location; not an Agent-readable boundary. */
-  reviewOutputRoot?: string;
-  /** Command-start resolved base ref used only by tool policy in snapshot-backed runs. */
-  sourceBaseRef?: string;
-  /** Command-start resolved head ref used only by tool policy in snapshot-backed runs. */
-  sourceHeadRef?: string;
-  systemMessage: string;
-  workingDirectory?: string;
-}
+export type ReviewSessionProfile = ReviewSessionProfileLike;
 
 /**
  * The explicit set of tool names exposed to LLM in review sessions.

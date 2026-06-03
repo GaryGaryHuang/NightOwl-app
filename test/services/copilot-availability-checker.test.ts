@@ -70,7 +70,6 @@ function createAvailabilityClientManagerDouble(
 test("CopilotAvailabilityChecker starts, pings, and stops the client on success", async () => {
   const fixture = createAvailabilityClientManagerDouble();
   const checker = new CopilotAvailabilityChecker({
-    pingMessage: "copilot health probe",
     clientManager: fixture.clientManager
   });
 
@@ -81,7 +80,7 @@ test("CopilotAvailabilityChecker starts, pings, and stops the client on success"
     stop: 1,
     forceStop: 0
   });
-  assert.deepEqual(fixture.pingMessages, ["copilot health probe"]);
+  assert.deepEqual(fixture.pingMessages, ["health check"]);
 });
 
 test("CopilotAvailabilityChecker surfaces startup failures", async () => {

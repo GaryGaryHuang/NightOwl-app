@@ -877,7 +877,8 @@ export class ReviewOrchestrator {
 }
 
 export function buildDefaultPerFileSteps(
-  input: ReviewPerFileStepsFactoryInput
+  input: ReviewPerFileStepsFactoryInput,
+  options: { reviewSummaryLanguage?: "zh-TW" | "en" } = {}
 ): StepDefinition[] {
   return [
     new ReviewBasisStep({ runContext: input.runContext }),
@@ -888,7 +889,8 @@ export function buildDefaultPerFileSteps(
       promptSerializer: input.promptSerializer
     }),
     new ReviewSummaryStep({
-      promptSerializer: input.promptSerializer
+      promptSerializer: input.promptSerializer,
+      language: options.reviewSummaryLanguage ?? "zh-TW"
     })
   ];
 }

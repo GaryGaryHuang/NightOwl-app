@@ -62,10 +62,14 @@ export function createReviewSummaryResolve(input: {
   stepId: string;
   filePath: string;
   sectionKey: ReviewSectionKey;
+  narrativeSections?: readonly ReviewSummaryNarrativeSectionPattern[];
   composeReport?: (response: string) => string;
 }): StepExecutionPlan["resolve"] {
   return async (response) => {
-    rejectMalformedReviewSummaryNarrative(response);
+    rejectMalformedReviewSummaryNarrative(
+      response,
+      input.narrativeSections ?? REVIEW_SUMMARY_NARRATIVE_SECTION_PATTERNS
+    );
     const sectionContent = input.composeReport?.(response) ?? response;
 
     return (targetContext: FileReviewContext) => {
@@ -74,20 +78,25 @@ export function createReviewSummaryResolve(input: {
   };
 }
 
-const REVIEW_SUMMARY_NARRATIVE_SECTION_PATTERNS: readonly {
-  label: string;
-  pattern: RegExp;
-}[] = [
+export interface ReviewSummaryNarrativeSectionPattern {
+  readonly label: string;
+  readonly pattern: RegExp;
+}
+
+const REVIEW_SUMMARY_NARRATIVE_SECTION_PATTERNS: readonly ReviewSummaryNarrativeSectionPattern[] = [
   { label: "審查依據", pattern: /^#{2,4}\s+審查依據(?:[：:]|\s|$)/mu },
   { label: "行為變更提醒", pattern: /^#{2,4}\s+行為變更提醒(?:[：:]|\s|$)/mu }
 ];
 
-function rejectMalformedReviewSummaryNarrative(response: string): void {
+function rejectMalformedReviewSummaryNarrative(
+  response: string,
+  narrativeSections: readonly ReviewSummaryNarrativeSectionPattern[]
+): void {
   if (response.trim().length === 0) {
     throw new Error("Review Summary narrative response is empty");
   }
 
-  for (const section of REVIEW_SUMMARY_NARRATIVE_SECTION_PATTERNS) {
+  for (const section of narrativeSections) {
     if (!section.pattern.test(response)) {
       throw new Error(
         `Review Summary narrative is missing required section: ${section.label}`

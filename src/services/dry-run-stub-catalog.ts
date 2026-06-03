@@ -6,7 +6,7 @@ import {
   SEMANTIC_VALIDATION_STEP_ID
 } from "../core/review-step-ids.ts";
 
-export const GENERIC_DRY_RUN_STUB =
+const GENERIC_DRY_RUN_STUB =
   "[dry-run] No built-in stub template for this step.";
 
 const STUB_CHANGESET_OVERVIEW_MARKDOWN = [
@@ -24,12 +24,7 @@ interface DryRunChangedFileEntry {
   readonly status: DryRunChangeMapStatus;
 }
 
-/**
- * Build a deterministic ChangeMap JSON for dry-run Changeset Overview by parsing the
- * `<changed_files>` block out of the prompt. Uses the head-side path field
- * for rename/copy entries (last tab-separated field).
- */
-export function buildDryRunChangesetOverviewResponse(prompt: string): string {
+function buildDryRunChangesetOverviewResponse(prompt: string): string {
   const changedFileEntries = extractChangedFilesBlockEntries(prompt);
   const changedPaths = changedFileEntries.map((entry) => entry.path);
 
@@ -53,7 +48,7 @@ export function buildDryRunChangesetOverviewResponse(prompt: string): string {
   });
 }
 
-export function buildDryRunReviewBasisResponse(prompt: string): string {
+function buildDryRunReviewBasisResponse(prompt: string): string {
   const filePath = extractDiffPath(prompt) ?? "dry-run.ts";
   return JSON.stringify({
     roleInChangeset: "Dry-run file basis.",
@@ -203,15 +198,15 @@ const STUB_CANDIDATE_FINDINGS = '{"findings": [], "findingOrigins": [], "hypothe
 const STUB_SEMANTIC_VALIDATION = '{"perFindingResults": [], "missingInformationItems": [], "loopControl": {"action": "accept", "reason": "dry-run stub has no candidates"}}';
 
 const STUB_SUMMARY = [
-  "### 審查依據",
-  "- 異動概要：dry-run 沒有實際檔案變更。",
-  "- 已核對依據：dry-run stub。",
-  "- 待確認資訊：無。",
-  "### 行為變更提醒",
-  "- 無行為變更"
+  "### Review Basis",
+  "- Change summary: dry-run has no actual file changes.",
+  "- Verified evidence: dry-run stub.",
+  "- Pending information: None.",
+  "### Behavior Change Notes",
+  "- No behavior changes"
 ].join("\n");
 
-export type DryRunResponseProvider = (prompt: string) => string;
+type DryRunResponseProvider = (prompt: string) => string;
 
 const DRY_RUN_STUB_RESPONSES = {
   [REVIEW_BASIS_STEP_ID]: STUB_REVIEW_BASIS,
@@ -221,18 +216,6 @@ const DRY_RUN_STUB_RESPONSES = {
 } as const;
 
 type BuiltInDryRunStepId = keyof typeof DRY_RUN_STUB_RESPONSES;
-
-export const BUILT_IN_DRY_RUN_STEP_IDS = Object.keys(
-  DRY_RUN_STUB_RESPONSES
-) as BuiltInDryRunStepId[];
-
-export function getDryRunStubResponse(
-  stepId: string
-): string | undefined {
-  return stepId in DRY_RUN_STUB_RESPONSES
-    ? DRY_RUN_STUB_RESPONSES[stepId as BuiltInDryRunStepId]
-    : undefined;
-}
 
 export function getDryRunResponseProvider(
   stepId?: string

@@ -120,7 +120,7 @@ function renderFindingsSection(
   }
 
   if (findings.length === 0) {
-    return ["## Findings", "- 無"].join("\n");
+    return ["## Findings", "- None"].join("\n");
   }
 
   const mustFindings = findings.filter((f) => f.priority === "must_fix");

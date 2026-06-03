@@ -23,23 +23,17 @@ interface CopilotAvailabilityClientManagerLike {
   getClient(): CopilotAvailabilityProbeLike;
 }
 
-interface CopilotAvailabilityClientManagerOptions {
-  createClient?: () => CopilotAvailabilityClientLike;
-}
-
 export interface CopilotAvailabilityCheckerOptions {
   clientManager?: CopilotAvailabilityClientManagerLike;
-  gracefulShutdownTimeoutMs?: number;
-  pingMessage?: string;
 }
 
 class CopilotAvailabilityClientManager
   extends CopilotClientManagerBase<CopilotAvailabilityClientLike, CopilotAvailabilityProbeLike>
   implements CopilotAvailabilityClientManagerLike {
 
-  constructor(options: CopilotAvailabilityClientManagerOptions = {}) {
+  constructor() {
     super(
-      options.createClient ?? (() => new CopilotClient() as CopilotAvailabilityClientLike),
+      () => new CopilotClient() as CopilotAvailabilityClientLike,
       (client) => client
     );
   }
@@ -47,15 +41,10 @@ class CopilotAvailabilityClientManager
 
 export class CopilotAvailabilityChecker {
   readonly #clientManager: CopilotAvailabilityClientManagerLike;
-  readonly #gracefulShutdownTimeoutMs: number;
-  readonly #pingMessage: string;
 
   constructor(options: CopilotAvailabilityCheckerOptions = {}) {
     this.#clientManager =
       options.clientManager ?? new CopilotAvailabilityClientManager();
-    this.#gracefulShutdownTimeoutMs =
-      options.gracefulShutdownTimeoutMs ?? DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
-    this.#pingMessage = options.pingMessage ?? "health check";
   }
 
   async check(): Promise<void> {
@@ -63,7 +52,7 @@ export class CopilotAvailabilityChecker {
 
     try {
       await this.#clientManager.start();
-      await this.#clientManager.getClient().ping(this.#pingMessage);
+      await this.#clientManager.getClient().ping("health check");
     } catch (error) {
       hasPrimaryError = true;
       throw error;
@@ -71,7 +60,7 @@ export class CopilotAvailabilityChecker {
       try {
         await stopClientManagerWithTimeout(
           this.#clientManager,
-          this.#gracefulShutdownTimeoutMs
+          DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS
         );
       } catch (cleanupError) {
         if (!hasPrimaryError) {

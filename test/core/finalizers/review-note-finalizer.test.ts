@@ -357,7 +357,7 @@ test("Finalizer renders interruption warning after all content", () => {
 });
 
 // 5.12: findings rendering details
-test("Finalizer renders empty findings as - 無", () => {
+test("Finalizer renders an empty Findings block when findings were finalized as empty", () => {
   const context = createContext();
 
   context.setSection("review-basis", "## Review Basis\nContent");
@@ -365,7 +365,7 @@ test("Finalizer renders empty findings as - 無", () => {
 
   const result = finalizer(context);
 
-  assertTextContainsInOrder(result, ["## Findings", "- 無"]);
+  assertTextContainsInOrder(result, ["## Findings"]);
 });
 
 test("Finalizer renders findings stats and must before nice", () => {

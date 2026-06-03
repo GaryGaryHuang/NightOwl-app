@@ -3,6 +3,7 @@ import {
   ChangesetOverviewRunner
 } from "../core/changeset-overview-runner.ts";
 import {
+  buildDefaultPerFileSteps,
   ReviewOrchestrator,
   type ReviewPerFileStepsFactory
 } from "../core/orchestrator.ts";
@@ -130,9 +131,14 @@ export class DryRunRunDepsBuilder {
   build(reviewConfig: ReviewConfig): RunDeps {
     const options = this.#options;
     const reviewSessionFactory = new DryRunReviewSessionFactory();
+    const dryRunSharedOptions: RunDepsSharedOptions = {
+      ...options,
+      perFileStepsFactory:
+        options.perFileStepsFactory ?? buildDefaultDryRunPerFileSteps
+    };
 
     const orchestrator = buildOrchestrator({
-      shared: options,
+      shared: dryRunSharedOptions,
       reviewConfig,
       reviewSessionFactory,
       onOutputTargetReady: undefined,
@@ -146,6 +152,9 @@ export class DryRunRunDepsBuilder {
     };
   }
 }
+
+const buildDefaultDryRunPerFileSteps: ReviewPerFileStepsFactory = (input) =>
+  buildDefaultPerFileSteps(input, { reviewSummaryLanguage: "en" });
 
 interface BuildOrchestratorParams {
   shared: RunDepsSharedOptions;

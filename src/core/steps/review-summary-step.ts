@@ -6,7 +6,29 @@ import type {ReviewStatePromptSerializer} from "../review-state-prompt-serialize
 import {countMustFindings, countNiceFindings} from "../risk-level.ts";
 import type {StepExecutionPlan, StepDefinition} from "../step-runner.ts";
 import {MARKDOWN_STEP_SYSTEM_MESSAGE} from "./shared-step-system-blocks.ts";
-import {createReviewSummaryResolve} from "./step-resolve-helpers.ts";
+import {
+    createReviewSummaryResolve,
+    type ReviewSummaryNarrativeSectionPattern
+} from "./step-resolve-helpers.ts";
+
+type ReviewSummaryLanguage = "zh-TW" | "en";
+
+const REVIEW_SUMMARY_NARRATIVE_SECTIONS: Record<
+    ReviewSummaryLanguage,
+    readonly ReviewSummaryNarrativeSectionPattern[]
+> = {
+    "zh-TW": [
+        { label: "審查依據", pattern: /^#{2,4}\s+審查依據(?:[：:]|\s|$)/mu },
+        { label: "行為變更提醒", pattern: /^#{2,4}\s+行為變更提醒(?:[：:]|\s|$)/mu }
+    ],
+    en: [
+        { label: "Review Basis", pattern: /^#{2,4}\s+Review Basis(?:[：:]|\s|$)/mu },
+        {
+            label: "Behavior Change Notes",
+            pattern: /^#{2,4}\s+Behavior Change Notes(?:[：:]|\s|$)/mu
+        }
+    ]
+};
 
 const REVIEW_SUMMARY_SYSTEM_ADDITION = [
     "## Current Step: Review Summary",
@@ -18,6 +40,7 @@ const REVIEW_SUMMARY_SYSTEM_ADDITION = [
 
 interface ReviewSummaryStepOptions {
     promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
+    language?: ReviewSummaryLanguage;
 }
 
 interface ReviewSummaryStatus {
@@ -32,9 +55,11 @@ interface ReviewSummaryStatus {
 export class ReviewSummaryStep implements StepDefinition {
     readonly stepId = REVIEW_SUMMARY_STEP_ID;
     readonly #promptSerializer: Pick<ReviewStatePromptSerializer, "serialize">;
+    readonly #language: ReviewSummaryLanguage;
 
     constructor(options: ReviewSummaryStepOptions) {
         this.#promptSerializer = options.promptSerializer;
+        this.#language = options.language ?? "zh-TW";
     }
 
     prepare(context: FileReviewContext): StepExecutionPlan {
@@ -42,12 +67,16 @@ export class ReviewSummaryStep implements StepDefinition {
         const missingInformationItems = context.getMissingInformationItems() ?? [];
         const summaryStatus = buildReviewSummaryStatus(
             context.getFindings(),
-            missingInformationItems.length
+            missingInformationItems.length,
+            this.#language
         );
         return {
             stepId,
             prompt: {
-                systemMessage: [MARKDOWN_STEP_SYSTEM_MESSAGE, REVIEW_SUMMARY_SYSTEM_ADDITION].join("\n\n"),
+                systemMessage: [
+                    MARKDOWN_STEP_SYSTEM_MESSAGE,
+                    REVIEW_SUMMARY_SYSTEM_ADDITION
+                ].join("\n\n"),
                 userMessage: buildReviewSummaryUserMessage(
                     this.#promptSerializer.serialize({
                         context,
@@ -69,7 +98,9 @@ export class ReviewSummaryStep implements StepDefinition {
                 stepId,
                 filePath: context.filePath,
                 sectionKey: SUMMARY_SECTION_KEY,
-                composeReport: (response) => composeReviewSummaryReport(response, summaryStatus)
+                narrativeSections: REVIEW_SUMMARY_NARRATIVE_SECTIONS[this.#language],
+                composeReport: (response) =>
+                    composeReviewSummaryReport(response, summaryStatus, this.#language)
             })
         };
     }
@@ -139,19 +170,37 @@ function buildReviewSummaryInstruction(): string {
 
 function buildReviewSummaryStatus(
     findings: Finding[] | undefined,
-    missingInformationCount: number
+    missingInformationCount: number,
+    language: ReviewSummaryLanguage
 ): ReviewSummaryStatus {
     return {
         mustFixFindingCount: countMustFindings(findings),
         niceToHaveFindingCount: countNiceFindings(findings),
         limitationSummary: missingInformationCount === 0
-            ? "無"
-            : `${missingInformationCount} 項 missing information`
+            ? language === "en" ? "None" : "無"
+            : language === "en"
+                ? `${missingInformationCount} missing information item(s)`
+                : `${missingInformationCount} 項 missing information`
     };
 }
 
-function composeReviewSummaryReport(response: string, status: ReviewSummaryStatus): string {
+function composeReviewSummaryReport(
+    response: string,
+    status: ReviewSummaryStatus,
+    language: ReviewSummaryLanguage
+): string {
     const narrative = response.trim();
+    if (language === "en") {
+        return [
+            "## Summary",
+            "### Review Conclusion",
+            `- Verified results: must-fix ${status.mustFixFindingCount}; nice-to-have ${status.niceToHaveFindingCount}`,
+            `- Review limitations: ${status.limitationSummary}`,
+            "",
+            narrative
+        ].join("\n");
+    }
+
     return [
         "## Summary",
         "### 審查結論",
