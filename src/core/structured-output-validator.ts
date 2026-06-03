@@ -1,10 +1,10 @@
 import type {
   DependencyPathException,
+  Finding,
   FindingTraceability
 } from "./file-review-context.ts";
 import type { ReviewBasis } from "./review-basis.ts";
 import type {
-  CandidateFinding,
   CandidateFindings,
   CandidatePriority,
   CriticalMissingInformation,
@@ -42,17 +42,11 @@ export class StructuredValidationReportError extends Error {
   }
 }
 
-interface TraceabilityValidationResult {
-  readonly traceability: FindingTraceability;
-}
-
 export class StructuredOutputValidator {
   validateCandidateFindingsWithReport(input: {
     responseText: string;
     reviewBasis: ReviewBasis;
     previousCandidateFindings?: CandidateFindings;
-    diffContent?: string;
-    filePath?: string;
   }): { payload: CandidateFindings; report: StructuredValidationReportEntry[] } {
     const report: StructuredValidationReportEntry[] = [];
 
@@ -112,8 +106,6 @@ export class StructuredOutputValidator {
     responseText: string;
     candidateFindings: CandidateFindings | Record<string, unknown>;
     reviewBasis?: ReviewBasis;
-    diffContent?: string;
-    filePath?: string;
   }): { payload: ValidationReportV1; report: StructuredValidationReportEntry[] } {
     const report: StructuredValidationReportEntry[] = [];
 
@@ -138,7 +130,7 @@ export class StructuredOutputValidator {
           outcome: result.decision === "approve" ? "accepted" : "rejected",
           gate: "semantic",
           reason: result.reason,
-          ...buildValidationReportSemanticFields(result, payload)
+          ...buildValidationReportSemanticFields(result)
         });
       }
 
@@ -164,18 +156,14 @@ export class StructuredOutputValidator {
 }
 
 function buildValidationReportSemanticFields(
-  result: PerFindingValidationResult | undefined,
-  payload: ValidationReportV1
+  result: PerFindingValidationResult
 ): Partial<StructuredValidationReportEntry> {
   return {
-    ...(result?.decision === undefined
-      ? {}
-      : { validationDecision: result.decision }),
-    ...(result?.failedGates[0] === undefined
+    validationDecision: result.decision,
+    ...(result.failedGates[0] === undefined
       ? {}
       : { semanticGate: result.failedGates[0] }),
-    ...(result?.requiredCorrections === undefined ||
-    result.requiredCorrections.length === 0
+    ...(result.requiredCorrections.length === 0
       ? {}
       : { requiredCorrections: [...result.requiredCorrections] })
   };
@@ -253,7 +241,7 @@ function validateCandidateFindingsRecord(input: {
 function validateCandidateFinding(input: {
   input: unknown;
   index: number;
-}): CandidateFinding {
+}): Finding {
   if (!input.input || typeof input.input !== "object" || Array.isArray(input.input)) {
     throw new Error(
       `deterministic validation failed: findings[${input.index}] must be a non-null object`
@@ -271,9 +259,7 @@ function validateCandidateFinding(input: {
     record.dependencyPathException,
     `findings[${input.index}].dependencyPathException`
   );
-  const traceabilityResult = validateTraceability(
-    record.traceability
-  );
+  const traceability = validateTraceability(record.traceability);
 
   const evidence = validateStringField(record.evidence, "evidence");
   const triggerCondition = validateStringField(
@@ -291,7 +277,7 @@ function validateCandidateFinding(input: {
     findingId: "", // placeholder; overwritten by caller
     priority,
     title: validateStringField(record.title, "title"),
-    traceability: traceabilityResult.traceability,
+    traceability,
     evidence,
     triggerCondition,
     impact,
@@ -936,7 +922,7 @@ function extractReportableFindingIdFromText(responseText: string): string | unde
   return undefined;
 }
 
-function validateTraceability(input: unknown): TraceabilityValidationResult {
+function validateTraceability(input: unknown): FindingTraceability {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new Error(
       "deterministic validation failed: 'traceability' must be a non-null object"
@@ -962,13 +948,11 @@ function validateTraceability(input: unknown): TraceabilityValidationResult {
       );
     }
 
-    const resolved: FindingTraceability = {
+    return {
       kind,
       lineStart,
       lineEnd
     };
-
-    return { traceability: resolved };
   }
 
   if (kind === "diff-hunk") {
@@ -977,12 +961,10 @@ function validateTraceability(input: unknown): TraceabilityValidationResult {
       "traceability.hunkHeader"
     );
 
-    const resolved: FindingTraceability = {
+    return {
       kind,
       hunkHeader
     };
-
-    return { traceability: resolved };
   }
 
   throw new Error(

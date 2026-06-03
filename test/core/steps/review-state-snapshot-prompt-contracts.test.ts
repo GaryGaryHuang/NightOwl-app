@@ -229,8 +229,7 @@ test("ReviewBasisStep wires ChangeMapReadiness data, diff, and ReviewBasis harne
   const runContext = createRunContext({
     changesetOverview: createChangeMap(
       "## Changeset Overview\n- Auth flow spans src/app.ts and package entrypoints."
-    ),
-    userContext: ["Root Cause: Candidate Findings context loss"]
+    )
   });
 
   const plan = new ReviewBasisStep({ runContext }).prepare(context);
@@ -250,8 +249,7 @@ test("ReviewBasisStep wires ChangeMapReadiness data, diff, and ReviewBasis harne
 test("default per-file pipeline is the four-step semantic pipeline", () => {
   const steps = buildDefaultPerFileSteps({
     runContext: createRunContext({
-      changesetOverview: createChangeMap(),
-      userContext: []
+      changesetOverview: createChangeMap()
     }),
     promptSerializer: serializer
   });

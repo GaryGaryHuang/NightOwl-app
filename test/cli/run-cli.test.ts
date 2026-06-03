@@ -517,8 +517,7 @@ function createCompletedRunResult(
     repoRoot: REPO_ROOT,
     runContext: {
       changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-      changesetOverviewMarkdown: "## Changeset Overview\n- 調整範圍：feature\n",
-      userContext: []
+      changesetOverviewMarkdown: "## Changeset Overview\n- 調整範圍：feature\n"
     },
     outputTarget: {
       ...createOutputTarget({ basePath: BASE_REVIEW_PATH }),

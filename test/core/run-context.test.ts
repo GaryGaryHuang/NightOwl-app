@@ -22,8 +22,7 @@ function makeChangeMap(overviewMarkdown: string): ChangeMapReadiness {
 test("createRunContext exposes the ChangeMapReadiness as changesetOverview by reference", () => {
   const changeMap = makeChangeMap("## Changeset Overview\n- x\n");
   const ctx = createRunContext({
-    changesetOverview: changeMap,
-    userContext: []
+    changesetOverview: changeMap
   });
 
   assert.equal(ctx.changesetOverview, changeMap);
@@ -32,8 +31,7 @@ test("createRunContext exposes the ChangeMapReadiness as changesetOverview by re
 test("changesetOverviewMarkdown equals overviewMarkdown when it already ends with a newline", () => {
   const changeMap = makeChangeMap("## Changeset Overview\n- entry\n");
   const ctx = createRunContext({
-    changesetOverview: changeMap,
-    userContext: []
+    changesetOverview: changeMap
   });
 
   assert.equal(ctx.changesetOverviewMarkdown, "## Changeset Overview\n- entry\n");
@@ -44,8 +42,7 @@ test("changesetOverviewMarkdown appends a trailing newline without mutating the 
   const overviewMarkdown = "## Changeset Overview\n- entry";
   const changeMap = makeChangeMap(overviewMarkdown);
   const ctx = createRunContext({
-    changesetOverview: changeMap,
-    userContext: []
+    changesetOverview: changeMap
   });
 
   assert.equal(ctx.changesetOverviewMarkdown, overviewMarkdown + "\n");
@@ -56,18 +53,12 @@ test("changesetOverviewMarkdown appends a trailing newline without mutating the 
   );
 });
 
-test("createRunContext freezes the returned RunContext and snapshots userContext", () => {
-  const userContext = ["PR-123", "https://example.com/spec"];
+test("createRunContext freezes the returned RunContext", () => {
   const ctx = createRunContext({
-    changesetOverview: makeChangeMap("## Changeset Overview\n- x\n"),
-    userContext
+    changesetOverview: makeChangeMap("## Changeset Overview\n- x\n")
   });
 
-  userContext.push("later mutation");
-
-  assert.deepEqual([...ctx.userContext], ["PR-123", "https://example.com/spec"]);
   assert.ok(Object.isFrozen(ctx));
-  assert.ok(Object.isFrozen(ctx.userContext));
   assert.throws(() => {
     (ctx as unknown as { changesetOverviewMarkdown: string }).changesetOverviewMarkdown = "x";
   }, TypeError);

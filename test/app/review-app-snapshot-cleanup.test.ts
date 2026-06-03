@@ -124,8 +124,7 @@ function createMinimalApp(options: {
           throw options.changesetOverviewError;
         }
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- cleanup test"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- cleanup test")
         });
       }
     },

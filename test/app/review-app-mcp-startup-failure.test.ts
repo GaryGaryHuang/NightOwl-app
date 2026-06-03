@@ -159,8 +159,7 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
           });
         }
       },

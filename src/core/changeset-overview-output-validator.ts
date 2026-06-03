@@ -37,7 +37,6 @@ export interface ChangesetOverviewValidationDiagnostic {
   readonly actualSummary?: string;
   readonly repairHint?: string;
   readonly parseStage?: string;
-  readonly repairKind?: ChangesetOverviewJsonRepairKind;
   readonly responseByteLength?: number;
   readonly errorPosition?: number;
   readonly errorLine?: number;

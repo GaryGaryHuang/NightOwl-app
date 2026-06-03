@@ -8,13 +8,6 @@ import {
 } from "../../src/core/structured-output-validator.ts";
 
 const DEFAULT_HUNK_HEADER = "@@ -20,2 +20,4 @@";
-const DEFAULT_DIFF = [
-  DEFAULT_HUNK_HEADER,
-  " context-before",
-  "+added-21",
-  "+added-22",
-  " context-after"
-].join("\n");
 
 test("StructuredOutputValidator rejects invalid CandidateFindings traceability payloads", () => {
   const cases: Array<{
@@ -52,7 +45,7 @@ test("StructuredOutputValidator rejects invalid CandidateFindings traceability p
   }
 });
 
-test("StructuredOutputValidator accepts CandidateFindings line-range outside changed head lines", () => {
+test("StructuredOutputValidator accepts CandidateFindings line-range traceability", () => {
   const result = validateCandidatePayload(
     createCandidatePayload({
       traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 }
@@ -66,7 +59,7 @@ test("StructuredOutputValidator accepts CandidateFindings line-range outside cha
   });
 });
 
-test("StructuredOutputValidator accepts CandidateFindings dependency path exception outside changed head lines", () => {
+test("StructuredOutputValidator accepts CandidateFindings dependency path exception", () => {
   const result = validateCandidatePayload(
     createCandidatePayload({
       traceability: { kind: "line-range", lineStart: 14, lineEnd: 18 },
@@ -81,20 +74,6 @@ test("StructuredOutputValidator accepts CandidateFindings dependency path except
     result.payload.findings[0]?.dependencyPathException?.dependencyAnchor.symbol,
     "helper"
   );
-});
-
-test("StructuredOutputValidator accepts CandidateFindings line-range on changed head lines", () => {
-  const result = validateCandidatePayload(
-    createCandidatePayload({
-      traceability: { kind: "line-range", lineStart: 21, lineEnd: 22 }
-    })
-  );
-
-  assert.deepEqual(result.payload.findings[0]?.traceability, {
-    kind: "line-range",
-    lineStart: 21,
-    lineEnd: 22
-  });
 });
 
 test("StructuredOutputValidator accepts CandidateFindings diff-hunk with trimmed header", () => {
@@ -113,9 +92,7 @@ test("StructuredOutputValidator accepts CandidateFindings diff-hunk with trimmed
 function validateCandidatePayload(payload: Record<string, unknown>) {
   return new StructuredOutputValidator().validateCandidateFindingsWithReport({
     responseText: JSON.stringify(payload),
-    reviewBasis: createReviewBasis(),
-    diffContent: DEFAULT_DIFF,
-    filePath: "src/app.ts"
+    reviewBasis: createReviewBasis()
   });
 }
 

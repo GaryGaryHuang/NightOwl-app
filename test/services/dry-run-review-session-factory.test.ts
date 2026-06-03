@@ -11,7 +11,6 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
     const session = await factory.createSession({
       knowledgeMode: "disabled",
       model: "gpt-5.4-mini",
-      outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
       systemMessage: "step system",
       stepId: "review-summary"
@@ -26,7 +25,6 @@ describe("DryRunReviewSessionFactory stub mapping", () => {
     const session = await factory.createSession({
       knowledgeMode: "disabled",
       model: "gpt-5.4-mini",
-      outputBaseDir: "/workspace/output",
       repoRoot: "/workspace/repo",
       systemMessage: "step system",
       stepId: "custom-diagnostic-step"

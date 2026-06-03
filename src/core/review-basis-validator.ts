@@ -1,6 +1,5 @@
 import {
   REVIEW_BASIS_INFERENCE_CONFIDENCES,
-  cloneReviewBasis,
   type ReviewBasisChangedBehavior,
   type ReviewBasisDependencyMap,
   type ReviewBasisEvidenceRef,
@@ -107,7 +106,7 @@ export class ReviewBasisValidator {
       evidenceRefs
     };
 
-    return { ok: true, value: deepFreeze(cloneReviewBasis(basis)) };
+    return { ok: true, value: deepFreeze(basis) };
   }
 }
 

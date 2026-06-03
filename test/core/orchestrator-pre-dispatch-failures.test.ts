@@ -131,8 +131,7 @@ test("ReviewOrchestrator aborts when publishChangesetOverview fails and does not
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
           });
         }
       },

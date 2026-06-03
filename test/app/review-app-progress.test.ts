@@ -77,8 +77,7 @@ describe("createLocalReviewRunApp progress wiring", () => {
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
           });
         }
       },
@@ -210,8 +209,7 @@ test("createLocalReviewRunApp emits a progress warning when tool-audit writes fa
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
           });
         }
       },

@@ -20,9 +20,8 @@ import {
 import { DEFAULT_MAX_CONCURRENT_FILES } from "./max-concurrent-files.ts";
 import { StepExecutionError } from "./step-execution-error.ts";
 import { renderReviewNote, type ReviewNoteRenderer } from "./finalizers/review-note-finalizer.ts";
-import type { SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
+import type { ResolvedFileOutcome, SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
 import { renderReviewIndex, type ReviewIndexRenderer } from "./finalizers/review-index-finalizer.ts";
-import { resolveFileOutcomes, type ResolvedFileOutcome } from "./run-outcome-resolver.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";
@@ -275,8 +274,6 @@ export class ReviewOrchestrator {
       outputTarget,
       request,
       repoRoot,
-      outputRepoRoot,
-      runContext,
       signal: options?.signal,
       reviewOutputRoot: outputReviewRoot,
       sourceBaseRef,
@@ -292,11 +289,7 @@ export class ReviewOrchestrator {
       slot?.kind === "skipped" ? [slot.outcome] : []
     );
 
-    const resolvedOutcomes = resolveFileOutcomes(
-      plannedNoteFiles,
-      successfulFiles,
-      skippedFiles
-    );
+    const resolvedOutcomes = resolveOutcomeSlots(plannedNoteFiles, outcomeSlots);
 
     this.#emitProgressEvent({
       type: "run-finalizing",
@@ -310,9 +303,7 @@ export class ReviewOrchestrator {
       outputTarget,
       plannedNoteFiles,
       resolvedOutcomes,
-      repoRoot: outputRepoRoot,
-      runContext,
-      request
+      runContext
     });
 
     return {
@@ -345,7 +336,6 @@ export class ReviewOrchestrator {
     try {
       return await this.#changesetOverviewRunner.run({
         changesetEntries,
-        outputBaseDir: input.outputRepoRoot,
         repoRoot: input.repoRoot,
         reviewOutputRoot: input.reviewOutputRoot,
         signal: input.signal,
@@ -396,22 +386,28 @@ export class ReviewOrchestrator {
     outputTarget: OutputTarget;
     plannedNoteFiles: PlannedNoteFile[];
     resolvedOutcomes: ResolvedFileOutcome[];
-    repoRoot: string;
     runContext: RunContext;
-    request: RunRequest;
   }): Promise<FinalizerFailure[]> {
     const failures: FinalizerFailure[] = [];
 
-    await this.#tryPublishFinalizer("index", failures, () =>
-      input.outputPublisher.publishArtifact("index", {
+    try {
+      await input.outputPublisher.publishArtifact("index", {
         content: this.#renderReviewIndex({
           changesetOverviewMarkdown: input.runContext.changesetOverviewMarkdown,
           basePath: input.outputTarget.basePath,
           resolvedOutcomes: input.resolvedOutcomes,
           plannedNotes: input.plannedNoteFiles
         })
-      })
-    );
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failures.push({ artifact: "index", message });
+      this.#emitProgressEvent({
+        type: "finalizer-failed",
+        artifact: "index",
+        message
+      });
+    }
 
     return failures;
   }
@@ -485,9 +481,7 @@ export class ReviewOrchestrator {
     outputPublisher: RunOutputPublisher;
     outputTarget: OutputTarget;
     request: RunRequest;
-    outputRepoRoot: string;
     repoRoot: string;
-    runContext: RunContext;
     signal?: AbortSignal;
     reviewOutputRoot: string;
     sourceBaseRef: string;
@@ -548,9 +542,7 @@ export class ReviewOrchestrator {
               outputPublisher: input.outputPublisher,
               outputTarget: input.outputTarget,
               request: input.request,
-              outputRepoRoot: input.outputRepoRoot,
               repoRoot: input.repoRoot,
-              runContext: input.runContext,
               signal: input.signal,
               reviewOutputRoot: input.reviewOutputRoot,
               sourceBaseRef: input.sourceBaseRef,
@@ -575,9 +567,7 @@ export class ReviewOrchestrator {
     outputPublisher: RunOutputPublisher;
     outputTarget: OutputTarget;
     request: RunRequest;
-    outputRepoRoot: string;
     repoRoot: string;
-    runContext: RunContext;
     signal?: AbortSignal;
     reviewOutputRoot: string;
     sourceBaseRef: string;
@@ -653,7 +643,6 @@ export class ReviewOrchestrator {
         result = await this.#stepRunner.run({
           step,
           context: fileContext,
-          outputBaseDir: input.outputTarget.basePath,
           repoRoot: input.repoRoot,
           reviewOutputRoot: input.reviewOutputRoot,
           signal: input.signal,
@@ -813,62 +802,26 @@ export class ReviewOrchestrator {
       throw outputError;
     }
 
-    this.#recordFileSkipped({
-      outcomeSlots: input.outcomeSlots,
-      plannedIndex: input.plannedIndex,
-      filePath: input.fileContext.filePath,
-      stepId: input.stepId,
-      reason: input.reason,
-      semanticReview: buildSemanticReviewStats(
-        input.fileContext,
-        input.semanticValidationCount
-      ),
-      riskSnapshot: buildRiskSnapshot(input.fileContext.getFindings() ?? [])
-    });
-  }
-
-  #recordFileSkipped(input: {
-    outcomeSlots: (PlannedOutcomeSlot | undefined)[];
-    plannedIndex: number;
-    filePath: string;
-    stepId: string;
-    reason: string;
-    semanticReview: SemanticReviewStats;
-    riskSnapshot: SuccessfulFileOutcome["riskSnapshot"];
-  }): void {
     input.outcomeSlots[input.plannedIndex] = {
       kind: "skipped",
       outcome: {
-        filePath: input.filePath,
+        filePath: input.fileContext.filePath,
         stepId: input.stepId,
         reason: input.reason,
-        semanticReview: input.semanticReview,
-        riskSnapshot: input.riskSnapshot
+        semanticReview: buildSemanticReviewStats(
+          input.fileContext,
+          input.semanticValidationCount
+        ),
+        riskSnapshot: buildRiskSnapshot(input.fileContext.getFindings() ?? [])
       }
     };
 
     this.#emitProgressEvent({
       type: "file-skipped",
-      filePath: input.filePath,
+      filePath: input.fileContext.filePath,
       stepId: input.stepId,
       reason: input.reason
     });
-  }
-
-  async #tryPublishFinalizer(
-    artifact: FinalizerFailure["artifact"],
-    failures: FinalizerFailure[],
-    publish: () => Promise<void>
-  ): Promise<boolean> {
-    try {
-      await publish();
-      return true;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      failures.push({ artifact, message });
-      this.#emitProgressEvent({ type: "finalizer-failed", artifact, message });
-      return false;
-    }
   }
 
   #emitProgressEvent(event: RunProgressEvent): void {
@@ -1110,6 +1063,24 @@ function renumberPerFindingResults(
     ...clonePerFindingValidationResult(result),
     findingId: `F${index + 1}`
   }));
+}
+
+function resolveOutcomeSlots(
+  plannedNoteFiles: readonly PlannedNoteFile[],
+  outcomeSlots: readonly (PlannedOutcomeSlot | undefined)[]
+): ResolvedFileOutcome[] {
+  return plannedNoteFiles.map((plannedNote, index): ResolvedFileOutcome => {
+    const slot = outcomeSlots[index];
+    if (!slot) {
+      throw new Error(
+        `Missing finalized outcome for planned file: ${plannedNote.filePath}`
+      );
+    }
+
+    return slot.kind === "successful"
+      ? { status: "successful", outcome: slot.outcome }
+      : { status: "skipped", outcome: slot.outcome };
+  });
 }
 
 function buildSemanticReviewStats(

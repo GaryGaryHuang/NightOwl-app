@@ -8,14 +8,6 @@ import {
   StructuredValidationReportError
 } from "../../src/core/structured-output-validator.ts";
 
-const DEFAULT_DIFF = [
-  "@@ -20,2 +20,4 @@",
-  " context-before",
-  "+added-21",
-  "+added-22",
-  " context-after"
-].join("\n");
-
 function lineRangeTraceability(lineStart: unknown, lineEnd: unknown) {
   return {
     kind: "line-range",
@@ -265,9 +257,7 @@ function validateCandidateFindingsText(
     reviewBasis,
     ...(previousCandidateFindings === undefined
       ? {}
-      : { previousCandidateFindings }),
-    diffContent: DEFAULT_DIFF,
-    filePath: reviewBasis.filePath
+      : { previousCandidateFindings })
   });
 }
 
@@ -287,9 +277,7 @@ function validateValidationReportText(
   return new StructuredOutputValidator().validateValidationReportV1WithReport({
     responseText,
     candidateFindings: candidatePayload,
-    reviewBasis,
-    diffContent: DEFAULT_DIFF,
-    filePath: reviewBasis.filePath
+    reviewBasis
   });
 }
 

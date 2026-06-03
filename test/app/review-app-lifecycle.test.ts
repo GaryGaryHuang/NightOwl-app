@@ -99,8 +99,7 @@ function createSignalTestApp(options: {
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset\n- test"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset\n- test")
         });
       }
     },
@@ -176,8 +175,7 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
           });
         }
       },

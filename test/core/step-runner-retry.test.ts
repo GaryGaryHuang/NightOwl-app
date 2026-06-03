@@ -44,7 +44,6 @@ test("StepRunner retries the whole section-step when deterministic completion fa
       resolve: DEFAULT_CHECKED_SECTION_RESOLVE
     }),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo",
     workingDirectory: "/workspace/repo"
   });
@@ -80,7 +79,6 @@ test("StepRunner adds empty-response repair feedback to the retry prompt", async
   const result = await runner.run({
     step: createSectionTestStep({}),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo",
     workingDirectory: "/workspace/repo"
   });
@@ -118,7 +116,6 @@ test("StepRunner fails after retry exhaustion on deterministic completion failur
           }
         }),
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
     /Step review-summary failed for src\/app\.ts: deterministic completion failed/u
@@ -155,7 +152,6 @@ test("StepRunner records structured validation reports without committing partia
       promptSerializer: new ReviewStatePromptSerializer()
     }),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
   });
 
@@ -192,7 +188,6 @@ test("StepRunner fails ReviewBasisStep after three parse failures without fallba
     diffContent: "@@ -10,2 +10,2 @@\n-oldUi()\n+newUi()\n"
   });
   const runContext = createRunContext({
-    userContext: [],
     changesetOverview: {
       reviewObjective: {
         summary: "Update MusicRecognitionViewModel to use the new UseCase flow.",
@@ -227,7 +222,6 @@ test("StepRunner fails ReviewBasisStep after three parse failures without fallba
       runner.run({
         step: new ReviewBasisStep({ runContext }),
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
     /Step review-basis failed for ExampleApp\/src\/main\/java\/com\/example\/recognition\/viewmodel\/MusicRecognitionViewModel\.kt: ReviewBasis validation failed: response is not valid JSON/u
@@ -268,7 +262,6 @@ test("StepRunner retries the whole step when resolve throws after a review respo
       }
     }),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
   });
 
@@ -297,7 +290,6 @@ test("StepRunner retries the whole step when review session startup fails and ev
         }).createSession({
           knowledgeMode: "built-in-context7",
           model: "gpt-5-mini",
-          outputBaseDir: "/workspace/output",
           repoRoot: "/workspace/repo",
           systemMessage: "system prompt"
         });
@@ -310,7 +302,6 @@ test("StepRunner retries the whole step when review session startup fails and ev
       resolve: DEFAULT_CHECKED_SECTION_RESOLVE
     }),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
   });
 
@@ -338,7 +329,6 @@ test("StepRunner reports standardized review startup failure after retry exhaust
           resolve: DEFAULT_CHECKED_SECTION_RESOLVE
         }),
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
     /Step review-summary failed for src\/app\.ts: review startup failed/u
@@ -378,8 +368,7 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
       cause: "deterministic completion failed",
       model: "gpt-5-mini",
       promptHash: "<stable-hash>",
-      schemaId: "ReviewSummaryMarkdown",
-      outputBaseDir: "/workspace/output"
+      schemaId: "ReviewSummaryMarkdown"
     }
   );
   assert.match(
@@ -476,7 +465,6 @@ test("StepRunner invokes onStepRetry when prepare itself throws on the first att
       }
     },
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
   });
 
@@ -517,7 +505,6 @@ test("StepRunner does not invoke onStepRetry on the final attempt failure", asyn
           }
         }),
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
     /Step review-summary failed for src\/app\.ts: deterministic completion failed/u

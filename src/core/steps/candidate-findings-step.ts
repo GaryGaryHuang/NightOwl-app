@@ -170,9 +170,7 @@ export class CandidateFindingsStep implements StepDefinition {
           reviewBasis,
           ...(previousCandidateFindings === undefined
             ? {}
-            : { previousCandidateFindings }),
-          filePath: context.filePath,
-          diffContent: context.diffContent
+            : { previousCandidateFindings })
         });
 
         return (targetContext: FileReviewContext) => {

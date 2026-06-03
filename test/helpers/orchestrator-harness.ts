@@ -50,8 +50,7 @@ export function createDefaultChangesetOverviewRunner(): {
   return {
     async run() {
       return createRunContext({
-        changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-        userContext: []
+        changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
       });
     }
   };

@@ -18,19 +18,15 @@ export interface DiffHunkAnchor {
 }
 
 export interface DiffAnchorMap {
-  readonly filePath: string;
   readonly hunks: readonly DiffHunkAnchor[];
 }
 
 const HUNK_HEADER_PATTERN =
   /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@(?: .*)?$/u;
 
-export function buildDiffAnchorMap(
-  filePath: string,
-  diffContent: string
-): DiffAnchorMap {
+export function buildDiffAnchorMap(diffContent: string): DiffAnchorMap {
   if (!diffContent) {
-    return { filePath, hunks: [] };
+    return { hunks: [] };
   }
 
   const lines = diffContent.split("\n");
@@ -107,5 +103,5 @@ export function buildDiffAnchorMap(
 
   flush();
 
-  return { filePath, hunks };
+  return { hunks };
 }

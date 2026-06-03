@@ -10,19 +10,15 @@ import type {
   ValidationDecision
 } from "./semantic-review.ts";
 
-export const VALIDATION_TAXONOMY_CODES = [
-  "SCHEMA",
-  "EVIDENCE",
-  "REACHABILITY",
-  "OUT_OF_SCOPE",
-  "DUPLICATE",
-  "CONTRADICTION",
-  "SEMANTIC",
-  "OK"
-] as const;
-
 export type StructuredValidationTaxonomyCode =
-  (typeof VALIDATION_TAXONOMY_CODES)[number];
+  | "SCHEMA"
+  | "EVIDENCE"
+  | "REACHABILITY"
+  | "OUT_OF_SCOPE"
+  | "DUPLICATE"
+  | "CONTRADICTION"
+  | "SEMANTIC"
+  | "OK";
 
 export interface StructuredValidationReportEntry {
   readonly findingId: string;
@@ -30,7 +26,6 @@ export interface StructuredValidationReportEntry {
   readonly outcome: "accepted" | "rejected";
   readonly gate: "schema" | "acceptance" | "semantic";
   readonly reason: string;
-  readonly semanticIteration?: number;
   readonly semanticGate?: SemanticGateId;
   readonly validationDecision?: ValidationDecision;
   readonly requiredCorrections?: readonly string[];

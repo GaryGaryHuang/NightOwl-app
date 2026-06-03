@@ -6,12 +6,6 @@ export const CANDIDATE_PRIORITIES = [
 ] as const;
 export type CandidatePriority = (typeof CANDIDATE_PRIORITIES)[number];
 
-/**
- * A Candidate Findings candidate finding. Structurally identical to `Finding`.
- * When approved by Semantic Validation, a candidate becomes the final `Finding` directly.
- */
-export type CandidateFinding = Finding;
-
 export const HYPOTHESIS_CLOSURE_STATUSES = [
   "closed_by_candidate",
   "rejected_by_evidence",
@@ -58,7 +52,7 @@ export type FindingOrigin =
     };
 
 export interface CandidateFindings {
-  findings: CandidateFinding[];
+  findings: Finding[];
   findingOrigins: FindingOrigin[];
   hypothesisClosure: HypothesisClosure[];
   criticalMissingInformation: CriticalMissingInformation[];

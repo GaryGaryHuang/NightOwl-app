@@ -61,8 +61,7 @@ describe("ReviewOrchestrator progress events", () => {
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
           });
         }
       },
@@ -142,8 +141,7 @@ test("ReviewOrchestrator caps semantic Candidate Findings reruns at two before c
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
         });
       }
     },
@@ -230,8 +228,7 @@ test("ReviewOrchestrator accumulates approved candidates while rerunning only ac
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
         });
       }
     },
@@ -357,8 +354,7 @@ test("ReviewOrchestrator stops repeated unsupported semantic claims without spen
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
         });
       }
     },
@@ -421,8 +417,7 @@ test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings ch
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
         });
       }
     },
@@ -484,8 +479,7 @@ test("ReviewOrchestrator does not stop semantic rerun when Candidate Findings ch
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
         });
       }
     },
@@ -548,8 +542,7 @@ test("ReviewOrchestrator stops repeated semantic rerun when only inactive critic
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
         });
       }
     },
@@ -610,8 +603,7 @@ test("ReviewOrchestrator honors Semantic Validation missing-critical-contract st
     changesetOverviewRunner: {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
         });
       }
     },

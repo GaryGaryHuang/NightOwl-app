@@ -76,7 +76,6 @@ test("ChangesetOverviewRunner produces a RunContext from a valid Changeset Overv
   });
 
   const runContext = await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
@@ -92,7 +91,6 @@ test("ChangesetOverviewRunner produces a RunContext from a valid Changeset Overv
   assert.equal((profiles[0] as { stepId: string }).stepId, "changeset-overview");
   assert.equal((profiles[0] as { knowledgeMode: string }).knowledgeMode, "built-in-context7");
   assert.equal((profiles[0] as { model: string }).model, "gpt-5.4-mini");
-  assert.equal((profiles[0] as { outputBaseDir: string }).outputBaseDir, "/workspace/repo");
   assert.equal((profiles[0] as { repoRoot: string }).repoRoot, "/workspace/repo");
   assert.equal(typeof (profiles[0] as { systemMessage: unknown }).systemMessage, "string");
   assert.equal((profiles[0] as { workingDirectory: undefined }).workingDirectory, undefined);
@@ -123,7 +121,6 @@ test("ChangesetOverviewRunner retries once with a fresh session when the first r
   });
 
   const runContext = await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
@@ -164,7 +161,6 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   });
 
   const runContext = await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
@@ -216,7 +212,6 @@ test("ChangesetOverviewRunner logs parse excerpts for trailing response content"
   });
 
   await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
@@ -248,7 +243,6 @@ test("ChangesetOverviewRunner logs successful syntax repairs", async () => {
   });
 
   await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
@@ -291,7 +285,6 @@ test("ChangesetOverviewRunner normalizes invalid Changeset Overview confidence w
   });
 
   const runContext = await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
     userContext: []
@@ -324,7 +317,6 @@ test("ChangesetOverviewRunner aborts after two consecutive validation failures",
   await assert.rejects(
     () =>
       runner.run({
-        outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
         changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
         userContext: []
@@ -353,7 +345,6 @@ test("ChangesetOverviewRunner fails after two empty responses", async () => {
   await assert.rejects(
     () =>
       runner.run({
-        outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
         changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
         userContext: []
@@ -379,7 +370,6 @@ test("ChangesetOverviewRunner accepts a renamed path via R-style name-status ent
   });
 
   const runContext = await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({
       status: "R",
@@ -411,7 +401,6 @@ test("ChangesetOverviewRunner accepts copied paths as added host descriptors", a
   });
 
   const runContext = await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: createChangesetEntries({
       status: "C",
@@ -458,7 +447,6 @@ test("ChangesetOverviewRunner accepts a zero-file changeset", async () => {
   });
 
   const runContext = await runner.run({
-    outputBaseDir: "/workspace/repo",
     repoRoot: "/workspace/repo",
     changesetEntries: [],
     userContext: []
@@ -499,7 +487,6 @@ test("ChangesetOverviewRunner aborts an in-flight Changeset Overview turn withou
   await assert.rejects(
     () =>
       runner.run({
-        outputBaseDir: "/workspace/repo",
         repoRoot: "/workspace/repo",
         signal: controller.signal,
         changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),

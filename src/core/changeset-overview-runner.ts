@@ -18,7 +18,6 @@ import { CHANGESET_OVERVIEW_STEP_ID } from "./review-step-ids.ts";
 
 export interface ChangesetOverviewRunnerInput {
   changesetEntries: ReviewChangesetEntry[];
-  outputBaseDir: string;
   repoRoot: string;
   reviewOutputRoot?: string;
   signal?: AbortSignal;
@@ -62,7 +61,6 @@ export class ChangesetOverviewRunner {
           stepId: CHANGESET_OVERVIEW_STEP_ID,
           knowledgeMode: CHANGESET_OVERVIEW_REVIEW_PROFILE.knowledgeMode,
           model: CHANGESET_OVERVIEW_REVIEW_PROFILE.model,
-          outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,
           ...(input.reviewOutputRoot === undefined
             ? {}
@@ -117,10 +115,7 @@ export class ChangesetOverviewRunner {
           throw error;
         }
 
-        return createRunContext({
-          changesetOverview: changeMap,
-          userContext: input.userContext
-        });
+        return createRunContext({ changesetOverview: changeMap });
       },
       buildFinalError(lastCause) {
         return new Error(lastCause);

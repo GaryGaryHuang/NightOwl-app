@@ -66,9 +66,7 @@ function runSemanticCase(
   try {
     candidateValidationResult = validator.validateCandidateFindingsWithReport({
       responseText: JSON.stringify(candidatePayload),
-      reviewBasis,
-      diffContent: DEFAULT_DIFF,
-      filePath: reviewBasis.filePath
+      reviewBasis
     });
   } catch (error) {
     assert.equal(error instanceof StructuredValidationReportError, true);
@@ -83,9 +81,7 @@ function runSemanticCase(
   const validationResult = validator.validateValidationReportV1WithReport({
     responseText: JSON.stringify(validationPayload),
     candidateFindings: candidateValidationResult.payload,
-    reviewBasis,
-    diffContent: DEFAULT_DIFF,
-    filePath: reviewBasis.filePath
+    reviewBasis
   });
 
   const approvedFindingIds = validationResult.payload.perFindingResults
@@ -109,14 +105,6 @@ function runSemanticCase(
       : {})
   };
 }
-
-const DEFAULT_DIFF = [
-  "@@ -20,3 +20,5 @@",
-  " context",
-  "+request.requestToken = currentRequestToken",
-  "+callback.onSearchResult(result)",
-  " context"
-].join("\n");
 
 function createReviewBasis(): ReviewBasis {
   return {

@@ -7,7 +7,7 @@ import {
   countMustFindings,
   countNiceFindings
 } from "../risk-level.ts";
-import type { ResolvedFileOutcome } from "../run-outcome-resolver.ts";
+import type { ResolvedFileOutcome } from "../run-outcomes.ts";
 
 interface ReviewIndexRenderInput {
   changesetOverviewMarkdown: string;

@@ -8,6 +8,10 @@ import {
   type ReviewStateSnapshot
 } from "../../src/core/review-state-prompt-serializer.ts";
 import type { ReviewBasis } from "../../src/core/review-basis.ts";
+import type {
+  CandidateFindings,
+  ValidationReportV1
+} from "../../src/core/semantic-review.ts";
 
 function createContext(): FileReviewContext {
   return new FileReviewContext({
@@ -49,12 +53,6 @@ function serializeSnapshot(
 }
 
 const serializer = new ReviewStatePromptSerializer();
-
-type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
-  setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
-  setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
-};
 
 type SemanticReviewStateSnapshot = ReviewStateSnapshot & {
   approvedFindings: Finding[];
@@ -129,7 +127,7 @@ test("JSON encoding prevents raw section content from creating XML-ish child blo
 });
 
 test("CandidateFindings populates candidateFindings without promoting approved findings", () => {
-  const ctx = createContext() as SemanticFileReviewContext;
+  const ctx = createContext();
   ctx.setCandidateFindings(createCandidateFindings());
 
   const snapshot = serializeSnapshot(ctx, ["candidate-findings"]);
@@ -155,7 +153,7 @@ test("CandidateFindings populates candidateFindings without promoting approved f
 });
 
 test("approved findings populate approvedFindings when requested", () => {
-  const ctx = createContext() as SemanticFileReviewContext;
+  const ctx = createContext();
   ctx.setFindings([createFinding("F1")]);
   ctx.setValidationReportV1(createValidationReportV1());
 
@@ -187,7 +185,7 @@ test("accumulated approved findings populate approvedFindings before final rende
 });
 
 test("missing-information items are serialized only when requested", () => {
-  const ctx = createContext() as SemanticFileReviewContext;
+  const ctx = createContext();
   ctx.setMissingInformationItems(createValidationReportV1().missingInformationItems);
 
   assert.deepEqual((serializeSnapshot(ctx, []) as SemanticReviewStateSnapshot).missingInformationItems, []);
@@ -203,7 +201,7 @@ test("missing-information items are serialized only when requested", () => {
 });
 
 test("validation report is serialized only when requested", () => {
-  const ctx = createContext() as SemanticFileReviewContext;
+  const ctx = createContext();
   const report = createValidationReportV1();
   ctx.setValidationReportV1(report);
 
@@ -272,7 +270,7 @@ test("prior validator feedback is serialized only when requested", () => {
   });
 });
 
-function createCandidateFindings() {
+function createCandidateFindings(): CandidateFindings {
   return {
     findings: [
       {
@@ -306,7 +304,7 @@ function createCandidateFindings() {
   };
 }
 
-function createValidationReportV1() {
+function createValidationReportV1(): ValidationReportV1 {
   return {
     perFindingResults: [
       {

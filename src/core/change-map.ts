@@ -2,8 +2,7 @@ import type { ReviewChangesetEntry } from "../providers/review-source-provider.t
 
 /** Changeset Overview's run-level contract plus host-normalized changeset descriptors. */
 
-export const CHANGE_MAP_STATUSES = ["A", "M", "D", "R"] as const;
-export type ChangeMapStatus = (typeof CHANGE_MAP_STATUSES)[number];
+export type ChangeMapStatus = "A" | "M" | "D" | "R";
 
 export interface ReadinessBehaviorChangeEntry {
   readonly description: string;

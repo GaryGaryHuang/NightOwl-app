@@ -1,5 +1,5 @@
 import type { FileReviewContext, Finding } from "./file-review-context.ts";
-import { buildFindingAnchorPromptContext } from "./finding-anchor-context.ts";
+import { buildDiffAnchorMap } from "./diff-anchor-map.ts";
 import type {
   PriorValidatorFeedback,
   ReviewBasisEvidenceRef,
@@ -87,11 +87,8 @@ export class ReviewStatePromptSerializer {
     return buildXmlishJsonBlock("review_state", snapshot).join("\n");
   }
 
-  buildSnapshot(input: ReviewStateSerializeInput): ReviewStateSnapshot {
-    const anchorContext = buildFindingAnchorPromptContext(
-      input.context.filePath,
-      input.context.diffContent
-    );
+  private buildSnapshot(input: ReviewStateSerializeInput): ReviewStateSnapshot {
+    const diffAnchorMap = buildDiffAnchorMap(input.context.diffContent);
     const approvedFindings =
       input.context.getFindings() ??
       input.context.getAccumulatedApprovedFindings?.() ??
@@ -110,7 +107,7 @@ export class ReviewStatePromptSerializer {
       baseRef: input.context.baseRef,
       headRef: input.context.headRef,
       diffSummary: {
-        hunks: anchorContext.diffAnchorMap.hunks.map((hunk) => ({
+        hunks: diffAnchorMap.hunks.map((hunk) => ({
           hunkHeader: hunk.hunkHeader,
           headLineStart: hunk.headLineStart,
           headLineEnd: hunk.headLineEnd,
@@ -118,8 +115,8 @@ export class ReviewStatePromptSerializer {
         }))
       },
       sections: input.include.includes("sections")
-        ? this.buildSections(input.context)
-        : emptySections(),
+        ? Object.fromEntries(input.context.getSectionEntries())
+        : {},
       candidateFindings: input.include.includes(CANDIDATE_FINDINGS_STEP_ID)
         ? candidateFindings
         : null,
@@ -144,14 +141,4 @@ export class ReviewStatePromptSerializer {
         : null
     };
   }
-
-  private buildSections(
-    context: Pick<FileReviewContext, "getSectionEntries">
-  ): ReviewStateSnapshotSections {
-    return Object.fromEntries(context.getSectionEntries());
-  }
-
-}
-function emptySections(): ReviewStateSnapshotSections {
-  return {};
 }

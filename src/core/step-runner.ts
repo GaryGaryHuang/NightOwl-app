@@ -25,15 +25,11 @@ export interface StructuredOutputValidatorLike {
     responseText: string;
     reviewBasis: ReviewBasis;
     previousCandidateFindings?: CandidateFindings;
-    diffContent?: string;
-    filePath?: string;
   }): { payload: CandidateFindings; report: StructuredValidationReportEntry[] };
   validateValidationReportV1WithReport(input: {
     responseText: string;
     candidateFindings: CandidateFindings | Record<string, unknown>;
     reviewBasis?: ReviewBasis;
-    diffContent?: string;
-    filePath?: string;
   }): { payload: ValidationReportV1; report: StructuredValidationReportEntry[] };
 }
 
@@ -71,7 +67,6 @@ export interface StepDefinition {
 export interface RunStepInput {
   step: StepDefinition;
   context: FileReviewContext;
-  outputBaseDir: string;
   repoRoot: string;
   reviewOutputRoot?: string;
   signal?: AbortSignal;
@@ -88,7 +83,6 @@ export interface StepRetryInfo {
   model?: string;
   promptHash?: string;
   schemaId?: string;
-  outputBaseDir?: string;
 }
 
 export interface StepRunnerOptions {
@@ -127,14 +121,12 @@ export class StepRunner {
           filePath: input.context.filePath,
           model: plan.reviewProfile.model,
           promptHash: hashPrompt(plan.prompt.systemMessage, plan.prompt.userMessage),
-          schemaId: schemaIdForStep(plan.stepId),
-          outputBaseDir: input.outputBaseDir
+          schemaId: schemaIdForStep(plan.stepId)
         };
         const sessionProfile = {
           stepId: plan.stepId,
           knowledgeMode: plan.reviewProfile.knowledgeMode,
           model: plan.reviewProfile.model,
-          outputBaseDir: input.outputBaseDir,
           repoRoot: input.repoRoot,
           ...(input.reviewOutputRoot === undefined
             ? {}
@@ -196,9 +188,6 @@ export class StepRunner {
             ? {}
             : { promptHash: retryDiagnostics.promptHash }),
           ...(retryDiagnostics?.schemaId === undefined ? {} : { schemaId: retryDiagnostics.schemaId }),
-          ...(retryDiagnostics?.outputBaseDir === undefined
-            ? {}
-            : { outputBaseDir: retryDiagnostics.outputBaseDir })
         });
       },
       buildFinalError: (lastCause) => {

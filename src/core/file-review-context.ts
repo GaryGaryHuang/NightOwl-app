@@ -213,10 +213,9 @@ export function renumberFindings(findings: readonly Finding[]): Finding[] {
 }
 
 function cloneFinding(finding: Finding): Finding {
-  const traceability = requireFindingTraceability(finding);
   const cloned: Finding = {
     ...finding,
-    traceability: { ...traceability }
+    traceability: { ...finding.traceability }
   };
 
   if (finding.dependencyPathException) {
@@ -227,14 +226,4 @@ function cloneFinding(finding: Finding): Finding {
   }
 
   return cloned;
-}
-
-function requireFindingTraceability(finding: Finding): FindingTraceability {
-  if (!finding.traceability) {
-    throw new Error(
-      `Formal finding \"${finding.title}\" is missing required traceability.`
-    );
-  }
-
-  return finding.traceability;
 }

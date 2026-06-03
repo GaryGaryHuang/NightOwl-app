@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { reviewOutputRoot } from "./nightowl-namespace.ts";
 
-export interface BuildSessionIdInput {
+interface BuildSessionIdInput {
   headRef: string;
   timestamp: string;
 }
@@ -15,8 +15,10 @@ export interface OutputTarget {
   toolAuditPath: string;
 }
 
-export interface ResolveOutputTargetInput extends BuildSessionIdInput {
+export interface ResolveOutputTargetInput {
   repoRoot: string;
+  headRef: string;
+  timestamp: string;
 }
 
 export interface PlannedNoteFile {
@@ -24,7 +26,7 @@ export interface PlannedNoteFile {
   noteFilePath: string;
 }
 
-export function buildSessionId(input: BuildSessionIdInput): string {
+function buildSessionId(input: BuildSessionIdInput): string {
   const prefix = sanitizeSegment(input.headRef) || "review";
 
   return `${prefix}_${input.timestamp}`;
@@ -49,6 +51,11 @@ export function planNoteFiles(
   filesPath: string,
   changedFiles: string[]
 ): PlannedNoteFile[] {
+  const duplicatePath = findDuplicateChangedFile(changedFiles);
+  if (duplicatePath !== undefined) {
+    throw new Error(`Duplicate changed file path: ${duplicatePath}`);
+  }
+
   // Track how many parent segments to include per file, starting at 1 (basename only).
   const depths = new Map(changedFiles.map((filePath) => [filePath, 1]));
 
@@ -101,6 +108,17 @@ function detectNoteNameConflicts(
   }
 
   return [...noteNameToFiles.values()].filter((paths) => paths.length > 1);
+}
+
+function findDuplicateChangedFile(changedFiles: string[]): string | undefined {
+  const seen = new Set<string>();
+  for (const filePath of changedFiles) {
+    if (seen.has(filePath)) {
+      return filePath;
+    }
+    seen.add(filePath);
+  }
+  return undefined;
 }
 
 function sanitizeSegment(value: string): string {

@@ -69,8 +69,7 @@ test("createLocalReviewRunApp reviews the resolved head snapshot while keeping a
       async run(input) {
         calls.changesetOverviewInputs.push(input);
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：snapshot"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：snapshot")
         });
       }
     },
@@ -129,12 +128,10 @@ test("createLocalReviewRunApp reviews the resolved head snapshot while keeping a
   // Orchestrator runners receive snapshot root as repoRoot and workingDirectory
   assert.equal(calls.changesetOverviewInputs.at(0)?.repoRoot, snapshotRoot);
   assert.equal(calls.changesetOverviewInputs.at(0)?.workingDirectory, snapshotRoot);
-  assert.equal(calls.changesetOverviewInputs.at(0)?.outputBaseDir, originalRoot);
   assert.equal(calls.changesetOverviewInputs.at(0)?.sourceBaseRef, "base-sha");
   assert.equal(calls.changesetOverviewInputs.at(0)?.sourceHeadRef, "head-sha");
   assert.equal(calls.stepInputs.at(0)?.repoRoot, snapshotRoot);
   assert.equal(calls.stepInputs.at(0)?.workingDirectory, snapshotRoot);
-  assert.equal(calls.stepInputs.at(0)?.outputBaseDir, result.outputTarget.basePath);
   assert.equal(calls.stepInputs.at(0)?.sourceBaseRef, "base-sha");
   assert.equal(calls.stepInputs.at(0)?.sourceHeadRef, "head-sha");
 
@@ -185,8 +182,7 @@ test("createLocalReviewRunApp keeps snapshot implementation details out of user-
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：source pinned"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：source pinned")
           });
         }
       },
@@ -263,8 +259,7 @@ test("createLocalReviewRunApp maps absolute repoPath requests onto the snapshot 
       async run(input) {
         calls.changesetOverviewInputs.push(input);
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：absolute repoPath"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：absolute repoPath")
         });
       }
     },
@@ -310,7 +305,7 @@ interface RunCallRecorder {
   changesetOverviewInputs: Array<
     Pick<
       ChangesetOverviewRunnerInput,
-      "repoRoot" | "outputBaseDir" | "workingDirectory" | "sourceBaseRef" | "sourceHeadRef"
+      "repoRoot" | "workingDirectory" | "sourceBaseRef" | "sourceHeadRef"
     >
   >;
   cleanupCount: number;

@@ -4,50 +4,47 @@ import test from "node:test";
 
 import {
   buildOutputTarget,
-  buildSessionId,
   planNoteFiles
 } from "../../src/core/review-path-resolver.ts";
 
 const FILES_PATH = "/workspace/.nightowl/review/run/files";
 
-test("buildSessionId normalizes review head refs into filesystem-safe session ids", () => {
+test("buildOutputTarget normalizes review head refs into filesystem-safe session ids", () => {
   const cases = [
     {
       label: "sanitized head ref",
-      input: {
-        headRef: "feature/review path",
-        timestamp: "03131430"
-      },
-      expected: "feature_review_path_03131430"
+      headRef: "feature/review path",
+      timestamp: "03131430",
+      expectedBasePath: "/workspace/.nightowl/review/feature_review_path_03131430"
     },
     {
       label: "head ref fallback",
-      input: {
-        headRef: "refs/pull/42/head",
-        timestamp: "03131430"
-      },
-      expected: "refs_pull_42_head_03131430"
+      headRef: "refs/pull/42/head",
+      timestamp: "03131430",
+      expectedBasePath: "/workspace/.nightowl/review/refs_pull_42_head_03131430"
     },
     {
       label: "collapsed repeated invalid separators in head ref",
-      input: {
-        headRef: "feature///review   path",
-        timestamp: "03131430"
-      },
-      expected: "feature_review_path_03131430"
+      headRef: "feature///review   path",
+      timestamp: "03131430",
+      expectedBasePath: "/workspace/.nightowl/review/feature_review_path_03131430"
     },
     {
       label: "current branch name does not affect naming",
-      input: {
-        headRef: "refs/heads/review-target",
-        timestamp: "04101200"
-      },
-      expected: "refs_heads_review-target_04101200"
+      headRef: "refs/heads/review-target",
+      timestamp: "04101200",
+      expectedBasePath: "/workspace/.nightowl/review/refs_heads_review-target_04101200"
     }
   ];
 
   for (const testCase of cases) {
-    assert.equal(buildSessionId(testCase.input), testCase.expected, testCase.label);
+    const target = buildOutputTarget({
+      repoRoot: "/workspace",
+      headRef: testCase.headRef,
+      timestamp: testCase.timestamp
+    });
+
+    assert.equal(target.basePath, testCase.expectedBasePath, testCase.label);
   }
 });
 
@@ -121,9 +118,9 @@ test("planNoteFiles throws for invalid changed-file paths that have no basename"
   );
 });
 
-test("planNoteFiles throws when duplicate entries cause unresolvable conflicts", () => {
+test("planNoteFiles throws when changed-file paths contain duplicates", () => {
   assert.throws(
     () => planNoteFiles(FILES_PATH, ["src/app.ts", "src/app.ts"]),
-    /conflict resolution exceeded maximum iterations/u
+    /Duplicate changed file path: src\/app\.ts/u
   );
 });

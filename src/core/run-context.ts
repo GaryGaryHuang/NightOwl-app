@@ -13,7 +13,6 @@ export interface RunContext {
    * never mutated — its deep-frozen contract is preserved.
    */
   readonly changesetOverviewMarkdown: string;
-  readonly userContext: readonly string[];
 }
 
 /**
@@ -25,7 +24,6 @@ export interface RunContext {
  */
 export function createRunContext(input: {
   changesetOverview: ChangeMapReadiness;
-  userContext: readonly string[];
 }): RunContext {
   const overviewMarkdown = input.changesetOverview.overviewMarkdown;
   const changesetOverviewMarkdown = overviewMarkdown.endsWith("\n")
@@ -34,7 +32,6 @@ export function createRunContext(input: {
 
   return Object.freeze({
     changesetOverview: input.changesetOverview,
-    changesetOverviewMarkdown,
-    userContext: Object.freeze([...input.userContext])
+    changesetOverviewMarkdown
   });
 }

@@ -132,7 +132,6 @@ export function runDefaultSectionStep(
   return runner.run({
     step: createSectionTestStep({}),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
   });
 }
@@ -146,7 +145,6 @@ export function runDefaultCheckedSectionStep(
       resolve: DEFAULT_CHECKED_SECTION_RESOLVE
     }),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"
   });
 }

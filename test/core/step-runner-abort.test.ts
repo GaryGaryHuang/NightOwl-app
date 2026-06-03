@@ -57,7 +57,6 @@ test("StepRunner does not consume retry budget or run resolve when a section-ste
           }
         }),
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo",
         signal: controller.signal
       }),
@@ -130,7 +129,6 @@ test("StepRunner does not consume retry budget or run deterministic validation w
       runner.run({
         step: createStructuredTestStep({}),
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo",
         signal: controller.signal
       }),

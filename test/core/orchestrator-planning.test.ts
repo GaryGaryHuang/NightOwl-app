@@ -43,7 +43,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
       },
       changesetOverviewRunner: {
         async run() {
-          return createRunContext({ changesetOverview: stubChangeMap("overview"), userContext: [] });
+          return createRunContext({ changesetOverview: stubChangeMap("overview") });
         }
       },
       onOutputTargetReady: (outputTarget) => {
@@ -95,7 +95,7 @@ test("ReviewOrchestrator works normally when onOutputTargetReady callback is not
       },
       changesetOverviewRunner: {
         async run() {
-          return createRunContext({ changesetOverview: stubChangeMap("overview"), userContext: [] });
+          return createRunContext({ changesetOverview: stubChangeMap("overview") });
         }
       },
       // onOutputTargetReady deliberately omitted
@@ -147,8 +147,7 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：feature")
           });
         }
       },
@@ -218,8 +217,7 @@ test("ReviewOrchestrator writes changeset overview even for a zero-file run", as
       changesetOverviewRunner: {
         async run() {
           return createRunContext({
-            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：空"),
-            userContext: []
+            changesetOverview: stubChangeMap("## Changeset Overview\n- 調整範圍：空")
           });
         }
       },

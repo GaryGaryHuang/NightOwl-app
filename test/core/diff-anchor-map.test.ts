@@ -12,9 +12,8 @@ test("buildDiffAnchorMap parses standard hunk header into head range and changed
     " context-b"
   ].join("\n");
 
-  const map = buildDiffAnchorMap("src/foo.ts", diff);
+  const map = buildDiffAnchorMap(diff);
 
-  assert.equal(map.filePath, "src/foo.ts");
   assert.equal(map.hunks.length, 1);
 
   const [hunk] = map.hunks;
@@ -35,7 +34,7 @@ test("buildDiffAnchorMap handles multiple hunks", () => {
     "+late"
   ].join("\n");
 
-  const map = buildDiffAnchorMap("src/bar.ts", diff);
+  const map = buildDiffAnchorMap(diff);
 
   assert.equal(map.hunks.length, 2);
   assert.deepEqual(
@@ -58,7 +57,7 @@ test("buildDiffAnchorMap treats pure deletion hunk as empty changed-head-lines",
     "-removed-3"
   ].join("\n");
 
-  const map = buildDiffAnchorMap("src/del.ts", diff);
+  const map = buildDiffAnchorMap(diff);
 
   assert.equal(map.hunks.length, 1);
   const [hunk] = map.hunks;
@@ -75,7 +74,7 @@ test("buildDiffAnchorMap skips no-newline marker lines", () => {
     "\\ No newline at end of file"
   ].join("\n");
 
-  const map = buildDiffAnchorMap("src/nl.ts", diff);
+  const map = buildDiffAnchorMap(diff);
 
   assert.equal(map.hunks.length, 1);
   assert.deepEqual(
@@ -87,7 +86,7 @@ test("buildDiffAnchorMap skips no-newline marker lines", () => {
 test("buildDiffAnchorMap handles header without explicit head count (defaults to 1)", () => {
   const diff = ["@@ -5 +7 @@", "+only"].join("\n");
 
-  const map = buildDiffAnchorMap("src/single.ts", diff);
+  const map = buildDiffAnchorMap(diff);
 
   assert.equal(map.hunks.length, 1);
   assert.equal(map.hunks[0].headLineStart, 7);
@@ -96,18 +95,18 @@ test("buildDiffAnchorMap handles header without explicit head count (defaults to
 });
 
 test("buildDiffAnchorMap returns empty hunk array for empty or unrecognized input", () => {
-  assert.deepEqual(buildDiffAnchorMap("a.ts", "").hunks, []);
+  assert.deepEqual(buildDiffAnchorMap("").hunks, []);
   assert.deepEqual(
-    buildDiffAnchorMap("a.ts", "Binary files differ\n").hunks,
+    buildDiffAnchorMap("Binary files differ\n").hunks,
     []
   );
-  assert.deepEqual(buildDiffAnchorMap("a.ts", "random text\n").hunks, []);
+  assert.deepEqual(buildDiffAnchorMap("random text\n").hunks, []);
 });
 
 test("buildDiffAnchorMap trims header whitespace", () => {
   const diff = ["  @@ -1,1 +1,1 @@  ", "+x"].join("\n");
 
-  const map = buildDiffAnchorMap("a.ts", diff);
+  const map = buildDiffAnchorMap(diff);
 
   assert.equal(map.hunks.length, 1);
   assert.equal(map.hunks[0].hunkHeader, "@@ -1,1 +1,1 @@");

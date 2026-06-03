@@ -3,8 +3,7 @@ import test from "node:test";
 
 import {
   buildRiskSnapshot,
-  deriveFileRiskLevel,
-  type RiskSnapshot
+  deriveFileRiskLevel
 } from "../../src/core/risk-level.ts";
 import { createFinding } from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
@@ -49,7 +48,6 @@ test("buildRiskSnapshot counts mixed finding types correctly", () => {
     createFinding("nice", 91),
     createFinding("must", 82, { title: "second must" })
   ];
-  // Override findingIds for uniqueness since createFinding generates from type+id suffix
   findings[2] = { ...findings[2], findingId: "must-82-2" };
 
   const snapshot = buildRiskSnapshot(findings);
@@ -59,22 +57,4 @@ test("buildRiskSnapshot counts mixed finding types correctly", () => {
   assert.ok(snapshot.acceptedFindingIds.includes("must-96"));
   assert.ok(snapshot.acceptedFindingIds.includes("nice-91"));
   assert.ok(snapshot.acceptedFindingIds.includes("must-82-2"));
-});
-
-test("buildRiskSnapshot derivedRiskLevel matches deriveFileRiskLevel", () => {
-  // Ensure buildRiskSnapshot delegates to deriveFileRiskLevel for consistency
-  const cases = [
-    [createFinding("must", 90)],
-    [createFinding("nice", 95)],
-    [] as ReturnType<typeof createFinding>[]
-  ];
-
-  for (const findings of cases) {
-    const snapshot = buildRiskSnapshot(findings);
-    assert.equal(
-      snapshot.derivedRiskLevel,
-      deriveFileRiskLevel(findings),
-      `Mismatch for findings: ${JSON.stringify(findings.map((f) => f.priority))}`
-    );
-  }
 });

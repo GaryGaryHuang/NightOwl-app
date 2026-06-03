@@ -167,9 +167,7 @@ export class SemanticValidationStep implements StepDefinition {
         const validated = services.validator.validateValidationReportV1WithReport({
           responseText: response,
           candidateFindings: candidatePayload,
-          ...(reviewBasis === undefined ? {} : { reviewBasis }),
-          filePath: context.filePath,
-          diffContent: context.diffContent
+          ...(reviewBasis === undefined ? {} : { reviewBasis })
         });
 
         return (targetContext: FileReviewContext) => {

@@ -10,7 +10,7 @@ function buildMinimalRunSummary(overrides: Partial<ReviewRunSummary> = {}): Revi
   const base = "/workspace/.nightowl/review/run";
   return {
     repoRoot: "/workspace/repo",
-    runContext: createRunContext({ changesetOverview: stubChangeMap("## Changeset Overview"), userContext: [] }),
+    runContext: createRunContext({ changesetOverview: stubChangeMap("## Changeset Overview") }),
     outputTarget: {
       basePath: base,
       changesetOverviewPath: `${base}/changeset-overview.md`,

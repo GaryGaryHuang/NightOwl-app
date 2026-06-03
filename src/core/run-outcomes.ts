@@ -33,3 +33,7 @@ export interface SkippedFileOutcome {
   semanticReview: SemanticReviewStats;
   riskSnapshot: RiskSnapshot;
 }
+
+export type ResolvedFileOutcome =
+  | { status: "successful"; outcome: SuccessfulFileOutcome }
+  | { status: "skipped"; outcome: SkippedFileOutcome };

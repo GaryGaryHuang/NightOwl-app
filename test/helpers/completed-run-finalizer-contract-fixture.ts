@@ -3,7 +3,7 @@ import type {
   OutputTarget,
   PlannedNoteFile
 } from "../../src/core/review-path-resolver.ts";
-import { resolveFileOutcomes, type ResolvedFileOutcome } from "../../src/core/run-outcome-resolver.ts";
+import type { ResolvedFileOutcome } from "../../src/core/run-outcomes.ts";
 import type {
   SemanticReviewStats
 } from "../../src/core/run-outcomes.ts";
@@ -144,5 +144,24 @@ export function createResolvedOutcomes(
   successfulFiles: SuccessfulFileOutcome[],
   skippedFiles: SkippedFileOutcome[]
 ): ResolvedFileOutcome[] {
-  return resolveFileOutcomes(plannedNotes, successfulFiles, skippedFiles);
+  const successMap = new Map(
+    successfulFiles.map((file) => [file.filePath, file])
+  );
+  const skippedMap = new Map(
+    skippedFiles.map((file) => [file.filePath, file])
+  );
+
+  return plannedNotes.map((note): ResolvedFileOutcome => {
+    const successful = successMap.get(note.filePath);
+    if (successful) {
+      return { status: "successful", outcome: successful };
+    }
+
+    const skipped = skippedMap.get(note.filePath);
+    if (skipped) {
+      return { status: "skipped", outcome: skipped };
+    }
+
+    throw new Error(`Missing finalized outcome for planned file: ${note.filePath}`);
+  });
 }

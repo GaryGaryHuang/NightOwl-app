@@ -7,6 +7,10 @@ import {
   type Finding
 } from "../../src/core/file-review-context.ts";
 import type { ReviewBasis } from "../../src/core/review-basis.ts";
+import type {
+  CandidateFindings,
+  ValidationReportV1
+} from "../../src/core/semantic-review.ts";
 
 const DEFAULT_CONTEXT_INPUT: FileReviewContextInput = {
   filePath: "src/app.ts",
@@ -119,7 +123,7 @@ test("FileReviewContext returns defensive ReviewBasis snapshots", () => {
 });
 
 test("FileReviewContext stores CandidateFindings separately from approved findings", () => {
-  const context = createContext() as SemanticFileReviewContext;
+  const context = createContext();
   const candidatePayload = createCandidateFindings();
 
   context.setCandidateFindings(candidatePayload);
@@ -132,7 +136,7 @@ test("FileReviewContext stores CandidateFindings separately from approved findin
 });
 
 test("FileReviewContext returns defensive CandidateFindings snapshots", () => {
-  const context = createContext() as SemanticFileReviewContext;
+  const context = createContext();
   const candidatePayload = createCandidateFindings();
 
   context.setCandidateFindings(candidatePayload);
@@ -151,7 +155,7 @@ test("FileReviewContext returns defensive CandidateFindings snapshots", () => {
 });
 
 test("FileReviewContext stores ValidationReportV1 and missing-information state defensively", () => {
-  const context = createContext() as SemanticFileReviewContext;
+  const context = createContext();
   const report = createValidationReportV1();
 
   context.setValidationReportV1(report);
@@ -306,16 +310,7 @@ function createContext(
   });
 }
 
-type SemanticFileReviewContext = FileReviewContext & {
-  setCandidateFindings(payload: ReturnType<typeof createCandidateFindings>): void;
-  getCandidateFindings(): ReturnType<typeof createCandidateFindings> | undefined;
-  setValidationReportV1(report: ReturnType<typeof createValidationReportV1>): void;
-  getValidationReportV1(): ReturnType<typeof createValidationReportV1> | undefined;
-  setMissingInformationItems(items: ReturnType<typeof createValidationReportV1>["missingInformationItems"]): void;
-  getMissingInformationItems(): ReturnType<typeof createValidationReportV1>["missingInformationItems"] | undefined;
-};
-
-function createCandidateFindings() {
+function createCandidateFindings(): CandidateFindings {
   return {
     findings: [
       {
@@ -353,12 +348,11 @@ function createFinding(findingId: string): Finding {
   const base = createCandidateFindings().findings[0]!;
   return {
     ...base,
-    priority: base.priority as Finding["priority"],
     findingId
   };
 }
 
-function createValidationReportV1() {
+function createValidationReportV1(): ValidationReportV1 {
   return {
     perFindingResults: [
       {

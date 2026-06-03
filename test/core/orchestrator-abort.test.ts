@@ -22,7 +22,6 @@ import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 type StepRunInput = {
   step: StepDefinition;
   context: FileReviewContext;
-  outputBaseDir: string;
   repoRoot: string;
   workingDirectory: string;
 };
@@ -144,8 +143,7 @@ function createBaseOrchestrator(overrides: {
     changesetOverviewRunner: overrides.changesetOverviewRunner ?? {
       async run() {
         return createRunContext({
-          changesetOverview: stubChangeMap("## Changeset\n- test"),
-          userContext: []
+          changesetOverview: stubChangeMap("## Changeset\n- test")
         });
       }
     },

@@ -33,7 +33,6 @@ test("StepRunner returns an apply-able result without mutating state or writing 
   const result = await runner.run({
     step: createSectionTestStep({}),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo",
     workingDirectory: "/workspace/repo"
   });
@@ -51,7 +50,6 @@ test("StepRunner returns an apply-able result without mutating state or writing 
         stepId: "review-summary",
         knowledgeMode: "disabled",
         model: "gpt-5-mini",
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo",
         systemMessage: "system prompt",
         workingDirectory: "/workspace/repo"
@@ -90,7 +88,6 @@ test("StepRunner passes the step-provided knowledgeMode into review sessions", a
       }
     }),
     context,
-    outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo",
     workingDirectory: "/workspace/repo"
   });
@@ -104,7 +101,6 @@ test("StepRunner passes the step-provided knowledgeMode into review sessions", a
         stepId: "custom-knowledge-step",
         knowledgeMode: "built-in-context7",
         model: "gpt-5-mini",
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo",
         systemMessage: "system prompt",
         workingDirectory: "/workspace/repo"
@@ -133,7 +129,6 @@ test("StepRunner fails on blank responses and does not apply any state", async (
       runner.run({
         step: createSectionTestStep({}),
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
     /review-summary/u
@@ -161,7 +156,6 @@ test("StepRunner wraps prepare failures with step and file context", async () =>
           }
         },
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
     /Step review-summary failed for src\/app\.ts: prepare exploded/u
@@ -187,7 +181,6 @@ test("StepRunner does not duplicate contextual prefixes for resolve failures", a
           }
         }),
         context,
-        outputBaseDir: "/workspace/output",
         repoRoot: "/workspace/repo"
       }),
     /^StepExecutionError: Step review-summary failed for src\/app\.ts: deterministic completion timed out$/u

@@ -2,13 +2,6 @@ import type { Finding } from "./file-review-context.ts";
 
 export type RiskLevel = "High" | "Low" | "None";
 
-// Shared priority ordering for run-level outputs: must-fix findings rank above nice-to-haves, then no findings.
-export const RISK_ORDER: Record<RiskLevel, number> = {
-  High: 0,
-  Low: 1,
-  None: 2
-};
-
 export function countMustFindings(findings: Finding[] | undefined): number {
   return findings?.filter((f) => f.priority === "must_fix").length ?? 0;
 }
@@ -44,12 +37,6 @@ export interface RiskSnapshot {
   acceptedFindingIds: string[];
 }
 
-/**
- * Build a deterministic approved-findings snapshot from finalized findings.
- *
- * Delegates to `deriveFileRiskLevel()` for the internal priority bucket so the
- * snapshot stays aligned with summary status and run-level ordering.
- */
 export function buildRiskSnapshot(findings: Finding[] | undefined): RiskSnapshot {
   const derivedRiskLevel = deriveFileRiskLevel(findings);
   const safe = findings ?? [];
