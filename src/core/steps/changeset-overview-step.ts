@@ -8,12 +8,10 @@ import {
   type ReviewChangesetEntry
 } from "../../providers/review-source-provider.ts";
 
-const CHANGESET_OVERVIEW_TIMEOUT_MS = REVIEW_TURN_TIMEOUT_MS;
-
 export const CHANGESET_OVERVIEW_REVIEW_PROFILE = {
   knowledgeMode: "built-in-context7",
   model: "gpt-5.4-mini",
-  timeoutMs: CHANGESET_OVERVIEW_TIMEOUT_MS
+  timeoutMs: REVIEW_TURN_TIMEOUT_MS
 } as const satisfies {
   knowledgeMode: ReviewKnowledgeMode;
   model: string;

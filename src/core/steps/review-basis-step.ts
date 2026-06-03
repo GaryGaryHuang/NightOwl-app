@@ -106,7 +106,7 @@ export class ReviewBasisStep implements StepDefinition {
       prompt: {
         systemMessage: [
           JSON_STEP_SYSTEM_MESSAGE,
-          MISSING_INFORMATION_DISCIPLINE_BLOCK.content,
+          MISSING_INFORMATION_DISCIPLINE_BLOCK,
           REVIEW_BASIS_SYSTEM_ADDITION
         ].join("\n\n"),
         userMessage: buildReviewBasisUserMessage(context, this.#runContext)

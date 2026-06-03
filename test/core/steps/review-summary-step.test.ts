@@ -3,9 +3,6 @@ import test from "node:test";
 
 import { FileReviewContext, type Finding } from "../../../src/core/file-review-context.ts";
 import { ReviewSummaryStep } from "../../../src/core/steps/review-summary-step.ts";
-import {
-  createReviewSummaryResolve
-} from "../../../src/core/steps/step-resolve-helpers.ts";
 import type { StepResolveServices } from "../../../src/core/step-runner.ts";
 import { StructuredOutputValidator } from "../../../src/core/structured-output-validator.ts";
 import { ReviewStatePromptSerializer } from "../../../src/core/review-state-prompt-serializer.ts";
@@ -45,50 +42,25 @@ function createFinding(
 
 const FAKE_SERIALIZER = new ReviewStatePromptSerializer();
 
-// --- createReviewSummaryResolve tests ---
-
-test("createReviewSummaryResolve accepts narrative without external completion service", async () => {
-  const context = createContext();
-  const resolve = createReviewSummaryResolve({
-    stepId: "review-summary",
-    filePath: "src/app.ts",
-    sectionKey: "summary"
-  });
-
-  const response = buildSummaryResponse();
-  const applyTo = await resolve(response, createResolveServices());
-  applyTo(context);
-
-  assert.equal(context.getSection("summary"), response);
-});
-
-test("createReviewSummaryResolve rejects empty narrative packaging", async () => {
-  const resolve = createReviewSummaryResolve({
-    stepId: "review-summary",
-    filePath: "src/app.ts",
-    sectionKey: "summary"
-  });
+test("ReviewSummaryStep.resolve rejects empty narrative packaging", async () => {
+  const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
+  const plan = step.prepare(createContext());
 
   await assert.rejects(
-    () => resolve("", createResolveServices()),
+    () => plan.resolve("", createResolveServices()),
     /narrative response is empty/u
   );
 });
 
-test("createReviewSummaryResolve rejects narrative missing required sections", async () => {
-  const resolve = createReviewSummaryResolve({
-    stepId: "review-summary",
-    filePath: "src/app.ts",
-    sectionKey: "summary"
-  });
+test("ReviewSummaryStep.resolve rejects narrative missing required sections", async () => {
+  const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
+  const plan = step.prepare(createContext());
 
   await assert.rejects(
-    () => resolve("### 審查依據\n- only one section", createResolveServices()),
+    () => plan.resolve("### 審查依據\n- only one section", createResolveServices()),
     /missing required section: 行為變更提醒/u
   );
 });
-
-// --- Review Summary prepare() harness contract tests ---
 
 test("ReviewSummaryStep.prepare() does not expose host-owned summary data blocks", () => {
   const step = new ReviewSummaryStep({ promptSerializer: FAKE_SERIALIZER });
@@ -229,15 +201,6 @@ test("ReviewSummaryStep.resolve composes host-owned report shell around narrativ
   assert.match(beforeNarrative, /1 項 missing information/u);
   assert.equal(afterNarrative.trim(), "");
 });
-
-// --- helpers ---
-
-function buildSummaryResponse(): string {
-  return [
-    "## Summary",
-    buildNarrativeResponse()
-  ].join("\n");
-}
 
 function buildNarrativeResponse(): string {
   return [

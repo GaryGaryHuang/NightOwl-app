@@ -15,9 +15,9 @@ import type { ReviewStatePromptSerializer } from "../review-state-prompt-seriali
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import {
   JSON_FINDING_STEP_SYSTEM_MESSAGE,
-  MISSING_INFORMATION_DISCIPLINE_BLOCK
+  MISSING_INFORMATION_DISCIPLINE_BLOCK,
+  formatQuotedValues
 } from "./shared-step-system-blocks.ts";
-import { createCandidateFindingsResolve } from "./step-resolve-helpers.ts";
 
 const CANDIDATE_FINDINGS_SYSTEM_ADDITION = [
   "## Current Step: Candidate Findings",
@@ -142,7 +142,7 @@ export class CandidateFindingsStep implements StepDefinition {
       prompt: {
         systemMessage: [
           JSON_FINDING_STEP_SYSTEM_MESSAGE,
-          MISSING_INFORMATION_DISCIPLINE_BLOCK.content,
+          MISSING_INFORMATION_DISCIPLINE_BLOCK,
           CANDIDATE_FINDINGS_SYSTEM_ADDITION
         ].join("\n\n"),
         userMessage: buildCandidateFindingsUserMessage(
@@ -164,14 +164,21 @@ export class CandidateFindingsStep implements StepDefinition {
         model: "gpt-5.4-mini",
         timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
-      resolve: createCandidateFindingsResolve({
-        filePath: context.filePath,
-        diffContent: context.diffContent,
-        reviewBasis,
-        ...(previousCandidateFindings === undefined
-          ? {}
-          : { previousCandidateFindings })
-      })
+      resolve: async (response, services) => {
+        const validated = services.validator.validateCandidateFindingsWithReport({
+          responseText: response,
+          reviewBasis,
+          ...(previousCandidateFindings === undefined
+            ? {}
+            : { previousCandidateFindings }),
+          filePath: context.filePath,
+          diffContent: context.diffContent
+        });
+
+        return (targetContext: FileReviewContext) => {
+          targetContext.setCandidateFindings(validated.payload);
+        };
+      }
     };
   }
 }
@@ -202,8 +209,4 @@ function requireReviewBasis(context: FileReviewContext): ReviewBasis {
     );
   }
   return reviewBasis;
-}
-
-function formatQuotedValues(values: readonly string[]): string {
-  return values.map((value) => `"${value}"`).join(", ");
 }

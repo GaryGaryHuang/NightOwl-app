@@ -5,8 +5,9 @@ import { StepRunner } from "../../src/core/step-runner.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
 import type { ReviewBasis } from "../../src/core/review-basis.ts";
 import { createRunContext } from "../../src/core/run-context.ts";
+import { ReviewStatePromptSerializer } from "../../src/core/review-state-prompt-serializer.ts";
 import { ReviewBasisStep } from "../../src/core/steps/review-basis-step.ts";
-import { createCandidateFindingsResolve } from "../../src/core/steps/step-resolve-helpers.ts";
+import { CandidateFindingsStep } from "../../src/core/steps/candidate-findings-step.ts";
 import {
   createReviewSessionFactory,
   createSectionTestStep,
@@ -132,6 +133,7 @@ test("StepRunner records structured validation reports without committing partia
   const prompts: string[] = [];
   let reviewAttempts = 0;
   const reviewBasis = createReviewBasis();
+  context.setReviewBasis(reviewBasis);
   const runner = new StepRunner({
     reviewSessionFactory: createReviewSessionFactory({
       onSendAndWait({ prompt }) {
@@ -149,25 +151,9 @@ test("StepRunner records structured validation reports without committing partia
   });
 
   const result = await runner.run({
-    step: {
-      stepId: "candidate-findings",
-      prepare(stepContext) {
-        return {
-          stepId: "candidate-findings",
-          prompt: { systemMessage: "system prompt", userMessage: "user prompt" },
-          reviewProfile: {
-            knowledgeMode: "disabled",
-            model: "gpt-5.4-mini",
-            timeoutMs: REVIEW_TURN_TIMEOUT_MS
-          },
-          resolve: createCandidateFindingsResolve({
-            filePath: stepContext.filePath,
-            diffContent: stepContext.diffContent,
-            reviewBasis
-          })
-        };
-      }
-    },
+    step: new CandidateFindingsStep({
+      promptSerializer: new ReviewStatePromptSerializer()
+    }),
     context,
     outputBaseDir: "/workspace/output",
     repoRoot: "/workspace/repo"

@@ -15,9 +15,9 @@ import {
 import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import {
   JSON_STEP_SYSTEM_MESSAGE,
-  MISSING_INFORMATION_DISCIPLINE_BLOCK
+  MISSING_INFORMATION_DISCIPLINE_BLOCK,
+  formatQuotedValues
 } from "./shared-step-system-blocks.ts";
-import { createValidationReportV1Resolve } from "./step-resolve-helpers.ts";
 
 const SEMANTIC_VALIDATION_SYSTEM_ADDITION = [
   "## Current Step: Semantic Validation",
@@ -134,13 +134,14 @@ export class SemanticValidationStep implements StepDefinition {
 
   prepare(context: FileReviewContext): StepExecutionPlan {
     const candidatePayload = requireCandidatePayload(context);
+    const reviewBasis = context.getReviewBasis();
 
     return {
       stepId: this.stepId,
       prompt: {
         systemMessage: [
           JSON_STEP_SYSTEM_MESSAGE,
-          MISSING_INFORMATION_DISCIPLINE_BLOCK.content,
+          MISSING_INFORMATION_DISCIPLINE_BLOCK,
           SEMANTIC_VALIDATION_SYSTEM_ADDITION
         ].join("\n\n"),
         userMessage: buildSemanticValidationUserMessage(
@@ -162,12 +163,22 @@ export class SemanticValidationStep implements StepDefinition {
         model: "gpt-5.4-mini",
         timeoutMs: REVIEW_TURN_TIMEOUT_MS
       },
-      resolve: createValidationReportV1Resolve({
-        filePath: context.filePath,
-        diffContent: context.diffContent,
-        reviewBasis: context.getReviewBasis(),
-        candidatePayload
-      })
+      resolve: async (response, services) => {
+        const validated = services.validator.validateValidationReportV1WithReport({
+          responseText: response,
+          candidateFindings: candidatePayload,
+          ...(reviewBasis === undefined ? {} : { reviewBasis }),
+          filePath: context.filePath,
+          diffContent: context.diffContent
+        });
+
+        return (targetContext: FileReviewContext) => {
+          targetContext.setValidationReportV1(validated.payload);
+          targetContext.setMissingInformationItems(
+            validated.payload.missingInformationItems
+          );
+        };
+      }
     };
   }
 }
@@ -200,8 +211,4 @@ function requireCandidatePayload(context: FileReviewContext): CandidateFindings 
     );
   }
   return candidatePayload;
-}
-
-function formatQuotedValues(values: readonly string[]): string {
-  return values.map((value) => `"${value}"`).join(", ");
 }

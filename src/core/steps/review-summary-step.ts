@@ -6,12 +6,13 @@ import type {ReviewStatePromptSerializer} from "../review-state-prompt-serialize
 import {countMustFindings, countNiceFindings} from "../risk-level.ts";
 import type {StepExecutionPlan, StepDefinition} from "../step-runner.ts";
 import {MARKDOWN_STEP_SYSTEM_MESSAGE} from "./shared-step-system-blocks.ts";
-import {
-    createReviewSummaryResolve,
-    type ReviewSummaryNarrativeSectionPattern
-} from "./step-resolve-helpers.ts";
 
 type ReviewSummaryLanguage = "zh-TW" | "en";
+
+interface ReviewSummaryNarrativeSectionPattern {
+    readonly label: string;
+    readonly pattern: RegExp;
+}
 
 const REVIEW_SUMMARY_NARRATIVE_SECTIONS: Record<
     ReviewSummaryLanguage,
@@ -94,14 +95,21 @@ export class ReviewSummaryStep implements StepDefinition {
                 model: "gpt-5.4-mini",
                 timeoutMs: REVIEW_TURN_TIMEOUT_MS
             },
-            resolve: createReviewSummaryResolve({
-                stepId,
-                filePath: context.filePath,
-                sectionKey: SUMMARY_SECTION_KEY,
-                narrativeSections: REVIEW_SUMMARY_NARRATIVE_SECTIONS[this.#language],
-                composeReport: (response) =>
-                    composeReviewSummaryReport(response, summaryStatus, this.#language)
-            })
+            resolve: async (response) => {
+                rejectMalformedReviewSummaryNarrative(
+                    response,
+                    REVIEW_SUMMARY_NARRATIVE_SECTIONS[this.#language]
+                );
+                const sectionContent = composeReviewSummaryReport(
+                    response,
+                    summaryStatus,
+                    this.#language
+                );
+
+                return (targetContext: FileReviewContext) => {
+                    targetContext.setSection(SUMMARY_SECTION_KEY, sectionContent);
+                };
+            }
         };
     }
 }
@@ -209,4 +217,21 @@ function composeReviewSummaryReport(
         "",
         narrative
     ].join("\n");
+}
+
+function rejectMalformedReviewSummaryNarrative(
+    response: string,
+    narrativeSections: readonly ReviewSummaryNarrativeSectionPattern[]
+): void {
+    if (response.trim().length === 0) {
+        throw new Error("Review Summary narrative response is empty");
+    }
+
+    for (const section of narrativeSections) {
+        if (!section.pattern.test(response)) {
+            throw new Error(
+                `Review Summary narrative is missing required section: ${section.label}`
+            );
+        }
+    }
 }
