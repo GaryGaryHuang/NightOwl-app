@@ -234,11 +234,33 @@ function appendRetryRepairContext(userMessage: string, retryFeedback: string): s
     userMessage,
     "",
     "<retry_repair_context>",
-    "The previous attempt failed deterministic validation or completion checking.",
-    "Use this block only as correction feedback for the same current-step inputs; do not treat it as new review evidence.",
-    "Regenerate the complete output for this step. Do not output a patch, diff, partial field list, explanation, or analysis note.",
-    "Fix the named parse, schema, provenance, coverage, or completion issue while preserving valid high-signal content from the current prompt.",
+    "Previous attempt status:",
+    "- The previous response failed host deterministic validation or completion checking for this step.",
+    "",
+    "Repair authority:",
+    "- The current step system message and original user prompt above remain the output contract.",
+    "- This block is diagnostic feedback only, not new review evidence or new source input.",
+    "",
+    "Validation feedback:",
     retryFeedback,
+    "",
+    "Repair task:",
+    "1. Re-read the current step output contract and required final packaging.",
+    "2. Internally identify each listed validation or completion failure and the contract rule it violates; do not include that analysis in the output.",
+    "3. Fix only the listed failures.",
+    "4. Preserve source-grounded content from the current step inputs unless it conflicts with a listed failure.",
+    "5. If a failure cannot be satisfied without violating the step contract or fabricating content, keep the output contract-valid and use the step's allowed uncertainty, omission, or fallback behavior instead of inventing data.",
+    "6. Return one complete replacement output for the current step.",
+    "",
+    "Before finishing, self-check the drafted output:",
+    "- Each listed failure is resolved.",
+    "- No new validation or completion failure was introduced.",
+    "- No contract-required source-grounded content, field, or section was dropped or weakened unless the listed failure required it.",
+    "- Required fields or sections, allowed values, cross-references, coverage, and final packaging satisfy the current step contract where that contract requires them.",
+    "",
+    "Output constraints:",
+    "- Return one complete output for the current step; do not output a patch, diff, or partial field list.",
+    "- Do not output analysis, scratch notes, or a follow-up question.",
     "</retry_repair_context>"
   ].join("\n");
 }
@@ -247,10 +269,7 @@ function buildRetryFeedback(error: unknown): string {
   if (error instanceof StructuredValidationReportError) {
     const rejectedEntries = error.report.filter((entry) => entry.outcome === "rejected");
     const entries = rejectedEntries.length > 0 ? rejectedEntries : error.report;
-    const details = entries.map(
-      (entry) =>
-        `- findingId=${entry.findingId}; gate=${entry.gate}; taxonomy=${entry.taxonomy}; reason=${entry.reason}`
-    );
+    const details = entries.map(formatStructuredValidationReportEntry);
 
     return [
       "Structured validation report:",
@@ -260,4 +279,17 @@ function buildRetryFeedback(error: unknown): string {
 
   const message = error instanceof Error ? error.message : String(error);
   return `Failure reason: ${message}`;
+}
+
+function formatStructuredValidationReportEntry(
+  entry: StructuredValidationReportEntry
+): string {
+  const fields = [
+    `findingId=${entry.findingId}`,
+    `gate=${entry.gate}`,
+    `taxonomy=${entry.taxonomy}`,
+    `reason=${entry.reason}`
+  ];
+
+  return `- ${fields.join("; ")}`;
 }
