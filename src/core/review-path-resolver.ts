@@ -142,5 +142,5 @@ function buildNoteFileName(filePath: string, parentDepth: number): string {
   const depth = Math.min(parentDepth, availableParents.length);
   const parentSegments = availableParents.slice(-depth);
 
-  return `${parentSegments.join("__")}__${fileName}.md`;
+  return `${parentSegments.join("_")}_${fileName}.md`;
 }

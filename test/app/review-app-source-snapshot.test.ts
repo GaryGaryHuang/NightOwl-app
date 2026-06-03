@@ -206,7 +206,7 @@ test("createLocalReviewRunApp keeps snapshot implementation details out of user-
 
     const indexContent = readFileSync(result.outputTarget.indexPath, "utf8");
     const noteContent = readFileSync(
-      path.join(result.outputTarget.filesPath, "src__app.ts.md"),
+      path.join(result.outputTarget.filesPath, "src_app.ts.md"),
       "utf8"
     );
     const artifactContent = `${indexContent}\n${noteContent}`;

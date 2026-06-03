@@ -74,14 +74,14 @@ test("planNoteFiles maps changed files to deterministic markdown note paths", ()
     {
       label: "nested file",
       changedFiles: ["src/server/routes/foo.ts"],
-      expectedFileNames: ["routes__foo.ts.md"]
+      expectedFileNames: ["routes_foo.ts.md"]
     },
     {
       label: "two-way filename conflict",
       changedFiles: ["src/api/index.ts", "tests/api/index.ts"],
       expectedFileNames: [
-        "src__api__index.ts.md",
-        "tests__api__index.ts.md"
+        "src_api_index.ts.md",
+        "tests_api_index.ts.md"
       ]
     },
     {
@@ -92,9 +92,9 @@ test("planNoteFiles maps changed files to deterministic markdown note paths", ()
         "src/api/index.ts"
       ],
       expectedFileNames: [
-        "z__src__api__index.ts.md",
-        "a__src__api__index.ts.md",
-        "src__api__index.ts.md"
+        "z_src_api_index.ts.md",
+        "a_src_api_index.ts.md",
+        "src_api_index.ts.md"
       ]
     }
   ];
