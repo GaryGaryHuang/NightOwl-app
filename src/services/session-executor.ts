@@ -21,6 +21,7 @@ import { SessionTurnAbortedError } from "../core/session-turn-aborted-error.ts";
 const SESSION_EXECUTOR_REUSE_ERROR =
   "SessionExecutor instances are single-use; create a new executor for each turn.";
 const SESSION_ABORT_WAIT_TIMEOUT_MS = 1000;
+const SESSION_DISCONNECT_AFTER_ABORT_WAIT_TIMEOUT_MS = 1000;
 
 export class SessionExecutor {
   readonly #session: SessionLike;
@@ -99,7 +100,10 @@ export class SessionExecutor {
       }
       await waitForAbortAttempt(abortPromise);
       // Each executor is one-shot: release the in-memory session immediately after the exchange.
-      await this.#session.disconnect().catch(() => {});
+      await disconnectSession(this.#session, {
+        signal,
+        timeoutMsAfterAbort: SESSION_DISCONNECT_AFTER_ABORT_WAIT_TIMEOUT_MS
+      });
     }
   }
 }
@@ -111,13 +115,56 @@ async function waitForAbortAttempt(
     return;
   }
 
+  await waitWithTimeout(abortPromise, SESSION_ABORT_WAIT_TIMEOUT_MS);
+}
+
+async function disconnectSession(
+  session: SessionLike,
+  options: { signal?: AbortSignal; timeoutMsAfterAbort: number }
+): Promise<void> {
+  const disconnectPromise = session.disconnect().catch(() => {});
+  const signal = options.signal;
+  if (!signal) {
+    await disconnectPromise;
+    return;
+  }
+
+  if (signal.aborted) {
+    await waitWithTimeout(disconnectPromise, options.timeoutMsAfterAbort);
+    return;
+  }
+
+  let removeAbortListener: (() => void) | undefined;
+  const abortDuringDisconnect = new Promise<"aborted">((resolve) => {
+    const handleAbort = (): void => resolve("aborted");
+    signal.addEventListener("abort", handleAbort, { once: true });
+    removeAbortListener = () => signal.removeEventListener("abort", handleAbort);
+  });
+
+  try {
+    const result = await Promise.race([
+      disconnectPromise.then(() => "disconnected" as const),
+      abortDuringDisconnect
+    ]);
+    if (result === "aborted") {
+      await waitWithTimeout(disconnectPromise, options.timeoutMsAfterAbort);
+    }
+  } finally {
+    removeAbortListener?.();
+  }
+}
+
+async function waitWithTimeout(
+  promise: Promise<void>,
+  timeoutMs: number
+): Promise<void> {
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
   try {
     await Promise.race([
-      abortPromise,
+      promise,
       new Promise<void>((resolve) => {
-        timeoutHandle = setTimeout(resolve, SESSION_ABORT_WAIT_TIMEOUT_MS);
+        timeoutHandle = setTimeout(resolve, timeoutMs);
       })
     ]);
   } finally {

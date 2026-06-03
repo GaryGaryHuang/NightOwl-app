@@ -205,6 +205,78 @@ test("SessionExecutor rejects on abort even when the in-flight turn never settle
   assert.deepEqual(calls, ["sendAndWait", "abort", "disconnect"]);
 });
 
+test("SessionExecutor timeboxes disconnect after abort so interrupted turns can settle", async () => {
+  const controller = new AbortController();
+  const calls: string[] = [];
+  const session = {
+    async sendAndWait() {
+      calls.push("sendAndWait");
+      return await new Promise<{ data?: { content?: string } } | undefined>(() => {});
+    },
+    async abort() {
+      calls.push("abort");
+    },
+    async disconnect() {
+      calls.push("disconnect");
+      return await new Promise<void>(() => {});
+    }
+  };
+
+  const executor = new SessionExecutor(session);
+  const pending = executor.sendAndWait("analyze this changeset", 300_000, controller.signal);
+  controller.abort("SIGINT");
+
+  const result = await Promise.race([
+    pending.then(
+      () => "resolved",
+      (error: unknown) => error instanceof SessionTurnAbortedError
+        ? "interrupted"
+        : "unexpected-error"
+    ),
+    new Promise<"timed-out">((resolve) => setTimeout(resolve, 1500, "timed-out"))
+  ]);
+
+  assert.equal(result, "interrupted");
+  assert.deepEqual(calls, ["sendAndWait", "abort", "disconnect"]);
+});
+
+test("SessionExecutor timeboxes disconnect when abort arrives during disconnect cleanup", async () => {
+  const controller = new AbortController();
+  const calls: string[] = [];
+  const session = {
+    async sendAndWait() {
+      calls.push("sendAndWait");
+      return {
+        data: {
+          content: "completed response"
+        }
+      };
+    },
+    async abort() {
+      calls.push("abort");
+    },
+    async disconnect() {
+      calls.push("disconnect");
+      queueMicrotask(() => controller.abort("SIGINT"));
+      return await new Promise<void>(() => {});
+    }
+  };
+
+  const executor = new SessionExecutor(session);
+  const pending = executor.sendAndWait("analyze this changeset", 300_000, controller.signal);
+
+  const result = await Promise.race([
+    pending.then(
+      (value) => value,
+      () => "rejected"
+    ),
+    new Promise<"timed-out">((resolve) => setTimeout(resolve, 1500, "timed-out"))
+  ]);
+
+  assert.equal(result, "completed response");
+  assert.deepEqual(calls, ["sendAndWait", "disconnect"]);
+});
+
 test("SessionExecutor does not send a late abort after the turn already settled", async () => {
   const controller = new AbortController();
   const calls: string[] = [];
