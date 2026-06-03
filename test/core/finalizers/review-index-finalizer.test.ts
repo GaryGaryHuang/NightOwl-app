@@ -15,7 +15,7 @@ import {
 
 function renderIndex(input: {
   changesetOverviewMarkdown?: string;
-  outputTarget?: ReturnType<typeof createOutputTarget>;
+  basePath?: string;
   plannedNotes: PlannedNoteFile[];
   successfulFiles: SuccessfulFileOutcome[];
   skippedFiles: SkippedFileOutcome[];
@@ -30,7 +30,7 @@ function renderIndex(input: {
         "- Behavior changes: adds a review flow",
         "- Test coverage observations: no corresponding test changes observed"
       ].join("\n"),
-    outputTarget: input.outputTarget ?? createOutputTarget(),
+    basePath: input.basePath ?? createOutputTarget().basePath,
     plannedNotes: input.plannedNotes,
     resolvedOutcomes: createResolvedOutcomes(input.plannedNotes, input.successfulFiles, input.skippedFiles)
   });
@@ -68,6 +68,8 @@ test("ReviewIndexFinalizer renders review overview, change context, and grouped 
   assert.match(rendered, /## Clean Files/u);
   assert.doesNotMatch(rendered, /## Files Requiring Attention/u);
   assert.doesNotMatch(rendered, /## File Notes/u);
+  assert.doesNotMatch(rendered, /candidate-findings/u);
+  assert.doesNotMatch(rendered, /deterministic validation failed/u);
   assertTextContainsInOrder(rendered, [
     "## Review Overview",
     "- Findings: must=0, nice=0",
@@ -99,13 +101,7 @@ test("ReviewIndexFinalizer renders an explicit empty clean-files section for zer
 
 test("ReviewIndexFinalizer preserves collision-resolved note targets and forward slashes", () => {
   const rendered = renderIndex({
-    outputTarget: createOutputTarget({
-      basePath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430`,
-      changesetOverviewPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\changeset-overview.md`,
-      filesPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\files`,
-      indexPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\index.md`,
-      toolAuditPath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430\tool-audit.jsonl`
-    }),
+    basePath: String.raw`C:\workspace\.nightowl\review\feature-branch_03131430`,
     plannedNotes: createPlannedNotes([
       windowsPlannedNote("src/api/index.ts", "src__api__index.ts.md"),
       windowsPlannedNote("tests/api/index.ts", "tests__api__index.ts.md")
@@ -127,7 +123,6 @@ test("ReviewIndexFinalizer preserves collision-resolved note targets and forward
 
 test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => {
   const rendered = renderIndex({
-    outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
       plannedNote("foo bar.ts", "foo bar.ts.md"),
       plannedNote("foo#bar).ts", "foo#bar).ts.md")
@@ -147,7 +142,6 @@ test("ReviewIndexFinalizer percent-encodes Markdown-unsafe note targets", () => 
 
 test("ReviewIndexFinalizer splits successful files into attention and clean sections", () => {
   const rendered = renderIndex({
-    outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
       plannedNote("nice.ts"),
       plannedNote("clean.ts"),
@@ -187,7 +181,6 @@ test("ReviewIndexFinalizer splits successful files into attention and clean sect
 
 test("ReviewIndexFinalizer preserves planned order within the clean-files section", () => {
   const rendered = renderIndex({
-    outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
       plannedNote("a.ts"),
       plannedNote("b.ts"),
@@ -207,11 +200,14 @@ test("ReviewIndexFinalizer preserves planned order within the clean-files sectio
     "- [`b.ts`](./files/b.ts.md)",
     "- [`c.ts`](./files/c.ts.md)"
   ]);
+  const cleanSection = rendered.slice(rendered.indexOf("## Clean Files"));
+  assert.doesNotMatch(cleanSection, /must=/u);
+  assert.doesNotMatch(cleanSection, /nice=/u);
+  assert.doesNotMatch(cleanSection, /\[Passed\]/u);
 });
 
 test("ReviewIndexFinalizer separates missing-information files from clean files", () => {
   const rendered = renderIndex({
-    outputTarget: createOutputTarget(),
     plannedNotes: createPlannedNotes([
       plannedNote("src/clean.ts"),
       plannedNote("src/blocked.ts")

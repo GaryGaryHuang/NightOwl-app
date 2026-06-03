@@ -11,7 +11,6 @@
     "test/core/file-review-context.test.ts",
     "test/core/finalizers/review-index-finalizer.test.ts",
     "test/core/finalizers/review-note-finalizer.test.ts",
-    "test/core/finalizers/run-summary-section.test.ts",
     "test/core/finding-anchor-context.test.ts",
     "test/core/nightowl-namespace-path.test.ts",
     "test/core/nightowl-namespace.test.ts",

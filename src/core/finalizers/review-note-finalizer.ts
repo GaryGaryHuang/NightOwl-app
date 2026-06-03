@@ -52,26 +52,12 @@ export function renderReviewNote(
     if (
       preFindingsSections.length === 0 &&
       !findingsSection &&
-      postFindingsSections.length === 0 &&
-      !warningBlock
-    ) {
-      return [
-        ...renderFileHeader(context.filePath),
-        "- Status: Review not yet generated."
-      ].join("\n");
-    }
-
-    if (
-      preFindingsSections.length === 0 &&
-      !findingsSection &&
-      postFindingsSections.length === 0 &&
-      warningBlock
+      postFindingsSections.length === 0
     ) {
       return [
         ...renderFileHeader(context.filePath),
         "- Status: Review not yet generated.",
-        "",
-        warningBlock
+        ...(warningBlock ? ["", warningBlock] : [])
       ].join("\n");
     }
 
@@ -123,22 +109,17 @@ function renderFindingsSection(
     return ["## Findings", "- None"].join("\n");
   }
 
-  const mustFindings = findings.filter((f) => f.priority === "must_fix");
-  const niceFindings = findings.filter((f) => f.priority === "nice_to_have");
-  const statsLine = `${mustFindings.length} must-fix issue(s), ${niceFindings.length} nice-to-have suggestion(s).`;
+  const orderedFindings = [
+    ...findings.filter((f) => f.priority === "must_fix"),
+    ...findings.filter((f) => f.priority === "nice_to_have")
+  ];
 
-  // Keep must-fix findings ahead so the rendered note is stable and priority-ordered.
   return [
     "## Findings",
-    statsLine,
-    ...[...mustFindings, ...niceFindings].flatMap((finding) => [
-      `- [${finding.priority}] ${finding.title}`,
-      `  - Traceability: ${formatTraceability(finding.traceability)}`,
-      `  - Evidence：${finding.evidence}`,
-      `  - Trigger Condition：${finding.triggerCondition}`,
-      `  - Impact：${finding.impact}`,
-      `  - Counter-Evidence：${finding.counterEvidence.join("; ") || "none"}`
-    ])
+    ...orderedFindings.map(
+      (finding) =>
+        `- [${finding.priority}] ${finding.title} (${formatTraceability(finding.traceability)})`
+    )
   ].join("\n");
 }
 
@@ -167,6 +148,6 @@ function renderInterruptionWarning(
 
   return [
     "> [!WARNING] Review Interrupted",
-    `> 本檔案在執行 ${interruption.stepId} 時失敗（原因：${interruption.reason}），後續審查已略過。`
+    `> This file failed while running ${interruption.stepId} (reason: ${interruption.reason}); later review steps were skipped.`
   ].join("\n");
 }

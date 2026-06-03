@@ -406,8 +406,8 @@ export class ReviewOrchestrator {
       input.outputPublisher.publishArtifact("index", {
         content: this.#renderReviewIndex({
           changesetOverviewMarkdown: input.runContext.changesetOverviewMarkdown,
+          basePath: input.outputTarget.basePath,
           resolvedOutcomes: input.resolvedOutcomes,
-          outputTarget: input.outputTarget,
           plannedNotes: input.plannedNoteFiles
         })
       })
