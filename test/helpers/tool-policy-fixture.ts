@@ -57,7 +57,6 @@ export function createPolicySession(options?: {
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
   hostnameClassifier?: WebFetchHostnameClassifier;
-  webFetchHostnameClassificationTimeoutMs?: number;
   auditWriter?: ToolAuditSink;
 }) {
   const guard = new ToolPolicyGuard({
@@ -69,13 +68,7 @@ export function createPolicySession(options?: {
       : { webFetchDeniedHosts: options.webFetchDeniedHosts }),
     hostnameClassifier:
       options?.hostnameClassifier ??
-      new FakeHostnameClassifier({ kind: "allowed" }),
-    ...(options?.webFetchHostnameClassificationTimeoutMs === undefined
-      ? {}
-      : {
-          webFetchHostnameClassificationTimeoutMs:
-            options.webFetchHostnameClassificationTimeoutMs
-        }),
+      new FakeHostnameClassifier({ kind: "allowed" })
   });
 
   return {
@@ -89,7 +82,6 @@ export function createWebFetchPolicy(options?: {
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
   hostnameClassifier?: WebFetchHostnameClassifier;
-  webFetchHostnameClassificationTimeoutMs?: number;
 }) {
   return new ToolPolicyWebFetchPolicy({
     ...(options?.webFetchAllowedHosts === undefined
@@ -100,13 +92,7 @@ export function createWebFetchPolicy(options?: {
       : { webFetchDeniedHosts: options.webFetchDeniedHosts }),
     hostnameClassifier:
       options?.hostnameClassifier ??
-      new FakeHostnameClassifier({ kind: "allowed" }),
-    ...(options?.webFetchHostnameClassificationTimeoutMs === undefined
-      ? {}
-      : {
-          webFetchHostnameClassificationTimeoutMs:
-            options.webFetchHostnameClassificationTimeoutMs
-        }),
+      new FakeHostnameClassifier({ kind: "allowed" })
   });
 }
 

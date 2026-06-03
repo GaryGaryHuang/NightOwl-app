@@ -23,8 +23,7 @@ import {
 } from "./tool-policy-web-fetch-policy.ts";
 import type {
   ToolPolicyBoundaryContext,
-  ToolPolicyDecision,
-  ToolPolicyDecisionDeny
+  ToolPolicyDecision
 } from "./tool-policy-types.ts";
 
 type PreToolUseHook = NonNullable<
@@ -35,13 +34,6 @@ type PreToolUseHookResult = Awaited<ReturnType<PreToolUseHook>>;
 
 const SHELL_TOOL_NAMES = new Set(["bash", "sh", "shell"]);
 const URL_TOOL_NAMES = new Set(["web_fetch", "url"]);
-const AUDITED_PASS_THROUGH_TOOL_ARGS = new Map<string, readonly string[]>([
-  ["list_bash", []],
-  ["read_bash", ["shellId", "delay"]],
-  ["stop_bash", ["shellId"]],
-  ["list_agents", ["include_completed"]],
-  ["read_agent", ["agent_id", "wait", "timeout", "since_turn"]]
-]);
 const SHELL_POLICY_FAIL_CLOSED_REASON =
   "Shell policy evaluation failed; denied as a precaution.";
 const CUSTOM_TOOL_DENY_REASON =
@@ -64,12 +56,7 @@ const READ_PATH_BOUNDARY_DENY_REASON =
   "Read path is outside the allowed review source boundary. For repository files, retry with a repo-relative `view.path`; do not pass absolute paths.";
 const READ_REVIEW_ARTIFACT_DENY_REASON =
   "On-disk `.nightowl/review/**` artifacts are not retrievable review evidence. Use only the review state supplied by the host for the current run.";
-const PRE_TOOL_USE_NOT_HANDLED = Symbol("pre-tool-use-not-handled");
 
-// Module-scoped intermediate decision record produced by each kind branch inside
-// buildPermissionHandler. A single post-dispatch segment reads this record to
-// write the audit entry and return the SDK result, keeping audit assembly logic
-// in one place rather than duplicated across every branch.
 type HandlerDecisionRecord = {
   tool: string;
   decision: "allow" | "deny";
@@ -78,12 +65,7 @@ type HandlerDecisionRecord = {
 };
 type PermissionRequestPayload = PermissionRequest & Record<string, unknown>;
 
-type PreToolUseDecisionResult =
-  | PreToolUseHookResult
-  | typeof PRE_TOOL_USE_NOT_HANDLED;
-
-export interface ToolPolicyGuardOptions
-  extends ToolPolicyWebFetchPolicyOptions {}
+export type ToolPolicyGuardOptions = ToolPolicyWebFetchPolicyOptions;
 
 /**
  * Enforce the review session tool boundary for url retrieval, shell, and file access.
@@ -105,18 +87,11 @@ export class ToolPolicyGuard {
     };
   }
 
-  #denyDecision(reason: string): ToolPolicyDecisionDeny {
+  #denyDecision(reason: string): ToolPolicyDecision {
     return {
       permissionDecision: "deny",
       permissionDecisionReason: reason
     };
-  }
-
-  #buildStringArgs(
-    key: string,
-    value: string
-  ): Record<string, string | undefined> {
-    return { [key]: value };
   }
 
   #buildPolicyDecisionRecord(
@@ -150,32 +125,6 @@ export class ToolPolicyGuard {
       : "";
   }
 
-  #extractHookPrimitiveArgs(
-    toolArgs: unknown,
-    keys: readonly string[]
-  ): Record<string, string | undefined> {
-    if (!toolArgs || typeof toolArgs !== "object") {
-      return {};
-    }
-
-    const record = toolArgs as Record<string, unknown>;
-    const args: Record<string, string | undefined> = {};
-
-    for (const key of keys) {
-      const value = record[key];
-
-      if (
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean"
-      ) {
-        args[key] = String(value);
-      }
-    }
-
-    return args;
-  }
-
   #evaluateShellPolicyDecision(
     command: string,
     profile: ToolPolicyBoundaryContext,
@@ -196,52 +145,49 @@ export class ToolPolicyGuard {
     }
   }
 
-  async #handlePreToolUseStringPolicy(options: {
-    input: PreToolUseHookInput;
-    auditWriter?: ToolAuditSink;
-    toolNames: ReadonlySet<string>;
-    argName: string;
-    evaluate: (value: string) => ToolPolicyDecision | Promise<ToolPolicyDecision>;
-    failClosedReason: string;
-  }): Promise<PreToolUseDecisionResult> {
-    if (!options.toolNames.has(options.input.toolName)) {
-      return PRE_TOOL_USE_NOT_HANDLED;
-    }
-
+  async #handlePreToolUseStringPolicy(
+    input: PreToolUseHookInput,
+    auditWriter: ToolAuditSink | undefined,
+    argName: string,
+    evaluate: (value: string) => ToolPolicyDecision | Promise<ToolPolicyDecision>,
+    failClosedReason: string
+  ): Promise<PreToolUseHookResult> {
     let value = "";
 
     try {
-      value = this.#extractHookStringArg(options.input.toolArgs, options.argName);
+      value = this.#extractHookStringArg(input.toolArgs, argName);
 
       if (!value) {
-        options.auditWriter?.append(this.#buildAuditEntry({
-          tool: options.input.toolName,
+        auditWriter?.append(this.#buildAuditEntry({
+          tool: input.toolName,
           decision: "allow",
           reason: EMPTY_TOOL_ARGS_DEFERRED_REASON,
-          args: this.#buildStringArgs(options.argName, "")
+          args: { [argName]: "" }
         }));
 
         return;
       }
 
-      const decision = await options.evaluate(value);
+      const decision = await evaluate(value);
+      const args = { [argName]: value };
 
-      options.auditWriter?.append(this.#buildAuditEntry(
+      auditWriter?.append(this.#buildAuditEntry(
         this.#buildPolicyDecisionRecord(
-          options.input.toolName,
-          this.#buildStringArgs(options.argName, value),
+          input.toolName,
+          args,
           decision
         )
       ));
 
       return decision;
     } catch {
-      const decision = this.#denyDecision(options.failClosedReason);
+      const decision = this.#denyDecision(failClosedReason);
+      const args = { [argName]: value };
 
-      options.auditWriter?.append(this.#buildAuditEntry(
+      auditWriter?.append(this.#buildAuditEntry(
         this.#buildPolicyDecisionRecord(
-          options.input.toolName,
-          this.#buildStringArgs(options.argName, value),
+          input.toolName,
+          args,
           decision
         )
       ));
@@ -249,29 +195,6 @@ export class ToolPolicyGuard {
       return decision;
     }
   }
-
-  #handlePreToolUsePassThroughAudit(options: {
-    input: PreToolUseHookInput;
-    auditWriter?: ToolAuditSink;
-  }): PreToolUseDecisionResult {
-    const auditArgKeys = AUDITED_PASS_THROUGH_TOOL_ARGS.get(options.input.toolName);
-
-    if (!auditArgKeys) {
-      return PRE_TOOL_USE_NOT_HANDLED;
-    }
-
-    options.auditWriter?.append(this.#buildAuditEntry({
-      tool: options.input.toolName,
-      decision: "allow",
-      args: this.#extractHookPrimitiveArgs(options.input.toolArgs, auditArgKeys)
-    }));
-
-    return;
-  }
-
-  // --- Per-kind permission evaluators ---
-  // Each method extracts request args and returns a HandlerDecisionRecord.
-  // Adding a new SDK permission kind requires only a new evaluator + a dispatch entry.
 
   #evaluateRead(
     request: PermissionRequestPayload,
@@ -332,7 +255,7 @@ export class ToolPolicyGuard {
         ? request.fullCommandText
         : "";
     const args = fullCommandText
-      ? this.#buildStringArgs("fullCommandText", fullCommandText)
+      ? { fullCommandText }
       : {};
 
     if (!fullCommandText) {
@@ -350,7 +273,7 @@ export class ToolPolicyGuard {
     request: PermissionRequestPayload
   ): Promise<HandlerDecisionRecord> {
     const url = typeof request.url === "string" ? request.url : "";
-    const args = url ? this.#buildStringArgs("url", url) : {};
+    const args = url ? { url } : {};
 
     if (!url) {
       return { tool: "url", decision: "allow", args };
@@ -456,8 +379,7 @@ export class ToolPolicyGuard {
   //   - onPermissionRequest (PermissionHandler): intercepts SDK permission request
   //     events, covering read / write / shell / url / mcp / custom-tool etc.
   //   - onPreToolUse (PreToolUseHook): first gate before tool execution,
-  //     used for inline tool-args validation of web_fetch and bash tools, and
-  //     pass-through audit records for session/agent status tools.
+  //     used for inline tool-args validation of web_fetch and bash tools.
   //
   // Both paths fire independently and are not mutually exclusive. A single AI
   // tool call may therefore produce two audit log entries — one from each path.
@@ -523,55 +445,29 @@ export class ToolPolicyGuard {
     auditWriter?: ToolAuditSink
   ): PreToolUseHook {
     return async (input: PreToolUseHookInput): Promise<PreToolUseHookResult> => {
-      // Per-call registry: ordered list of string-arg policies. First matching
-      // toolName short-circuits. Adding a new pre-tool-use kind requires only
-      // one additional entry. Closures capture `profile` and `input.workingDirectory`.
-      const policies: ReadonlyArray<{
-        toolNames: ReadonlySet<string>;
-        argName: string;
-        evaluate: (value: string) =>
-          | ToolPolicyDecision
-          | Promise<ToolPolicyDecision>;
-        failClosedReason: string;
-      }> = [
-        {
-          toolNames: URL_TOOL_NAMES,
-          argName: "url",
-          evaluate: (url) => this.#evaluateUrlPolicyDecision(url),
-          failClosedReason: WEB_FETCH_POLICY_FAIL_CLOSED_REASON
-        },
-        {
-          toolNames: SHELL_TOOL_NAMES,
-          argName: "command",
-          evaluate: (command) =>
+      if (URL_TOOL_NAMES.has(input.toolName)) {
+        return this.#handlePreToolUseStringPolicy(
+          input,
+          auditWriter,
+          "url",
+          (url) => this.#evaluateUrlPolicyDecision(url),
+          WEB_FETCH_POLICY_FAIL_CLOSED_REASON
+        );
+      }
+
+      if (SHELL_TOOL_NAMES.has(input.toolName)) {
+        return this.#handlePreToolUseStringPolicy(
+          input,
+          auditWriter,
+          "command",
+          (command) =>
             this.#evaluateShellPolicyDecision(
               command,
               profile,
               input.workingDirectory
             ),
-          failClosedReason: SHELL_POLICY_FAIL_CLOSED_REASON
-        }
-      ];
-
-      for (const policy of policies) {
-        const result = await this.#handlePreToolUseStringPolicy({
-          input,
-          auditWriter,
-          ...policy
-        });
-
-        if (result !== PRE_TOOL_USE_NOT_HANDLED) {
-          return result;
-        }
-      }
-
-      const passThroughAuditResult = this.#handlePreToolUsePassThroughAudit({
-        input,
-        auditWriter
-      });
-
-      if (passThroughAuditResult !== PRE_TOOL_USE_NOT_HANDLED) {
-        return passThroughAuditResult;
+          SHELL_POLICY_FAIL_CLOSED_REASON
+        );
       }
 
       return;
@@ -640,9 +536,7 @@ export {
   READ_REVIEW_ARTIFACT_DENY_REASON,
   READONLY_BASH_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
-  SHELL_TOOL_NAMES,
   UNKNOWN_KIND_DENY_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
-  URL_TOOL_NAMES,
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
 };

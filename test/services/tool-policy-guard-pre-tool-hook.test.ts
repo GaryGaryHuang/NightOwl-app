@@ -224,73 +224,22 @@ test("tool policy guard pre-tool hook writes representative audit records for al
   });
 });
 
-test("tool policy guard pre-tool hook audits allowed session and agent read tools", async () => {
+test("tool policy guard pre-tool hook bypasses session and agent read tools without audit records", async () => {
   const sink = new InMemoryAuditSink();
   const { hook } = createPolicySession({ auditWriter: sink });
-  const cases = [
-    {
-      input: createHookInput("list_bash"),
-      expectedAudit: { tool: "list_bash", args: {} }
-    },
-    {
-      input: createHookInput("read_bash", {
-        shellId: "shell-1",
-        delay: 5
-      }),
-      expectedAudit: {
-        tool: "read_bash",
-        args: { shellId: "shell-1", delay: "5" }
-      }
-    },
-    {
-      input: createHookInput("stop_bash", {
-        shellId: "shell-1"
-      }),
-      expectedAudit: {
-        tool: "stop_bash",
-        args: { shellId: "shell-1" }
-      }
-    },
-    {
-      input: createHookInput("list_agents", {
-        include_completed: false
-      }),
-      expectedAudit: {
-        tool: "list_agents",
-        args: { include_completed: "false" }
-      }
-    },
-    {
-      input: createHookInput("read_agent", {
-        agent_id: "explore-0",
-        wait: true,
-        timeout: 10,
-        since_turn: 0
-      }),
-      expectedAudit: {
-        tool: "read_agent",
-        args: {
-          agent_id: "explore-0",
-          wait: "true",
-          timeout: "10",
-          since_turn: "0"
-        }
-      }
-    }
+  const inputs = [
+    createHookInput("list_bash"),
+    createHookInput("read_bash", { shellId: "shell-1", delay: 5 }),
+    createHookInput("stop_bash", { shellId: "shell-1" }),
+    createHookInput("list_agents", { include_completed: false }),
+    createHookInput("read_agent", { agent_id: "explore-0", wait: true })
   ] as const;
 
-  for (const testCase of cases) {
-    assert.equal(await hook(testCase.input, SESSION_CONTEXT), undefined);
+  for (const input of inputs) {
+    assert.equal(await hook(input, SESSION_CONTEXT), undefined);
   }
 
-  assert.equal(sink.records.length, cases.length);
-
-  for (const [index, testCase] of cases.entries()) {
-    assertAuditRecord(sink.records[index], {
-      ...testCase.expectedAudit,
-      decision: "allow"
-    });
-  }
+  assert.equal(sink.records.length, 0);
 });
 
 test("tool policy guard pre-tool hook fails closed for shell policy exceptions and preserves command extraction in audit records", async () => {

@@ -6,7 +6,6 @@ import {
   ToolPolicyWebFetchPolicy,
   UNSAFE_WEB_FETCH_URL_REASON
 } from "../../src/services/tool-policy/tool-policy-web-fetch-policy.ts";
-import { UNSAFE_WEB_FETCH_HOSTNAME_REASON } from "../../src/services/tool-policy/web-fetch-hostname-classifier.ts";
 import {
   createWebFetchPolicy,
   FakeHostnameClassifier
@@ -202,87 +201,7 @@ test("tool policy web-fetch policy canonicalizes hostnames for DNS classificatio
   ]);
 });
 
-// Spy-stub that records every address passed to isAllowed() and returns a
-// fixed value. Used to verify that the injected addressPolicy is actually
-// wired into the IP-literal evaluation path.
-class FakeAddressPolicy {
-  readonly calls: string[] = [];
-  readonly #returnValue: boolean;
-
-  constructor(returnValue: boolean) {
-    this.#returnValue = returnValue;
-  }
-
-  isAllowed(address: string): boolean {
-    this.calls.push(address);
-    return this.#returnValue;
-  }
-}
-
-test("tool policy web-fetch policy uses injected addressPolicy for IP literal URLs across IPv4, IPv6, and IPv4-mapped IPv6", async () => {
-  const cases = [
-    {
-      url: "https://93.184.216.34/",
-      returnValue: false,
-      expectedDecision: {
-        permissionDecision: "deny",
-        permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-      },
-      expectedCalls: ["93.184.216.34"]
-    },
-    {
-      url: "https://[2606:2800:220:1:248:1893:25c8:1946]/",
-      returnValue: false,
-      expectedDecision: {
-        permissionDecision: "deny",
-        permissionDecisionReason: UNSAFE_WEB_FETCH_URL_REASON
-      },
-      expectedCalls: ["2606:2800:220:1:248:1893:25c8:1946"]
-    },
-    {
-      url: "https://[::ffff:93.184.216.34]/",
-      returnValue: true,
-      expectedDecision: undefined,
-      expectedCalls: ["::ffff:5db8:d822"]
-    }
-  ] as const;
-
-  for (const testCase of cases) {
-    const addressPolicy = new FakeAddressPolicy(testCase.returnValue);
-    const policy = new ToolPolicyWebFetchPolicy({
-      hostnameClassifier: new FakeHostnameClassifier({ kind: "allowed" }),
-      addressPolicy
-    });
-
-    assert.deepEqual(await policy.evaluate(testCase.url), testCase.expectedDecision);
-    assert.deepEqual(addressPolicy.calls, testCase.expectedCalls);
-  }
-});
-
-test("tool policy web-fetch policy reuses injected addressPolicy for default hostname classification", async () => {
-  const addressPolicy = new FakeAddressPolicy(false);
-  const lookupCalls: string[] = [];
-  const policy = new ToolPolicyWebFetchPolicy({
-    addressPolicy,
-    hostnameLookupFn: async (hostname) => {
-      lookupCalls.push(hostname);
-
-      return [{ address: "93.184.216.34", family: 4 }];
-    }
-  });
-
-  assert.deepEqual(
-    await policy.evaluate("https://Docs.Example.Com/ref"),
-    {
-      permissionDecision: "deny",
-      permissionDecisionReason: UNSAFE_WEB_FETCH_HOSTNAME_REASON
-    }
-  );
-  assert.deepEqual(lookupCalls, ["docs.example.com"]);
-  assert.deepEqual(addressPolicy.calls, ["93.184.216.34"]);
-});
-
-test("tool policy web-fetch policy preserves default IP literal behavior when no addressPolicy is injected", async () => {
+test("tool policy web-fetch policy preserves default IP literal behavior", async () => {
   const policy = createWebFetchPolicy();
 
   assert.equal(await policy.evaluate("https://93.184.216.34/"), undefined);

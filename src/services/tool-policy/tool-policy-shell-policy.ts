@@ -12,11 +12,8 @@ import {
 } from "./shell-command-parser.ts";
 import type {
   ToolPolicyBoundaryContext,
-  ToolPolicyDecision,
-  ToolPolicyDecisionDeny
+  ToolPolicyDecision
 } from "./tool-policy-types.ts";
-
-export type { ToolPolicyDecision, ToolPolicyDecisionDeny } from "./tool-policy-types.ts";
 
 export const READONLY_BASH_DENY_REASON =
   "Review sessions only allow repo-local read-only shell analysis commands.";

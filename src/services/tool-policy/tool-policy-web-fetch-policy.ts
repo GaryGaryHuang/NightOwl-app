@@ -3,17 +3,14 @@ import { isIP } from "node:net";
 import {
   DefaultWebFetchHostnameClassifier,
   DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS,
-  type WebFetchHostnameClassifier,
-  type WebFetchHostnameLookupLike
+  type WebFetchHostnameClassifier
 } from "./web-fetch-hostname-classifier.ts";
 import { canonicalizeHostnameForComparison } from "../../core/web-fetch-hostname-normalization.ts";
 import {
   DefaultWebFetchPublicAddressPolicy,
   type WebFetchPublicAddressPolicy
 } from "./web-fetch-public-address-policy.ts";
-import type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
-
-export type { ToolPolicyDecisionDeny, ToolPolicyDecision } from "./tool-policy-types.ts";
+import type { ToolPolicyDecision } from "./tool-policy-types.ts";
 
 export const UNSAFE_WEB_FETCH_URL_REASON =
   "Review sessions only allow fetching absolute public https URLs.";
@@ -21,75 +18,37 @@ export const CONFIGURED_WEB_FETCH_HOST_REASON =
   "Review sessions only allow fetching configured public https hosts.";
 
 export interface ToolPolicyWebFetchPolicyOptions {
-  addressPolicy?: WebFetchPublicAddressPolicy;
   hostnameClassifier?: WebFetchHostnameClassifier;
-  hostnameLookupFn?: WebFetchHostnameLookupLike;
   webFetchAllowedHosts?: string[];
   webFetchDeniedHosts?: string[];
-  webFetchHostnameClassificationTimeoutMs?: number;
+}
+
+interface HostPatterns {
+  exactHosts: ReadonlySet<string>;
+  wildcardSuffixes: readonly string[];
 }
 
 export class ToolPolicyWebFetchPolicy {
   readonly #addressPolicy: WebFetchPublicAddressPolicy;
   readonly #hostnameClassifier: WebFetchHostnameClassifier;
-  readonly #webFetchAllowedHosts?: Set<string>;
-  readonly #webFetchWildcardSuffixes?: readonly string[];
-  readonly #webFetchDeniedHosts?: Set<string>;
-  readonly #webFetchDeniedWildcardSuffixes?: readonly string[];
-  readonly #webFetchHostnameClassificationTimeoutMs: number;
+  readonly #webFetchAllowedHosts?: HostPatterns;
+  readonly #webFetchDeniedHosts?: HostPatterns;
 
   constructor(options: ToolPolicyWebFetchPolicyOptions) {
-    this.#addressPolicy =
-      options.addressPolicy ?? new DefaultWebFetchPublicAddressPolicy();
+    const addressPolicy = new DefaultWebFetchPublicAddressPolicy();
+
+    this.#addressPolicy = addressPolicy;
     this.#hostnameClassifier =
       options.hostnameClassifier ??
       new DefaultWebFetchHostnameClassifier({
-        addressPolicy: this.#addressPolicy,
-        ...(options.hostnameLookupFn === undefined
-          ? {}
-          : { lookupFn: options.hostnameLookupFn })
+        addressPolicy
       });
-    this.#webFetchHostnameClassificationTimeoutMs =
-      options.webFetchHostnameClassificationTimeoutMs ??
-      DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS;
-
-    if (options.webFetchAllowedHosts === undefined) {
-      this.#webFetchAllowedHosts = undefined;
-      this.#webFetchWildcardSuffixes = undefined;
-    } else {
-      const exactHosts = new Set<string>();
-      const wildcardSuffixes: string[] = [];
-
-      for (const host of options.webFetchAllowedHosts) {
-        if (host.startsWith("*.")) {
-          wildcardSuffixes.push(`.${canonicalizeHostnameForComparison(host.slice(2))}`);
-        } else {
-          exactHosts.add(canonicalizeHostnameForComparison(host));
-        }
-      }
-
-      this.#webFetchAllowedHosts = exactHosts;
-      this.#webFetchWildcardSuffixes = wildcardSuffixes;
-    }
-
-    if (options.webFetchDeniedHosts === undefined) {
-      this.#webFetchDeniedHosts = undefined;
-      this.#webFetchDeniedWildcardSuffixes = undefined;
-    } else {
-      const exactDenied = new Set<string>();
-      const deniedWildcardSuffixes: string[] = [];
-
-      for (const host of options.webFetchDeniedHosts) {
-        if (host.startsWith("*.")) {
-          deniedWildcardSuffixes.push(`.${canonicalizeHostnameForComparison(host.slice(2))}`);
-        } else {
-          exactDenied.add(canonicalizeHostnameForComparison(host));
-        }
-      }
-
-      this.#webFetchDeniedHosts = exactDenied;
-      this.#webFetchDeniedWildcardSuffixes = deniedWildcardSuffixes;
-    }
+    this.#webFetchAllowedHosts = normalizeHostPatterns(
+      options.webFetchAllowedHosts
+    );
+    this.#webFetchDeniedHosts = normalizeHostPatterns(
+      options.webFetchDeniedHosts
+    );
   }
 
   async evaluate(urlString: string): Promise<ToolPolicyDecision> {
@@ -114,26 +73,24 @@ export class ToolPolicyWebFetchPolicy {
   #evaluateHostPolicy(url: URL): ToolPolicyDecision {
     const normalizedHostname = canonicalizeHostnameForComparison(url.hostname);
 
-    if (this.#webFetchAllowedHosts !== undefined) {
-      if (
-        !this.#webFetchAllowedHosts.has(normalizedHostname) &&
-        !(this.#webFetchWildcardSuffixes ?? []).some((suffix) =>
-          normalizedHostname.endsWith(suffix)
-        )
-      ) {
-        return {
-          permissionDecision: "deny",
-          permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-        };
-      }
+    if (
+      this.#webFetchAllowedHosts !== undefined &&
+      !matchesHostPatterns(normalizedHostname, this.#webFetchAllowedHosts)
+    ) {
+      return {
+        permissionDecision: "deny",
+        permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
+      };
     }
 
-    if (this.#webFetchDeniedHosts !== undefined) {
-      return evaluateWebFetchDenyList(
-        normalizedHostname,
-        this.#webFetchDeniedHosts,
-        this.#webFetchDeniedWildcardSuffixes
-      );
+    if (
+      this.#webFetchDeniedHosts !== undefined &&
+      matchesHostPatterns(normalizedHostname, this.#webFetchDeniedHosts)
+    ) {
+      return {
+        permissionDecision: "deny",
+        permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
+      };
     }
 
     return undefined;
@@ -148,7 +105,7 @@ export class ToolPolicyWebFetchPolicy {
 
     return this.#hostnameClassifier
       .classifyHostname(normalizedHostname, {
-        timeoutMs: this.#webFetchHostnameClassificationTimeoutMs
+        timeoutMs: DEFAULT_WEB_FETCH_HOSTNAME_CLASSIFICATION_TIMEOUT_MS
       })
       .then((classification): ToolPolicyDecision => {
         if (classification.kind === "denied") {
@@ -163,27 +120,45 @@ export class ToolPolicyWebFetchPolicy {
   }
 }
 
-function evaluateWebFetchDenyList(
-  normalizedHostname: string,
-  webFetchDeniedHosts: ReadonlySet<string>,
-  webFetchDeniedWildcardSuffixes?: readonly string[]
-): ToolPolicyDecision {
-  if (
-    webFetchDeniedHosts.has(normalizedHostname) ||
-    (webFetchDeniedWildcardSuffixes ?? []).some((suffix) =>
-      normalizedHostname.endsWith(suffix)
-    )
-  ) {
-    return {
-      permissionDecision: "deny",
-      permissionDecisionReason: CONFIGURED_WEB_FETCH_HOST_REASON
-    };
+function normalizeHostPatterns(
+  hosts: string[] | undefined
+): HostPatterns | undefined {
+  if (hosts === undefined) {
+    return undefined;
   }
 
-  return undefined;
+  const exactHosts = new Set<string>();
+  const wildcardSuffixes: string[] = [];
+
+  for (const host of hosts) {
+    if (host.startsWith("*.")) {
+      wildcardSuffixes.push(
+        `.${canonicalizeHostnameForComparison(host.slice(2))}`
+      );
+    } else {
+      exactHosts.add(canonicalizeHostnameForComparison(host));
+    }
+  }
+
+  return { exactHosts, wildcardSuffixes };
 }
 
-function parseAllowedWebFetchUrl(urlString: string, addressPolicy: WebFetchPublicAddressPolicy): URL | undefined {
+function matchesHostPatterns(
+  normalizedHostname: string,
+  patterns: HostPatterns
+): boolean {
+  return (
+    patterns.exactHosts.has(normalizedHostname) ||
+    patterns.wildcardSuffixes.some((suffix) =>
+      normalizedHostname.endsWith(suffix)
+    )
+  );
+}
+
+function parseAllowedWebFetchUrl(
+  urlString: string,
+  addressPolicy: WebFetchPublicAddressPolicy
+): URL | undefined {
   let parsed: URL;
 
   try {
