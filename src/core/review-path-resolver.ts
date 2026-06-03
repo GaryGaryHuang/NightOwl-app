@@ -2,11 +2,6 @@ import path from "node:path";
 
 import { reviewOutputRoot } from "./nightowl-namespace.ts";
 
-interface BuildSessionIdInput {
-  headRef: string;
-  timestamp: string;
-}
-
 export interface OutputTarget {
   basePath: string;
   changesetOverviewPath: string;
@@ -15,25 +10,19 @@ export interface OutputTarget {
   toolAuditPath: string;
 }
 
-export interface ResolveOutputTargetInput {
-  repoRoot: string;
-  headRef: string;
-  timestamp: string;
-}
-
 export interface PlannedNoteFile {
   filePath: string;
   noteFilePath: string;
 }
 
-function buildSessionId(input: BuildSessionIdInput): string {
+function buildSessionId(input: { headRef: string; timestamp: string }): string {
   const prefix = sanitizeSegment(input.headRef) || "review";
 
   return `${prefix}_${input.timestamp}`;
 }
 
 export function buildOutputTarget(
-  input: ResolveOutputTargetInput
+  input: { repoRoot: string; headRef: string; timestamp: string }
 ): OutputTarget {
   const sessionId = buildSessionId(input);
   const basePath = path.join(reviewOutputRoot(input.repoRoot), sessionId);

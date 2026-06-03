@@ -3,7 +3,7 @@
  *
  * Pure, deterministic derivation from a unified diff string. Only the head-side
  * (`+s,c`) hunk header is parsed because finding traceability targets the
- * post-change file. See `openspec/specs/diff-anchor-map/` for the full contract.
+ * post-change file.
  */
 
 export interface DiffHunkAnchor {

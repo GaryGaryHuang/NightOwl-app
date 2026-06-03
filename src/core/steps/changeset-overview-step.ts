@@ -122,7 +122,7 @@ export function buildChangesetOverviewRetryRepairPrompt(
         "Regenerate the complete Changeset Overview JSON object after deterministic validation rejected the previous response.",
       correctionOrder: [
         "If previousFailure.code is PARSE, first make the response exactly one syntactically complete JSON object: remove Markdown fences, prose, duplicate root objects, trailing text, and incomplete JSON.",
-        "If previousFailure.code is SCHEMA, fix the field indicated by previousFailure.message, previousFailure.offendingPath, previousFailure.allowedValues, or previousFailure.repairHint while preserving valid high-signal content.",
+        "If previousFailure.code is SCHEMA, fix the field indicated by previousFailure.message or previousFailure.repairHint while preserving valid high-signal content.",
         "Before finishing, re-check the replacement object: all required top-level fields are present (reviewObjective, userBehavior, behaviorChanges, missingInformation, overviewMarkdown), the previousFailure is resolved, no new schema violation was introduced, and no source-backed high-signal content was dropped."
       ],
       repairConstraints: [

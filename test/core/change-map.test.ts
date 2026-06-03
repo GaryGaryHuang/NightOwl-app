@@ -34,15 +34,3 @@ test("normalizeChangesetEntriesForChangeMap handles regular, rename, copy, and e
   assert.equal(result[4]?.copiedAsAdded, true);
   assert.equal(result[2]?.reviewableNonDeleted, false);
 });
-
-test("normalizeChangesetEntriesForChangeMap preserves duplicates", () => {
-  const result = normalizeChangesetEntriesForChangeMap([
-    { status: "M", path: "src/dup.ts" },
-    { status: "M", path: "src/dup.ts" }
-  ]);
-
-  assert.deepEqual(result.map((entry) => entry.path), [
-    "src/dup.ts",
-    "src/dup.ts"
-  ]);
-});

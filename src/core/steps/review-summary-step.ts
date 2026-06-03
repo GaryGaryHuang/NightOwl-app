@@ -1,6 +1,5 @@
 import type {FileReviewContext, Finding} from "../file-review-context.ts";
 import {REVIEW_BASIS_STEP_ID, REVIEW_SUMMARY_STEP_ID} from "../review-step-ids.ts";
-import {SUMMARY_SECTION_KEY} from "../review-section-contract.ts";
 import {REVIEW_TURN_TIMEOUT_MS} from "../review-runtime-contract.ts";
 import type {ReviewStatePromptSerializer} from "../review-state-prompt-serializer.ts";
 import {countMustFindings, countNiceFindings} from "../risk-level.ts";
@@ -107,7 +106,7 @@ export class ReviewSummaryStep implements StepDefinition {
                 );
 
                 return (targetContext: FileReviewContext) => {
-                    targetContext.setSection(SUMMARY_SECTION_KEY, sectionContent);
+                    targetContext.setSection("summary", sectionContent);
                 };
             }
         };

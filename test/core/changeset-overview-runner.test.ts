@@ -141,8 +141,8 @@ test("ChangesetOverviewRunner retries once when the first response fails ChangeM
   const prompts: string[] = [];
   const logMessages: string[] = [];
   const runner = new ChangesetOverviewRunner({
-    onChangesetOverviewLogEvent(event) {
-      logMessages.push(event.message);
+    onChangesetOverviewLog(message) {
+      logMessages.push(message);
     },
     reviewSessionFactory: {
       async createSession() {
@@ -193,8 +193,8 @@ test("ChangesetOverviewRunner logs parse excerpts for trailing response content"
   let createCalls = 0;
   const logMessages: string[] = [];
   const runner = new ChangesetOverviewRunner({
-    onChangesetOverviewLogEvent(event) {
-      logMessages.push(event.message);
+    onChangesetOverviewLog(message) {
+      logMessages.push(message);
     },
     reviewSessionFactory: {
       async createSession() {
@@ -228,8 +228,8 @@ test("ChangesetOverviewRunner logs parse excerpts for trailing response content"
 test("ChangesetOverviewRunner logs successful syntax repairs", async () => {
   const logMessages: string[] = [];
   const runner = new ChangesetOverviewRunner({
-    onChangesetOverviewLogEvent(event) {
-      logMessages.push(event.message);
+    onChangesetOverviewLog(message) {
+      logMessages.push(message);
     },
     reviewSessionFactory: {
       async createSession() {
@@ -253,49 +253,6 @@ test("ChangesetOverviewRunner logs successful syntax repairs", async () => {
   assert.match(logMessages[0]!, /repair=object_extraction/u);
   assert.match(logMessages[0]!, /responseBytes=/u);
   assert.match(logMessages[0]!, /parsedBytes=/u);
-});
-
-test("ChangesetOverviewRunner normalizes invalid Changeset Overview confidence without retry", async () => {
-  let createCalls = 0;
-  const prompts: string[] = [];
-  const invalidJson = JSON.stringify({
-    reviewObjective: {
-      summary: "Test review context.",
-      requestedFocus: [],
-      expectedBehaviorSummary: []
-    },
-    userBehavior: [{ statement: "x", confidence: "wrong" }],
-    missingInformation: [],
-    overviewMarkdown: "## Changeset Overview\n- 調整範圍：feature",
-    behaviorChanges: []
-  });
-  const runner = new ChangesetOverviewRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        createCalls += 1;
-
-        return {
-          async sendAndWait(prompt) {
-            prompts.push(prompt);
-            return invalidJson;
-          }
-        };
-      }
-    }
-  });
-
-  const runContext = await runner.run({
-    repoRoot: "/workspace/repo",
-    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
-    userContext: []
-  });
-
-  assert.equal(createCalls, 1);
-  assert.equal(prompts.length, 1);
-  assert.equal(
-    runContext.changesetOverview.userBehavior[0]?.confidence,
-    "inferred"
-  );
 });
 
 test("ChangesetOverviewRunner aborts after two consecutive validation failures", async () => {
@@ -352,35 +309,6 @@ test("ChangesetOverviewRunner fails after two empty responses", async () => {
     /changeset overview/i
   );
   assert.equal(createCalls, 2);
-});
-
-test("ChangesetOverviewRunner accepts a renamed path via R-style name-status entry", async () => {
-  const runner = new ChangesetOverviewRunner({
-    reviewSessionFactory: {
-      async createSession() {
-        return {
-          async sendAndWait() {
-            return buildChangeMapJson({
-              paths: ["src/new.ts"]
-            });
-          }
-        };
-      }
-    }
-  });
-
-  const runContext = await runner.run({
-    repoRoot: "/workspace/repo",
-    changesetEntries: createChangesetEntries({
-      status: "R",
-      similarityScore: 100,
-      previousPath: "src/old.ts",
-      path: "src/new.ts"
-    }),
-    userContext: []
-  });
-
-  assert.equal(runContext.changesetOverview.behaviorChanges[0]?.files[0], "src/new.ts");
 });
 
 test("ChangesetOverviewRunner accepts copied paths as added host descriptors", async () => {

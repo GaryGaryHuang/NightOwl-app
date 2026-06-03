@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  buildRiskSnapshot,
-  deriveFileRiskLevel
-} from "../../src/core/risk-level.ts";
+import { buildRiskSnapshot } from "../../src/core/risk-level.ts";
 import { createFinding } from "../helpers/completed-run-finalizer-contract-fixture.ts";
 
 test("buildRiskSnapshot returns a valid RiskSnapshot for all risk levels", async (t) => {

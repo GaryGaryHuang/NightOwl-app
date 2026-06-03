@@ -23,7 +23,6 @@ type StepRunnerDouble = {
     context: FileReviewContext;
     step: { stepId: string };
   }): Promise<{
-    stepId: string;
     applyTo(context: FileReviewContext): void;
   }>;
 };

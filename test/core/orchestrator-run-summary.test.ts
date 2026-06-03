@@ -145,7 +145,6 @@ test("ReviewOrchestrator does not publish run-level artifacts when applyTo fails
               }
 
               return {
-                stepId: step.stepId,
                 applyTo() {
                   throw new Error("apply failed");
                 }

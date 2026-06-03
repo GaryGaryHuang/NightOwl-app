@@ -88,7 +88,7 @@ export class StructuredOutputValidator {
       const reason = error instanceof Error ? error.message : String(error);
       if (report.length === 0 || report.every((entry) => entry.outcome !== "rejected")) {
         report.push({
-          findingId: extractReportableFindingIdFromText(input.responseText) ?? "<payload>",
+          findingId: "<payload>",
           taxonomy: "SEMANTIC",
           outcome: "rejected",
           gate: "semantic",
@@ -138,7 +138,7 @@ export class StructuredOutputValidator {
       const reason = error instanceof Error ? error.message : String(error);
       if (report.length === 0 || report.every((entry) => entry.outcome !== "rejected")) {
         report.push({
-          findingId: extractReportableFindingIdFromText(input.responseText) ?? "<payload>",
+          findingId: "<payload>",
           taxonomy: "SEMANTIC",
           outcome: "rejected",
           gate: "semantic",
@@ -481,7 +481,6 @@ function validateValidationReportV1Record(input: {
   }
   assertValidationReportMatchesCandidatePayload({
     candidatePayload: input.candidatePayload,
-    perFindingResults,
     missingInformationItems
   });
 
@@ -635,7 +634,6 @@ function countSupplementalOrigins(
 
 function assertValidationReportMatchesCandidatePayload(input: {
   candidatePayload: CandidateFindings;
-  perFindingResults: readonly PerFindingValidationResult[];
   missingInformationItems: readonly MissingInformationItem[];
 }): void {
   if (
@@ -871,40 +869,6 @@ function validateDependencyPathException(
       ...(symbol === undefined ? {} : { symbol })
     }
   };
-}
-
-function extractReportableFindingId(input: unknown): string | undefined {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    return undefined;
-  }
-
-  const value = (input as Record<string, unknown>).findingId;
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function extractReportableFindingIdFromText(responseText: string): string | undefined {
-  try {
-    const parsed = JSON.parse(responseText) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return undefined;
-    }
-    const record = parsed as Record<string, unknown>;
-    const findings = Array.isArray(record.findings)
-      ? record.findings
-      : undefined;
-    if (!findings) {
-      return undefined;
-    }
-    for (const finding of findings) {
-      const id = extractReportableFindingId(finding);
-      if (id) {
-        return id;
-      }
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
 }
 
 function validateTraceability(input: unknown): FindingTraceability {

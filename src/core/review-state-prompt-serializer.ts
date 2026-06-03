@@ -91,15 +91,15 @@ export class ReviewStatePromptSerializer {
     const diffAnchorMap = buildDiffAnchorMap(input.context.diffContent);
     const approvedFindings =
       input.context.getFindings() ??
-      input.context.getAccumulatedApprovedFindings?.() ??
+      input.context.getAccumulatedApprovedFindings() ??
       [];
     const candidateFindings =
-      input.context.getCandidateFindings?.() ?? null;
+      input.context.getCandidateFindings() ?? null;
     const missingInformationItems =
-      input.context.getMissingInformationItems?.() ??
-      input.context.getValidationReportV1?.()?.missingInformationItems ??
+      input.context.getMissingInformationItems() ??
+      input.context.getValidationReportV1()?.missingInformationItems ??
       [];
-    const reviewBasis = input.context.getReviewBasis?.();
+    const reviewBasis = input.context.getReviewBasis();
     const includeReviewBasis = input.include.includes(REVIEW_BASIS_STEP_ID);
 
     return {
@@ -127,7 +127,7 @@ export class ReviewStatePromptSerializer {
         ? missingInformationItems
         : [],
       validationReport: input.include.includes("validation-report")
-        ? input.context.getValidationReportV1?.() ?? null
+        ? input.context.getValidationReportV1() ?? null
         : null,
       reviewBasis: includeReviewBasis ? reviewBasis ?? null : null,
       evidenceRefs: includeReviewBasis && reviewBasis
@@ -137,7 +137,7 @@ export class ReviewStatePromptSerializer {
         ? [...reviewBasis.hypothesisLedger]
         : [],
       validationFeedback: input.include.includes("validation-feedback")
-        ? input.context.getPriorValidatorFeedback?.() ?? null
+        ? input.context.getPriorValidatorFeedback() ?? null
         : null
     };
   }

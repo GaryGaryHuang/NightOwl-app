@@ -2,7 +2,6 @@ import {
   type FileReviewContextInput,
   FileReviewContext
 } from "../../src/core/file-review-context.ts";
-import type { ReviewSectionKey } from "../../src/core/review-section-contract.ts";
 import { REVIEW_TURN_TIMEOUT_MS } from "../../src/core/review-runtime-contract.ts";
 import {
   type StepExecutionPlan,
@@ -33,7 +32,7 @@ export function createStepRunnerContext(
 // behavior (retry, error wrapping) rather than prompt content or validator logic.
 export function createSectionTestStep(input: {
   stepId?: string;
-  sectionKey?: ReviewSectionKey;
+  sectionKey?: string;
   systemMessage?: string;
   userMessage?: string;
   reviewProfile?: StepExecutionPlan["reviewProfile"];
@@ -67,7 +66,7 @@ export function createSectionTestStep(input: {
 }
 
 export function makeSectionResolveWithDeterministicCheck(
-  sectionKey: ReviewSectionKey,
+  sectionKey: string,
   check: (response: string) => string | undefined
 ): StepExecutionPlan["resolve"] {
   return async (response: string) => {

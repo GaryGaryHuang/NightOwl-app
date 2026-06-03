@@ -109,7 +109,6 @@ function createSignalTestApp(options: {
           options.onReviewBasis?.();
         }
         return {
-          stepId: step.stepId,
           applyTo(_ctx: unknown) {}
         };
       }

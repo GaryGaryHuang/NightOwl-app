@@ -356,25 +356,13 @@ test("StepRunner invokes onStepRetry with stepId, filePath, attempt 0, and cause
   result.applyTo(context);
 
   assert.equal(retryInfos.length, 1);
-  assert.deepEqual(
-    {
-      ...(retryInfos[0] as Record<string, unknown>),
-      promptHash: "<stable-hash>"
-    },
-    {
-      stepId: "review-summary",
-      filePath: "src/app.ts",
-      attempt: 0,
-      cause: "deterministic completion failed",
-      model: "gpt-5-mini",
-      promptHash: "<stable-hash>",
-      schemaId: "ReviewSummaryMarkdown"
-    }
-  );
-  assert.match(
-    (retryInfos[0] as { promptHash?: string }).promptHash ?? "",
-    /^[0-9a-f]{8}$/u
-  );
+  assert.deepEqual(retryInfos[0], {
+    stepId: "review-summary",
+    filePath: "src/app.ts",
+    attempt: 0,
+    cause: "deterministic completion failed",
+    model: "gpt-5-mini"
+  });
 });
 
 test("StepRunner does not invoke onStepRetry when the step succeeds on the first attempt", async () => {

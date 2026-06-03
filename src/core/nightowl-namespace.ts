@@ -1,7 +1,6 @@
 import path from "node:path";
 
-/** Canonical NightOwl namespace directory name under repo root. */
-export const NIGHTOWL_DIR = ".nightowl";
+const NIGHTOWL_DIR = ".nightowl";
 
 /** Absolute path to the review config: `<repoRoot>/.nightowl/reviewconfig.json` */
 export function reviewConfigPath(repoRoot: string): string {

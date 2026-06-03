@@ -18,7 +18,6 @@
     "test/core/review-basis-validator.test.ts",
     "test/core/review-path-resolver.test.ts",
     "test/core/review-state-prompt-serializer.test.ts",
-    "test/core/risk-level.test.ts",
     "test/core/risk-snapshot.test.ts",
     "test/core/run-context.test.ts",
     "test/core/step-runner-abort.test.ts",

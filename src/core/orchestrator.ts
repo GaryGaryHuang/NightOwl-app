@@ -19,9 +19,9 @@ import {
 } from "./file-review-context.ts";
 import { DEFAULT_MAX_CONCURRENT_FILES } from "./max-concurrent-files.ts";
 import { StepExecutionError } from "./errors.ts";
-import { renderReviewNote, type ReviewNoteRenderer } from "./finalizers/review-note-finalizer.ts";
+import { renderReviewNote } from "./finalizers/review-note-finalizer.ts";
 import type { ResolvedFileOutcome, SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
-import { renderReviewIndex, type ReviewIndexRenderer } from "./finalizers/review-index-finalizer.ts";
+import { renderReviewIndex } from "./finalizers/review-index-finalizer.ts";
 import type { RunContext } from "./run-context.ts";
 import type { RunProgressEvent, RunProgressEventHandler } from "./run-progress.ts";
 import type { RunRequest } from "./run-request.ts";
@@ -101,8 +101,6 @@ export interface ReviewOrchestratorOptions {
   onRunLevelFailureOutputTargetReady?: (outputTarget: OutputTarget) => Promise<void> | void;
   perFileStepsFactory?: ReviewPerFileStepsFactory;
   reviewFileFilter: ReviewFileFilter;
-  renderReviewNote?: ReviewNoteRenderer;
-  renderReviewIndex?: ReviewIndexRenderer;
   sourceProvider: ReviewSourceProvider;
   outputSink: ReviewOutputSink;
   successfulSnapshotOutputHealthAssessor?: OutputWriteHealthAssessor;
@@ -130,8 +128,6 @@ export class ReviewOrchestrator {
   readonly #stepRunner: Pick<StepRunner, "run">;
   readonly #workingDirectory: string;
   readonly #timestampProvider: () => string;
-  readonly #renderReviewNote: ReviewNoteRenderer;
-  readonly #renderReviewIndex: ReviewIndexRenderer;
   readonly #maxConcurrentFiles: number;
   readonly #onProgressEvent?: RunProgressEventHandler;
   readonly #onOutputTargetReady?: (outputTarget: OutputTarget) => void;
@@ -161,8 +157,6 @@ export class ReviewOrchestrator {
     this.#stepRunner = options.stepRunner;
     this.#workingDirectory = options.workingDirectory;
     this.#timestampProvider = options.timestampProvider ?? defaultTimestampProvider;
-    this.#renderReviewNote = options.renderReviewNote ?? renderReviewNote;
-    this.#renderReviewIndex = options.renderReviewIndex ?? renderReviewIndex;
     this.#maxConcurrentFiles =
       options.maxConcurrentFiles ?? DEFAULT_MAX_CONCURRENT_FILES;
     this.#onProgressEvent = options.onProgressEvent;
@@ -313,7 +307,7 @@ export class ReviewOrchestrator {
       plannedFileCount: plannedNoteFiles.length,
       successfulFileCount: successfulFiles.length,
       skippedFileCount: skippedFiles.length,
-      dryRun: request.dryRun ?? false,
+      dryRun: request.dryRun,
       finalizerFailures
     };
   }
@@ -367,7 +361,7 @@ export class ReviewOrchestrator {
       input.abortGuard.throwIfAborted();
       await input.outputPublisher.publishFileReview({
         filePath: plannedNote.filePath,
-        content: this.#renderReviewNote(
+        content: renderReviewNote(
           new FileReviewContext({
             filePath: plannedNote.filePath,
             noteFilePath: plannedNote.noteFilePath,
@@ -392,7 +386,7 @@ export class ReviewOrchestrator {
 
     try {
       await input.outputPublisher.publishArtifact("index", {
-        content: this.#renderReviewIndex({
+        content: renderReviewIndex({
           changesetOverviewMarkdown: input.runContext.changesetOverviewMarkdown,
           basePath: input.outputTarget.basePath,
           resolvedOutcomes: input.resolvedOutcomes,
@@ -692,7 +686,7 @@ export class ReviewOrchestrator {
       try {
         await input.outputPublisher.publishFileReview({
           filePath: fileContext.filePath,
-          content: this.#renderReviewNote(fileContext)
+          content: renderReviewNote(fileContext)
         });
       } catch (outputError) {
         await this.#handleSnapshotPublishFailure({
@@ -795,7 +789,7 @@ export class ReviewOrchestrator {
     try {
       await input.outputPublisher.publishFileReview({
         filePath: input.fileContext.filePath,
-        content: this.#renderReviewNote(input.fileContext)
+        content: renderReviewNote(input.fileContext)
       });
     } catch (outputError) {
       input.abortGuard.markAborted(outputError);

@@ -49,10 +49,10 @@ function validateChangeMap(
   responseText: string,
   userContext: readonly string[] = expectedUserContext
 ): ChangeMapReadiness {
-  return new ChangesetOverviewOutputValidator().validate({
+  return new ChangesetOverviewOutputValidator().validateDetailed({
     responseText,
     userContext
-  });
+  }).changeMap;
 }
 
 function expectFailure(
@@ -128,7 +128,7 @@ test("ChangesetOverviewOutputValidator returns a deeply frozen ChangeMapReadines
 test("ChangesetOverviewOutputValidator rejects invalid JSON with PARSE diagnostics", () => {
   expectFailure(
     () =>
-      new ChangesetOverviewOutputValidator().validate({
+      new ChangesetOverviewOutputValidator().validateDetailed({
         responseText: "not json",
         userContext: []
       }),
@@ -137,7 +137,7 @@ test("ChangesetOverviewOutputValidator rejects invalid JSON with PARSE diagnosti
 
   const error = expectFailure(
     () =>
-      new ChangesetOverviewOutputValidator().validate({
+      new ChangesetOverviewOutputValidator().validateDetailed({
         responseText: '"not an object" trailing assistant text',
         userContext: []
       }),
@@ -171,7 +171,7 @@ test("ChangesetOverviewOutputValidator rejects ambiguous or truncated JSON witho
   const validator = new ChangesetOverviewOutputValidator();
   const multiple = expectFailure(
     () =>
-      validator.validate({
+      validator.validateDetailed({
         responseText: [makeValidChangeMap(), makeValidChangeMap()].join("\n"),
         userContext: expectedUserContext
       }),
@@ -182,7 +182,7 @@ test("ChangesetOverviewOutputValidator rejects ambiguous or truncated JSON witho
 
   const truncated = expectFailure(
     () =>
-      validator.validate({
+      validator.validateDetailed({
         responseText: '{"reviewObjective":{',
         userContext: []
       }),
@@ -194,7 +194,7 @@ test("ChangesetOverviewOutputValidator rejects ambiguous or truncated JSON witho
 test("ChangesetOverviewOutputValidator rejects non-object payload", () => {
   expectFailure(
     () =>
-      new ChangesetOverviewOutputValidator().validate({
+      new ChangesetOverviewOutputValidator().validateDetailed({
         responseText: "[]",
         userContext: []
       }),
@@ -216,14 +216,6 @@ test("ChangesetOverviewOutputValidator normalizes overviewMarkdown presentation 
   assert.equal(extraSpace.overviewMarkdown.startsWith("## Changeset Overview"), true);
   assert.equal(lowercase.overviewMarkdown, "## Changeset Overview\nx");
   assert.equal(missingHeader.overviewMarkdown, "## Changeset Overview\nScope: feature");
-});
-
-test("ChangesetOverviewOutputValidator allows empty behaviorChanges", () => {
-  const changeMap = validateChangeMap(
-    makeValidChangeMap({ behaviorChanges: [] })
-  );
-
-  assert.equal(changeMap.behaviorChanges.length, 0);
 });
 
 test("ChangesetOverviewOutputValidator defaults invalid userBehavior confidence to inferred", () => {

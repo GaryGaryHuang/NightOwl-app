@@ -136,7 +136,6 @@ export function buildSuccessfulStepResult(
 ): StepResult {
   if (stepId === "review-basis") {
     return {
-      stepId,
       applyTo(targetContext: FileReviewContext) {
         targetContext.setReviewBasis(buildReviewBasis(filePath));
       }
@@ -145,7 +144,6 @@ export function buildSuccessfulStepResult(
 
   if (stepId === "candidate-findings") {
     return {
-      stepId,
       applyTo(targetContext: FileReviewContext) {
         targetContext.setCandidateFindings(buildCandidateFindingsForFile(filePath));
       }
@@ -154,7 +152,6 @@ export function buildSuccessfulStepResult(
 
   if (stepId === "semantic-validation") {
     return {
-      stepId,
       applyTo(targetContext: FileReviewContext) {
         const findings = options.findingsByFile?.get(filePath) ?? buildFindingsForFile(filePath);
         targetContext.setValidationReportV1(buildValidationReportForFindings(findings));
@@ -166,7 +163,6 @@ export function buildSuccessfulStepResult(
 
   if (stepId === "review-summary") {
     return {
-      stepId,
       applyTo(targetContext: FileReviewContext) {
         targetContext.setSection(
           "summary",

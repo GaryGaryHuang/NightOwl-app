@@ -8,7 +8,6 @@ import {
   type ReviewPerFileStepsFactory
 } from "../core/orchestrator.ts";
 import { StepRunner } from "../core/step-runner.ts";
-import { StructuredOutputValidator } from "../core/structured-output-validator.ts";
 import type { ReviewConfig } from "../providers/config/review-config-provider.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewOutputSink } from "../providers/review-output-sink.ts";
@@ -179,11 +178,11 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     shared.changesetOverviewRunner ??
     new ChangesetOverviewRunner({
       reviewSessionFactory,
-      onChangesetOverviewLogEvent(event) {
+      onChangesetOverviewLog(message) {
         shared.onProgressEvent?.({
           type: "review-session-log",
           stepId: CHANGESET_OVERVIEW_STEP_ID,
-          message: event.message
+          message
         });
       }
     });
@@ -191,7 +190,6 @@ function buildOrchestrator(params: BuildOrchestratorParams): ReviewOrchestrator 
     shared.stepRunner ??
     new StepRunner({
       reviewSessionFactory,
-      structuredOutputValidator: new StructuredOutputValidator(),
       onStepRetry(info) {
         shared.onProgressEvent?.({
           type: "review-session-log",
@@ -224,15 +222,11 @@ function formatStepRetryDiagnostic(info: {
   attempt: number;
   cause: string;
   model?: string;
-  promptHash?: string;
-  schemaId?: string;
 }): string {
   const fields = [
     `file=${info.filePath}`,
     `attempt=${info.attempt + 1}`,
     info.model === undefined ? undefined : `model=${info.model}`,
-    info.promptHash === undefined ? undefined : `promptHash=${info.promptHash}`,
-    info.schemaId === undefined ? undefined : `schema=${info.schemaId}`,
     `cause=${JSON.stringify(info.cause)}`
   ].filter((field): field is string => field !== undefined);
 

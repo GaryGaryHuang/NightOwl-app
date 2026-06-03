@@ -28,7 +28,6 @@ type StepRunInput = {
 
 type StepRunnerDouble = {
   run(input: StepRunInput): Promise<{
-    stepId: string;
     applyTo(context: FileReviewContext): void;
   }>;
 };
@@ -108,7 +107,6 @@ function createStepRunnerDouble(
       await onRun?.(input);
 
       return {
-        stepId: input.step.stepId,
         applyTo(_ctx: FileReviewContext) {}
       };
     }

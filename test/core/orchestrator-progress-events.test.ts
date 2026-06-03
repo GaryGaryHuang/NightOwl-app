@@ -244,7 +244,6 @@ test("ReviewOrchestrator accumulates approved candidates while rerunning only ac
         stepEvents.push(step.stepId);
         if (step.stepId === "review-basis") {
           return {
-            stepId: step.stepId,
             applyTo(targetContext: FileReviewContext) {
               targetContext.setReviewBasis(buildReviewBasis(targetContext.filePath));
             }
@@ -268,7 +267,6 @@ test("ReviewOrchestrator accumulates approved candidates while rerunning only ac
             );
           }
           return {
-            stepId: step.stepId,
             applyTo(targetContext: FileReviewContext) {
               (targetContext as SemanticFileReviewContext).setCandidateFindings(
                 candidateFindingsAttempt === 1
@@ -282,7 +280,6 @@ test("ReviewOrchestrator accumulates approved candidates while rerunning only ac
         if (step.stepId === "semantic-validation") {
           semanticValidationAttempt += 1;
           return {
-            stepId: step.stepId,
             applyTo(targetContext: FileReviewContext) {
               (targetContext as SemanticFileReviewContext).setValidationReportV1(
                 semanticValidationAttempt === 1
@@ -301,7 +298,6 @@ test("ReviewOrchestrator accumulates approved candidates while rerunning only ac
               (result) => result.decision
             ) ?? [];
           return {
-            stepId: step.stepId,
             applyTo(targetContext: FileReviewContext) {
               targetContext.setSection("summary", "## Summary\n### 審查結論\n- 已驗證的結果：must-fix 2；nice-to-have 0\n- 審查限制：無\n\n### 審查依據\n- 異動概要：無\n- 已核對依據：無\n- 待確認資訊：無\n### 行為變更提醒\n- 無行為變更");
             }
@@ -709,7 +705,6 @@ function buildSemanticLoopStepResult(
 ): StepResult {
   if (stepId === "review-basis") {
     return {
-      stepId,
       applyTo(context: FileReviewContext) {
         context.setReviewBasis(buildReviewBasis(filePath));
       }
@@ -718,7 +713,6 @@ function buildSemanticLoopStepResult(
 
   if (stepId === "candidate-findings") {
     return {
-      stepId,
       applyTo(context: FileReviewContext) {
         (context as SemanticFileReviewContext).setCandidateFindings(
           createCandidateFindings(
@@ -734,7 +728,6 @@ function buildSemanticLoopStepResult(
 
   if (stepId === "semantic-validation") {
     return {
-      stepId,
       applyTo(context: FileReviewContext) {
         const report = options.validationMode === "missing-critical-stop"
           ? createStopValidationReportV1()
@@ -750,7 +743,6 @@ function buildSemanticLoopStepResult(
 
   if (stepId === "review-summary") {
     return {
-      stepId,
       applyTo(context: FileReviewContext) {
         context.setSection("summary", "## Summary\n### 審查結論\n- 已驗證的結果：must-fix 0；nice-to-have 0\n- 審查限制：無\n\n### 審查依據\n- 異動概要：無\n- 已核對依據：無\n- 待確認資訊：無\n### 行為變更提醒\n- 無行為變更");
       }

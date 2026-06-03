@@ -8,12 +8,6 @@ import {
   StructuredValidationReportError
 } from "./structured-output-validator.ts";
 import type { ReviewBasis } from "./review-basis.ts";
-import {
-  CANDIDATE_FINDINGS_STEP_ID,
-  REVIEW_BASIS_STEP_ID,
-  REVIEW_SUMMARY_STEP_ID,
-  SEMANTIC_VALIDATION_STEP_ID
-} from "./review-step-ids.ts";
 import type {
   CandidateFindings,
   ValidationReportV1
@@ -55,7 +49,6 @@ export interface StepExecutionPlan {
 }
 
 export interface StepResult {
-  stepId: string;
   applyTo(context: FileReviewContext): void;
 }
 
@@ -81,13 +74,10 @@ export interface StepRetryInfo {
   attempt: number;
   cause: string;
   model?: string;
-  promptHash?: string;
-  schemaId?: string;
 }
 
 export interface StepRunnerOptions {
   reviewSessionFactory: ReviewSessionFactoryLike;
-  structuredOutputValidator?: StructuredOutputValidatorLike;
   onStepRetry?: (info: StepRetryInfo) => void;
 }
 
@@ -96,13 +86,12 @@ export interface StepRunnerOptions {
  */
 export class StepRunner {
   readonly #reviewSessionFactory: ReviewSessionFactoryLike;
-  readonly #structuredOutputValidator: NonNullable<StepRunnerOptions["structuredOutputValidator"]>;
+  readonly #structuredOutputValidator: StructuredOutputValidatorLike;
   readonly #onStepRetry?: (info: StepRetryInfo) => void;
 
   constructor(options: StepRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
-    this.#structuredOutputValidator =
-      options.structuredOutputValidator ?? new StructuredOutputValidator();
+    this.#structuredOutputValidator = new StructuredOutputValidator();
     this.#onStepRetry = options.onStepRetry;
   }
 
@@ -119,9 +108,7 @@ export class StepRunner {
         retryDiagnostics = {
           stepId: plan.stepId,
           filePath: input.context.filePath,
-          model: plan.reviewProfile.model,
-          promptHash: hashPrompt(plan.prompt.systemMessage, plan.prompt.userMessage),
-          schemaId: schemaIdForStep(plan.stepId)
+          model: plan.reviewProfile.model
         };
         const sessionProfile = {
           stepId: plan.stepId,
@@ -170,7 +157,6 @@ export class StepRunner {
         }
 
         return {
-          stepId: plan.stepId,
           applyTo(context: FileReviewContext) {
             // Defer canonical state mutation until the orchestrator accepts the validated step result.
             deferred(context);
@@ -183,11 +169,7 @@ export class StepRunner {
           filePath: retryDiagnostics?.filePath ?? input.context.filePath,
           attempt,
           cause,
-          ...(retryDiagnostics?.model === undefined ? {} : { model: retryDiagnostics.model }),
-          ...(retryDiagnostics?.promptHash === undefined
-            ? {}
-            : { promptHash: retryDiagnostics.promptHash }),
-          ...(retryDiagnostics?.schemaId === undefined ? {} : { schemaId: retryDiagnostics.schemaId }),
+          ...(retryDiagnostics?.model === undefined ? {} : { model: retryDiagnostics.model })
         });
       },
       buildFinalError: (lastCause) => {
@@ -200,33 +182,6 @@ export class StepRunner {
       maxAttempts: 3
     });
   }
-}
-
-function schemaIdForStep(stepId: string): string {
-  switch (stepId) {
-    case REVIEW_BASIS_STEP_ID:
-      return "ReviewBasis";
-    case CANDIDATE_FINDINGS_STEP_ID:
-      return "CandidateFindings";
-    case SEMANTIC_VALIDATION_STEP_ID:
-      return "ValidationReportV1";
-    case REVIEW_SUMMARY_STEP_ID:
-      return "ReviewSummaryMarkdown";
-    default:
-      return "unknown";
-  }
-}
-
-function hashPrompt(systemMessage: string, userMessage: string): string {
-  const value = `${systemMessage}\n---\n${userMessage}`;
-  let hash = 0x811c9dc5; // FNV-1a 32-bit; diagnostic identity only.
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-
-  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function appendRetryRepairContext(userMessage: string, retryFeedback: string): string {

@@ -106,7 +106,6 @@ test("ReviewOrchestrator fails the run when applyTo throws and does not downgrad
           }
 
           return {
-            stepId: step.stepId,
             applyTo() {
               throw new Error("apply failed");
             }

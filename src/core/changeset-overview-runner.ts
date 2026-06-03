@@ -29,27 +29,18 @@ export interface ChangesetOverviewRunnerInput {
 
 export interface ChangesetOverviewRunnerOptions {
   reviewSessionFactory: ReviewSessionFactoryLike;
-  /** Optional injection point; defaults to a fresh `ChangesetOverviewOutputValidator`. */
-  changesetOverviewOutputValidator?: ChangesetOverviewOutputValidator;
-  onChangesetOverviewLogEvent?: (event: ChangesetOverviewLogEvent) => void;
+  onChangesetOverviewLog?: (message: string) => void;
 }
 
-export interface ChangesetOverviewLogEvent {
-  readonly message: string;
-}
-
-/**
- * Run the run-level Changeset Overview review once, retrying only if the response is blank or the session fails.
- */
 export class ChangesetOverviewRunner {
   readonly #reviewSessionFactory: ReviewSessionFactoryLike;
   readonly #validator: ChangesetOverviewOutputValidator;
-  readonly #onChangesetOverviewLogEvent?: (event: ChangesetOverviewLogEvent) => void;
+  readonly #onChangesetOverviewLog?: (message: string) => void;
 
   constructor(options: ChangesetOverviewRunnerOptions) {
     this.#reviewSessionFactory = options.reviewSessionFactory;
-    this.#validator = options.changesetOverviewOutputValidator ?? new ChangesetOverviewOutputValidator();
-    this.#onChangesetOverviewLogEvent = options.onChangesetOverviewLogEvent;
+    this.#validator = new ChangesetOverviewOutputValidator();
+    this.#onChangesetOverviewLog = options.onChangesetOverviewLog;
   }
 
   async run(input: ChangesetOverviewRunnerInput): Promise<RunContext> {
@@ -119,7 +110,8 @@ export class ChangesetOverviewRunner {
       },
       buildFinalError(lastCause) {
         return new Error(lastCause);
-      }
+      },
+      maxAttempts: 2
     });
   }
 
@@ -144,7 +136,6 @@ export class ChangesetOverviewRunner {
       `attempt ${attempt + 1}`,
       `code=${diagnostic.code}`,
       diagnostic.parseStage ? `stage=${diagnostic.parseStage}` : undefined,
-      diagnostic.offendingPath ? `path=${diagnostic.offendingPath}` : undefined,
       diagnostic.responseByteLength === undefined
         ? undefined
         : `responseBytes=${diagnostic.responseByteLength}`,
@@ -155,9 +146,6 @@ export class ChangesetOverviewRunner {
       diagnostic.errorColumn === undefined
         ? undefined
         : `column=${diagnostic.errorColumn}`,
-      diagnostic.allowedValues === undefined
-        ? undefined
-        : `allowed=${JSON.stringify(diagnostic.allowedValues)}`,
       diagnostic.responseExcerpt === undefined
         ? undefined
         : `excerpt=${JSON.stringify(diagnostic.responseExcerpt)}`,
@@ -168,6 +156,6 @@ export class ChangesetOverviewRunner {
   }
 
   #emitLog(message: string): void {
-    this.#onChangesetOverviewLogEvent?.({ message });
+    this.#onChangesetOverviewLog?.(message);
   }
 }

@@ -32,8 +32,6 @@ export class ChangesetOverviewOutputValidationError extends Error {
 export interface ChangesetOverviewValidationDiagnostic {
   readonly code: ChangesetOverviewValidationCode;
   readonly message: string;
-  readonly offendingPath?: string;
-  readonly allowedValues?: readonly string[];
   readonly actualSummary?: string;
   readonly repairHint?: string;
   readonly parseStage?: string;
@@ -80,10 +78,6 @@ const OVERVIEW_MARKDOWN_PREFIX = "## Changeset Overview";
  * uniformly to blank, parse, and schema failures.
  */
 export class ChangesetOverviewOutputValidator {
-  validate(input: ChangesetOverviewOutputValidatorInput): ChangeMapReadiness {
-    return this.validateDetailed(input).changeMap;
-  }
-
   validateDetailed(input: ChangesetOverviewOutputValidatorInput): ChangesetOverviewOutputValidationResult {
     const { value: parsed, metadata: parseMetadata } = parseJson(input.responseText);
     const obj = ensurePlainObject(parsed, "top-level payload");

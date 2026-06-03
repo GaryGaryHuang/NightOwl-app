@@ -1,4 +1,3 @@
-import type { ReviewSectionKey } from "./review-section-contract.ts";
 import {
   clonePriorValidatorFeedback,
   cloneReviewBasis,
@@ -100,11 +99,11 @@ export class FileReviewContext {
     this.headRef = input.headRef;
   }
 
-  setSection(sectionKey: ReviewSectionKey, content: string): void {
+  setSection(sectionKey: string, content: string): void {
     this.#sections.set(sectionKey, content);
   }
 
-  getSection(sectionKey: ReviewSectionKey): string | undefined {
+  getSection(sectionKey: string): string | undefined {
     return this.#sections.get(sectionKey);
   }
 

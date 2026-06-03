@@ -38,7 +38,7 @@ test("ReviewOrchestrator invokes onOutputTargetReady callback after initializeRu
       stepRunner: {
         async run(input) {
           callOrder.push("stepRunner.run");
-          return { stepId: input.step.stepId, applyTo() {} };
+          return { applyTo() {} };
         }
       },
       changesetOverviewRunner: {
@@ -89,8 +89,8 @@ test("ReviewOrchestrator works normally when onOutputTargetReady callback is not
       reviewFileFilter: new LocalReviewFileFilter(),
       outputSink: new LocalWorkspaceProvider(),
       stepRunner: {
-        async run(input) {
-          return { stepId: input.step.stepId, applyTo() {} };
+        async run() {
+          return { applyTo() {} };
         }
       },
       changesetOverviewRunner: {
@@ -140,8 +140,8 @@ test("ReviewOrchestrator writes changeset overview after initializeRun and befor
         }
       }),
       stepRunner: {
-        async run(input) {
-          return { stepId: input.step.stepId, applyTo() {} };
+        async run() {
+          return { applyTo() {} };
         }
       },
       changesetOverviewRunner: {

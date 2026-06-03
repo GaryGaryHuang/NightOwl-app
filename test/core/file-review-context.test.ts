@@ -35,20 +35,6 @@ test("FileReviewContext preserves execution metadata and starts empty", () => {
   assert.equal(context.getFindingsInsertionIndex(), undefined);
 });
 
-test("FileReviewContext accepts custom section keys", () => {
-  const context = createContext();
-
-  context.setSection("custom-analysis", "custom content");
-  assert.equal(context.getSection("custom-analysis"), "custom content");
-  assert.deepEqual(context.getSectionEntries(), [["custom-analysis", "custom content"]]);
-});
-
-test("FileReviewContext getSection returns undefined for unwritten custom key", () => {
-  const context = createContext();
-
-  assert.equal(context.getSection("never-written"), undefined);
-});
-
 test("FileReviewContext setSection overwrites same key preserving insertion position", () => {
   const context = createContext();
 

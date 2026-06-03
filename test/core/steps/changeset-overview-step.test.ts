@@ -168,7 +168,7 @@ test("CHANGESET_OVERVIEW_REVIEW_PROFILE keeps the documented ten minute timeout"
 test("buildChangesetOverviewRetryRepairPrompt preserves inputs and provides structured validator feedback", () => {
   const previousFailure = {
     code: "SCHEMA",
-    offendingPath: "overviewMarkdown"
+    message: "overviewMarkdown must include the canonical heading"
   };
   const prompt = buildChangesetOverviewRetryRepairPrompt(
     {

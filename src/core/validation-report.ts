@@ -5,12 +5,12 @@
  * Pure data types. No I/O.
  */
 
-export type StructuredValidationTaxonomyCode = "SCHEMA" | "SEMANTIC" | "OK";
+export type StructuredValidationTaxonomyCode = "SEMANTIC" | "OK";
 
 export interface StructuredValidationReportEntry {
   readonly findingId: string;
   readonly taxonomy: StructuredValidationTaxonomyCode;
   readonly outcome: "accepted" | "rejected";
-  readonly gate: "schema" | "acceptance" | "semantic";
+  readonly gate: "schema" | "semantic";
   readonly reason: string;
 }

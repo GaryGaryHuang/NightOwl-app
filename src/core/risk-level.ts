@@ -17,7 +17,7 @@ export function countNiceFindings(findings: Finding[] | undefined): number {
  * nice_to_have findings map to Low;
  * and no accepted findings maps to None.
  */
-export function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel {
+function deriveFileRiskLevel(findings: Finding[] | undefined): RiskLevel {
   if (!findings || findings.length === 0) {
     return "None";
   }

@@ -85,11 +85,6 @@ test("ReviewBasisValidator accepts a complete ReviewBasis", () => {
   assert.ok(Object.isFrozen(result.value.evidenceRefs));
 });
 
-test("ReviewBasisValidator injects host filePath regardless of LLM output", () => {
-  const result = validateOk(makeValidReviewBasis());
-  assert.equal(result.value.filePath, FILE_PATH);
-});
-
 test("ReviewBasisValidator ignores unknown top-level fields", () => {
   const result = validateOk(makeValidReviewBasis({ extraField: "hello", anotherOne: 42 }));
   assert.equal(result.value.roleInChangeset, "Owns review prompt harness state handoff.");

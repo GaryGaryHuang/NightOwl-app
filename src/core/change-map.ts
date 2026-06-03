@@ -83,6 +83,4 @@ function normalizeChangeMapStatus(
     case "C":
       return "A";
   }
-
-  return "M";
 }

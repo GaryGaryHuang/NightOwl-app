@@ -99,7 +99,7 @@ function validateCandidatePayload(payload: Record<string, unknown>) {
 function assertCandidateValidationFails(
   payload: Record<string, unknown>,
   label: string
-): StructuredValidationReportError {
+): void {
   assert.throws(
     () => validateCandidatePayload(payload),
     (error: unknown) => {
@@ -108,14 +108,6 @@ function assertCandidateValidationFails(
     },
     label
   );
-
-  try {
-    validateCandidatePayload(payload);
-  } catch (error) {
-    return error as StructuredValidationReportError;
-  }
-
-  throw new Error(`expected validation failure for ${label}`);
 }
 
 function createCandidatePayload(

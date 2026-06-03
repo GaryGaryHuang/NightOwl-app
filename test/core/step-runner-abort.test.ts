@@ -96,38 +96,18 @@ test("StepRunner does not consume retry budget or run deterministic validation w
           async disconnect() {}
         });
       }
-    },
-    structuredOutputValidator: {
-      validateCandidateFindingsWithReport() {
-        validateCalls += 1;
-        return {
-          payload: {
-            findings: [],
-            findingOrigins: [],
-            hypothesisClosure: [],
-            criticalMissingInformation: []
-          },
-          report: []
-        };
-      },
-      validateValidationReportV1WithReport() {
-        validateCalls += 1;
-        return {
-          payload: {
-            perFindingResults: [],
-            missingInformationItems: [],
-            loopControl: { action: "accept", reason: "no findings" }
-          },
-          report: []
-        };
-      }
     }
   });
 
   await assert.rejects(
     () =>
       runner.run({
-        step: createStructuredTestStep({}),
+        step: createStructuredTestStep({
+          resolve: async () => {
+            validateCalls += 1;
+            return () => {};
+          }
+        }),
         context,
         repoRoot: "/workspace/repo",
         signal: controller.signal
