@@ -15,8 +15,8 @@ export interface SessionLike {
 }
 
 // Re-export from its canonical home in core/ so existing consumers of this module keep working.
-export { SessionTurnAbortedError } from "../core/session-turn-aborted-error.ts";
-import { SessionTurnAbortedError } from "../core/session-turn-aborted-error.ts";
+export { SessionTurnAbortedError } from "../core/errors.ts";
+import { SessionTurnAbortedError } from "../core/errors.ts";
 
 const SESSION_EXECUTOR_REUSE_ERROR =
   "SessionExecutor instances are single-use; create a new executor for each turn.";

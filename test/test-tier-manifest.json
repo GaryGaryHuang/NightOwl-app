@@ -12,7 +12,6 @@
     "test/core/file-review-context.test.ts",
     "test/core/finalizers/review-index-finalizer.test.ts",
     "test/core/finalizers/review-note-finalizer.test.ts",
-    "test/core/nightowl-namespace-path.test.ts",
     "test/core/nightowl-namespace.test.ts",
     "test/core/orchestrator-abort.test.ts",
     "test/core/review-access-guard.test.ts",

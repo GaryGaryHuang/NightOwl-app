@@ -1,7 +1,7 @@
 import type { FileReviewContext } from "./file-review-context.ts";
 import type { ReviewKnowledgeMode } from "./review-knowledge-mode.ts";
 import type { ReviewSessionFactoryLike } from "./session-factory-contracts.ts";
-import { StepExecutionError } from "./step-execution-error.ts";
+import { StepExecutionError } from "./errors.ts";
 import { retryWithLimit } from "./session-retry.ts";
 import {
   StructuredOutputValidator,

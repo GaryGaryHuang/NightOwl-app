@@ -7,7 +7,7 @@ import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
 import type { ReviewSourceProvider } from "../../src/providers/review-source-provider.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import { createReviewRepoFixture, type ReviewRepoFixture } from "../helpers/git-fixture.ts";
-import { StepExecutionError } from "../../src/core/step-execution-error.ts";
+import { StepExecutionError } from "../../src/core/errors.ts";
 import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";
 import {
   REQUEST,

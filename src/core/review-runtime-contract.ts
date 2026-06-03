@@ -1,2 +1,1 @@
 export const REVIEW_TURN_TIMEOUT_MS = 600_000;
-export const REVIEW_STREAMING_ENABLED = false;

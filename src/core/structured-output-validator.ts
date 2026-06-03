@@ -129,8 +129,7 @@ export class StructuredOutputValidator {
           taxonomy: result.decision === "approve" ? "OK" : "SEMANTIC",
           outcome: result.decision === "approve" ? "accepted" : "rejected",
           gate: "semantic",
-          reason: result.reason,
-          ...buildValidationReportSemanticFields(result)
+          reason: result.reason
         });
       }
 
@@ -153,20 +152,6 @@ export class StructuredOutputValidator {
     }
   }
 
-}
-
-function buildValidationReportSemanticFields(
-  result: PerFindingValidationResult
-): Partial<StructuredValidationReportEntry> {
-  return {
-    validationDecision: result.decision,
-    ...(result.failedGates[0] === undefined
-      ? {}
-      : { semanticGate: result.failedGates[0] }),
-    ...(result.requiredCorrections.length === 0
-      ? {}
-      : { requiredCorrections: [...result.requiredCorrections] })
-  };
 }
 
 function validateCandidateFindingsRecord(input: {

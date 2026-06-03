@@ -1,7 +1,7 @@
 import path from "node:path";
 
-import { ReviewRunInterruptedError } from "./review-run-interrupted-error.ts";
-export { ReviewRunInterruptedError } from "./review-run-interrupted-error.ts";
+import { ReviewRunInterruptedError } from "./errors.ts";
+export { ReviewRunInterruptedError } from "./errors.ts";
 
 function extractSignalName(reason: unknown): "SIGINT" | "SIGTERM" | undefined {
   if (reason === "SIGINT" || reason === "SIGTERM") {
@@ -18,7 +18,7 @@ import {
   type Finding
 } from "./file-review-context.ts";
 import { DEFAULT_MAX_CONCURRENT_FILES } from "./max-concurrent-files.ts";
-import { StepExecutionError } from "./step-execution-error.ts";
+import { StepExecutionError } from "./errors.ts";
 import { renderReviewNote, type ReviewNoteRenderer } from "./finalizers/review-note-finalizer.ts";
 import type { ResolvedFileOutcome, SkippedFileOutcome, SuccessfulFileOutcome } from "./run-outcomes.ts";
 import { renderReviewIndex, type ReviewIndexRenderer } from "./finalizers/review-index-finalizer.ts";
@@ -66,7 +66,7 @@ import {
 } from "../providers/review-output-health-assessor.ts";
 import type { ReviewFileFilter } from "../providers/review-file-filter.ts";
 import type { ReviewSourceProvider } from "../providers/review-source-provider.ts";
-import { SessionTurnAbortedError } from "./session-turn-aborted-error.ts";
+import { SessionTurnAbortedError } from "./errors.ts";
 
 export interface FinalizerFailure {
   artifact: "index";

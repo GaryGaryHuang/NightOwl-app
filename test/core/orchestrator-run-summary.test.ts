@@ -13,7 +13,7 @@ import {
   type ReviewOrchestratorOptions
 } from "../../src/core/orchestrator.ts";
 import type { RunStepInput, StepResult, StepRunner } from "../../src/core/step-runner.ts";
-import { StepExecutionError } from "../../src/core/step-execution-error.ts";
+import { StepExecutionError } from "../../src/core/errors.ts";
 import type { OutputTarget } from "../../src/core/review-path-resolver.ts";
 import { LocalGitProvider } from "../../src/providers/local-git-provider.ts";
 import type {

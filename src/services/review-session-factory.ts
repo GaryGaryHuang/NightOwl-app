@@ -2,9 +2,6 @@ import {
   type SessionConfig
 } from "@github/copilot-sdk";
 
-import {
-  REVIEW_STREAMING_ENABLED
-} from "../core/review-runtime-contract.ts";
 import type {
   ReviewSessionFactoryLike,
   ReviewSessionProfileLike
@@ -93,7 +90,7 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
         ? { provider: this.#modelProvider.provider }
         : {}),
       reasoningEffort: "high",
-      streaming: REVIEW_STREAMING_ENABLED,
+      streaming: false,
       systemMessage: {
         mode: "customize",
         sections: buildRemoveAllSectionsConfig(),

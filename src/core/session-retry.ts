@@ -1,4 +1,4 @@
-import { SessionTurnAbortedError } from "./session-turn-aborted-error.ts";
+import { SessionTurnAbortedError } from "./errors.ts";
 
 export interface SessionRetryInput<T> {
   execute(attempt: number): Promise<T>;

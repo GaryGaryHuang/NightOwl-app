@@ -1,6 +1,6 @@
 import ignore from "ignore";
 
-import { isNightOwlNamespacePath } from "../core/nightowl-namespace-path.ts";
+import { isNightOwlNamespacePath } from "../core/nightowl-namespace.ts";
 
 /**
  * Applies reviewable-file policy to repo-relative file paths.

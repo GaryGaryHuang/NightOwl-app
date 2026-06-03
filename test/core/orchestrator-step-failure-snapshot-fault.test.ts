@@ -6,7 +6,7 @@ import { ReviewOrchestrator } from "../../src/core/orchestrator.ts";
 import { planNoteFiles } from "../../src/core/review-path-resolver.ts";
 import type { StepRunner } from "../../src/core/step-runner.ts";
 import type { RunStepInput, StepResult } from "../../src/core/step-runner.ts";
-import { StepExecutionError } from "../../src/core/step-execution-error.ts";
+import { StepExecutionError } from "../../src/core/errors.ts";
 import { createReviewRepoFixture } from "../helpers/git-fixture.ts";
 import { defineOutputSinkDouble } from "../helpers/output-sink-double.ts";
 import { buildSuccessfulStepResult } from "../helpers/orchestrator-fixture.ts";

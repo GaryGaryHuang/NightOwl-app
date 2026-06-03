@@ -5,20 +5,7 @@
  * Pure data types. No I/O.
  */
 
-import type {
-  SemanticGateId,
-  ValidationDecision
-} from "./semantic-review.ts";
-
-export type StructuredValidationTaxonomyCode =
-  | "SCHEMA"
-  | "EVIDENCE"
-  | "REACHABILITY"
-  | "OUT_OF_SCOPE"
-  | "DUPLICATE"
-  | "CONTRADICTION"
-  | "SEMANTIC"
-  | "OK";
+export type StructuredValidationTaxonomyCode = "SCHEMA" | "SEMANTIC" | "OK";
 
 export interface StructuredValidationReportEntry {
   readonly findingId: string;
@@ -26,7 +13,4 @@ export interface StructuredValidationReportEntry {
   readonly outcome: "accepted" | "rejected";
   readonly gate: "schema" | "acceptance" | "semantic";
   readonly reason: string;
-  readonly semanticGate?: SemanticGateId;
-  readonly validationDecision?: ValidationDecision;
-  readonly requiredCorrections?: readonly string[];
 }
