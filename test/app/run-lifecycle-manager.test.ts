@@ -11,6 +11,85 @@ function createFakeSignalSource(): SignalSource & EventEmitter {
   return new EventEmitter() as SignalSource & EventEmitter;
 }
 
+interface FakeTtyInput {
+  isTTY?: boolean;
+  isRaw?: boolean;
+  setRawMode(mode: boolean): void;
+  isPaused(): boolean;
+  on(event: "data", handler: (chunk: Buffer) => void): void;
+  off(event: "data", handler: (chunk: Buffer) => void): void;
+  resume(): void;
+  pause(): void;
+  emitData(chunk: Buffer): void;
+  readonly rawModeCalls: boolean[];
+  readonly resumed: boolean;
+  readonly paused: boolean;
+  readonly flowing: boolean;
+  readonly dataListenerCount: number;
+}
+
+function createFakeTtyInput(options: {
+  isTTY?: boolean;
+  initiallyPaused?: boolean;
+  setRawModeError?: Error;
+} = {}): FakeTtyInput {
+  const emitter = new EventEmitter();
+  const rawModeCalls: boolean[] = [];
+  let isRaw = false;
+  let resumed = false;
+  let paused = false;
+  let flowing = !(options.initiallyPaused ?? true);
+
+  return {
+    isTTY: options.isTTY ?? true,
+    get isRaw() {
+      return isRaw;
+    },
+    setRawMode(mode: boolean) {
+      if (options.setRawModeError) {
+        throw options.setRawModeError;
+      }
+      isRaw = mode;
+      rawModeCalls.push(mode);
+    },
+    isPaused() {
+      return !flowing;
+    },
+    on(event, handler) {
+      emitter.on(event, handler);
+    },
+    off(event, handler) {
+      emitter.off(event, handler);
+    },
+    resume() {
+      resumed = true;
+      flowing = true;
+    },
+    pause() {
+      paused = true;
+      flowing = false;
+    },
+    emitData(chunk: Buffer) {
+      emitter.emit("data", chunk);
+    },
+    get rawModeCalls() {
+      return rawModeCalls;
+    },
+    get resumed() {
+      return resumed;
+    },
+    get paused() {
+      return paused;
+    },
+    get flowing() {
+      return flowing;
+    },
+    get dataListenerCount() {
+      return emitter.listenerCount("data");
+    }
+  };
+}
+
 function createLifecycleTracker(overrides: {
   startError?: Error;
   stopImpl?: () => Promise<void>;
@@ -398,4 +477,141 @@ test("RunLifecycleManager does not touch process listeners with custom signalSou
 
   assert.equal(process.listenerCount("SIGINT"), sigintBefore);
   assert.equal(process.listenerCount("SIGTERM"), sigtermBefore);
+});
+
+// ─── TTY raw-mode Ctrl+C echo suppression ───────────────────────────────────
+
+test("RunLifecycleManager enables raw mode on a TTY and restores it afterwards", async () => {
+  const signalSource = createFakeSignalSource();
+  const ttyInput = createFakeTtyInput({ isTTY: true });
+  const manager = new RunLifecycleManager({ signalSource, ttyInput });
+
+  await manager.run(async () => {
+    assert.deepEqual(ttyInput.rawModeCalls, [true]);
+    assert.equal(ttyInput.resumed, true);
+    assert.equal(ttyInput.dataListenerCount, 1);
+    return "done";
+  });
+
+  assert.deepEqual(ttyInput.rawModeCalls, [true, false]);
+  assert.equal(ttyInput.paused, true);
+  assert.equal(ttyInput.dataListenerCount, 0);
+});
+
+test("RunLifecycleManager aborts with SIGINT when the ETX byte arrives on a raw TTY", async () => {
+  const signalSource = createFakeSignalSource();
+  const ttyInput = createFakeTtyInput({ isTTY: true });
+  const manager = new RunLifecycleManager({ signalSource, ttyInput });
+
+  await assert.rejects(
+    () =>
+      manager.run(async (signal) => {
+        ttyInput.emitData(Buffer.from([0x03]));
+        assert.ok(signal.aborted, "signal should be aborted after Ctrl+C byte");
+        assert.equal(signal.reason, "SIGINT");
+        throw new Error("interrupted");
+      }),
+    { message: "interrupted" }
+  );
+
+  assert.deepEqual(ttyInput.rawModeCalls, [true, false]);
+});
+
+test("RunLifecycleManager ignores non-ETX stdin bytes", async () => {
+  const signalSource = createFakeSignalSource();
+  const ttyInput = createFakeTtyInput({ isTTY: true });
+  const manager = new RunLifecycleManager({ signalSource, ttyInput });
+
+  await manager.run(async (signal) => {
+    ttyInput.emitData(Buffer.from("hello\n"));
+    assert.ok(!signal.aborted, "ordinary input must not abort the run");
+    return "done";
+  });
+});
+
+test("RunLifecycleManager does not enable raw mode when stdin is not a TTY", async () => {
+  const signalSource = createFakeSignalSource();
+  const ttyInput = createFakeTtyInput({ isTTY: false });
+  const manager = new RunLifecycleManager({ signalSource, ttyInput });
+
+  await manager.run(async () => "done");
+
+  assert.deepEqual(ttyInput.rawModeCalls, []);
+  assert.equal(ttyInput.resumed, false);
+  assert.equal(ttyInput.dataListenerCount, 0);
+});
+
+test("RunLifecycleManager still cleans up listeners and stops client when raw-mode setup throws", async () => {
+  const signalSource = createFakeSignalSource();
+  const ttyInput = createFakeTtyInput({
+    isTTY: true,
+    setRawModeError: new Error("ENOTTY")
+  });
+  const { calls, clientManager } = createLifecycleTracker();
+  const manager = new RunLifecycleManager({
+    clientManager,
+    signalSource,
+    ttyInput
+  });
+
+  await manager.run(async () => "done");
+
+  assert.deepEqual(calls, ["start", "stop"]);
+  assert.equal(signalSource.listenerCount("SIGINT"), 0);
+  assert.equal(signalSource.listenerCount("SIGTERM"), 0);
+  assert.equal(ttyInput.dataListenerCount, 0);
+});
+
+test("RunLifecycleManager restores stdin to its prior paused state", async () => {
+  const signalSource = createFakeSignalSource();
+  const ttyInput = createFakeTtyInput({ isTTY: true, initiallyPaused: true });
+  const manager = new RunLifecycleManager({ signalSource, ttyInput });
+
+  await manager.run(async () => {
+    assert.equal(ttyInput.flowing, true, "stdin should flow during the run");
+    return "done";
+  });
+
+  assert.equal(ttyInput.flowing, false, "stdin should be paused again afterwards");
+});
+
+test("RunLifecycleManager leaves stdin flowing when it was already flowing", async () => {
+  const signalSource = createFakeSignalSource();
+  const ttyInput = createFakeTtyInput({ isTTY: true, initiallyPaused: false });
+  const manager = new RunLifecycleManager({ signalSource, ttyInput });
+
+  await manager.run(async () => "done");
+
+  assert.equal(
+    ttyInput.flowing,
+    true,
+    "an already-flowing stdin must not be paused on restore"
+  );
+});
+
+test("RunLifecycleManager nesting keeps stdin flowing for the outer run after the inner run restores", async () => {
+  const signalSource = createFakeSignalSource();
+  const ttyInput = createFakeTtyInput({ isTTY: true, initiallyPaused: true });
+  const outer = new RunLifecycleManager({ signalSource, ttyInput });
+  const inner = new RunLifecycleManager({ signalSource, ttyInput });
+
+  await outer.run(async (outerSignal) => {
+    assert.equal(ttyInput.flowing, true, "outer run should make stdin flow");
+
+    await inner.run(async () => "inner-done");
+
+    assert.equal(
+      ttyInput.flowing,
+      true,
+      "inner restore must not pause stdin while the outer run is active"
+    );
+
+    // The outer run can still observe Ctrl+C after the inner run completes.
+    ttyInput.emitData(Buffer.from([0x03]));
+    assert.ok(outerSignal.aborted, "outer run should still detect Ctrl+C");
+    assert.equal(outerSignal.reason, "SIGINT");
+    return "outer-done";
+  });
+
+  assert.equal(ttyInput.flowing, false, "stdin restored to paused after outer run");
 });
