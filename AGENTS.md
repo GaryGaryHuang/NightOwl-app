@@ -125,7 +125,7 @@ These are product safety boundaries that must not be circumvented or relaxed:
 
 ## Copilot SDK Notes
 
-- Using `@github/copilot-sdk@1.0.0-beta.12`. Before upgrading, re-verify: runtime imports, session lifecycle, permission hooks (`onPreToolUse`, `onPostToolUseFailure`, and `onPermissionRequest`), MCP config types, system message section names, extension permission kinds, and test behavior.
+- Using `@github/copilot-sdk@1.0.0`. Before upgrading, re-verify: runtime imports, session lifecycle, permission hooks (`onPreToolUse`, `onPostToolUseFailure`, and `onPermissionRequest`), MCP config types, system message section names, extension permission kinds, and test behavior.
 - Review sessions customize SDK-managed system message sections. Keep every `SystemMessageSection` classified as either removed or intentionally retained; `runtime_instructions` is retained so SDK/runtime notifications remain interpretable by the model.
 
 ## Commit Guidance
