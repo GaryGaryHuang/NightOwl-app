@@ -116,10 +116,13 @@ function renderFindingsSection(
 
   return [
     "## Findings",
-    ...orderedFindings.map(
-      (finding) =>
-        `- [${finding.priority}] ${finding.title} (${formatTraceability(finding.traceability)})`
-    )
+    ...orderedFindings.flatMap((finding) => [
+      `- [${finding.priority}] ${finding.title} (${formatTraceability(finding.traceability)})`,
+      `  - Evidence：${finding.evidence}`,
+      `  - Trigger Condition：${finding.triggerCondition}`,
+      `  - Impact：${finding.impact}`,
+      `  - Counter-Evidence：${finding.counterEvidence.join("; ")}`
+    ])
   ].join("\n");
 }
 

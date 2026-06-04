@@ -346,7 +346,7 @@ test("Finalizer renders an empty Findings block when findings were finalized as 
   assertTextContainsInOrder(result, ["## Findings"]);
 });
 
-test("Finalizer renders compact findings with must before nice", () => {
+test("Finalizer renders detailed findings with must before nice", () => {
   const context = createContext();
 
   context.setSection("review-basis", "## Review Basis\nContent");
@@ -363,11 +363,22 @@ test("Finalizer renders compact findings with must before nice", () => {
     { type: "must", title: "must-fix-2" },
     { type: "nice", title: "nice-suggestion" }
   ]);
-  assertTextExcludesAll(result, [
-    "Evidence：",
-    "Trigger Condition：",
-    "Impact：",
-    "Counter-Evidence："
+  assertTextContainsInOrder(result, [
+    "- [must_fix] must-fix-1 (L1)",
+    "  - Evidence：test-evidence",
+    "  - Trigger Condition：test-trigger",
+    "  - Impact：test-impact",
+    "  - Counter-Evidence：test-counter",
+    "- [must_fix] must-fix-2 (L1)",
+    "  - Evidence：test-evidence",
+    "  - Trigger Condition：test-trigger",
+    "  - Impact：test-impact",
+    "  - Counter-Evidence：test-counter",
+    "- [nice_to_have] nice-suggestion (@@ -1,3 +1,3 @@)",
+    "  - Evidence：test-evidence",
+    "  - Trigger Condition：test-trigger",
+    "  - Impact：test-impact",
+    "  - Counter-Evidence：test-counter"
   ]);
 });
 
