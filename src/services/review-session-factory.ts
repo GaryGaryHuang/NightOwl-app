@@ -3,11 +3,16 @@ import {
 } from "@github/copilot-sdk";
 
 import type {
+  ReviewSessionCreationOptions,
   ReviewSessionFactoryLike,
   ReviewSessionProfileLike
 } from "../core/session-factory-contracts.ts";
+import { SessionTurnAbortedError } from "../core/errors.ts";
 import type { CopilotClientLike } from "./copilot-client-manager.ts";
-import { SessionExecutor } from "./session-executor.ts";
+import {
+  SessionExecutor,
+  type SessionLike
+} from "./session-executor.ts";
 import type { KnowledgeSvc } from "./knowledge.ts";
 import { buildRemoveAllSectionsConfig } from "./review-system-message-sections.ts";
 import { ToolPolicyGuard } from "./tool-policy/tool-policy-guard.ts";
@@ -62,7 +67,11 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
     this.#auditWriterProvider = options.auditWriterProvider;
   }
 
-  async createSession(profile: ReviewSessionProfile): Promise<SessionExecutor> {
+  async createSession(
+    profile: ReviewSessionProfile,
+    options?: ReviewSessionCreationOptions
+  ): Promise<SessionExecutor> {
+    throwIfSessionCreationAborted(options?.signal);
     const auditWriter = this.#auditWriterProvider?.();
     if (profile.knowledgeMode === undefined) {
       throw new Error(
@@ -112,8 +121,53 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
       sessionConfig.workingDirectory = profile.workingDirectory;
     }
 
-    const session = await this.#clientManager.getClient().createSession(sessionConfig);
+    throwIfSessionCreationAborted(options?.signal);
+    const sessionPromise = this.#clientManager.getClient().createSession(sessionConfig);
+    const session = await waitForSessionCreation(sessionPromise, options?.signal);
 
     return new SessionExecutor(session);
+  }
+}
+
+function throwIfSessionCreationAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new SessionTurnAbortedError();
+  }
+}
+
+async function waitForSessionCreation(
+  sessionPromise: Promise<SessionLike>,
+  signal: AbortSignal | undefined
+): Promise<SessionLike> {
+  if (!signal) {
+    return await sessionPromise;
+  }
+
+  throwIfSessionCreationAborted(signal);
+
+  let removeAbortListener: (() => void) | undefined;
+  const abortPromise = new Promise<never>((_, reject) => {
+    const handleAbort = (): void => reject(new SessionTurnAbortedError());
+    signal.addEventListener("abort", handleAbort, { once: true });
+    removeAbortListener = () => signal.removeEventListener("abort", handleAbort);
+  });
+
+  try {
+    return await Promise.race([sessionPromise, abortPromise]);
+  } catch (error) {
+    if (error instanceof SessionTurnAbortedError) {
+      void sessionPromise.then(disconnectSessionAfterAbortedCreation, () => {});
+    }
+    throw error;
+  } finally {
+    removeAbortListener?.();
+  }
+}
+
+async function disconnectSessionAfterAbortedCreation(session: SessionLike): Promise<void> {
+  try {
+    await session.disconnect();
+  } catch {
+    // Best-effort cleanup for a session that arrived after the run was interrupted.
   }
 }

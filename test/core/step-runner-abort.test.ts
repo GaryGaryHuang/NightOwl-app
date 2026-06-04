@@ -12,6 +12,29 @@ import {
   createStepRunnerContext
 } from "../helpers/step-runner-contract-fixture.ts";
 
+async function assertRejectsWithAbortBeforeTimeout(
+  promise: Promise<unknown>
+): Promise<void> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(
+      () => reject(new Error("timed out waiting for session creation abort")),
+      100
+    );
+  });
+
+  try {
+    await assert.rejects(
+      () => Promise.race([promise, timeoutPromise]),
+      (error: unknown) => error instanceof SessionTurnAbortedError
+    );
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
 test("StepRunner does not consume retry budget or run resolve when a section-step review turn is aborted", async () => {
   const controller = new AbortController();
   const context = createStepRunnerContext();
@@ -117,4 +140,42 @@ test("StepRunner does not consume retry budget or run deterministic validation w
   assert.equal(reviewAttempts, 1);
   assert.equal(abortCalls, 1);
   assert.equal(validateCalls, 0);
+});
+
+test("StepRunner aborts while creating a review session", async () => {
+  const controller = new AbortController();
+  const context = createStepRunnerContext();
+  let reviewAttempts = 0;
+  let receivedSignal = false;
+  const runner = new StepRunner({
+    reviewSessionFactory: {
+      async createSession(_profile, options) {
+        reviewAttempts += 1;
+        receivedSignal = options?.signal === controller.signal;
+
+        return await new Promise((_, reject) => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => reject(new SessionTurnAbortedError()),
+            { once: true }
+          );
+        });
+      }
+    },
+    onStepRetry() {
+      assert.fail("aborted session creation must not consume retry budget");
+    }
+  });
+
+  const pending = runner.run({
+    step: createSectionTestStep({}),
+    context,
+    repoRoot: "/workspace/repo",
+    signal: controller.signal
+  });
+  controller.abort("SIGINT");
+
+  await assertRejectsWithAbortBeforeTimeout(pending);
+  assert.equal(reviewAttempts, 1);
+  assert.equal(receivedSignal, true);
 });

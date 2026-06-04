@@ -48,23 +48,26 @@ export class ChangesetOverviewRunner {
 
     return retryWithLimit({
       execute: async (attempt) => {
-        const session = await this.#reviewSessionFactory.createSession({
-          stepId: CHANGESET_OVERVIEW_STEP_ID,
-          knowledgeMode: CHANGESET_OVERVIEW_REVIEW_PROFILE.knowledgeMode,
-          model: CHANGESET_OVERVIEW_REVIEW_PROFILE.model,
-          repoRoot: input.repoRoot,
-          ...(input.reviewOutputRoot === undefined
-            ? {}
-            : { reviewOutputRoot: input.reviewOutputRoot }),
-          ...(input.sourceBaseRef === undefined
-            ? {}
-            : { sourceBaseRef: input.sourceBaseRef }),
-          ...(input.sourceHeadRef === undefined
-            ? {}
-            : { sourceHeadRef: input.sourceHeadRef }),
-          systemMessage: CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
-          workingDirectory: input.workingDirectory
-        });
+        const session = await this.#reviewSessionFactory.createSession(
+          {
+            stepId: CHANGESET_OVERVIEW_STEP_ID,
+            knowledgeMode: CHANGESET_OVERVIEW_REVIEW_PROFILE.knowledgeMode,
+            model: CHANGESET_OVERVIEW_REVIEW_PROFILE.model,
+            repoRoot: input.repoRoot,
+            ...(input.reviewOutputRoot === undefined
+              ? {}
+              : { reviewOutputRoot: input.reviewOutputRoot }),
+            ...(input.sourceBaseRef === undefined
+              ? {}
+              : { sourceBaseRef: input.sourceBaseRef }),
+            ...(input.sourceHeadRef === undefined
+              ? {}
+              : { sourceHeadRef: input.sourceHeadRef }),
+            systemMessage: CHANGESET_OVERVIEW_SYSTEM_MESSAGE,
+            workingDirectory: input.workingDirectory
+          },
+          input.signal ? { signal: input.signal } : undefined
+        );
         const prompt = retryRepairFailure
           ? buildChangesetOverviewRetryRepairPrompt(input, retryRepairFailure)
           : buildChangesetOverviewPrompt(input);

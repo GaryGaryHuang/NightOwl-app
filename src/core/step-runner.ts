@@ -129,7 +129,10 @@ export class StepRunner {
             ? {}
             : { workingDirectory: input.workingDirectory })
         };
-        const session = await this.#reviewSessionFactory.createSession(sessionProfile);
+        const session = await this.#reviewSessionFactory.createSession(
+          sessionProfile,
+          input.signal ? { signal: input.signal } : undefined
+        );
         const userMessage =
           attempt > 0 && retryFeedback
             ? appendRetryRepairContext(plan.prompt.userMessage, retryFeedback)

@@ -31,10 +31,17 @@ export interface ReviewSessionProfileLike {
   workingDirectory?: string;
 }
 
+export interface ReviewSessionCreationOptions {
+  signal?: AbortSignal;
+}
+
 /**
  * Factory contract for creating review sessions.
  * Implemented by both the production ReviewSessionFactory and the DryRunReviewSessionFactory.
  */
 export interface ReviewSessionFactoryLike {
-  createSession(profile: ReviewSessionProfileLike): Promise<ReviewSessionLike>;
+  createSession(
+    profile: ReviewSessionProfileLike,
+    options?: ReviewSessionCreationOptions
+  ): Promise<ReviewSessionLike>;
 }

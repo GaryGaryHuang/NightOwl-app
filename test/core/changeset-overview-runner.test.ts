@@ -58,6 +58,29 @@ function parseJsonBlock(prompt: string, blockName: string): unknown {
   return JSON.parse(match[1]);
 }
 
+async function assertRejectsWithAbortBeforeTimeout(
+  promise: Promise<unknown>
+): Promise<void> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(
+      () => reject(new Error("timed out waiting for session creation abort")),
+      100
+    );
+  });
+
+  try {
+    await assert.rejects(
+      () => Promise.race([promise, timeoutPromise]),
+      (error: unknown) => error instanceof SessionTurnAbortedError
+    );
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
 test("ChangesetOverviewRunner produces a RunContext from a valid Changeset Overview ChangeMapReadiness response", async () => {
   const prompts: string[] = [];
   const profiles: unknown[] = [];
@@ -424,4 +447,38 @@ test("ChangesetOverviewRunner aborts an in-flight Changeset Overview turn withou
   );
   assert.equal(createCalls, 1);
   assert.equal(abortCalls, 1);
+});
+
+test("ChangesetOverviewRunner aborts while creating a Changeset Overview session", async () => {
+  const controller = new AbortController();
+  let createCalls = 0;
+  let receivedSignal = false;
+  const runner = new ChangesetOverviewRunner({
+    reviewSessionFactory: {
+      async createSession(_profile, options) {
+        createCalls += 1;
+        receivedSignal = options?.signal === controller.signal;
+
+        return await new Promise((_, reject) => {
+          options?.signal?.addEventListener(
+            "abort",
+            () => reject(new SessionTurnAbortedError()),
+            { once: true }
+          );
+        });
+      }
+    }
+  });
+
+  const pending = runner.run({
+    repoRoot: "/workspace/repo",
+    signal: controller.signal,
+    changesetEntries: createChangesetEntries({ status: "M", path: "src/app.ts" }),
+    userContext: []
+  });
+  controller.abort("SIGINT");
+
+  await assertRejectsWithAbortBeforeTimeout(pending);
+  assert.equal(createCalls, 1);
+  assert.equal(receivedSignal, true);
 });

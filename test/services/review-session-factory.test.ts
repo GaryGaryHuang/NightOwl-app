@@ -6,6 +6,7 @@ import {
   ReviewSessionFactory,
   type ReviewSessionFactoryOptions
 } from "../../src/services/review-session-factory.ts";
+import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
 import type {
   ResolvedReviewSessionModelProvider
 } from "../../src/services/review-model-provider-resolver.ts";
@@ -117,6 +118,29 @@ function getRecordedConfig(
 
   assert.ok(config, `expected a recorded session config at index ${index}`);
   return config;
+}
+
+async function assertRejectsWithAbortBeforeTimeout(
+  promise: Promise<unknown>
+): Promise<void> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(
+      () => reject(new Error("timed out waiting for session creation abort")),
+      100
+    );
+  });
+
+  try {
+    await assert.rejects(
+      () => Promise.race([promise, timeoutPromise]),
+      (error: unknown) => error instanceof SessionTurnAbortedError
+    );
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
 }
 
 // Subclassing ToolPolicyGuard lets the test record which auditWriter and profile
@@ -434,4 +458,34 @@ test("ReviewSessionFactory sets availableTools to exactly the SOP tool set", asy
   const availableTools = receivedConfigs[0]?.availableTools;
   assert.ok(availableTools !== undefined, "availableTools should be present in session config");
   assert.deepEqual(availableTools, [...EXPECTED_REVIEW_AVAILABLE_TOOLS]);
+});
+
+test("ReviewSessionFactory aborts while the SDK session creation is pending", async () => {
+  const controller = new AbortController();
+  let createCalls = 0;
+  const factory = new ReviewSessionFactory({
+    clientManager: {
+      getClient() {
+        return {
+          async createSession() {
+            createCalls += 1;
+            return await new Promise<never>(() => {});
+          }
+        };
+      }
+    },
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  const pending = factory.createSession(
+    {
+      ...BASE_REVIEW_PROFILE,
+      knowledgeMode: "disabled"
+    },
+    { signal: controller.signal }
+  );
+  controller.abort("SIGINT");
+
+  await assertRejectsWithAbortBeforeTimeout(pending);
+  assert.equal(createCalls, 1);
 });
