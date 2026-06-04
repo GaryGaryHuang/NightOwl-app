@@ -92,6 +92,9 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
         onPreToolUse: this.#toolPolicyGuard.buildPreToolUseHook(
           profile,
           auditWriter
+        ),
+        onPostToolUseFailure: this.#toolPolicyGuard.buildPostToolUseFailureHook(
+          auditWriter
         )
       },
       model: this.#modelProvider?.model ?? profile.model,

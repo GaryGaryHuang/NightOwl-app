@@ -49,10 +49,14 @@ const DEFAULT_CONTEXT7_SERVERS: Record<string, MCPServerConfig> = {
 type PreToolUseHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPreToolUse"]
 >;
+type PostToolUseFailureHook = NonNullable<
+  NonNullable<SessionConfig["hooks"]>["onPostToolUseFailure"]
+>;
 type PermissionHandler = NonNullable<SessionConfig["onPermissionRequest"]>;
 type RecordedReviewSessionConfig = SessionConfig & {
   hooks: NonNullable<SessionConfig["hooks"]> & {
     onPreToolUse: PreToolUseHook;
+    onPostToolUseFailure: PostToolUseFailureHook;
   };
   onPermissionRequest: PermissionHandler;
 };
@@ -62,6 +66,7 @@ function assertRecordedReviewSessionConfig(
 ): asserts config is RecordedReviewSessionConfig {
   assert.ok(config.hooks);
   assert.ok(config.hooks.onPreToolUse);
+  assert.ok(config.hooks.onPostToolUseFailure);
   assert.ok(config.onPermissionRequest);
 }
 
@@ -148,12 +153,16 @@ async function assertRejectsWithAbortBeforeTimeout(
 // implementation details.
 class SpyToolPolicyGuard extends ToolPolicyGuard {
   readonly preToolUseHook: PreToolUseHook = async () => undefined;
+  readonly postToolUseFailureHook: PostToolUseFailureHook = async () => undefined;
   readonly permissionHandler: PermissionHandler = async () => ({
     kind: "user-not-available"
   });
   readonly preToolUseCalls: Array<{
     auditWriter?: ToolAuditSink;
     profile: ToolPolicyBoundaryContext;
+  }> = [];
+  readonly postToolUseFailureCalls: Array<{
+    auditWriter?: ToolAuditSink;
   }> = [];
   readonly permissionCalls: Array<{
     auditWriter?: ToolAuditSink;
@@ -170,6 +179,13 @@ class SpyToolPolicyGuard extends ToolPolicyGuard {
   ): PreToolUseHook {
     this.preToolUseCalls.push({ auditWriter, profile });
     return this.preToolUseHook;
+  }
+
+  override buildPostToolUseFailureHook(
+    auditWriter?: ToolAuditSink
+  ): PostToolUseFailureHook {
+    this.postToolUseFailureCalls.push({ auditWriter });
+    return this.postToolUseFailureHook;
   }
 
   override buildPermissionHandler(
@@ -195,6 +211,11 @@ test("ReviewSessionFactory delegates hook construction to ToolPolicyGuard", asyn
       profile: BASE_REVIEW_PROFILE
     }
   ]);
+  assert.deepEqual(toolPolicyGuard.postToolUseFailureCalls, [
+    {
+      auditWriter: undefined
+    }
+  ]);
   assert.deepEqual(toolPolicyGuard.permissionCalls, [
     {
       auditWriter: undefined,
@@ -205,6 +226,10 @@ test("ReviewSessionFactory delegates hook construction to ToolPolicyGuard", asyn
 
   const config = getRecordedConfig(receivedConfigs);
   assert.equal(config.hooks.onPreToolUse, toolPolicyGuard.preToolUseHook);
+  assert.equal(
+    config.hooks.onPostToolUseFailure,
+    toolPolicyGuard.postToolUseFailureHook
+  );
   assert.equal(config.onPermissionRequest, toolPolicyGuard.permissionHandler);
 });
 
@@ -391,8 +416,16 @@ test("ReviewSessionFactory threads audit writer via auditWriterProvider", async 
     await factory.createSession(BASE_REVIEW_PROFILE);
 
     assert.equal(toolPolicyGuard.preToolUseCalls[0]?.auditWriter, undefined);
+    assert.equal(
+      toolPolicyGuard.postToolUseFailureCalls[0]?.auditWriter,
+      undefined
+    );
     assert.equal(toolPolicyGuard.permissionCalls[0]?.auditWriter, undefined);
     assert.equal(toolPolicyGuard.preToolUseCalls[1]?.auditWriter, auditWriter);
+    assert.equal(
+      toolPolicyGuard.postToolUseFailureCalls[1]?.auditWriter,
+      auditWriter
+    );
     assert.equal(toolPolicyGuard.permissionCalls[1]?.auditWriter, auditWriter);
   } finally {
     auditFixture.cleanup();

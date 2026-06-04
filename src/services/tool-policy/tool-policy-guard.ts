@@ -31,6 +31,11 @@ type PreToolUseHook = NonNullable<
 >;
 type PreToolUseHookInput = Parameters<PreToolUseHook>[0];
 type PreToolUseHookResult = Awaited<ReturnType<PreToolUseHook>>;
+type PostToolUseFailureHook = NonNullable<
+  NonNullable<SessionConfig["hooks"]>["onPostToolUseFailure"]
+>;
+type PostToolUseFailureHookInput = Parameters<PostToolUseFailureHook>[0];
+type PostToolUseFailureHookResult = Awaited<ReturnType<PostToolUseFailureHook>>;
 
 const SHELL_TOOL_NAMES = new Set(["bash", "sh", "shell"]);
 const URL_TOOL_NAMES = new Set(["web_fetch", "url"]);
@@ -59,7 +64,7 @@ const READ_REVIEW_ARTIFACT_DENY_REASON =
 
 type HandlerDecisionRecord = {
   tool: string;
-  decision: "allow" | "deny";
+  decision: "allow" | "deny" | "failure";
   reason?: string;
   args: Record<string, string | undefined>;
 };
@@ -469,6 +474,32 @@ export class ToolPolicyGuard {
           SHELL_POLICY_FAIL_CLOSED_REASON
         );
       }
+
+      return;
+    };
+  }
+
+  buildPostToolUseFailureHook(
+    auditWriter?: ToolAuditSink
+  ): PostToolUseFailureHook {
+    return async (
+      input: PostToolUseFailureHookInput
+    ): Promise<PostToolUseFailureHookResult> => {
+      let args: Record<string, string | undefined> = {};
+      if (input.toolArgs !== undefined) {
+        try {
+          args = { toolArgs: JSON.stringify(input.toolArgs) };
+        } catch {
+          args = { toolArgs: "[unserializable]" };
+        }
+      }
+
+      auditWriter?.append(this.#buildAuditEntry({
+        tool: input.toolName,
+        decision: "failure",
+        reason: input.error,
+        args
+      }));
 
       return;
     };

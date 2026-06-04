@@ -17,7 +17,7 @@ export const BASE_PROFILE: ToolPolicyBoundaryContext = {
 
 export interface ExpectedAuditRecord {
   tool: string;
-  decision: "allow" | "deny";
+  decision: "allow" | "deny" | "failure";
   reason?: string;
   args?: Record<string, string | undefined>;
 }
@@ -74,6 +74,7 @@ export function createPolicySession(options?: {
   return {
     guard,
     hook: guard.buildPreToolUseHook(options?.profile ?? BASE_PROFILE, options?.auditWriter),
+    failureHook: guard.buildPostToolUseFailureHook(options?.auditWriter),
     handler: guard.buildPermissionHandler(options?.profile ?? BASE_PROFILE, options?.auditWriter)
   };
 }

@@ -1,3 +1,5 @@
+import type { SessionConfig } from "@github/copilot-sdk";
+
 import {
   lineRangeTraceability
 } from "./orchestrator-fixture.ts";
@@ -10,7 +12,10 @@ import {
  * format expected by the finalizer.
  */
 export function buildSessionResponse(
-  config: { systemMessage?: unknown; availableTools?: string[] },
+  config: {
+    systemMessage?: unknown;
+    availableTools?: SessionConfig["availableTools"];
+  },
   prompt: string
 ): string {
   const systemMessage = extractSystemMessageContent(config.systemMessage);

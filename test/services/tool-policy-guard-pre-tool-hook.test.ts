@@ -224,6 +224,42 @@ test("tool policy guard pre-tool hook writes representative audit records for al
   });
 });
 
+test("tool policy guard post-tool failure hook records failures without additional context", async () => {
+  const sink = new InMemoryAuditSink();
+  const { failureHook } = createPolicySession({ auditWriter: sink });
+
+  assert.equal(
+    await failureHook(
+      {
+        sessionId: SESSION_CONTEXT.sessionId,
+        timestamp: new Date(0),
+        workingDirectory: "/workspace/repo",
+        toolName: "rg",
+        toolArgs: {
+          pattern: "TODO",
+          path: "src",
+          context: 2,
+          includeHidden: false
+        },
+        error: "rg exited with code 1"
+      },
+      SESSION_CONTEXT
+    ),
+    undefined
+  );
+
+  assert.equal(sink.records.length, 1);
+  assertAuditRecord(sink.records[0], {
+    tool: "rg",
+    decision: "failure",
+    reason: "rg exited with code 1",
+    args: {
+      toolArgs:
+        '{"pattern":"TODO","path":"src","context":2,"includeHidden":false}'
+    }
+  });
+});
+
 test("tool policy guard pre-tool hook bypasses session and agent read tools without audit records", async () => {
   const sink = new InMemoryAuditSink();
   const { hook } = createPolicySession({ auditWriter: sink });

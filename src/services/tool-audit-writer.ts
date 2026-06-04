@@ -4,8 +4,8 @@ import path from "node:path";
 export interface ToolAuditRecord {
   ts: string;                 // ISO 8601 UTC
   tool: string;               // Observed tool name/kind, e.g. "bash", "shell", "web_fetch", "url", "read", "write", ...
-  decision: "allow" | "deny";
-  reason?: string;            // present when deny; also used as diagnostic note for deferred-allow
+  decision: "allow" | "deny" | "failure";
+  reason?: string;            // present when deny/failure; also used as diagnostic note for deferred-allow
   args: Record<string, string | undefined>;
 }
 

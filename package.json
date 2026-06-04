@@ -29,8 +29,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@github/copilot-sdk": "1.0.0-beta.8",
+    "@github/copilot-sdk": "1.0.0-beta.9",
     "ignore": "^7.0.5"
+  },
+  "overrides": {
+    "@github/copilot": "1.0.55-5"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
