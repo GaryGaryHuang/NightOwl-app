@@ -13,6 +13,7 @@ export interface ClientManagerLike {
   start(): Promise<void>;
   stop(): Promise<readonly Error[]>;
   forceStop(): Promise<void>;
+  forceStopCurrentClient?(): Promise<void>;
   getClient(): CopilotClientLike;
 }
 
@@ -41,6 +42,8 @@ export function buildCopilotClientEnvironment(
  * Lifecycle operations are serialized so overlapping calls do not orphan clients.
  * Once stop()/forceStop() completes, the manager no longer exposes that client;
  * a later start() creates a fresh instance.
+ * forceStopCurrentClient() is reserved for graceful-stop timeout fallback: it
+ * bypasses the lifecycle queue so SDK forceStop() can interrupt a hanging stop().
  */
 export class CopilotClientManagerBase<
   TClient extends { start(): Promise<void>; stop(): Promise<readonly Error[]>; forceStop(): Promise<unknown> },
@@ -106,6 +109,18 @@ export class CopilotClientManagerBase<
         this.#client = undefined;
       }
     });
+  }
+
+  async forceStopCurrentClient(): Promise<void> {
+    const client = this.#client;
+    if (!client) {
+      return;
+    }
+
+    await client.forceStop();
+    if (this.#client === client) {
+      this.#client = undefined;
+    }
   }
 
   async #runExclusive<TResult>(operation: () => Promise<TResult>): Promise<TResult> {

@@ -12,10 +12,12 @@ import {
   READ_PATH_BOUNDARY_DENY_REASON,
   READ_PATH_INVALID_DENY_REASON,
   READ_REVIEW_ARTIFACT_DENY_REASON,
+  SHELL_COMMAND_INVALID_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
   ToolPolicyGuard,
   UNKNOWN_KIND_DENY_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
+  URL_INVALID_DENY_REASON,
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
 } from "../../src/services/tool-policy/tool-policy-guard.ts";
 import {
@@ -258,15 +260,61 @@ test("tool policy guard permission handler validates shell and url payloads thro
   }
 });
 
-test("tool policy guard permission handler approves requests when optional fields are absent", async () => {
+test("tool policy guard permission handler denies malformed shell and url requests without required fields", async () => {
   const sink = new InMemoryAuditSink();
   const { handler } = createPolicySession({ auditWriter: sink });
 
-  assert.deepEqual(
-    await handler(createPermissionRequest({ kind: "shell" }), SESSION_CONTEXT),
-    APPROVED
-  );
-  assertAuditRecord(sink.records[0], { tool: "shell", decision: "allow", args: {} });
+  const cases = [
+    {
+      request: createPermissionRequest({ kind: "shell" }),
+      expected: denied(SHELL_COMMAND_INVALID_DENY_REASON),
+      expectedAudit: {
+        tool: "shell",
+        decision: "deny",
+        reason: SHELL_COMMAND_INVALID_DENY_REASON,
+        args: {}
+      }
+    },
+    {
+      request: createPermissionRequest({ kind: "shell", fullCommandText: "" }),
+      expected: denied(SHELL_COMMAND_INVALID_DENY_REASON),
+      expectedAudit: {
+        tool: "shell",
+        decision: "deny",
+        reason: SHELL_COMMAND_INVALID_DENY_REASON,
+        args: {}
+      }
+    },
+    {
+      request: createPermissionRequest({ kind: "url" }),
+      expected: denied(URL_INVALID_DENY_REASON),
+      expectedAudit: {
+        tool: "url",
+        decision: "deny",
+        reason: URL_INVALID_DENY_REASON,
+        args: {}
+      }
+    },
+    {
+      request: createPermissionRequest({ kind: "url", url: "" }),
+      expected: denied(URL_INVALID_DENY_REASON),
+      expectedAudit: {
+        tool: "url",
+        decision: "deny",
+        reason: URL_INVALID_DENY_REASON,
+        args: {}
+      }
+    }
+  ] as const;
+
+  for (const testCase of cases) {
+    assert.deepEqual(await handler(testCase.request, SESSION_CONTEXT), testCase.expected);
+  }
+
+  assert.equal(sink.records.length, cases.length);
+  for (const [index, testCase] of cases.entries()) {
+    assertAuditRecord(sink.records[index], testCase.expectedAudit);
+  }
 });
 
 test("tool policy guard permission handler denies read requests without a valid path", async () => {
@@ -436,7 +484,10 @@ test("tool policy guard permission handler behaves normally without an audit wri
   const { handler } = createPolicySession();
 
   assert.deepEqual(
-    await handler(createPermissionRequest({ kind: "shell" }), SESSION_CONTEXT),
+    await handler(
+      createPermissionRequest({ kind: "shell", fullCommandText: "git status --short" }),
+      SESSION_CONTEXT
+    ),
     APPROVED
   );
 });

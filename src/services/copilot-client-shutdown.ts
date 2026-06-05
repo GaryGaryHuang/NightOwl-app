@@ -1,6 +1,7 @@
 export interface GracefulShutdownClientManagerLike {
   stop(): Promise<readonly Error[]>;
   forceStop(): Promise<unknown>;
+  forceStopCurrentClient?(): Promise<unknown>;
 }
 
 export const DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS = 5000;
@@ -39,6 +40,10 @@ export async function stopClientManagerWithTimeout(
 
   // stop() may still settle after timeout; handle that late rejection while forceStop() takes over.
   void stopPromise.catch(() => {});
-  await clientManager.forceStop();
+  if (clientManager.forceStopCurrentClient) {
+    await clientManager.forceStopCurrentClient();
+  } else {
+    await clientManager.forceStop();
+  }
   return [];
 }

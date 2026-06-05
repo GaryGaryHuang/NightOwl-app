@@ -4,6 +4,10 @@ import test from "node:test";
 import {
   stopClientManagerWithTimeout
 } from "../../src/services/copilot-client-shutdown.ts";
+import {
+  CopilotClientManager,
+  type CopilotClientLike
+} from "../../src/services/copilot-client-manager.ts";
 
 interface ShutdownClientManagerDoubleOptions {
   stopImpl?: () => Promise<readonly Error[] | void>;
@@ -82,6 +86,43 @@ test("stopClientManagerWithTimeout falls back to forceStop() when stop() exceeds
     stop: 1,
     forceStop: 1
   });
+});
+
+test("stopClientManagerWithTimeout force-stops the active Copilot client without waiting behind a hanging stop()", async () => {
+  const lifecycle: string[] = [];
+  const client: CopilotClientLike = {
+    async start() {
+      lifecycle.push("start");
+    },
+    async stop() {
+      lifecycle.push("stop");
+      return await new Promise<readonly Error[]>(() => {});
+    },
+    async forceStop() {
+      lifecycle.push("forceStop");
+    },
+    async createSession() {
+      throw new Error("createSession should not be called in this test");
+    }
+  };
+  const manager = new CopilotClientManager({ createClient: () => client });
+
+  await manager.start();
+
+  const shutdown = stopClientManagerWithTimeout(manager, 0);
+  const outcome = await Promise.race([
+    shutdown.then(() => "completed" as const),
+    new Promise<"hung">((resolve) => {
+      setTimeout(() => resolve("hung"), 25);
+    })
+  ]);
+
+  assert.equal(outcome, "completed");
+  assert.deepEqual(lifecycle, ["start", "stop", "forceStop"]);
+  assert.throws(
+    () => manager.getClient(),
+    /Copilot client has not been started\./
+  );
 });
 
 test("stopClientManagerWithTimeout surfaces a fast stop() rejection without calling forceStop()", async () => {

@@ -57,6 +57,10 @@ const WEB_FETCH_POLICY_FAIL_CLOSED_REASON =
   "URL policy evaluation failed; denied as a precaution.";
 const READ_PATH_INVALID_DENY_REASON =
   "Read permission request did not include a valid path.";
+const SHELL_COMMAND_INVALID_DENY_REASON =
+  "Shell permission request did not include a valid command.";
+const URL_INVALID_DENY_REASON =
+  "URL permission request did not include a valid URL.";
 const READ_PATH_BOUNDARY_DENY_REASON =
   "Read path is outside the allowed review source boundary. For repository files, retry with a repo-relative `view.path`; do not pass absolute paths.";
 const READ_REVIEW_ARTIFACT_DENY_REASON =
@@ -258,13 +262,18 @@ export class ToolPolicyGuard {
     const fullCommandText =
       typeof request.fullCommandText === "string"
         ? request.fullCommandText
-        : "";
-    const args = fullCommandText
+        : undefined;
+    const args = fullCommandText !== undefined && fullCommandText.length > 0
       ? { fullCommandText }
       : {};
 
-    if (!fullCommandText) {
-      return { tool: "shell", decision: "allow", args };
+    if (fullCommandText === undefined || fullCommandText.trim().length === 0) {
+      return {
+        tool: "shell",
+        decision: "deny",
+        reason: SHELL_COMMAND_INVALID_DENY_REASON,
+        args
+      };
     }
 
     return this.#buildPolicyDecisionRecord(
@@ -277,11 +286,16 @@ export class ToolPolicyGuard {
   async #evaluateUrl(
     request: PermissionRequestPayload
   ): Promise<HandlerDecisionRecord> {
-    const url = typeof request.url === "string" ? request.url : "";
-    const args = url ? { url } : {};
+    const url = typeof request.url === "string" ? request.url : undefined;
+    const args = url !== undefined && url.length > 0 ? { url } : {};
 
-    if (!url) {
-      return { tool: "url", decision: "allow", args };
+    if (url === undefined || url.trim().length === 0) {
+      return {
+        tool: "url",
+        decision: "deny",
+        reason: URL_INVALID_DENY_REASON,
+        args
+      };
     }
 
     return this.#buildPolicyDecisionRecord(
@@ -566,8 +580,10 @@ export {
   READ_PATH_BOUNDARY_DENY_REASON,
   READ_REVIEW_ARTIFACT_DENY_REASON,
   READONLY_BASH_DENY_REASON,
+  SHELL_COMMAND_INVALID_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
   UNKNOWN_KIND_DENY_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
+  URL_INVALID_DENY_REASON,
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
 };
