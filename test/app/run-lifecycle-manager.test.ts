@@ -15,7 +15,6 @@ interface FakeTtyInput {
   isTTY?: boolean;
   isRaw?: boolean;
   setRawMode(mode: boolean): void;
-  isPaused(): boolean;
   on(event: "data", handler: (chunk: Buffer) => void): void;
   off(event: "data", handler: (chunk: Buffer) => void): void;
   resume(): void;
@@ -51,9 +50,6 @@ function createFakeTtyInput(options: {
       }
       isRaw = mode;
       rawModeCalls.push(mode);
-    },
-    isPaused() {
-      return !flowing;
     },
     on(event, handler) {
       emitter.on(event, handler);
@@ -647,17 +643,20 @@ test("RunLifecycleManager restores stdin to its prior paused state", async () =>
   assert.equal(ttyInput.flowing, false, "stdin should be paused again afterwards");
 });
 
-test("RunLifecycleManager leaves stdin flowing when it was already flowing", async () => {
+test("RunLifecycleManager releases stdin after restoring a lifecycle-owned resume", async () => {
   const signalSource = createFakeSignalSource();
   const ttyInput = createFakeTtyInput({ isTTY: true, initiallyPaused: false });
   const manager = new RunLifecycleManager({ signalSource, ttyInput });
 
-  await manager.run(async () => "done");
+  await manager.run(async () => {
+    assert.equal(ttyInput.flowing, true, "stdin should flow during the run");
+    return "done";
+  });
 
   assert.equal(
     ttyInput.flowing,
-    true,
-    "an already-flowing stdin must not be paused on restore"
+    false,
+    "stdin should be paused once no lifecycle manager is using it"
   );
 });
 

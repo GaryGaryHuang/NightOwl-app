@@ -17,7 +17,6 @@ interface TtyInputSource {
   isTTY?: boolean;
   isRaw?: boolean;
   setRawMode?(mode: boolean): void;
-  isPaused(): boolean;
   on(event: "data", handler: (chunk: Buffer) => void): void;
   off(event: "data", handler: (chunk: Buffer) => void): void;
   resume(): void;
@@ -25,6 +24,7 @@ interface TtyInputSource {
 }
 
 const ETX_BYTE = 0x03;
+const activeTtyInputRuns = new WeakMap<TtyInputSource, number>();
 
 export interface RunLifecycleManagerOptions {
   clientManager?: GracefulShutdownClientManagerLike & {
@@ -104,7 +104,8 @@ export class RunLifecycleManager {
    * While the run is active, put the TTY into raw mode so the terminal no
    * longer echoes `^C`. Raw mode also stops the OS from synthesizing SIGINT,
    * so Ctrl+C is detected as the ETX byte on stdin and routed to the same
-   * abort handler. Returns a function that restores the prior TTY state.
+   * abort handler. Returns a function that restores raw mode and releases the
+   * lifecycle-owned stdin resume.
    */
   #suppressCtrlCEcho(onCtrlC: () => void): () => void {
     const input = this.#ttyInput;
@@ -113,7 +114,8 @@ export class RunLifecycleManager {
     }
 
     const wasRaw = input.isRaw === true;
-    const wasPaused = input.isPaused();
+    let didResume = false;
+    let didRestore = false;
     const handleData = (chunk: Buffer): void => {
       for (const byte of chunk) {
         if (byte === ETX_BYTE) {
@@ -123,16 +125,29 @@ export class RunLifecycleManager {
     };
 
     const restorePriorState = (): void => {
+      if (didRestore) {
+        return;
+      }
+      didRestore = true;
+
       input.off("data", handleData);
       try {
         input.setRawMode?.(wasRaw);
       } catch {
         // Best-effort restore; nothing actionable if the terminal rejects it.
       }
-      // Restore the prior flow state instead of forcing a pause, so a nested
-      // (inner) run does not pause stdin out from under an outer run that is
-      // still listening for Ctrl+C.
-      if (wasPaused) {
+
+      if (!didResume) {
+        return;
+      }
+
+      const nextActiveRuns = (activeTtyInputRuns.get(input) ?? 1) - 1;
+      if (nextActiveRuns > 0) {
+        activeTtyInputRuns.set(input, nextActiveRuns);
+      } else {
+        activeTtyInputRuns.delete(input);
+        // Release the read handle owned by this lifecycle; a TTY may report
+        // unpaused before resume() but still keep Node alive after resume().
         input.pause();
       }
     };
@@ -141,6 +156,11 @@ export class RunLifecycleManager {
       input.setRawMode(true);
       input.on("data", handleData);
       input.resume();
+      didResume = true;
+      activeTtyInputRuns.set(
+        input,
+        (activeTtyInputRuns.get(input) ?? 0) + 1
+      );
     } catch {
       // Echo suppression is non-essential; if the terminal refuses raw mode,
       // roll back any partial setup and let the run proceed normally.
