@@ -8,7 +8,7 @@ import {
 interface AvailabilityClientManagerDoubleOptions {
   startImpl?: () => Promise<void>;
   pingImpl?: (message?: string) => Promise<{ message: string; timestamp: string }>;
-  stopImpl?: () => Promise<unknown>;
+  stopImpl?: () => Promise<readonly Error[] | void>;
   forceStopImpl?: () => Promise<unknown>;
 }
 
@@ -22,7 +22,7 @@ function createAvailabilityClientManagerDouble(
     getClient(): {
       ping(message?: string): Promise<{ message: string; timestamp: string }>;
     };
-    stop(): Promise<unknown>;
+    stop(): Promise<readonly Error[]>;
     forceStop(): Promise<unknown>;
   };
 } {
@@ -57,7 +57,7 @@ function createAvailabilityClientManagerDouble(
       },
       async stop() {
         calls.stop += 1;
-        return await (options.stopImpl?.() ?? Promise.resolve());
+        return (await options.stopImpl?.()) ?? [];
       },
       async forceStop() {
         calls.forceStop += 1;
@@ -140,6 +140,34 @@ test("CopilotAvailabilityChecker fails when cleanup fails after a successful pro
   await assert.rejects(
     () => checker.check(),
     (error: unknown) => error === stopError
+  );
+
+  assert.deepEqual(fixture.calls, {
+    start: 1,
+    stop: 1,
+    forceStop: 0
+  });
+  assert.deepEqual(fixture.pingMessages, ["health check"]);
+});
+
+test("CopilotAvailabilityChecker fails when cleanup diagnostics are returned after a successful probe", async () => {
+  const cleanupErrors = [new Error("cleanup warning")];
+  const fixture = createAvailabilityClientManagerDouble({
+    async stopImpl() {
+      return cleanupErrors;
+    }
+  });
+  const checker = new CopilotAvailabilityChecker({
+    clientManager: fixture.clientManager
+  });
+
+  await assert.rejects(
+    () => checker.check(),
+    (error: unknown) =>
+      error instanceof AggregateError &&
+      error.errors.length === 1 &&
+      error.errors[0] === cleanupErrors[0] &&
+      /1 diagnostic error/.test(error.message)
   );
 
   assert.deepEqual(fixture.calls, {

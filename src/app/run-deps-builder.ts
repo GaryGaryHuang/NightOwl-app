@@ -109,7 +109,13 @@ export class ProductionRunDepsBuilder {
     });
 
     const lifecycleManager = new RunLifecycleManager({
-      clientManager: options.clientManager
+      clientManager: options.clientManager,
+      onCleanupDiagnostics(errors) {
+        options.onProgressEvent?.({
+          type: "run-warning",
+          message: formatCopilotCleanupDiagnostics(errors)
+        });
+      }
     });
 
     return {
@@ -231,6 +237,11 @@ function formatStepRetryDiagnostic(info: {
   ].filter((field): field is string => field !== undefined);
 
   return `Step retry (${fields.join(", ")})`;
+}
+
+function formatCopilotCleanupDiagnostics(errors: readonly Error[]): string {
+  const details = errors.map((error) => error.message).join("; ");
+  return `Copilot client cleanup completed with ${errors.length} diagnostic error(s): ${details}`;
 }
 
 function createProductionToolAuditLifecycle(

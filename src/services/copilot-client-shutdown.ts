@@ -1,5 +1,5 @@
 export interface GracefulShutdownClientManagerLike {
-  stop(): Promise<unknown>;
+  stop(): Promise<readonly Error[]>;
   forceStop(): Promise<unknown>;
 }
 
@@ -13,14 +13,14 @@ const STOP_TIMEOUT_EXCEEDED = Symbol("stop-timeout-exceeded");
 export async function stopClientManagerWithTimeout(
   clientManager: GracefulShutdownClientManagerLike,
   timeoutMs: number
-): Promise<void> {
+): Promise<readonly Error[]> {
   const stopPromise = clientManager.stop();
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-  let stopResult: void | typeof STOP_TIMEOUT_EXCEEDED = undefined;
+  let stopResult: readonly Error[] | typeof STOP_TIMEOUT_EXCEEDED = [];
 
   try {
     stopResult = await Promise.race([
-      stopPromise.then(() => undefined),
+      stopPromise,
       new Promise<typeof STOP_TIMEOUT_EXCEEDED>((resolve) => {
         timeoutHandle = setTimeout(() => {
           resolve(STOP_TIMEOUT_EXCEEDED);
@@ -34,10 +34,11 @@ export async function stopClientManagerWithTimeout(
   }
 
   if (stopResult !== STOP_TIMEOUT_EXCEEDED) {
-    return;
+    return stopResult;
   }
 
   // stop() may still settle after timeout; handle that late rejection while forceStop() takes over.
   void stopPromise.catch(() => {});
   await clientManager.forceStop();
+  return [];
 }

@@ -47,6 +47,7 @@ function createSignalTestApp(options: {
       async start() {},
       async stop() {
         options.stopCalls.push("stop");
+        return [];
       },
       async forceStop() {
         options.stopCalls.push("forceStop");
@@ -153,12 +154,12 @@ test("createLocalReviewRunApp creates tool-audit.jsonl at outputTarget.toolAudit
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               return {
@@ -228,12 +229,12 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when Cha
       timestampProvider: () => "03241401",
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               await config.hooks?.onPreToolUse?.(
@@ -308,12 +309,12 @@ test("createLocalReviewRunApp persists Changeset Overview audit records when cha
       timestampProvider: () => "03241402",
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               await config.hooks?.onPreToolUse?.(

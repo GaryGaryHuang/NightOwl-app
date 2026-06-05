@@ -6,7 +6,7 @@ import {
 } from "../../src/services/copilot-client-shutdown.ts";
 
 interface ShutdownClientManagerDoubleOptions {
-  stopImpl?: () => Promise<unknown>;
+  stopImpl?: () => Promise<readonly Error[] | void>;
   forceStopImpl?: () => Promise<unknown>;
 }
 
@@ -15,7 +15,7 @@ function createShutdownClientManagerDouble(
 ): {
   calls: { stop: number; forceStop: number };
   clientManager: {
-    stop(): Promise<unknown>;
+    stop(): Promise<readonly Error[]>;
     forceStop(): Promise<unknown>;
   };
 } {
@@ -29,7 +29,7 @@ function createShutdownClientManagerDouble(
     clientManager: {
       async stop() {
         calls.stop += 1;
-        return await (options.stopImpl?.() ?? Promise.resolve());
+        return (await options.stopImpl?.()) ?? [];
       },
       async forceStop() {
         calls.forceStop += 1;
@@ -42,8 +42,26 @@ function createShutdownClientManagerDouble(
 test("stopClientManagerWithTimeout resolves after stop() when shutdown completes before the timeout", async () => {
   const fixture = createShutdownClientManagerDouble();
 
-  await stopClientManagerWithTimeout(fixture.clientManager, 10);
+  const cleanupErrors = await stopClientManagerWithTimeout(fixture.clientManager, 10);
 
+  assert.deepEqual(cleanupErrors, []);
+  assert.deepEqual(fixture.calls, {
+    stop: 1,
+    forceStop: 0
+  });
+});
+
+test("stopClientManagerWithTimeout returns graceful stop() cleanup diagnostics", async () => {
+  const cleanupErrors = [new Error("cleanup warning")];
+  const fixture = createShutdownClientManagerDouble({
+    async stopImpl() {
+      return cleanupErrors;
+    }
+  });
+
+  const result = await stopClientManagerWithTimeout(fixture.clientManager, 10);
+
+  assert.equal(result, cleanupErrors);
   assert.deepEqual(fixture.calls, {
     stop: 1,
     forceStop: 0
@@ -57,8 +75,9 @@ test("stopClientManagerWithTimeout falls back to forceStop() when stop() exceeds
     }
   });
 
-  await stopClientManagerWithTimeout(fixture.clientManager, 0);
+  const cleanupErrors = await stopClientManagerWithTimeout(fixture.clientManager, 0);
 
+  assert.deepEqual(cleanupErrors, []);
   assert.deepEqual(fixture.calls, {
     stop: 1,
     forceStop: 1

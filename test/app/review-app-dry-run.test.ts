@@ -45,6 +45,7 @@ describe("dry-run integration", () => {
         },
         async stop() {
           clientManagerStopCalls += 1;
+          return [];
         },
         async forceStop() {},
         getClient() {

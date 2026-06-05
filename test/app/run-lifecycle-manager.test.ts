@@ -92,7 +92,7 @@ function createFakeTtyInput(options: {
 
 function createLifecycleTracker(overrides: {
   startError?: Error;
-  stopImpl?: () => Promise<void>;
+  stopImpl?: () => Promise<readonly Error[] | void>;
   forceStopImpl?: () => Promise<void>;
 } = {}) {
   const calls: string[] = [];
@@ -105,7 +105,7 @@ function createLifecycleTracker(overrides: {
     },
     async stop() {
       calls.push("stop");
-      await overrides.stopImpl?.();
+      return (await overrides.stopImpl?.()) ?? [];
     },
     async forceStop() {
       calls.push("forceStop");
@@ -369,6 +369,78 @@ test("RunLifecycleManager does not call forceStop when stop resolves within time
   await manager.run(async () => "done");
 
   assert.deepEqual(calls, ["start", "stop"]);
+});
+
+test("RunLifecycleManager reports cleanup diagnostics without failing a successful run", async () => {
+  const signalSource = createFakeSignalSource();
+  const cleanupErrors = [new Error("cleanup warning")];
+  const diagnostics: Array<readonly Error[]> = [];
+  const { clientManager } = createLifecycleTracker({
+    async stopImpl() {
+      return cleanupErrors;
+    }
+  });
+  const manager = new RunLifecycleManager({
+    clientManager,
+    signalSource,
+    onCleanupDiagnostics(errors) {
+      diagnostics.push(errors);
+    }
+  });
+
+  const result = await manager.run(async () => "done");
+
+  assert.equal(result, "done");
+  assert.deepEqual(diagnostics, [cleanupErrors]);
+});
+
+test("RunLifecycleManager does not let cleanup diagnostic callbacks replace a successful run", async () => {
+  const signalSource = createFakeSignalSource();
+  const { clientManager } = createLifecycleTracker({
+    async stopImpl() {
+      return [new Error("cleanup warning")];
+    }
+  });
+  const manager = new RunLifecycleManager({
+    clientManager,
+    signalSource,
+    onCleanupDiagnostics() {
+      throw new Error("diagnostic callback failed");
+    }
+  });
+
+  const result = await manager.run(async () => "done");
+
+  assert.equal(result, "done");
+});
+
+test("RunLifecycleManager preserves the original callback error when cleanup diagnostics are returned", async () => {
+  const signalSource = createFakeSignalSource();
+  const callbackError = new Error("callback failure");
+  const cleanupErrors = [new Error("cleanup warning")];
+  const diagnostics: Array<readonly Error[]> = [];
+  const { clientManager } = createLifecycleTracker({
+    async stopImpl() {
+      return cleanupErrors;
+    }
+  });
+  const manager = new RunLifecycleManager({
+    clientManager,
+    signalSource,
+    onCleanupDiagnostics(errors) {
+      diagnostics.push(errors);
+    }
+  });
+
+  await assert.rejects(
+    () =>
+      manager.run(async () => {
+        throw callbackError;
+      }),
+    (err: unknown) => err === callbackError
+  );
+
+  assert.deepEqual(diagnostics, [cleanupErrors]);
 });
 
 test("RunLifecycleManager preserves the original callback error when forceStop follows a timed-out stop", async () => {

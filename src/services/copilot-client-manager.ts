@@ -4,14 +4,14 @@ import type { SessionLike } from "./session-executor.ts";
 
 export interface CopilotClientLike {
   start(): Promise<void>;
-  stop(): Promise<unknown>;
+  stop(): Promise<readonly Error[]>;
   forceStop(): Promise<unknown>;
   createSession(config: SessionConfig): Promise<SessionLike>;
 }
 
 export interface ClientManagerLike {
   start(): Promise<void>;
-  stop(): Promise<void>;
+  stop(): Promise<readonly Error[]>;
   forceStop(): Promise<void>;
   getClient(): CopilotClientLike;
 }
@@ -43,7 +43,7 @@ export function buildCopilotClientEnvironment(
  * a later start() creates a fresh instance.
  */
 export class CopilotClientManagerBase<
-  TClient extends { start(): Promise<void>; stop(): Promise<unknown>; forceStop(): Promise<unknown> },
+  TClient extends { start(): Promise<void>; stop(): Promise<readonly Error[]>; forceStop(): Promise<unknown> },
   TSurface
 > {
   readonly #createClient: () => TClient;
@@ -79,17 +79,18 @@ export class CopilotClientManagerBase<
     return this.#extractSurface(this.#client);
   }
 
-  async stop(): Promise<void> {
-    await this.#runExclusive(async () => {
+  async stop(): Promise<readonly Error[]> {
+    return await this.#runExclusive(async () => {
       const client = this.#client;
       if (!client) {
-        return;
+        return [];
       }
 
-      await client.stop();
+      const cleanupErrors = await client.stop();
       if (this.#client === client) {
         this.#client = undefined;
       }
+      return cleanupErrors;
     });
   }
 

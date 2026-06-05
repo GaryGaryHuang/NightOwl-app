@@ -27,6 +27,7 @@ import { createPassthroughSnapshotProvider, createSingleStepFactory } from "../h
 describe("createLocalReviewRunApp progress wiring", () => {
   let result: ReviewRunSummary;
   const events: RunProgressEvent[] = [];
+  const cleanupWarning = new Error("sdk cleanup warning");
 
   before(async () => {
     const app = createLocalReviewRunApp({
@@ -68,7 +69,7 @@ describe("createLocalReviewRunApp progress wiring", () => {
       },
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return [cleanupWarning]; },
         async forceStop() {},
         getClient() {
           throw new Error("unused");
@@ -130,6 +131,20 @@ describe("createLocalReviewRunApp progress wiring", () => {
       "expected the run-finalizing event to be forwarded as a wiring smoke"
     );
   });
+
+  test("forwards Copilot cleanup diagnostics as a run warning", () => {
+    assert.ok(
+      events.some(
+        (event) =>
+          event.type === "run-warning" &&
+          /Copilot client cleanup completed with 1 diagnostic error/u.test(
+            event.message
+          ) &&
+          /sdk cleanup warning/u.test(event.message)
+      ),
+      "expected Copilot cleanup diagnostics to be forwarded as a run warning"
+    );
+  });
 });
 
 test("createLocalReviewRunApp emits a progress warning when tool-audit writes fail", async () => {
@@ -173,12 +188,12 @@ test("createLocalReviewRunApp emits a progress warning when tool-audit writes fa
       },
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               await config.hooks?.onPreToolUse?.(

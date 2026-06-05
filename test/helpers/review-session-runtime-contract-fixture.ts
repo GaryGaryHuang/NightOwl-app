@@ -76,6 +76,7 @@ export function createLifecycleClientFactory(
     },
     async stop() {
       lifecycle.push("stop");
+      return [];
     },
     async forceStop() {
       if (input.forceStopShouldThrowBeforeStart) {

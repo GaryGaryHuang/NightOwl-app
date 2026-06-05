@@ -59,12 +59,12 @@ describe("createLocalReviewRunApp web-fetch tool policy wiring", () => {
       webFetchHostnameClassifier: createAllowingHostnameClassifier(),
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               sessionConfigs.push(config);

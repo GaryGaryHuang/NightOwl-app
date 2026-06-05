@@ -320,7 +320,7 @@ test("runCli surfaces a clear runtime error when Changeset Overview session star
       async start() {
         throw new Error("Copilot CLI is unavailable.");
       },
-      async stop() {},
+      async stop() { return []; },
       async forceStop() {},
       getClient() {
         throw new Error("unreachable");

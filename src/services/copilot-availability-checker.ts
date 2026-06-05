@@ -12,13 +12,13 @@ interface CopilotAvailabilityProbeLike {
 
 interface CopilotAvailabilityClientLike extends CopilotAvailabilityProbeLike {
   start(): Promise<void>;
-  stop(): Promise<unknown>;
+  stop(): Promise<readonly Error[]>;
   forceStop(): Promise<unknown>;
 }
 
 interface CopilotAvailabilityClientManagerLike {
   start(): Promise<void>;
-  stop(): Promise<unknown>;
+  stop(): Promise<readonly Error[]>;
   forceStop(): Promise<unknown>;
   getClient(): CopilotAvailabilityProbeLike;
 }
@@ -58,10 +58,16 @@ export class CopilotAvailabilityChecker {
       throw error;
     } finally {
       try {
-        await stopClientManagerWithTimeout(
+        const cleanupErrors = await stopClientManagerWithTimeout(
           this.#clientManager,
           DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS
         );
+        if (!hasPrimaryError && cleanupErrors.length > 0) {
+          throw new AggregateError(
+            cleanupErrors,
+            `Copilot cleanup completed with ${cleanupErrors.length} diagnostic error(s).`
+          );
+        }
       } catch (cleanupError) {
         if (!hasPrimaryError) {
           throw cleanupError;

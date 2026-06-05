@@ -234,7 +234,7 @@ test("createLocalReviewRunApp does not create a snapshot if interrupted during c
       async start() {
         clientStartCalls += 1;
       },
-      async stop() {},
+      async stop() { return []; },
       async forceStop() {},
       getClient() {
         throw new Error("clientManager.getClient() must not be called");

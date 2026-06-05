@@ -30,12 +30,13 @@ test("createLocalReviewRunApp aborts Changeset Overview MCP startup failure afte
         },
         async stop() {
           stopCalls += 1;
+          return [];
         },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               sessionConfigs.push(config);
@@ -119,12 +120,12 @@ test("createLocalReviewRunApp skips one file after per-file MCP startup retry ex
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               sessionConfigs.push(config);

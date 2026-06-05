@@ -37,6 +37,7 @@ function createTrackedClientFactory(
         },
         async stop() {
           lifecycle.push(`stop:${id}`);
+          return [];
         },
         async forceStop() {
           lifecycle.push(`forceStop:${id}`);
@@ -59,9 +60,37 @@ test("CopilotClientManager stops the underlying client and clears the retained c
 
   await manager.start();
   assert.equal(manager.getClient(), fixture.createdClients[0]);
-  await manager.stop();
+  const cleanupErrors = await manager.stop();
 
+  assert.deepEqual(cleanupErrors, []);
   assert.deepEqual(lifecycle, ["start:1", "stop:1"]);
+  assert.throws(
+    () => manager.getClient(),
+    /Copilot client has not been started\./
+  );
+});
+
+test("CopilotClientManager returns cleanup diagnostics from the underlying client", async () => {
+  const cleanupErrors = [new Error("cleanup warning")];
+  const manager = new CopilotClientManager({
+    createClient() {
+      return {
+        async start() {},
+        async stop() {
+          return cleanupErrors;
+        },
+        async forceStop() {},
+        async createSession() {
+          throw new Error("createSession should not be called in this test");
+        }
+      };
+    }
+  });
+
+  await manager.start();
+  const result = await manager.stop();
+
+  assert.equal(result, cleanupErrors);
   assert.throws(
     () => manager.getClient(),
     /Copilot client has not been started\./
@@ -170,6 +199,7 @@ test("CopilotClientManager serializes overlapping start() calls onto one client 
         },
         async stop() {
           lifecycle.push(`stop:${id}`);
+          return [];
         },
         async forceStop() {
           lifecycle.push(`forceStop:${id}`);

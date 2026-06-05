@@ -16,12 +16,12 @@ test("createLocalReviewRunApp preserves default Copilot session behavior when mo
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               sessionConfigs.push(config);
@@ -87,12 +87,12 @@ test("createLocalReviewRunApp passes repo BYOK modelProvider to real review sess
       workingDirectory: fixture.repoDir,
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               sessionConfigs.push(config);
@@ -161,6 +161,7 @@ test("createLocalReviewRunApp fails before client startup, Changeset Overview, a
         },
         async stop() {
           stopCalls += 1;
+          return [];
         },
         async forceStop() {},
         getClient() {
@@ -215,12 +216,12 @@ test("createLocalReviewRunApp passes context7ApiKey option to the session config
       context7ApiKey: "injected-test-key",
       clientManager: {
         async start() {},
-        async stop() {},
+        async stop() { return []; },
         async forceStop() {},
         getClient() {
           return {
             async start() {},
-            async stop() {},
+            async stop() { return []; },
             async forceStop() {},
             async createSession(config: SessionConfig) {
               sessionConfigs.push(config);

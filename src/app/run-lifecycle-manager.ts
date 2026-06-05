@@ -33,6 +33,7 @@ export interface RunLifecycleManagerOptions {
   signalSource?: SignalSource;
   ttyInput?: TtyInputSource;
   gracefulShutdownTimeoutMs?: number;
+  onCleanupDiagnostics?: (errors: readonly Error[]) => void;
 }
 
 export class RunLifecycleManager {
@@ -42,6 +43,7 @@ export class RunLifecycleManager {
   readonly #signalSource: SignalSource;
   readonly #ttyInput: TtyInputSource;
   readonly #gracefulShutdownTimeoutMs: number;
+  readonly #onCleanupDiagnostics?: (errors: readonly Error[]) => void;
 
   constructor(options: RunLifecycleManagerOptions = {}) {
     this.#clientManager = options.clientManager;
@@ -49,6 +51,7 @@ export class RunLifecycleManager {
     this.#ttyInput = options.ttyInput ?? process.stdin;
     this.#gracefulShutdownTimeoutMs =
       options.gracefulShutdownTimeoutMs ?? DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
+    this.#onCleanupDiagnostics = options.onCleanupDiagnostics;
   }
 
   async run<T>(fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
@@ -83,10 +86,11 @@ export class RunLifecycleManager {
       this.#signalSource.off("SIGTERM", handleSigterm);
       if (clientManager) {
         try {
-          await stopClientManagerWithTimeout(
+          const cleanupErrors = await stopClientManagerWithTimeout(
             clientManager,
             this.#gracefulShutdownTimeoutMs
           );
+          this.#emitCleanupDiagnostics(cleanupErrors);
         } catch (cleanupError) {
           if (!hasPrimaryError) {
             throw cleanupError;
@@ -145,5 +149,17 @@ export class RunLifecycleManager {
     }
 
     return restorePriorState;
+  }
+
+  #emitCleanupDiagnostics(errors: readonly Error[]): void {
+    if (errors.length === 0) {
+      return;
+    }
+
+    try {
+      this.#onCleanupDiagnostics?.(errors);
+    } catch {
+      // Cleanup diagnostics must not replace the primary run result.
+    }
   }
 }

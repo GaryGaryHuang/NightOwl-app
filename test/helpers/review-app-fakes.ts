@@ -62,7 +62,7 @@ export function createPassthroughSnapshotProvider(
 export function createUnusedClientManager() {
   return {
     async start() {},
-    async stop() {},
+    async stop() { return []; },
     async forceStop() {},
     getClient() {
       throw new Error("clientManager.getClient() must not be called by this test");
