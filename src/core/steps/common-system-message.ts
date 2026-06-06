@@ -54,7 +54,7 @@ const REPOSITORY_INSPECTION_BLOCK = [
   "- Use `grep` with a scoped path/glob pattern for content searches.",
   "- Use `view` to inspect specific repository files after candidate paths are known.",
   "- The `view` tool requires an absolute file path. Do not pass repo-relative paths or reconstruct snapshot paths from memory; use absolute paths discovered inside the session working directory.",
-  "- Prefer built-in retrieval tools first. Use `bash` only for policy-allowed repo-local read-only analysis that built-in tools cannot express, especially run-ref-bound Git evidence such as `git diff ... -- <source-path>`, `git show <run-ref>:<source-path>`, or `git grep <pattern> <run-ref> -- <source-path>`.",
+  "- Prefer built-in retrieval tools first. Use `bash` only for policy-allowed repo-local read-only analysis that built-in tools cannot express, especially run-ref-bound Git evidence such as `git diff <baseRef>...<headRef> -- <source-path>`, `git show <run-ref>:<source-path>`, or `git grep <pattern> <run-ref> -- <source-path>`.",
   "- Do not use Python, Python scripts, `python`, or `python3` for repository inspection or command execution; use the allowed read-only inspection tools and bash commands instead.",
   "- If a permission denial includes feedback, use it as correction guidance before retrying.",
   "- Before concluding a repo-local fact is unavailable, inspect obvious counterpart files for implementations, call sites, dependency injection wiring, tests, mappers, downstream consumers, and interface contracts."
