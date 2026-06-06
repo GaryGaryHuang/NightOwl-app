@@ -3,7 +3,10 @@ import test from "node:test";
 
 import {
   evaluateReadonlyShellCommand,
-  READONLY_BASH_DENY_REASON
+  READONLY_BASH_DENY_REASON,
+  SHELL_COMMAND_SUBSTITUTION_DENY_REASON,
+  SHELL_EXPANSION_DENY_REASON,
+  SHELL_REDIRECTION_DENY_REASON
 } from "../../src/services/tool-policy/tool-policy-shell-policy.ts";
 import { BASE_PROFILE } from "../helpers/tool-policy-fixture.ts";
 
@@ -13,13 +16,16 @@ function assertAllowedCommands(commands: readonly string[]): void {
   }
 }
 
-function assertDeniedCommands(commands: readonly string[]): void {
+function assertDeniedCommands(
+  commands: readonly string[],
+  reason: string = READONLY_BASH_DENY_REASON
+): void {
   for (const command of commands) {
     assert.deepEqual(
       evaluateReadonlyShellCommand(command, BASE_PROFILE),
       {
         permissionDecision: "deny",
-        permissionDecisionReason: READONLY_BASH_DENY_REASON
+        permissionDecisionReason: reason
       },
       command
     );
@@ -68,11 +74,19 @@ test("tool policy shell policy rejects empty or unwhitelisted pipeline and chain
   assertDeniedCommands(EMPTY_OR_UNTRUSTED_SEGMENT_COMMANDS);
 });
 
+test("tool policy shell policy denies redirection forms with targeted guidance", () => {
+  assertDeniedCommands(
+    [
+      "git log --oneline  |  head -20 > out.txt",
+      'grep "List<Foo>" src/app.ts > out.txt',
+      "cat < /etc/passwd"
+    ],
+    SHELL_REDIRECTION_DENY_REASON
+  );
+});
+
 test("tool policy shell policy keeps lexical guards for shell combining syntax and background execution", () => {
   assertDeniedCommands([
-    "git log --oneline  |  head -20 > out.txt",
-    'grep "List<Foo>" src/app.ts > out.txt',
-    "cat < /etc/passwd",
     "git status || echo fail",
     "git log || true | head",
     "git log &",
@@ -89,21 +103,27 @@ test("tool policy shell policy rejects malformed quoting dangling escapes and bl
 });
 
 test("tool policy shell policy denies command substitution syntax even when the inner command is allowlisted", () => {
-  assertDeniedCommands([
-    "echo $(git status)",
-    "echo `git status`",
-    "echo \"prefix $(git status) suffix\""
-  ]);
+  assertDeniedCommands(
+    [
+      "echo $(git status)",
+      "echo `git status`",
+      "echo \"prefix $(git status) suffix\""
+    ],
+    SHELL_COMMAND_SUBSTITUTION_DENY_REASON
+  );
 });
 
 test("tool policy shell policy denies shell expansion forms outside quotes", () => {
-  assertDeniedCommands([
-    "cat $HOME/.ssh/config",
-    'cat "$HOME/.ssh/config"',
-    "cat ~root/.ssh/config",
-    "cat src/*",
-    "cat {src,/etc}/passwd"
-  ]);
+  assertDeniedCommands(
+    [
+      "cat $HOME/.ssh/config",
+      'cat "$HOME/.ssh/config"',
+      "cat ~root/.ssh/config",
+      "cat src/*",
+      "cat {src,/etc}/passwd"
+    ],
+    SHELL_EXPANSION_DENY_REASON
+  );
 });
 
 test("tool policy shell policy keeps denied subcommand-execution flags denied inside pipes and chains", () => {

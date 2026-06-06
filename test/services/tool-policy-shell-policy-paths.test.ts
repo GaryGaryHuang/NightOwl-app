@@ -3,7 +3,8 @@ import test from "node:test";
 
 import {
   evaluateReadonlyShellCommand,
-  READONLY_BASH_DENY_REASON
+  READONLY_BASH_DENY_REASON,
+  SHELL_EXPANSION_DENY_REASON
 } from "../../src/services/tool-policy/tool-policy-shell-policy.ts";
 import { BASE_PROFILE } from "../helpers/tool-policy-fixture.ts";
 
@@ -22,14 +23,15 @@ function assertAllowedCommands(
 
 function assertDeniedCommands(
   commands: readonly string[],
-  commandCwd?: string
+  commandCwd?: string,
+  reason: string = READONLY_BASH_DENY_REASON
 ): void {
   for (const command of commands) {
     assert.deepEqual(
       evaluateReadonlyShellCommand(command, BASE_PROFILE, commandCwd),
       {
         permissionDecision: "deny",
-        permissionDecisionReason: READONLY_BASH_DENY_REASON
+        permissionDecisionReason: reason
       },
       command
     );
@@ -122,10 +124,14 @@ test("tool policy shell policy only allows absolute git -C paths and rejects mal
 });
 
 test("tool policy shell policy denies home-relative paths outside the repo boundary", () => {
-  assertDeniedCommands([
-    "cat ~",
-    "cat ~/secret.txt"
-  ]);
+  assertDeniedCommands(
+    [
+      "cat ~",
+      "cat ~/secret.txt"
+    ],
+    undefined,
+    SHELL_EXPANSION_DENY_REASON
+  );
 });
 
 test("tool policy shell policy propagates cd-derived cwd and enforces cd path boundaries", () => {

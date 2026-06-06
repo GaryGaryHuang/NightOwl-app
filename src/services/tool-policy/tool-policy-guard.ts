@@ -41,6 +41,8 @@ const SHELL_TOOL_NAMES = new Set(["bash", "sh", "shell"]);
 const URL_TOOL_NAMES = new Set(["web_fetch", "url"]);
 const SHELL_POLICY_FAIL_CLOSED_REASON =
   "Shell policy evaluation failed; denied as a precaution.";
+const WRITE_DENY_REASON =
+  "Write operations are not permitted in review sessions.";
 const CUSTOM_TOOL_DENY_REASON =
   "Custom tools are not permitted in review sessions.";
 const HOOK_DENY_REASON =
@@ -62,9 +64,17 @@ const SHELL_COMMAND_INVALID_DENY_REASON =
 const URL_INVALID_DENY_REASON =
   "URL permission request did not include a valid URL.";
 const READ_PATH_BOUNDARY_DENY_REASON =
-  "Read path is outside the allowed review source boundary. For repository files, retry with a repo-relative `view.path`; do not pass absolute paths.";
+  "Read path is outside the allowed review source root. Read only files inside the current session working directory (the review source root). Locate the source file with `glob` or `grep`, then retry the read with an absolute path inside that root.";
 const READ_REVIEW_ARTIFACT_DENY_REASON =
   "On-disk `.nightowl/review/**` artifacts are not retrievable review evidence. Use only the review state supplied by the host for the current run.";
+const VIEW_ABSOLUTE_PATH_FAILURE_GUIDANCE =
+  "This read was rejected because the path was not accepted as absolute. Locate the file with `glob` or `grep`, then retry `view` with an absolute path inside the current session working directory. Do not pass repo-relative paths or reconstruct snapshot paths from memory.";
+const PATH_NOT_FOUND_FAILURE_GUIDANCE =
+  "This path does not exist in the review source. Do not guess paths. Confirm the correct location with `glob`, `grep`, or a policy-allowed parent-directory listing, then retry. Common causes: wrong module root or an extra or missing nested directory segment.";
+// Built-in tools whose failures are typically caused by an incorrect filesystem
+// path, so path-correction guidance is meaningful. Excludes `web_fetch` (whose
+// "not found" means an HTTP 404, not a path) and session/agent management tools.
+const PATH_GUIDANCE_TOOLS = new Set(["view", "grep", "rg", "glob", "bash"]);
 
 type HandlerDecisionRecord = {
   tool: string;
@@ -250,7 +260,7 @@ export class ToolPolicyGuard {
     return {
       tool: "write",
       decision: "deny",
-      reason: "Write operations are not permitted in review sessions.",
+      reason: WRITE_DENY_REASON,
       args: fileName !== undefined ? { path: fileName } : {}
     };
   }
@@ -515,7 +525,9 @@ export class ToolPolicyGuard {
         args
       }));
 
-      return;
+      const guidance = buildToolFailureGuidance(input.toolName, input.error);
+
+      return guidance === undefined ? undefined : { additionalContext: guidance };
     };
   }
 }
@@ -570,12 +582,43 @@ function isPathInsideOrEqualForFeedback(
   }
 }
 
+// Map a failed built-in tool result to short corrective guidance the small model
+// can act on next turn. Returns undefined for unrecognized failures to avoid
+// adding noise to legitimate, self-explanatory tool errors.
+function buildToolFailureGuidance(
+  toolName: string,
+  error: string
+): string | undefined {
+  if (!PATH_GUIDANCE_TOOLS.has(toolName)) {
+    return undefined;
+  }
+
+  const normalizedError = error.toLowerCase();
+
+  if (toolName === "view" && normalizedError.includes("not absolute")) {
+    return VIEW_ABSOLUTE_PATH_FAILURE_GUIDANCE;
+  }
+
+  if (
+    normalizedError.includes("does not exist") ||
+    normalizedError.includes("no such file") ||
+    normalizedError.includes("not found") ||
+    normalizedError.includes("enoent") ||
+    normalizedError.includes("cannot find")
+  ) {
+    return PATH_NOT_FOUND_FAILURE_GUIDANCE;
+  }
+
+  return undefined;
+}
+
 export {
   CUSTOM_TOOL_DENY_REASON,
   EMPTY_TOOL_ARGS_DEFERRED_REASON,
   EXTENSION_MANAGEMENT_DENY_REASON,
   EXTENSION_PERMISSION_ACCESS_DENY_REASON,
   HOOK_DENY_REASON,
+  PATH_NOT_FOUND_FAILURE_GUIDANCE,
   READ_PATH_INVALID_DENY_REASON,
   READ_PATH_BOUNDARY_DENY_REASON,
   READ_REVIEW_ARTIFACT_DENY_REASON,
@@ -585,5 +628,7 @@ export {
   UNKNOWN_KIND_DENY_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
   URL_INVALID_DENY_REASON,
-  WEB_FETCH_POLICY_FAIL_CLOSED_REASON
+  VIEW_ABSOLUTE_PATH_FAILURE_GUIDANCE,
+  WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
+  WRITE_DENY_REASON
 };

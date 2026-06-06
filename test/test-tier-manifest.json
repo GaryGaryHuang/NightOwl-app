@@ -84,6 +84,7 @@
     "test/services/tool-audit-writer.test.ts",
     "test/services/tool-policy-guard-dual-path.test.ts",
     "test/services/tool-policy-guard-permission-handler.test.ts",
+    "test/services/tool-policy-guard-post-tool-failure.test.ts",
     "test/services/tool-policy-guard-pre-tool-hook.test.ts"
   ],
   "e2e": [

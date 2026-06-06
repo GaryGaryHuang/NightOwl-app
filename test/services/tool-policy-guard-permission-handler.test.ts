@@ -18,7 +18,8 @@ import {
   UNKNOWN_KIND_DENY_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
   URL_INVALID_DENY_REASON,
-  WEB_FETCH_POLICY_FAIL_CLOSED_REASON
+  WEB_FETCH_POLICY_FAIL_CLOSED_REASON,
+  WRITE_DENY_REASON
 } from "../../src/services/tool-policy/tool-policy-guard.ts";
 import {
   assertAuditRecord,
@@ -30,7 +31,6 @@ import {
 
 const SESSION_CONTEXT = { sessionId: "s1" };
 const APPROVED = { kind: "approve-once" } as const;
-const WRITE_DENY_REASON = "Write operations are not permitted in review sessions.";
 const denied = (feedback: string) => ({ kind: "reject", feedback }) as const;
 
 test("tool policy guard permission handler enforces the read and write boundary and records representative audit decisions", async () => {

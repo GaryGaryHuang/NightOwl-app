@@ -41,7 +41,7 @@ const GLOBAL_UNCERTAINTY_BLOCK = [
 const CONTEXT_RETRIEVAL_BLOCK = [
   "## Context Retrieval",
   "- Retrieve only the minimal context that the current step allows or requires to complete reliably.",
-  "- Use `web_fetch` and MCP tools only when the current step allows or requires external knowledge verification that local context cannot provide.",
+  "- Use external retrieval tools only when they are available in the current session, allowed by the current step, and needed to verify knowledge that local context cannot provide.",
   "- If retrieval is allowed and user-provided context includes URLs or external references, attempt retrieval when tools and policy allow.",
   "- When multiple independent retrievals are needed, batch them in a single turn rather than retrieving sequentially.",
   "- Stop retrieving additional context once it no longer changes the current step's output."
@@ -53,8 +53,8 @@ const REPOSITORY_INSPECTION_BLOCK = [
   "- Use `glob` first to discover candidate files by path or filename pattern when the relevant file is not already known.",
   "- Use `grep` with a scoped path/glob pattern for content searches.",
   "- Use `view` to inspect specific repository files after candidate paths are known.",
-  "- For repository file reads, pass repo-relative paths to the `view` tool. Do not pass absolute paths.",
-  "- Use `bash` only for supported source-path-scoped read-only Git evidence that built-in retrieval tools cannot express, such as run-ref-bound `git diff ... -- <source-path>`, `git show <run-ref>:<source-path>`, or `git grep <pattern> <run-ref> -- <source-path>`.",
+  "- The `view` tool requires an absolute file path. Do not pass repo-relative paths or reconstruct snapshot paths from memory; use absolute paths discovered inside the session working directory.",
+  "- Prefer built-in retrieval tools first. Use `bash` only for policy-allowed repo-local read-only analysis that built-in tools cannot express, especially run-ref-bound Git evidence such as `git diff ... -- <source-path>`, `git show <run-ref>:<source-path>`, or `git grep <pattern> <run-ref> -- <source-path>`.",
   "- Do not use Python, Python scripts, `python`, or `python3` for repository inspection or command execution; use the allowed read-only inspection tools and bash commands instead.",
   "- If a permission denial includes feedback, use it as correction guidance before retrying.",
   "- Before concluding a repo-local fact is unavailable, inspect obvious counterpart files for implementations, call sites, dependency injection wiring, tests, mappers, downstream consumers, and interface contracts."
