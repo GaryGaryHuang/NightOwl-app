@@ -80,11 +80,13 @@ async function defaultGitRunner(
   return stdout;
 }
 
+// Returns a short, not-yet-existing path; `git worktree add` creates the
+// directory, so this must not pre-create it. The name is kept deliberately short
+// (one random token, no pid/full UUID) to reduce downstream path-handling errors.
+// The `nightowl-` marker is retained so orphaned worktrees stay identifiable for
+// debugging and manual cleanup (`rm -rf $TMPDIR/nightowl-*`).
 async function defaultCreateSnapshotDirectory(): Promise<string> {
-  return path.join(
-    tmpdir(),
-    `nightowl-review-source-${process.pid}-${randomUUID()}`
-  );
+  return path.join(tmpdir(), `nightowl-${randomUUID().slice(0, 8)}`);
 }
 
 function trimTrailingLineEndings(output: string): string {
