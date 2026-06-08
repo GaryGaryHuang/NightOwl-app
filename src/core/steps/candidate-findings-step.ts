@@ -16,6 +16,7 @@ import type { StepExecutionPlan, StepDefinition } from "../step-runner.ts";
 import {
   JSON_FINDING_STEP_SYSTEM_MESSAGE,
   MISSING_INFORMATION_DISCIPLINE_BLOCK,
+  REVIEWED_FILE_DIFF_EVIDENCE_BLOCK,
   formatQuotedValues
 } from "./shared-step-system-blocks.ts";
 
@@ -142,6 +143,7 @@ export class CandidateFindingsStep implements StepDefinition {
       prompt: {
         systemMessage: [
           JSON_FINDING_STEP_SYSTEM_MESSAGE,
+          REVIEWED_FILE_DIFF_EVIDENCE_BLOCK,
           MISSING_INFORMATION_DISCIPLINE_BLOCK,
           CANDIDATE_FINDINGS_SYSTEM_ADDITION
         ].join("\n\n"),
@@ -187,7 +189,7 @@ function buildCandidateFindingsUserMessage(
   reviewState: string
 ): string {
   return [
-    `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
+    `<diff path="${context.filePath}">`,
     context.diffContent,
     "</diff>",
     "",

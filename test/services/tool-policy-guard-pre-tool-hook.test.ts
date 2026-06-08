@@ -6,6 +6,7 @@ import test from "node:test";
 import {
   EMPTY_TOOL_ARGS_DEFERRED_REASON,
   READONLY_BASH_DENY_REASON,
+  SNAPSHOT_BACKED_BASH_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
   WEB_FETCH_POLICY_FAIL_CLOSED_REASON
@@ -137,7 +138,7 @@ test("tool policy guard pre-tool hook passes snapshot source refs into shell pol
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: READONLY_BASH_DENY_REASON
+      permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
     }
   );
   assert.deepEqual(
@@ -153,7 +154,7 @@ test("tool policy guard pre-tool hook passes snapshot source refs into shell pol
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: READONLY_BASH_DENY_REASON
+      permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
     }
   );
 });

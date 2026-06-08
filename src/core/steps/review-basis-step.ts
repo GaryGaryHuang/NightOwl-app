@@ -10,7 +10,8 @@ import { buildXmlishJsonBlock } from "../prompt-serialization.ts";
 import { REVIEW_BASIS_STEP_ID } from "../review-step-ids.ts";
 import {
   JSON_STEP_SYSTEM_MESSAGE,
-  MISSING_INFORMATION_DISCIPLINE_BLOCK
+  MISSING_INFORMATION_DISCIPLINE_BLOCK,
+  REVIEWED_FILE_DIFF_EVIDENCE_BLOCK
 } from "./shared-step-system-blocks.ts";
 
 const REVIEW_BASIS_SYSTEM_ADDITION = [
@@ -106,6 +107,7 @@ export class ReviewBasisStep implements StepDefinition {
       prompt: {
         systemMessage: [
           JSON_STEP_SYSTEM_MESSAGE,
+          REVIEWED_FILE_DIFF_EVIDENCE_BLOCK,
           MISSING_INFORMATION_DISCIPLINE_BLOCK,
           REVIEW_BASIS_SYSTEM_ADDITION
         ].join("\n\n"),
@@ -149,7 +151,7 @@ function buildReviewBasisUserMessage(
   return [
     ...buildXmlishJsonBlock("change_map", runContext.changesetOverview),
     "",
-    `<diff path="${context.filePath}" base="${context.baseRef}" head="${context.headRef}">`,
+    `<diff path="${context.filePath}">`,
     context.diffContent,
     "</diff>",
     "",

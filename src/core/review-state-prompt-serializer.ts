@@ -32,7 +32,6 @@ export type ReviewStateBlock =
 export interface ReviewStateSerializeInput {
   context: Pick<
     FileReviewContext,
-    | "baseRef"
     | "diffContent"
     | "filePath"
     | "getCandidateFindings"
@@ -43,7 +42,6 @@ export interface ReviewStateSerializeInput {
     | "getReviewBasis"
     | "getSectionEntries"
     | "getValidationReportV1"
-    | "headRef"
   >;
   include: readonly ReviewStateBlock[];
 }
@@ -59,8 +57,6 @@ export type ReviewStateSnapshotSections = Record<string, string>;
 
 export interface ReviewStateSnapshot {
   filePath: string;
-  baseRef: string;
-  headRef: string;
   diffSummary: {
     hunks: ReviewStateSnapshotHunk[];
   };
@@ -104,8 +100,6 @@ export class ReviewStatePromptSerializer {
 
     return {
       filePath: input.context.filePath,
-      baseRef: input.context.baseRef,
-      headRef: input.context.headRef,
       diffSummary: {
         hunks: diffAnchorMap.hunks.map((hunk) => ({
           hunkHeader: hunk.hunkHeader,

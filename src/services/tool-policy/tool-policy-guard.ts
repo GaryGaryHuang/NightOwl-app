@@ -13,7 +13,8 @@ import {
 } from "../../core/review-access-guard.ts";
 import {
   evaluateReadonlyShellCommand,
-  READONLY_BASH_DENY_REASON
+  READONLY_BASH_DENY_REASON,
+  SNAPSHOT_BACKED_BASH_DENY_REASON
 } from "./tool-policy-shell-policy.ts";
 import type { ToolAuditRecord, ToolAuditSink } from "../tool-audit-writer.ts";
 import {
@@ -71,6 +72,10 @@ const VIEW_ABSOLUTE_PATH_FAILURE_GUIDANCE =
   "This read was rejected because the path was not accepted as absolute. Locate the file with `glob` or `grep`, then retry `view` with an absolute path inside the current session working directory. Do not pass repo-relative paths or reconstruct snapshot paths from memory.";
 const PATH_NOT_FOUND_FAILURE_GUIDANCE =
   "This path does not exist in the review source. Do not guess paths. Confirm the correct location with `glob`, `grep`, or a policy-allowed parent-directory listing, then retry. Common causes: wrong module root or an extra or missing nested directory segment.";
+const GREP_UNSUPPORTED_TYPE_FILTER_FAILURE_GUIDANCE =
+  "The grep/rg `type` filter is not recognized. Retry grep/rg with structured arguments: set `pattern` and scope with `paths` and/or `glob`, such as `**/*.kt`; omit the invalid `type` field.";
+const TOOL_ARGUMENT_SYNTAX_FAILURE_GUIDANCE =
+  "The tool arguments were malformed. Retry with exactly one valid JSON object using documented structured fields only; do not pass CLI flag tokens as raw strings or arrays. If retrying grep/rg and line numbers are needed, use documented structured fields such as `\"-n\": true` and `\"output_mode\": \"content\"`.";
 // Built-in tools whose failures are typically caused by an incorrect filesystem
 // path, so path-correction guidance is meaningful. Excludes `web_fetch` (whose
 // "not found" means an HTTP 404, not a path) and session/agent management tools.
@@ -600,6 +605,20 @@ function buildToolFailureGuidance(
   }
 
   if (
+    normalizedError.includes("expected double-quoted property name in json") ||
+    normalizedError.includes("malformed json")
+  ) {
+    return TOOL_ARGUMENT_SYNTAX_FAILURE_GUIDANCE;
+  }
+
+  if (
+    (toolName === "grep" || toolName === "rg") &&
+    normalizedError.includes("unrecognized file type")
+  ) {
+    return GREP_UNSUPPORTED_TYPE_FILTER_FAILURE_GUIDANCE;
+  }
+
+  if (
     normalizedError.includes("does not exist") ||
     normalizedError.includes("no such file") ||
     normalizedError.includes("not found") ||
@@ -617,14 +636,17 @@ export {
   EMPTY_TOOL_ARGS_DEFERRED_REASON,
   EXTENSION_MANAGEMENT_DENY_REASON,
   EXTENSION_PERMISSION_ACCESS_DENY_REASON,
+  GREP_UNSUPPORTED_TYPE_FILTER_FAILURE_GUIDANCE,
   HOOK_DENY_REASON,
   PATH_NOT_FOUND_FAILURE_GUIDANCE,
   READ_PATH_INVALID_DENY_REASON,
   READ_PATH_BOUNDARY_DENY_REASON,
   READ_REVIEW_ARTIFACT_DENY_REASON,
   READONLY_BASH_DENY_REASON,
+  SNAPSHOT_BACKED_BASH_DENY_REASON,
   SHELL_COMMAND_INVALID_DENY_REASON,
   SHELL_POLICY_FAIL_CLOSED_REASON,
+  TOOL_ARGUMENT_SYNTAX_FAILURE_GUIDANCE,
   UNKNOWN_KIND_DENY_REASON,
   UNSAFE_WEB_FETCH_URL_REASON,
   URL_INVALID_DENY_REASON,

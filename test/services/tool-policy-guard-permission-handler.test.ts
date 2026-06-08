@@ -9,6 +9,7 @@ import {
   EXTENSION_PERMISSION_ACCESS_DENY_REASON,
   HOOK_DENY_REASON,
   READONLY_BASH_DENY_REASON,
+  SNAPSHOT_BACKED_BASH_DENY_REASON,
   READ_PATH_BOUNDARY_DENY_REASON,
   READ_PATH_INVALID_DENY_REASON,
   READ_REVIEW_ARTIFACT_DENY_REASON,
@@ -189,7 +190,7 @@ test("tool policy guard permission handler applies snapshot-backed shell policy"
       }),
       SESSION_CONTEXT
     ),
-    denied(READONLY_BASH_DENY_REASON)
+    denied(SNAPSHOT_BACKED_BASH_DENY_REASON)
   );
 
   assertAuditRecord(sink.records[0], {

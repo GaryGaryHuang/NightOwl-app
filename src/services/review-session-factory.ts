@@ -107,7 +107,7 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
       ...(this.#modelProvider?.mode === "byok"
         ? { provider: this.#modelProvider.provider }
         : {}),
-      reasoningEffort: "high",
+      reasoningEffort: "xhigh",
       streaming: false,
       systemMessage: {
         mode: "customize",

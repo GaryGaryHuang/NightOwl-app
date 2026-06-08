@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   evaluateReadonlyShellCommand,
   READONLY_BASH_DENY_REASON,
+  SNAPSHOT_BACKED_BASH_DENY_REASON,
   SHELL_EXPANSION_DENY_REASON
 } from "../../src/services/tool-policy/tool-policy-shell-policy.ts";
 import { BASE_PROFILE } from "../helpers/tool-policy-fixture.ts";
@@ -183,7 +184,7 @@ test("tool policy shell policy supports separate snapshot source and original re
       evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       {
         permissionDecision: "deny",
-        permissionDecisionReason: READONLY_BASH_DENY_REASON
+        permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
       },
       command
     );
@@ -222,7 +223,7 @@ test("tool policy shell policy validates SDK cwd before allowing bare path argum
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: READONLY_BASH_DENY_REASON
+      permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
     }
   );
   assert.deepEqual(
@@ -233,7 +234,7 @@ test("tool policy shell policy validates SDK cwd before allowing bare path argum
     ),
     {
       permissionDecision: "deny",
-      permissionDecisionReason: READONLY_BASH_DENY_REASON
+      permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
     }
   );
 });
@@ -279,7 +280,7 @@ test("tool policy shell policy allows only run-ref-bound Git evidence forms in s
       evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       {
         permissionDecision: "deny",
-        permissionDecisionReason: READONLY_BASH_DENY_REASON
+        permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
       },
       command
     );
@@ -302,7 +303,7 @@ test("tool policy shell policy denies snapshot git diff when resolved source ref
       evaluateReadonlyShellCommand(command, profileWithoutSourceRefs),
       {
         permissionDecision: "deny",
-        permissionDecisionReason: READONLY_BASH_DENY_REASON
+        permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
       },
       command
     );
@@ -324,7 +325,7 @@ test("tool policy shell policy validates snapshot Git object paths and ambiguous
       evaluateReadonlyShellCommand(command, SNAPSHOT_PROFILE),
       {
         permissionDecision: "deny",
-        permissionDecisionReason: READONLY_BASH_DENY_REASON
+        permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
       },
       command
     );
@@ -351,6 +352,49 @@ test("tool policy shell policy validates snapshot Git object paths and ambiguous
       command
     );
   }
+});
+
+test("tool policy shell policy returns a snapshot-aware deny reason only in snapshot-backed sessions", () => {
+  const snapshotDenial = evaluateReadonlyShellCommand(
+    "git diff main feature -- src/app.ts",
+    SNAPSHOT_PROFILE
+  );
+  assert.deepEqual(snapshotDenial, {
+    permissionDecision: "deny",
+    permissionDecisionReason: SNAPSHOT_BACKED_BASH_DENY_REASON
+  });
+
+  // The snapshot reason is post-denial correction; the shared system prompt
+  // owns the stable repository-inspection policy.
+  assert.match(SNAPSHOT_BACKED_BASH_DENY_REASON, /Do not retry the denied diff/u);
+  assert.match(SNAPSHOT_BACKED_BASH_DENY_REASON, /working-tree, or branch-ref form/u);
+  assert.match(SNAPSHOT_BACKED_BASH_DENY_REASON, /current prompt input/u);
+  assert.match(SNAPSHOT_BACKED_BASH_DENY_REASON, /<changed_files_json>/u);
+  assert.match(SNAPSHOT_BACKED_BASH_DENY_REASON, /<review_state>/u);
+  assert.match(SNAPSHOT_BACKED_BASH_DENY_REASON, /repository-inspection policy/u);
+  assert.match(SNAPSHOT_BACKED_BASH_DENY_REASON, /HEAD-side bash Git lookups/u);
+  assert.doesNotMatch(SNAPSHOT_BACKED_BASH_DENY_REASON, /Retry with one legal path/u);
+  assert.doesNotMatch(SNAPSHOT_BACKED_BASH_DENY_REASON, /do not invent snapshot paths/u);
+  assert.doesNotMatch(SNAPSHOT_BACKED_BASH_DENY_REASON, /`view`, `grep`, or `glob`/u);
+  assert.doesNotMatch(SNAPSHOT_BACKED_BASH_DENY_REASON, /git show HEAD:/u);
+  assert.doesNotMatch(SNAPSHOT_BACKED_BASH_DENY_REASON, /git log/u);
+  assert.doesNotMatch(
+    SNAPSHOT_BACKED_BASH_DENY_REASON,
+    /changed-file list or `<diff>` input/u
+  );
+  assert.doesNotMatch(
+    SNAPSHOT_BACKED_BASH_DENY_REASON,
+    /per-file `<diff>` already contains/u
+  );
+  assert.doesNotMatch(SNAPSHOT_BACKED_BASH_DENY_REASON, /<baseRef>\.\.\.<headRef>/u);
+  assert.doesNotMatch(SNAPSHOT_BACKED_BASH_DENY_REASON, /ref-bound forms/u);
+
+  // Same-root sessions keep the existing general deny reason.
+  const sameRootDenial = evaluateReadonlyShellCommand("rm -rf /", BASE_PROFILE);
+  assert.deepEqual(sameRootDenial, {
+    permissionDecision: "deny",
+    permissionDecisionReason: READONLY_BASH_DENY_REASON
+  });
 });
 
 test("tool policy shell policy keeps snapshot-only Git restrictions out of explicit same-root profiles", () => {

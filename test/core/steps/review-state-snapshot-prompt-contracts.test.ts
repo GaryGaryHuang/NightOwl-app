@@ -197,8 +197,6 @@ function assertBaseSnapshot(
   }
 ): void {
   assert.equal(snapshot.filePath, "src/app.ts");
-  assert.equal(snapshot.baseRef, "main");
-  assert.equal(snapshot.headRef, "feature");
   assert.deepEqual(snapshot.diffSummary.hunks, [
     {
       hunkHeader: "@@ -1 +1 @@",
@@ -216,10 +214,7 @@ function assertBaseSnapshot(
 }
 
 function assertDiffBlock(prompt: string): void {
-  assert.match(
-    prompt,
-    /<diff path="src\/app\.ts" base="main" head="feature">/u
-  );
+  assert.match(prompt, /<diff path="src\/app\.ts">/u);
   assert.match(prompt, /@@ -1 \+1 @@\n-old\n\+new/u);
   assert.match(prompt, /<\/diff>/u);
 }

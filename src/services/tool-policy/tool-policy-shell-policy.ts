@@ -17,6 +17,8 @@ import type {
 
 export const READONLY_BASH_DENY_REASON =
   "Review sessions only allow simple literal shell commands for repo-local read-only analysis that built-in retrieval tools cannot express. Common allowed shell examples: `rg`, `grep`, `find`, `ls`, `cat`, `sed -n`, `git diff <baseRef>...<headRef> -- <path>`, `git show <ref>:<path>`, and `git grep <pattern> <ref> -- <path>`. A plain working-tree `git diff` is rejected; use ref-bound forms.";
+export const SNAPSHOT_BACKED_BASH_DENY_REASON =
+  "This snapshot-backed shell command is not supported. Do not retry the denied diff, working-tree, or branch-ref form. For review-scope changes, use the current prompt input (`<changed_files_json>`, `<diff>`, or `<review_state>`). For additional source lookup, follow the repository-inspection policy in the system message and use available retrieval tools or policy-allowed HEAD-side bash Git lookups.";
 export const SHELL_COMMAND_SUBSTITUTION_DENY_REASON =
   "Command substitution (`$(...)` or backticks) is not allowed in review shell commands. Run the inner read-only command as a separate tool call, then retry with a literal value or use a built-in retrieval tool.";
 export const SHELL_REDIRECTION_DENY_REASON =
@@ -130,8 +132,12 @@ function classifyReadonlyBashDenial(
 ): string | undefined {
   const trimmedCommand = command.trim();
 
+  const generalBashDenyReason = isSnapshotBackedProfile(profile)
+    ? SNAPSHOT_BACKED_BASH_DENY_REASON
+    : READONLY_BASH_DENY_REASON;
+
   if (!trimmedCommand) {
-    return READONLY_BASH_DENY_REASON;
+    return generalBashDenyReason;
   }
 
   if (/[`]/u.test(trimmedCommand) || /\$\(/u.test(trimmedCommand)) {
@@ -153,13 +159,13 @@ function classifyReadonlyBashDenial(
   // Ambiguous input (for example unclosed quotes) is denied conservatively with
   // the general reason rather than a misleading syntax-specific one.
   if (redirection === undefined || expansion === undefined) {
-    return READONLY_BASH_DENY_REASON;
+    return generalBashDenyReason;
   }
 
   const sequenceSegments = splitTopLevelSequenceSegments(trimmedCommand);
 
   if (!sequenceSegments) {
-    return READONLY_BASH_DENY_REASON;
+    return generalBashDenyReason;
   }
 
   let effectiveCwd = commandCwd;
@@ -168,7 +174,7 @@ function classifyReadonlyBashDenial(
     const pipelineSegments = splitTopLevelPipelineSegments(sequenceSegment);
 
     if (!pipelineSegments) {
-      return READONLY_BASH_DENY_REASON;
+      return generalBashDenyReason;
     }
 
     if (
@@ -176,13 +182,13 @@ function classifyReadonlyBashDenial(
         isAllowedSingleSegment(segment, profile, effectiveCwd)
       )
     ) {
-      return READONLY_BASH_DENY_REASON;
+      return generalBashDenyReason;
     }
 
     const cdCwd = extractCdCwd(sequenceSegment, profile, effectiveCwd);
 
     if (cdCwd === false) {
-      return READONLY_BASH_DENY_REASON;
+      return generalBashDenyReason;
     }
 
     if (cdCwd !== undefined) {

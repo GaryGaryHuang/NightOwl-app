@@ -266,7 +266,7 @@ test("ReviewSessionFactory builds the base review session config from the profil
 
   const config = getRecordedConfig(receivedConfigs);
   assert.equal(config.model, "gpt-5.4-mini");
-  assert.equal(config.reasoningEffort, "high");
+  assert.equal(config.reasoningEffort, "xhigh");
   assert.equal(config.streaming, false);
   assert.equal(config.onEvent, undefined);
   assert.equal(config.workingDirectory, "/workspace/repo");

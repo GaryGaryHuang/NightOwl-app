@@ -190,7 +190,7 @@ function normalizeDryRunStatus(statusField: string): DryRunChangeMapStatus {
 }
 
 const STUB_REVIEW_BASIS = buildDryRunReviewBasisResponse(
-  '<diff path="dry-run.ts" base="main" head="HEAD">\n</diff>'
+  '<diff path="dry-run.ts">\n</diff>'
 );
 
 const STUB_CANDIDATE_FINDINGS = '{"findings": [], "findingOrigins": [], "hypothesisClosure": [{"hypothesisId": "H1", "status": "rejected_by_evidence", "rationale": "dry-run stub has no findings"}], "criticalMissingInformation": []}';

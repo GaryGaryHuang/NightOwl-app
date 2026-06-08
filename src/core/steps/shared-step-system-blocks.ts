@@ -24,6 +24,12 @@ export const MISSING_INFORMATION_DISCIPLINE_BLOCK = [
   "- If the missing fact no longer changes the current step's result, omit it instead of carrying it forward."
 ].join("\n");
 
+export const REVIEWED_FILE_DIFF_EVIDENCE_BLOCK = [
+  "## Reviewed File Diff Evidence",
+  "- Treat `<diff>` as host-provided reviewed-file change evidence; use allowed repository-inspection tools only for source context needed to interpret or validate that diff, not to regenerate the reviewed-file diff or expand the reviewed change scope.",
+  "- For hunk headers, head-side line spans, or changed-line anchors, read the full context from `<diff>`; when `<review_state>.diffSummary` is present, use it only as the structured index for `hunkHeader`, `headLineStart`, `headLineEnd`, and `changedHeadLines`."
+].join("\n");
+
 const MARKDOWN_RESPONSE_FORMAT_BLOCK = [
   "## Markdown Response Format",
   "- Begin with the heading designated by the current step."

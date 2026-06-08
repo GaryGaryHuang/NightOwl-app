@@ -70,12 +70,10 @@ test("serializes one stable review_state JSON block", () => {
   assert.equal(result.includes("<verified_findings"), false);
 });
 
-test("snapshot includes stable file refs and diff summary hunks derived from the diff", () => {
+test("snapshot includes the file path and diff summary hunks derived from the diff", () => {
   const snapshot = serializeSnapshot(createContext(), ["sections"]);
 
   assert.equal(snapshot.filePath, "src/app.ts");
-  assert.equal(snapshot.baseRef, "main");
-  assert.equal(snapshot.headRef, "feature");
   assert.deepEqual(snapshot.diffSummary.hunks, [
     {
       hunkHeader: "@@ -1 +1 @@",

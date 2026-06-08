@@ -60,10 +60,7 @@ test("CandidateFindingsStep wires ReviewBasis and CandidateFindings harness cont
   assert.equal(plan.reviewProfile.knowledgeMode, "built-in-context7");
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
-  assert.match(
-    plan.prompt.userMessage,
-    /<diff path="src\/app\.ts" base="main" head="feature">/u
-  );
+  assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts">/u);
   assert.deepEqual(reviewBasisBlock, expectedReviewBasis);
   assert.deepEqual(reviewState.reviewBasis, expectedReviewBasis);
   assert.deepEqual(reviewState.hypothesisLedger, expectedReviewBasis.hypothesisLedger);
@@ -161,6 +158,7 @@ test("SemanticValidationStep wires candidate state and ValidationReport harness 
 
   assert.equal(plan.reviewProfile.timeoutMs, REVIEW_TURN_TIMEOUT_MS);
   assert.equal(plan.reviewProfile.model, "gpt-5.4-mini");
+  assert.match(plan.prompt.userMessage, /<diff path="src\/app\.ts">/u);
   const snapshot = parseReviewStateFromPrompt(plan.prompt.userMessage) as {
     candidateFindings: ReturnType<typeof createCandidateFindings>;
     approvedFindings: Finding[];
