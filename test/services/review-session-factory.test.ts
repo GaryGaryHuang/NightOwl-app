@@ -35,7 +35,8 @@ const EXPECTED_REVIEW_AVAILABLE_TOOLS = [
   "rg",
   "glob",
   "list_agents",
-  "read_agent"
+  "read_agent",
+  "custom:validate_json"
 ] as const;
 
 const DEFAULT_CONTEXT7_SERVERS: Record<string, MCPServerConfig> = {
@@ -491,6 +492,20 @@ test("ReviewSessionFactory sets availableTools to exactly the SOP tool set", asy
   const availableTools = receivedConfigs[0]?.availableTools;
   assert.ok(availableTools !== undefined, "availableTools should be present in session config");
   assert.deepEqual(availableTools, [...EXPECTED_REVIEW_AVAILABLE_TOOLS]);
+});
+
+test("ReviewSessionFactory registers the validate_json custom tool", async () => {
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const tools = receivedConfigs[0]?.tools;
+  assert.ok(tools !== undefined, "tools should be present in session config");
+  const validateJson = tools.find((tool) => tool.name === "validate_json");
+  assert.ok(validateJson, "validate_json custom tool should be registered");
+  assert.equal(validateJson.skipPermission, true);
 });
 
 test("ReviewSessionFactory aborts while the SDK session creation is pending", async () => {

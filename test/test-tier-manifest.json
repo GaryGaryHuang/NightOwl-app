@@ -27,6 +27,7 @@
     "test/core/steps/review-state-snapshot-prompt-contracts.test.ts",
     "test/core/steps/review-summary-step.test.ts",
     "test/core/steps/semantic-pipeline-prompt-contracts.test.ts",
+    "test/core/steps/shared-step-system-blocks.test.ts",
     "test/core/structured-output-validator-anchor.test.ts",
     "test/core/structured-output-validator-semantic-review.test.ts",
     "test/core/web-fetch-hostname-normalization.test.ts",
@@ -50,6 +51,7 @@
     "test/services/tool-policy-shell-policy-composition.test.ts",
     "test/services/tool-policy-shell-policy-paths.test.ts",
     "test/services/tool-policy-web-fetch-policy.test.ts",
+    "test/services/validate-json-tool.test.ts",
     "test/services/web-fetch-hostname-classifier.test.ts",
     "test/services/web-fetch-public-address-policy.test.ts"
   ],

@@ -18,6 +18,10 @@ import { buildRemoveAllSectionsConfig } from "./review-system-message-sections.t
 import { ToolPolicyGuard } from "./tool-policy/tool-policy-guard.ts";
 import type { ToolAuditSink } from "./tool-audit-writer.ts";
 import type { ResolvedReviewSessionModelProvider } from "./review-model-provider-resolver.ts";
+import {
+  VALIDATE_JSON_AVAILABLE_TOOL,
+  validateJsonTool
+} from "./validate-json-tool.ts";
 
 export type ReviewSessionProfile = ReviewSessionProfileLike;
 
@@ -36,7 +40,8 @@ export const REVIEW_AVAILABLE_TOOLS = [
   "rg",
   "glob",
   "list_agents",
-  "read_agent"
+  "read_agent",
+  VALIDATE_JSON_AVAILABLE_TOOL
 ] as const;
 
 export interface ReviewSessionFactoryOptions {
@@ -88,6 +93,7 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
     }
     const sessionConfig: SessionConfig = {
       availableTools: [...REVIEW_AVAILABLE_TOOLS],
+      tools: [validateJsonTool],
       hooks: {
         onPreToolUse: this.#toolPolicyGuard.buildPreToolUseHook(
           profile,
