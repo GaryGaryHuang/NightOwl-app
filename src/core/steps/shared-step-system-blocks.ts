@@ -6,9 +6,11 @@ const JSON_OUTPUT_CONTRACT_BLOCK = [
   "- Follow the current step instruction for object shape; do not invent alternate keys or aliases.",
   "- Close every array and object before finishing the response.",
   "- Prioritize syntactically complete JSON over exhaustive detail. If the response is getting long, shorten strings or omit lower-signal entries before risking an incomplete object.",
-  "- Before sending your final message, call the `validate_json` tool once with your drafted JSON to confirm it parses; it checks JSON syntax only, not fields or content.",
-  "- Treat a `valid: true` result as a checkpoint, not the finish line: your turn ends only when you have sent the complete JSON object as your final message.",
-  "- If `validate_json` returns `valid: false`, fix the reported syntax error and check again; your final message must be the JSON object itself, with no other text."
+  "- Execution order before you finish a JSON step:",
+  "  1. Call `validate_json` with your drafted JSON; it checks JSON syntax only, not fields or content.",
+  "  2. If it returns `valid: false`, fix the reported syntax error and call `validate_json` again.",
+  "  3. A `valid: true` result is not the finish line: you still owe the complete JSON object as your final message, output as a normal assistant text message — not as a tool call.",
+  "  4. The host reads only that final assistant message; a tool call alone produces an empty result and fails the step."
 ].join("\n");
 
 export const MISSING_INFORMATION_DISCIPLINE_BLOCK = [
