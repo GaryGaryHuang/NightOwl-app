@@ -4,13 +4,13 @@
   "description": "NightOwl is a local code review CLI built with the GitHub Copilot SDK.",
   "license": "MIT",
   "type": "module",
-  "homepage": "https://github.com/GaryGaryHuang/NightOwl-app#readme",
+  "homepage": "https://github.com/GaryGaryHuang/NightOwl#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GaryGaryHuang/NightOwl-app.git"
+    "url": "git+https://github.com/GaryGaryHuang/NightOwl.git"
   },
   "bugs": {
-    "url": "https://github.com/GaryGaryHuang/NightOwl-app/issues"
+    "url": "https://github.com/GaryGaryHuang/NightOwl/issues"
   },
   "keywords": [
     "cli",

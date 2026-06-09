@@ -42,8 +42,8 @@ npx @garyhuangdev/nightowl --check
 To use a source checkout instead of the published npm package:
 
 ```bash
-git clone https://github.com/GaryGaryHuang/NightOwl-app.git
-cd NightOwl-app
+git clone https://github.com/GaryGaryHuang/NightOwl.git
+cd NightOwl
 npm install        # Install dependencies
 npm run build      # Produce dist/
 npm link           # Make the `nightowl` command available on your PATH
@@ -252,7 +252,7 @@ Run locally without building (uses the source entry point directly):
 npm run nightowl -- main feature-branch
 ```
 
-See [TESTING.md](https://github.com/GaryGaryHuang/NightOwl-app/blob/main/TESTING.md) for tier decision criteria, test patterns, fixture catalog, and manifest maintenance rules.
+See [TESTING.md](https://github.com/GaryGaryHuang/NightOwl/blob/main/TESTING.md) for tier decision criteria, test patterns, fixture catalog, and manifest maintenance rules.
 
 ### Architecture
 
@@ -266,7 +266,7 @@ src/
 └── services/       Copilot SDK session management, tool policy, MCP setup
 ```
 
-See [AGENTS.md](https://github.com/GaryGaryHuang/NightOwl-app/blob/main/AGENTS.md) for detailed architecture, layer boundaries, and design rules.
+See [AGENTS.md](https://github.com/GaryGaryHuang/NightOwl/blob/main/AGENTS.md) for detailed architecture, layer boundaries, and design rules.
 
 ## License
 
