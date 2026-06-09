@@ -1,6 +1,6 @@
 {
   "name": "@garyhuangdev/nightowl",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "NightOwl is a local code review CLI built with the GitHub Copilot SDK.",
   "license": "MIT",
   "type": "module",
