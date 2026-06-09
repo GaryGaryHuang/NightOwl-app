@@ -181,8 +181,8 @@ test("runCli reports usage errors before startup feedback and app invocation", a
     assert.deepEqual(appCalls, [], name);
     assert.deepEqual(stdout, [], name);
     assert.match(stderr.join("\n"), messagePattern, name);
-    assert.match(stderr.join("\n"), /review <base_ref> <head_ref>/u, name);
-    assert.match(stderr.join("\n"), /review --check/u, name);
+    assert.match(stderr.join("\n"), /nightowl <base_ref> <head_ref>/u, name);
+    assert.match(stderr.join("\n"), /nightowl --check/u, name);
   }
 });
 

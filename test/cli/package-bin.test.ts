@@ -32,12 +32,13 @@ interface PackageBinWorkspace {
 // Skipped by default because `npm pack` + global install is slow and depends
 // on the public npm registry; opt in by setting `NIGHTOWL_RUN_PACKAGE_BIN=1`
 // before release. Mirrors the env-gate pattern of run-cli-check-smoke.test.ts.
-test("package exposes an installable review executable", { skip: !shouldRunPackageBin }, () => {
+test("package exposes an installable nightowl executable", { skip: !shouldRunPackageBin }, () => {
   const packageJson = JSON.parse(
     readFileSync(path.join(repoRoot, "package.json"), "utf8")
   );
 
-  assert.equal(packageJson.bin.review, "./dist/bin/review.js");
+  assert.equal(packageJson.name, "@garyhuangdev/nightowl");
+  assert.equal(packageJson.bin.nightowl, "./dist/bin/review.js");
 
   const workspace = createPackageBinWorkspace();
   try {
@@ -62,13 +63,14 @@ function createPackageBinWorkspace(): PackageBinWorkspace {
 }
 
 function preparePackageCopy(workspace: PackageBinWorkspace): void {
-  // Copy source without node_modules / cache / dist so that `npm pack` builds
-  // a clean tarball; the rmSync below is a belt-and-suspenders guard in case
-  // the filter misses nested paths.
+  // Copy source without VCS metadata, node_modules, cache, or dist so that
+  // `npm pack` builds a clean tarball from repo content only; the rmSync below
+  // is a belt-and-suspenders guard in case the filter misses nested paths.
   cpSync(repoRoot, workspace.appCopyDir, {
     recursive: true,
     filter(sourcePath) {
       return !(
+        sourcePath.includes(`${path.sep}.git`) ||
         sourcePath.includes(`${path.sep}node_modules`) ||
         sourcePath.includes(`${path.sep}.npm-cache`) ||
         sourcePath.endsWith(`${path.sep}dist`)
@@ -135,9 +137,9 @@ function installPackage(
 function assertInstalledBinaryRunsUsageError(
   workspace: PackageBinWorkspace
 ): void {
-  const binaryPath = path.join(workspace.prefixDir, "bin", "review");
+  const binaryPath = path.join(workspace.prefixDir, "bin", "nightowl");
 
-  assert.ok(existsSync(binaryPath), "installed review executable should exist");
+  assert.ok(existsSync(binaryPath), "installed nightowl executable should exist");
 
   // Pass only one positional arg to trigger the missing-head_ref usage error;
   // verifies the installed binary runs and produces the correct error output.
@@ -148,7 +150,7 @@ function assertInstalledBinaryRunsUsageError(
 
   assert.equal(execResult.status, 1, execResult.stderr || execResult.stdout);
   assert.match(execResult.stderr, /head_ref/u);
-  assert.match(execResult.stderr, /review <base_ref> <head_ref>/u);
+  assert.match(execResult.stderr, /nightowl <base_ref> <head_ref>/u);
 }
 
 function assertSpawnSucceeded(

@@ -53,7 +53,7 @@ Thin guardrails for the published CLI surface. These tests exercise the outermos
 - Tests the installed or runnable CLI entry point as a user would invoke it
 - Verifies exit codes, stdout/stderr output, and error messages for success, failure, and interrupt paths
 
-**Typical subjects:** installable `review` executable (`package-bin`), `--check` mode environment smoke test (`run-cli-check-smoke`).
+**Typical subjects:** installable `nightowl` executable (`package-bin`), `--check` mode environment smoke test (`run-cli-check-smoke`).
 
 **E2E scope clarification.** E2E is reserved for tests that exercise the installed or published binary surface — currently `package-bin` and `run-cli-check-smoke`. Non-binary CLI tests that invoke `runCli()` in-process (and therefore share the Node.js test process with the system under test) belong to **integration**, not e2e. A test that spawns a subprocess but does not exercise the published binary (for example, spawning a script under `scripts/` to verify its CLI entry point) is also **integration**, not e2e. Accordingly, `test/cli/run-cli.test.ts` and `test/cli/run-cli-progress.test.ts` are integration entries in `test/test-tier-manifest.json`.
 
@@ -120,7 +120,7 @@ npm run test:e2e           # Build + verify manifest + run e2e tests only
 
 ### Optional e2e smokes
 
-The package/install path and `review --check` have environment-gated smoke tests. `npm run test:e2e` loads these files, but the slow package-bin assertion and real Copilot availability assertion are skipped by default so CI stays deterministic.
+The package/install path and `nightowl --check` have environment-gated smoke tests. `npm run test:e2e` loads these files, but the slow package-bin assertion and real Copilot availability assertion are skipped by default so CI stays deterministic.
 
 ```bash
 npm run build && NIGHTOWL_RUN_PACKAGE_BIN=1 node --test test/cli/package-bin.test.ts

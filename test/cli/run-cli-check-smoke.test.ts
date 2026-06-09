@@ -13,7 +13,7 @@ const SMOKE_COMMAND_TIMEOUT_MS = 120_000;
 const binaryPath = path.join(repoRoot, "dist/bin/review.js");
 
 test(
-  "review --check succeeds against a real Copilot CLI environment",
+  "nightowl --check succeeds against a real Copilot CLI environment",
   { skip: !shouldRunSmoke },
   () => {
     assert.ok(

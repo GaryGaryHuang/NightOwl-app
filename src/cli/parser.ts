@@ -8,8 +8,8 @@ export class CliUsageError extends Error {
 }
 
 const REVIEW_RUN_USAGE =
-  "review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]";
-const CHECK_USAGE = "review --check";
+  "nightowl <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]";
+const CHECK_USAGE = "nightowl --check";
 const USAGE = `${REVIEW_RUN_USAGE}\n${CHECK_USAGE}`;
 
 type ParsedReviewCommand =

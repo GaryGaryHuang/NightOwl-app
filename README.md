@@ -25,22 +25,28 @@ This section gets you from zero to your first review report. If you only want to
   - **Copilot mode (default)** — a [GitHub Copilot](https://github.com/features/copilot) subscription and an authenticated [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli)
   - **BYOK mode** — a provider API key (OpenAI, Azure, or Anthropic) supplied via an environment variable. See [Model Provider](#model-provider)
 
-### 2. Install the `review` command
+### 2. Install the `nightowl` command
 
-NightOwl is not yet published to a public registry, so the supported path today is building from source:
+Install NightOwl globally from npm:
+
+```bash
+npm install -g @garyhuangdev/nightowl
+```
+
+Or run it without a global install:
+
+```bash
+npx @garyhuangdev/nightowl --check
+```
+
+To use a source checkout instead of the published npm package:
 
 ```bash
 git clone https://github.com/GaryGaryHuang/NightOwl-app.git
 cd NightOwl-app
 npm install        # Install dependencies
 npm run build      # Produce dist/
-npm link           # Make the `review` command available on your PATH
-```
-
-Once a package or tarball is available, you can instead install it globally:
-
-```bash
-npm install -g <package-or-tarball>
+npm link           # Make the `nightowl` command available on your PATH
 ```
 
 ### 3. Authenticate (Copilot mode only)
@@ -54,17 +60,17 @@ copilot auth login
 Then verify NightOwl can reach Copilot:
 
 ```bash
-review --check
+nightowl --check
 ```
 
 This prints `GitHub Copilot is available.` on success.
 
-> `review --check` only validates Copilot availability. It does **not** validate BYOK credentials, and it is **not** required before `--dry-run`.
+> `nightowl --check` only validates Copilot availability. It does **not** validate BYOK credentials, and it is **not** required before `--dry-run`.
 
 ### 4. Run your first review
 
 ```bash
-review main feature-branch
+nightowl main feature-branch
 ```
 
 NightOwl prints progress to the terminal and writes the report under `.nightowl/review/<session_id>/` inside the repository. Open `index.md` in that folder to read the review.
@@ -74,8 +80,8 @@ NightOwl prints progress to the terminal and writes the report under `.nightowl/
 ## Usage
 
 ```bash
-review <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
-review --check
+nightowl <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
+nightowl --check
 ```
 
 `base_ref` and `head_ref` are required; NightOwl reviews the changes from `base_ref` to `head_ref`.
@@ -90,10 +96,10 @@ review --check
 **Examples:**
 
 ```bash
-review main feature-branch
-review main HEAD --repo /path/to/repo
-review main HEAD --context "Performance optimization PR" --context "https://link-to-spec"
-review main feature-branch --dry-run
+nightowl main feature-branch
+nightowl main HEAD --repo /path/to/repo
+nightowl main HEAD --context "Performance optimization PR" --context "https://link-to-spec"
+nightowl main feature-branch --dry-run
 ```
 
 Providing `--context` is recommended: NightOwl feeds it into the review as source-of-truth background (stated requirements, expected behavior, root cause, business context), which produces more relevant findings.
@@ -224,7 +230,7 @@ NightOwl is written in TypeScript (strict mode, ESM). Tests use the Node.js buil
 ```bash
 npm install          # Install dependencies
 npm run build        # Produce dist/
-npm link             # Symlink the built `review` command locally
+npm link             # Symlink the built `nightowl` command locally
 npm test             # Build + verify manifest + run all tests
 npm run test:unit    # Run fast deterministic unit tests
 npm run test:integration  # Run boundary/collaboration tests
@@ -243,7 +249,7 @@ npm run build && node --test test/core/orchestrator-bounded-concurrency.test.ts
 Run locally without building (uses the source entry point directly):
 
 ```bash
-npm run review -- main feature-branch
+npm run nightowl -- main feature-branch
 ```
 
 See [TESTING.md](https://github.com/GaryGaryHuang/NightOwl-app/blob/main/TESTING.md) for tier decision criteria, test patterns, fixture catalog, and manifest maintenance rules.

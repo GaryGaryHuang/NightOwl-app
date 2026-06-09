@@ -1,9 +1,27 @@
 {
-  "name": "nightowl",
+  "name": "@garyhuangdev/nightowl",
   "version": "0.1.0",
   "description": "NightOwl is a local code review CLI built with the GitHub Copilot SDK.",
   "license": "MIT",
   "type": "module",
+  "homepage": "https://github.com/GaryGaryHuang/NightOwl-app#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GaryGaryHuang/NightOwl-app.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GaryGaryHuang/NightOwl-app/issues"
+  },
+  "keywords": [
+    "cli",
+    "code-review",
+    "github-copilot",
+    "copilot-sdk",
+    "nightowl"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.18.0"
   },
@@ -14,11 +32,12 @@
     "AGENTS.md"
   ],
   "bin": {
-    "review": "./dist/bin/review.js"
+    "nightowl": "./dist/bin/review.js"
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "prepack": "npm run build",
+    "nightowl": "node src/bin/review.ts",
     "review": "node src/bin/review.ts",
     "test": "npm run build && node ./scripts/test-tier-runner.mjs all",
     "test:unit": "npm run build && node ./scripts/test-tier-runner.mjs unit",
