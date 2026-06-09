@@ -24,6 +24,9 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
+      - name: Use npm 11
+        run: npm install -g npm@11
+
       - name: Verify release tag matches package version
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -49,6 +52,4 @@ jobs:
         run: NIGHTOWL_RUN_PACKAGE_BIN=1 node --test test/cli/package-bin.test.ts
 
       - name: Publish package
-        run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
