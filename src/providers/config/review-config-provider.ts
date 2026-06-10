@@ -6,12 +6,14 @@ export type ReviewConfigModelProvider =
   | {
       kind: "copilot";
       model?: string;
+      reasoningEffort?: string;
     }
   | {
       kind: "byok";
       type: "openai" | "azure" | "anthropic";
       baseUrl: string;
       model: string;
+      reasoningEffort?: string;
       apiKeyEnv?: string;
       bearerTokenEnv?: string;
       wireApi?: "completions" | "responses";

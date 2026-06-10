@@ -34,12 +34,14 @@ test("resolveModelProviderFromConfigObject omits absent modelProvider and accept
     resolveModelProviderFromConfigObject({
       modelProvider: {
         kind: "copilot",
-        model: "gpt-5.4-mini"
+        model: "gpt-5.4-mini",
+        reasoningEffort: "xhigh"
       }
     }),
     {
       kind: "copilot",
-      model: "gpt-5.4-mini"
+      model: "gpt-5.4-mini",
+      reasoningEffort: "xhigh"
     }
   );
 });
@@ -73,6 +75,7 @@ test("resolveModelProviderFromConfigObject accepts minimal and optional BYOK pro
         model: "review-deployment",
         bearerTokenEnv: "NIGHTOWL_AZURE_TOKEN",
         wireApi: "responses",
+        reasoningEffort: "configured-effort",
         azure: {
           apiVersion: "2024-10-21"
         }
@@ -85,11 +88,38 @@ test("resolveModelProviderFromConfigObject accepts minimal and optional BYOK pro
       model: "review-deployment",
       bearerTokenEnv: "NIGHTOWL_AZURE_TOKEN",
       wireApi: "responses",
+      reasoningEffort: "configured-effort",
       azure: {
         apiVersion: "2024-10-21"
       }
     }
   );
+});
+
+test("resolveModelProviderFromConfigObject rejects non-string or blank reasoning effort", () => {
+  assertModelProviderConfigError({
+    config: {
+      modelProvider: {
+        kind: "copilot",
+        model: "gpt-5.4-mini",
+        reasoningEffort: ""
+      }
+    },
+    expectedMessage: "reasoningEffort"
+  });
+  assertModelProviderConfigError({
+    config: {
+      modelProvider: {
+        kind: "byok",
+        type: "openai",
+        baseUrl: "https://llm-gateway.example.com/v1",
+        model: "company-review",
+        apiKeyEnv: "NIGHTOWL_OPENAI_API_KEY",
+        reasoningEffort: ["high"]
+      }
+    },
+    expectedMessage: "reasoningEffort"
+  });
 });
 
 test("resolveModelProviderFromConfigObject rejects invalid modelProvider kind and BYOK type", () => {

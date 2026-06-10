@@ -1,12 +1,24 @@
-import { CopilotClient, type SessionConfig } from "@github/copilot-sdk";
+import { CopilotClient, type ModelInfo, type SessionConfig } from "@github/copilot-sdk";
 
 import type { SessionLike } from "./session-executor.ts";
+
+export type CopilotModelInfo = Omit<
+  ModelInfo,
+  "defaultReasoningEffort" | "supportedReasoningEfforts"
+> & {
+  defaultReasoningEffort?: string;
+  supportedReasoningEfforts?: string[];
+};
+export type CopilotSessionConfig = Omit<SessionConfig, "reasoningEffort"> & {
+  reasoningEffort?: string;
+};
 
 export interface CopilotClientLike {
   start(): Promise<void>;
   stop(): Promise<readonly Error[]>;
   forceStop(): Promise<unknown>;
-  createSession(config: SessionConfig): Promise<SessionLike>;
+  listModels?(): Promise<CopilotModelInfo[]>;
+  createSession(config: CopilotSessionConfig): Promise<SessionLike>;
 }
 
 export interface ClientManagerLike {

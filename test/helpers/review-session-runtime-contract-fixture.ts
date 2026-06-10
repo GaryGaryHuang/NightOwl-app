@@ -1,7 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SessionConfig } from "@github/copilot-sdk";
 
 import type {
   ReviewContext7OverrideConfig,
@@ -10,7 +9,9 @@ import type {
 } from "../../src/core/review-mcp-server-config.ts";
 import type { ReviewSessionProfile } from "../../src/services/review-session-factory.ts";
 import type {
-  CopilotClientLike
+  CopilotClientLike,
+  CopilotModelInfo,
+  CopilotSessionConfig
 } from "../../src/services/copilot-client-manager.ts";
 import type {
   SessionLike
@@ -25,7 +26,22 @@ export const BASE_REVIEW_PROFILE: ReviewSessionProfile = {
   workingDirectory: "/workspace/repo"
 };
 
-export function createRecordedConfigs<T = SessionConfig>(): T[] {
+export const DEFAULT_TEST_MODEL_INFO: CopilotModelInfo = {
+  id: "gpt-5.4-mini",
+  name: "GPT-5.4 mini",
+  capabilities: {
+    supports: {
+      vision: true,
+      reasoningEffort: true
+    },
+    limits: {
+      max_context_window_tokens: 400000
+    }
+  },
+  supportedReasoningEfforts: ["low", "medium", "high", "xhigh"]
+};
+
+export function createRecordedConfigs<T = CopilotSessionConfig>(): T[] {
   return [];
 }
 
@@ -45,14 +61,18 @@ export function createAssistantSession(
 }
 
 export function createSessionRecordingClientManager(
-  recordedConfigs: SessionConfig[],
-  sessionFactory: (config: SessionConfig) => SessionLike = () =>
-    createAssistantSession()
+  recordedConfigs: CopilotSessionConfig[],
+  sessionFactory: (config: CopilotSessionConfig) => SessionLike = () =>
+    createAssistantSession(),
+  models: CopilotModelInfo[] = [DEFAULT_TEST_MODEL_INFO]
 ) {
   return {
     getClient() {
       return {
-        async createSession(config: SessionConfig) {
+        async listModels() {
+          return models;
+        },
+        async createSession(config: CopilotSessionConfig) {
           recordedConfigs.push(config);
           return sessionFactory(config);
         }
@@ -87,6 +107,9 @@ export function createLifecycleClientFactory(
     },
     async createSession() {
       throw new Error("createSession should not be called in this test");
+    },
+    async listModels() {
+      return [DEFAULT_TEST_MODEL_INFO];
     }
   });
 }

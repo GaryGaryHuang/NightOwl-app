@@ -1,14 +1,13 @@
-import {
-  type SessionConfig
-} from "@github/copilot-sdk";
-
 import type {
   ReviewSessionCreationOptions,
   ReviewSessionFactoryLike,
   ReviewSessionProfileLike
 } from "../core/session-factory-contracts.ts";
 import { SessionTurnAbortedError } from "../core/errors.ts";
-import type { CopilotClientLike } from "./copilot-client-manager.ts";
+import type {
+  CopilotClientLike,
+  CopilotSessionConfig
+} from "./copilot-client-manager.ts";
 import {
   SessionExecutor,
   type SessionLike
@@ -24,6 +23,12 @@ import {
 } from "./validate-json-tool.ts";
 
 export type ReviewSessionProfile = ReviewSessionProfileLike;
+// Treat supportedReasoningEfforts as a set; choose only known high-effort tiers.
+const REVIEW_REASONING_EFFORT_PREFERENCE: readonly string[] = [
+  "max",
+  "xhigh",
+  "high"
+];
 
 /**
  * The explicit set of tool names exposed to LLM in review sessions.
@@ -46,7 +51,7 @@ export const REVIEW_AVAILABLE_TOOLS = [
 
 export interface ReviewSessionFactoryOptions {
   clientManager: {
-    getClient(): Pick<CopilotClientLike, "createSession">;
+    getClient(): Pick<CopilotClientLike, "createSession" | "listModels">;
   };
   knowledgeSvc?: Pick<KnowledgeSvc, "getMcpServers">;
   modelProvider?: ResolvedReviewSessionModelProvider;
@@ -91,7 +96,14 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
         "ReviewSessionFactory requires knowledgeSvc for built-in-context7 sessions."
       );
     }
-    const sessionConfig: SessionConfig = {
+    const client = this.#clientManager.getClient();
+    const model = this.#modelProvider?.model ?? profile.model;
+    const reasoningEffort = await resolveReviewReasoningEffort(
+      client,
+      this.#modelProvider,
+      model
+    );
+    const sessionConfig: CopilotSessionConfig = {
       availableTools: [...REVIEW_AVAILABLE_TOOLS],
       tools: [validateJsonTool],
       hooks: {
@@ -103,11 +115,11 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
           auditWriter
         )
       },
-      model: this.#modelProvider?.model ?? profile.model,
+      model,
       ...(this.#modelProvider?.mode === "byok"
         ? { provider: this.#modelProvider.provider }
         : {}),
-      reasoningEffort: "xhigh",
+      ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
       streaming: false,
       systemMessage: {
         mode: "customize",
@@ -131,11 +143,53 @@ export class ReviewSessionFactory implements ReviewSessionFactoryLike {
     }
 
     throwIfSessionCreationAborted(options?.signal);
-    const sessionPromise = this.#clientManager.getClient().createSession(sessionConfig);
+    const sessionPromise = client.createSession(sessionConfig);
     const session = await waitForSessionCreation(sessionPromise, options?.signal);
 
     return new SessionExecutor(session);
   }
+}
+
+async function resolveReviewReasoningEffort(
+  client: Pick<CopilotClientLike, "listModels">,
+  modelProvider: ResolvedReviewSessionModelProvider | undefined,
+  model: string
+): Promise<string | undefined> {
+  if (modelProvider?.reasoningEffort !== undefined) {
+    return modelProvider.reasoningEffort;
+  }
+
+  if (modelProvider?.mode === "byok") {
+    return undefined;
+  }
+
+  if (client.listModels === undefined) {
+    return undefined;
+  }
+
+  const modelInfo = (await client.listModels()).find((availableModel) => (
+    availableModel.id === model
+  ));
+
+  if (modelInfo?.capabilities.supports.reasoningEffort !== true) {
+    return undefined;
+  }
+
+  return selectHighestSupportedReviewReasoningEffort(
+    modelInfo.supportedReasoningEfforts
+  );
+}
+
+function selectHighestSupportedReviewReasoningEffort(
+  supportedReasoningEfforts: readonly string[] | undefined
+): string | undefined {
+  if (supportedReasoningEfforts === undefined) {
+    return undefined;
+  }
+
+  return REVIEW_REASONING_EFFORT_PREFERENCE.find((reasoningEffort) => (
+    supportedReasoningEfforts.includes(reasoningEffort)
+  ));
 }
 
 function throwIfSessionCreationAborted(signal: AbortSignal | undefined): void {

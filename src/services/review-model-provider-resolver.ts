@@ -8,10 +8,12 @@ export type ResolvedReviewSessionModelProvider =
   | {
       mode: "copilot";
       model?: string;
+      reasoningEffort?: string;
     }
   | {
       mode: "byok";
       model: string;
+      reasoningEffort?: string;
       provider: ProviderConfig;
     };
 
@@ -22,7 +24,10 @@ export function resolveReviewSessionModelProvider(
   if (modelProvider === undefined || modelProvider.kind === "copilot") {
     return {
       mode: "copilot",
-      ...(modelProvider?.model === undefined ? {} : { model: modelProvider.model })
+      ...(modelProvider?.model === undefined ? {} : { model: modelProvider.model }),
+      ...(modelProvider?.reasoningEffort === undefined
+        ? {}
+        : { reasoningEffort: modelProvider.reasoningEffort })
     };
   }
 
@@ -58,6 +63,9 @@ export function resolveReviewSessionModelProvider(
   return {
     mode: "byok",
     model: modelProvider.model,
+    ...(modelProvider.reasoningEffort === undefined
+      ? {}
+      : { reasoningEffort: modelProvider.reasoningEffort }),
     provider
   };
 }

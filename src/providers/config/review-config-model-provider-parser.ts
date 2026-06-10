@@ -8,7 +8,8 @@ import {
 
 const COPILOT_ALLOWED_KEYS: ReadonlySet<string> = new Set([
   "kind",
-  "model"
+  "model",
+  "reasoningEffort"
 ]);
 
 const BYOK_ALLOWED_KEYS: ReadonlySet<string> = new Set([
@@ -16,6 +17,7 @@ const BYOK_ALLOWED_KEYS: ReadonlySet<string> = new Set([
   "type",
   "baseUrl",
   "model",
+  "reasoningEffort",
   "apiKeyEnv",
   "bearerTokenEnv",
   "wireApi",
@@ -75,10 +77,17 @@ function resolveCopilotModelProvider(
     readNonBlankString,
     "'model' must be a non-blank string"
   );
+  const reasoningEffort = readOptionalField(
+    rawModelProvider,
+    "reasoningEffort",
+    readNonBlankString,
+    "'reasoningEffort' must be a non-blank string"
+  );
 
   return {
     kind: "copilot",
-    ...(model === undefined ? {} : { model })
+    ...(model === undefined ? {} : { model }),
+    ...(reasoningEffort === undefined ? {} : { reasoningEffort })
   };
 }
 
@@ -124,6 +133,12 @@ function resolveByokModelProvider(
     readWireApi,
     "'wireApi' must be \"completions\" or \"responses\""
   );
+  const reasoningEffort = readOptionalField(
+    rawModelProvider,
+    "reasoningEffort",
+    readNonBlankString,
+    "'reasoningEffort' must be a non-blank string"
+  );
   const azure = readOptionalField(
     rawModelProvider,
     "azure",
@@ -145,6 +160,7 @@ function resolveByokModelProvider(
     ...(apiKeyEnv === undefined ? {} : { apiKeyEnv }),
     ...(bearerTokenEnv === undefined ? {} : { bearerTokenEnv }),
     ...(wireApi === undefined ? {} : { wireApi }),
+    ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
     ...(azure === undefined ? {} : { azure })
   };
 }

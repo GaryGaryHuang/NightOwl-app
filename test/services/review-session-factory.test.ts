@@ -8,6 +8,10 @@ import {
 } from "../../src/services/review-session-factory.ts";
 import { SessionTurnAbortedError } from "../../src/services/session-executor.ts";
 import type {
+  CopilotModelInfo,
+  CopilotSessionConfig
+} from "../../src/services/copilot-client-manager.ts";
+import type {
   ResolvedReviewSessionModelProvider
 } from "../../src/services/review-model-provider-resolver.ts";
 import {
@@ -54,7 +58,7 @@ type PostToolUseFailureHook = NonNullable<
   NonNullable<SessionConfig["hooks"]>["onPostToolUseFailure"]
 >;
 type PermissionHandler = NonNullable<SessionConfig["onPermissionRequest"]>;
-type RecordedReviewSessionConfig = SessionConfig & {
+type RecordedReviewSessionConfig = CopilotSessionConfig & {
   hooks: NonNullable<SessionConfig["hooks"]> & {
     onPreToolUse: PreToolUseHook;
     onPostToolUseFailure: PostToolUseFailureHook;
@@ -63,7 +67,7 @@ type RecordedReviewSessionConfig = SessionConfig & {
 };
 
 function assertRecordedReviewSessionConfig(
-  config: SessionConfig
+  config: CopilotSessionConfig
 ): asserts config is RecordedReviewSessionConfig {
   assert.ok(config.hooks);
   assert.ok(config.hooks.onPreToolUse);
@@ -77,22 +81,28 @@ function createReviewSessionFactoryHarness(
       ReviewSessionFactoryOptions,
       "knowledgeSvc" | "toolPolicyGuard" | "auditWriterProvider" | "modelProvider"
     >
-  > = {}
+  > & {
+    availableModels?: CopilotModelInfo[];
+  } = {}
 ) {
   const receivedConfigs = createRecordedConfigs<RecordedReviewSessionConfig>();
   const factory = new ReviewSessionFactory({
-    clientManager: createSessionRecordingClientManager(receivedConfigs, (config) => {
-      assertRecordedReviewSessionConfig(config);
-      return {
-        async sendAndWait() {
-          return {
-            type: "assistant.message",
-            data: { content: "ok" }
-          };
-        },
-        async disconnect() {}
-      };
-    }),
+    clientManager: createSessionRecordingClientManager(
+      receivedConfigs,
+      (config) => {
+        assertRecordedReviewSessionConfig(config);
+        return {
+          async sendAndWait() {
+            return {
+              type: "assistant.message",
+              data: { content: "ok" }
+            };
+          },
+          async disconnect() {}
+        };
+      },
+      options.availableModels
+    ),
     toolPolicyGuard: options.toolPolicyGuard ?? new SpyToolPolicyGuard(),
     knowledgeSvc:
       options.knowledgeSvc ?? {
@@ -290,6 +300,203 @@ test("ReviewSessionFactory applies explicit Copilot model override without SDK p
   assert.equal(config.provider, undefined);
 });
 
+test("ReviewSessionFactory honors configured Copilot reasoning effort", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "copilot",
+    model: "review-model",
+    reasoningEffort: "high"
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard(),
+    availableModels: [
+      {
+        id: "review-model",
+        name: "Review Model",
+        capabilities: {
+          supports: {
+            vision: false,
+            reasoningEffort: true
+          },
+          limits: {
+            max_context_window_tokens: 200000
+          }
+        },
+        supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"]
+      }
+    ]
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "review-model");
+  assert.equal(config.reasoningEffort, "high");
+});
+
+test("ReviewSessionFactory uses the highest supported Copilot reasoning effort", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "copilot",
+    model: "review-model"
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard(),
+    availableModels: [
+      {
+        id: "review-model",
+        name: "Review Model",
+        capabilities: {
+          supports: {
+            vision: false,
+            reasoningEffort: true
+          },
+          limits: {
+            max_context_window_tokens: 200000
+          }
+        },
+        supportedReasoningEfforts: ["low", "medium", "high"]
+      }
+    ]
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "review-model");
+  assert.equal(config.reasoningEffort, "high");
+});
+
+test("ReviewSessionFactory prefers max reasoning effort when Copilot reports support", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "copilot",
+    model: "claude-review"
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard(),
+    availableModels: [
+      {
+        id: "claude-review",
+        name: "Claude Review",
+        capabilities: {
+          supports: {
+            vision: false,
+            reasoningEffort: true
+          },
+          limits: {
+            max_context_window_tokens: 200000
+          }
+        },
+        supportedReasoningEfforts: ["low", "xhigh", "max"]
+      }
+    ]
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "claude-review");
+  assert.equal(config.reasoningEffort, "max");
+});
+
+test("ReviewSessionFactory omits Copilot reasoning effort below high", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "copilot",
+    model: "review-model"
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard(),
+    availableModels: [
+      {
+        id: "review-model",
+        name: "Review Model",
+        capabilities: {
+          supports: {
+            vision: false,
+            reasoningEffort: true
+          },
+          limits: {
+            max_context_window_tokens: 200000
+          }
+        },
+        supportedReasoningEfforts: ["low", "medium"]
+      }
+    ]
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "review-model");
+  assert.equal(config.reasoningEffort, undefined);
+});
+
+test("ReviewSessionFactory omits Copilot reasoning effort when supported efforts are missing", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "copilot",
+    model: "review-model"
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard(),
+    availableModels: [
+      {
+        id: "review-model",
+        name: "Review Model",
+        capabilities: {
+          supports: {
+            vision: false,
+            reasoningEffort: true
+          },
+          limits: {
+            max_context_window_tokens: 200000
+          }
+        }
+      }
+    ]
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "review-model");
+  assert.equal(config.reasoningEffort, undefined);
+});
+
+test("ReviewSessionFactory omits reasoning effort when Copilot model does not support it", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "copilot",
+    model: "mai-code-1-flash"
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard(),
+    availableModels: [
+      {
+        id: "mai-code-1-flash",
+        name: "MAI-Code-1-Flash",
+        capabilities: {
+          supports: {
+            vision: false,
+            reasoningEffort: false
+          },
+          limits: {
+            max_context_window_tokens: 200000
+          }
+        }
+      }
+    ]
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "mai-code-1-flash");
+  assert.equal(config.reasoningEffort, undefined);
+});
+
 test("ReviewSessionFactory includes BYOK provider config and configured model", async () => {
   const modelProvider: ResolvedReviewSessionModelProvider = {
     mode: "byok",
@@ -314,6 +521,30 @@ test("ReviewSessionFactory includes BYOK provider config and configured model", 
     baseUrl: "https://llm-gateway.example.com/v1",
     apiKey: "sk-test"
   });
+  assert.equal(config.reasoningEffort, undefined);
+});
+
+test("ReviewSessionFactory includes configured BYOK reasoning effort", async () => {
+  const modelProvider: ResolvedReviewSessionModelProvider = {
+    mode: "byok",
+    model: "company-review",
+    reasoningEffort: "configured-effort",
+    provider: {
+      type: "openai",
+      baseUrl: "https://llm-gateway.example.com/v1",
+      apiKey: "sk-test"
+    }
+  };
+  const { factory, receivedConfigs } = createReviewSessionFactoryHarness({
+    modelProvider,
+    toolPolicyGuard: new SpyToolPolicyGuard()
+  });
+
+  await factory.createSession(BASE_REVIEW_PROFILE);
+
+  const config = getRecordedConfig(receivedConfigs);
+  assert.equal(config.model, "company-review");
+  assert.equal(config.reasoningEffort, "configured-effort");
 });
 
 test("ReviewSessionFactory injects MCP servers only when KnowledgeSvc returns them for the resolved knowledge mode", async () => {
@@ -515,6 +746,24 @@ test("ReviewSessionFactory aborts while the SDK session creation is pending", as
     clientManager: {
       getClient() {
         return {
+          async listModels() {
+            return [
+              {
+                id: "gpt-5.4-mini",
+                name: "GPT-5.4 mini",
+                capabilities: {
+                  supports: {
+                    vision: true,
+                    reasoningEffort: true
+                  },
+                  limits: {
+                    max_context_window_tokens: 400000
+                  }
+                },
+                supportedReasoningEfforts: ["low", "medium", "high", "xhigh"]
+              }
+            ];
+          },
           async createSession() {
             createCalls += 1;
             return await new Promise<never>(() => {});
@@ -532,6 +781,7 @@ test("ReviewSessionFactory aborts while the SDK session creation is pending", as
     },
     { signal: controller.signal }
   );
+  await new Promise<void>((resolve) => setImmediate(resolve));
   controller.abort("SIGINT");
 
   await assertRejectsWithAbortBeforeTimeout(pending);

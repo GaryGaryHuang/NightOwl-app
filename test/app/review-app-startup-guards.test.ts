@@ -56,6 +56,7 @@ test("createLocalReviewRunApp preserves default Copilot session behavior when mo
     );
     assert.ok(changesetOverviewConfig, "Changeset Overview session should be attempted");
     assert.equal(changesetOverviewConfig.model, "gpt-5.4-mini");
+    assert.equal(changesetOverviewConfig.reasoningEffort, undefined);
     assert.equal(changesetOverviewConfig.provider, undefined);
   } finally {
     fixture.cleanup();
@@ -132,6 +133,7 @@ test("createLocalReviewRunApp passes repo BYOK modelProvider to real review sess
       baseUrl: "https://llm-gateway.example.com/v1",
       apiKey: "sk-test"
     });
+    assert.equal(changesetOverviewConfig.reasoningEffort, undefined);
   } finally {
     if (previousApiKey === undefined) {
       delete process.env.NIGHTOWL_TEST_OPENAI_API_KEY;

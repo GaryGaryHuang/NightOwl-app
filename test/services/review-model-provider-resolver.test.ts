@@ -11,13 +11,15 @@ test("resolveReviewSessionModelProvider preserves Copilot mode without SDK provi
     resolveReviewSessionModelProvider(
       {
         kind: "copilot",
-        model: "gpt-5.4-mini"
+        model: "gpt-5.4-mini",
+        reasoningEffort: "high"
       },
       {}
     ),
     {
       mode: "copilot",
-      model: "gpt-5.4-mini"
+      model: "gpt-5.4-mini",
+      reasoningEffort: "high"
     }
   );
 });
@@ -30,6 +32,7 @@ test("resolveReviewSessionModelProvider resolves BYOK apiKey env and maps SDK Pr
         type: "openai",
         baseUrl: "https://llm-gateway.example.com/v1",
         model: "company-review",
+        reasoningEffort: "configured-effort",
         apiKeyEnv: "NIGHTOWL_OPENAI_API_KEY"
       },
       {
@@ -39,6 +42,7 @@ test("resolveReviewSessionModelProvider resolves BYOK apiKey env and maps SDK Pr
     {
       mode: "byok",
       model: "company-review",
+      reasoningEffort: "configured-effort",
       provider: {
         type: "openai",
         baseUrl: "https://llm-gateway.example.com/v1",
