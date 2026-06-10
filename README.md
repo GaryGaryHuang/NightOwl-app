@@ -200,6 +200,7 @@ BYOK fields:
 | `type` | Yes | Provider type: `openai`, `azure`, or `anthropic` |
 | `baseUrl` | Yes | Provider API endpoint URL |
 | `model` | Yes | Model name used for every review session |
+| `reasoningEffort` | No | Provider-specific effort string |
 | `apiKeyEnv` | One credential required | Environment variable name containing the provider API key |
 | `bearerTokenEnv` | One credential required | Environment variable name containing a bearer token; takes precedence over `apiKeyEnv` when both are configured |
 | `wireApi` | No | OpenAI/Azure wire API: `completions` or `responses` |
