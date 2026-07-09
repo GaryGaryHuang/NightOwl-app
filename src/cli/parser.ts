@@ -10,10 +10,12 @@ export class CliUsageError extends Error {
 const REVIEW_RUN_USAGE =
   "nightowl <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]";
 const CHECK_USAGE = "nightowl --check";
-const USAGE = `${REVIEW_RUN_USAGE}\n${CHECK_USAGE}`;
+const AUTH_USAGE = "nightowl auth <login|status>";
+const USAGE = `${REVIEW_RUN_USAGE}\n${CHECK_USAGE}\n${AUTH_USAGE}`;
 
 type ParsedReviewCommand =
   | { kind: "check" }
+  | { kind: "auth"; action: "login" | "status" }
   | { kind: "run"; request: RunRequest };
 
 interface ParsedRunTokens {
@@ -28,9 +30,34 @@ export function parseReviewCommand(argv: string[]): ParsedReviewCommand {
     return { kind: "check" };
   }
 
+  if (argv[0] === "auth") {
+    return buildAuthCommand(argv);
+  }
+
   return {
     kind: "run",
     request: buildRunRequest(validateRunTokens(scanRunTokens(argv)))
+  };
+}
+
+function buildAuthCommand(argv: string[]): ParsedReviewCommand {
+  const action = argv[1];
+
+  if (!action) {
+    throw usageError("Missing auth command");
+  }
+
+  if (action !== "login" && action !== "status") {
+    throw usageError(`Unknown auth command: ${action}`);
+  }
+
+  if (argv.length > 2) {
+    throw usageError(`Unexpected positional input: ${argv[2]}`);
+  }
+
+  return {
+    kind: "auth",
+    action
   };
 }
 

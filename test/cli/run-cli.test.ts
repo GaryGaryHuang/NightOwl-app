@@ -249,6 +249,55 @@ test("runCli surfaces availability checker failures through the fatal error path
   assert.match(stderr.join("\n"), /Copilot auth expired\./u);
 });
 
+test("runCli dispatches auth commands to the auth runner and ignores review/check paths", async () => {
+  const calls: string[] = [];
+
+  const { exitCode, stdout, stderr } = await runCliWithCapturedOutput(
+    ["auth", "login"],
+    {
+      app: {
+        async run() {
+          calls.push("app.run");
+          throw new Error("review app must not run in auth mode");
+        }
+      },
+      availabilityChecker: {
+        async check() {
+          calls.push("availabilityChecker.check");
+          throw new Error("availability checker must not run in auth mode");
+        }
+      },
+      authRunner: {
+        async run(action) {
+          calls.push(`authRunner.run:${action}`);
+        }
+      }
+    }
+  );
+
+  assert.equal(exitCode, 0);
+  assert.deepEqual(calls, ["authRunner.run:login"]);
+  assert.deepEqual(stdout, []);
+  assert.deepEqual(stderr, []);
+});
+
+test("runCli surfaces auth runner failures through the fatal error path", async () => {
+  const { exitCode, stdout, stderr } = await runCliWithCapturedOutput(
+    ["auth", "status"],
+    {
+      authRunner: {
+        async run() {
+          throw new Error("GitHub Copilot auth status failed with exit code 1.");
+        }
+      }
+    }
+  );
+
+  assert.equal(exitCode, 2);
+  assert.deepEqual(stdout, []);
+  assert.match(stderr.join("\n"), /auth status failed with exit code 1/u);
+});
+
 test("runCli prints the completed-run summary contract from the app result", async () => {
   const cases: Array<{
     name: string;

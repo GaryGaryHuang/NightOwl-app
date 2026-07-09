@@ -6,10 +6,15 @@ import { formatLocalReviewRunSummary } from "./cli/format-run-summary.ts";
 import { CliProgressReporter, type CliProgressStdout } from "./cli/progress-reporter.ts";
 import { CliUsageError, parseReviewCommand } from "./cli/parser.ts";
 import { ReviewRunInterruptedError } from "./core/orchestrator.ts";
+import {
+  CopilotAuthRunner,
+  type CopilotAuthRunnerLike
+} from "./services/copilot-auth-runner.ts";
 import { CopilotAvailabilityChecker } from "./services/copilot-availability-checker.ts";
 
 export interface CliRuntime {
   app?: ReviewApp;
+  authRunner?: CopilotAuthRunnerLike;
   availabilityChecker?: { check(): Promise<void> };
   progressReporter?: CliProgressReporter;
   stdout?: CliProgressStdout;
@@ -34,6 +39,16 @@ export async function runCli(
         runtime.availabilityChecker ?? new CopilotAvailabilityChecker();
       await availabilityChecker.check();
       stdout.log("GitHub Copilot is available.");
+      return 0;
+    }
+
+    if (command.kind === "auth") {
+      const authRunner =
+        runtime.authRunner ??
+        new CopilotAuthRunner({
+          stdout
+        });
+      await authRunner.run(command.action);
       return 0;
     }
 

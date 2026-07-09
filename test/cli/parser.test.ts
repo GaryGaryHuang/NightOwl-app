@@ -222,3 +222,72 @@ test("parseReviewCommand returns check mode", () => {
     assert.deepEqual(parseReviewCommand(argv), { kind: "check" }, name);
   }
 });
+
+test("parseReviewCommand returns auth mode", () => {
+  const cases: Array<{
+    name: string;
+    argv: string[];
+    expected: ReturnType<typeof parseReviewCommand>;
+  }> = [
+    {
+      name: "auth login",
+      argv: ["auth", "login"],
+      expected: {
+        kind: "auth",
+        action: "login"
+      }
+    },
+    {
+      name: "auth status",
+      argv: ["auth", "status"],
+      expected: {
+        kind: "auth",
+        action: "status"
+      }
+    },
+    {
+      name: "check takes precedence over auth",
+      argv: ["auth", "login", "--check"],
+      expected: {
+        kind: "check"
+      }
+    }
+  ];
+
+  for (const { name, argv, expected } of cases) {
+    assert.deepEqual(parseReviewCommand(argv), expected, name);
+  }
+});
+
+test("parseReviewCommand rejects invalid auth arguments", () => {
+  const cases: Array<{
+    name: string;
+    argv: string[];
+    messagePattern: RegExp;
+  }> = [
+    {
+      name: "missing auth action",
+      argv: ["auth"],
+      messagePattern: /Missing auth command/u
+    },
+    {
+      name: "unknown auth action",
+      argv: ["auth", "logout"],
+      messagePattern: /Unknown auth command: logout/u
+    },
+    {
+      name: "surplus auth input",
+      argv: ["auth", "login", "extra"],
+      messagePattern: /Unexpected positional input: extra/u
+    }
+  ];
+
+  for (const { name, argv, messagePattern } of cases) {
+    assert.throws(
+      () => parseReviewCommand(argv),
+      (error) =>
+        error instanceof CliUsageError && messagePattern.test(error.message),
+      name
+    );
+  }
+});

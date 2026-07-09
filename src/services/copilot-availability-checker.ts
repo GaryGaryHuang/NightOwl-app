@@ -1,10 +1,14 @@
-import { CopilotClient } from "@github/copilot-sdk";
+import { CopilotClient, RuntimeConnection } from "@github/copilot-sdk";
 
-import { CopilotClientManagerBase } from "./copilot-client-manager.ts";
+import {
+  CopilotClientManagerBase,
+  buildCopilotClientEnvironment
+} from "./copilot-client-manager.ts";
 import {
   DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT_MS,
   stopClientManagerWithTimeout
 } from "./copilot-client-shutdown.ts";
+import { resolveCopilotCliPath } from "./copilot-runtime-resolver.ts";
 
 interface CopilotAvailabilityProbeLike {
   ping(message?: string): Promise<{ message: string; timestamp: string }>;
@@ -33,7 +37,13 @@ class CopilotAvailabilityClientManager
 
   constructor() {
     super(
-      () => new CopilotClient() as CopilotAvailabilityClientLike,
+      () =>
+        new CopilotClient({
+          connection: RuntimeConnection.forStdio({
+            path: resolveCopilotCliPath()
+          }),
+          env: buildCopilotClientEnvironment()
+        }) as CopilotAvailabilityClientLike,
       (client) => client
     );
   }

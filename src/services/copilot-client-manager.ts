@@ -1,5 +1,11 @@
-import { CopilotClient, type ModelInfo, type SessionConfig } from "@github/copilot-sdk";
+import {
+  CopilotClient,
+  RuntimeConnection,
+  type ModelInfo,
+  type SessionConfig
+} from "@github/copilot-sdk";
 
+import { resolveCopilotCliPath } from "./copilot-runtime-resolver.ts";
 import type { SessionLike } from "./session-executor.ts";
 
 export type CopilotModelInfo = Omit<
@@ -159,6 +165,9 @@ export class CopilotClientManager extends CopilotClientManagerBase<CopilotClient
       options.createClient ??
         (() =>
           new CopilotClient({
+            connection: RuntimeConnection.forStdio({
+              path: resolveCopilotCliPath()
+            }),
             env: buildCopilotClientEnvironment()
           }) as CopilotClientLike),
       (client) => client
