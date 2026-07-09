@@ -22,7 +22,7 @@ This section gets you from zero to your first review report. If you only want to
 
 - **Node.js ≥ 22.18.0** (`node --version` to confirm)
 - For real reviews, one of:
-  - **Copilot mode (default)** — a [GitHub Copilot](https://github.com/features/copilot) subscription and an authenticated [GitHub Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli)
+  - **Copilot mode (default)** — a GitHub account with a [GitHub Copilot](https://github.com/features/copilot) subscription, signed in via `nightowl auth login`
   - **BYOK mode** — a provider API key (OpenAI, Azure, or Anthropic) supplied via an environment variable. See [Model Provider](#model-provider)
 
 ### 2. Install the `nightowl` command
@@ -51,10 +51,10 @@ npm link           # Make the `nightowl` command available on your PATH
 
 ### 3. Authenticate (Copilot mode only)
 
-Copilot mode is the default and requires a signed-in [Copilot CLI](https://docs.github.com/en/copilot/managing-copilot/configure-personal-settings/installing-github-copilot-in-the-cli). Sign in once:
+Copilot mode is the default and requires a GitHub account with Copilot access. Run NightOwl's Copilot sign-in command once; it uses the Copilot runtime bundled with NightOwl, so a global `copilot` CLI is not required:
 
 ```bash
-copilot auth login
+nightowl auth login
 ```
 
 Then verify NightOwl can reach Copilot:
@@ -64,6 +64,12 @@ nightowl --check
 ```
 
 This prints `GitHub Copilot is available.` on success.
+
+You can also inspect the current auth status:
+
+```bash
+nightowl auth status
+```
 
 > `nightowl --check` only validates Copilot availability. It does **not** validate BYOK credentials, and it is **not** required before `--dry-run`.
 
@@ -82,6 +88,7 @@ NightOwl prints progress to the terminal and writes the report under `.nightowl/
 ```bash
 nightowl <base_ref> <head_ref> [--repo <path>] [--context <value>] [--dry-run]
 nightowl --check
+nightowl auth <login|status>
 ```
 
 `base_ref` and `head_ref` are required; NightOwl reviews the changes from `base_ref` to `head_ref`.
@@ -92,6 +99,13 @@ nightowl --check
 | `--context <value>` | Background context for the review (PR description, root cause, expected behavior, spec links). Repeatable |
 | `--dry-run` | Run the pipeline locally without calling GitHub Copilot |
 | `--check` | Check that GitHub Copilot is available, then exit |
+
+Auth commands:
+
+| Command | Description |
+|---------|-------------|
+| `nightowl auth login` | Sign in to GitHub Copilot using the Copilot runtime bundled with NightOwl |
+| `nightowl auth status` | Print the current Copilot auth status |
 
 **Examples:**
 
@@ -108,7 +122,7 @@ Providing `--context` is recommended: NightOwl feeds it into the review as sourc
 
 | Mode | How to enable | Requires | Use it for |
 |------|---------------|----------|------------|
-| **Copilot** (default) | nothing — it's the default | Copilot subscription + authenticated Copilot CLI | Normal reviews |
+| **Copilot** (default) | nothing — it's the default | Copilot subscription + `nightowl auth login` | Normal reviews |
 | **BYOK** | set `modelProvider.kind: "byok"` in config | A provider API key in an env var | Using your own OpenAI/Azure/Anthropic credentials |
 
 ---
@@ -167,7 +181,7 @@ To exclude files from review, add a `<repo_root>/.nightowl/reviewignore` file us
 
 ### Model Provider
 
-Use explicit Copilot mode to keep Copilot authentication while overriding the model:
+Use explicit Copilot mode to keep using your Copilot sign-in while overriding the model:
 
 ```json
 {
