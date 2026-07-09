@@ -1,6 +1,6 @@
 {
   "name": "@garyhuangdev/nightowl",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "NightOwl is a local code review CLI built with the GitHub Copilot SDK.",
   "license": "MIT",
   "type": "module",
@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "@github/copilot": "1.0.68",
-    "@github/copilot-sdk": "1.0.0",
+    "@github/copilot-sdk": "1.0.2",
     "ignore": "^7.0.5"
   },
   "devDependencies": {
